@@ -335,10 +335,12 @@ private:
 	ibPropertyCategory*        m_categoryList   = ibPropertyObject::CreatePropertyCategory(wxT("DynamicList"), _("Dynamic list"));
 	// Source = a dynamic-source property holding the chosen queryable variable; the list
 	// reads it via GetSourceQueryable() facade (the variable does NOT live on the list).
-	ibPropertyDynamicSource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryList, wxT("Source"), _("Source"));
+	ibPropertyDynamicSource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryList, wxT("Source"), _("Source"),
+		_("The table the list shows: a catalog, document, register or other registered source. The list reads its rows page by page and follows its records as they change. Ignored when the list runs an arbitrary query (set on the Settings window's Query tab)."));
 	// "Settings..." — an action property; m_owner = THIS dynamic list, and the frontend
 	// ibPGDynamicListProperty casts owner → dynamic list and opens the settings form.
-	ibPropertyDynamicList* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDynamicList>(m_categoryList, wxT("Settings"), _("Settings"));
+	ibPropertyDynamicList* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDynamicList>(m_categoryList, wxT("Settings"), _("Settings"),
+		_("Opens the list's settings window: the arbitrary query (Query tab), and the default filter, order and appearance the user starts from."));
 	// Arbitrary-query mode: the flag switches the source from a picked metaobject to a QUERY TEXT (both serialised
 	// by ReadProperty/WriteProperty). The text is edited on the settings dialog's first "Query" tab.
 	// (⛔ `UseCustomQuery` + `CustomQuery` PROPERTIES STOOD HERE — hidden from the inspector, still
@@ -348,7 +350,9 @@ private:
 	// batch by batch. FALSE: the whole result set is materialised into a RAM snapshot ONCE and paged in memory (the base
 	// ibValueModelCursor::EnsureSnapshot / RunStoragePage) — the fallback for when cursor paging misbehaves, or a
 	// small / stable list where liveness does not matter. Read by IsDynamicRead() above; serialised by Read/WriteProperty.
-	ibPropertyBoolean* m_propertyDynamicRead = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("DynamicRead"), _("Dynamic data read"), true);
+	ibPropertyBoolean* m_propertyDynamicRead = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("DynamicRead"), _("Dynamic data read"),
+		_("On (the default): the list pages its rows from the database as they are scrolled to, so a table of any size opens at once and shows current data. Off: the whole result is read into memory once and paged there - for a small or stable list, or when paging from the database misbehaves."),
+		true);
 };
 
 // Create a folder-select SOURCE: a dynamic list in CHOICE mode with a FIXED `IsFolder = true` predicate — the

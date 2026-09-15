@@ -223,9 +223,12 @@ private:
 		return FillGenericFormType(prop);
 	}
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"));
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+		_("The form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. Edited in the form designer; the code runs on the client with the form open."));
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("Form"), _("Form"));
-	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("FormType"), _("Type"), &ibValueMetaObjectForm::FillFormType);
+	ibPropertyList* m_properyFormType = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("FormType"), _("Type"),
+		_("Which role the form plays for its owner (object form, list form, choice form, folder form and so on). The type decides what data source the form gets when opened - a list form gets the list, an object form an object - and which default-form slot of the owner it can fill."),
+		&ibValueMetaObjectForm::FillFormType);
 };
 
 // -----------------------------------------------------------------------
@@ -305,7 +308,8 @@ protected:
 
 private:
 
-	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"));
+	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, wxT("FormData"), _("Form"),
+		_("The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."));
 
 #pragma region role
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), _("Use"));

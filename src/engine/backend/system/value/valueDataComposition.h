@@ -518,12 +518,14 @@ private:
 	// --- property surface — these SURFACE onto the form attribute ------------
 	ibPropertyCategory*      m_categoryComposer = ibPropertyObject::CreatePropertyCategory(wxT("DataComposition"), _("Data composer"));
 	// Source = the picked queryable; read through the GetSourceQueryable() facade.
-	ibPropertyDynamicSource* m_propertySource   = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryComposer, wxT("Source"), _("Source"));
+	ibPropertyDynamicSource* m_propertySource   = ibPropertyObject::CreateProperty<ibPropertyDynamicSource>(m_categoryComposer, wxT("Source"), _("Source"),
+		_("The main table the composition reads when it has no query of its own: a catalog, document, register or other registered source. With a query set, the query decides the data."));
 	// "Settings..." — the action property, and a TYPE of its own rather than the dynamic list's:
 	// the frontend property is matched by this type, so opening the composition's window instead of
 	// the list's needs no branch anywhere (Max, 2026-08-20). The frontend reaches this object
 	// through the property's owner.
-	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, wxT("Settings"), _("Settings"));
+	ibPropertyDataComposition* m_propertySettings = ibPropertyObject::CreateProperty<ibPropertyDataComposition>(m_categoryComposer, wxT("Settings"), _("Settings"),
+		_("Opens the composition's settings window: query, resources, parameters, structure (groupings, table, charts) and settings variants."));
 
 	// WHICH COMPOSER'S SETTINGS THE BASE HOLDS FOR THIS ONE. Empty on a composition
 	// built in code or in the designer — those save nothing, which is right: there

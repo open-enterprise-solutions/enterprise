@@ -131,20 +131,29 @@ private:
 	class ibValueCommandBar* m_bar = nullptr;
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(wxT("Command"), _("Command"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, wxT("Name"), _("Name"), _("Command"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, wxT("Name"), _("Name"),
+		_("The item's name, unique among the command bar's items. It identifies the item in the designer; the user never sees it."), _("Command"));
 	// Empty by default ON PURPOSE: an unset caption lets the bound command provide the DEFAULT (BuildCommands
 	// fills it via the command door). A designer who types one overrides that — own caption on top.
-	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Caption"), _("Caption"), wxT(""));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, wxT("Representation"), _("Representation"), ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_category, wxT("Picture"), _("Picture"));
-	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Tooltip"), _("Tooltip"), wxEmptyString);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Enabled"), _("Enabled"), true);
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Visible"), _("Visible"), true);
+	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Caption"), _("Caption"),
+		_("The item's caption on the bar. Empty: the bound command's own caption. Can be written per language."), wxT(""));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, wxT("Representation"), _("Representation"),
+		_("What the item shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text)."),
+		ibRepresentation::ibRepresentation_Auto);
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_category, wxT("Picture"), _("Picture"),
+		_("The item's icon. Empty: the bound command's own picture."));
+	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Tooltip"), _("Tooltip"),
+		_("Saved with the form, but the bar does not show it yet: an item's tooltip is always its caption."), wxEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Enabled"), _("Enabled"),
+		_("Whether the item can be pressed. Off: it is shown greyed out."), true);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Visible"), _("Visible"),
+		_("Whether the item is shown on the bar."), true);
 	// The button's COMMAND-SOURCE property — the real picker (registered frontend editor ibPGCommandSourceProperty:
 	// a type glyph + a dialog of the form's command sources), the command-door twin of a control's ibPropertySource.
 	// Internal name MUST differ from the category name ("Command") — wxPropertyGrid keys categories and
 	// properties in ONE per-page name map (a collision asserts in PrepareToAddItem). Label stays _("Command").
-	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, wxT("BoundCommand"), _("Command"));
+	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, wxT("BoundCommand"), _("Command"),
+		_("The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."));
 };
 
 // A command bar is a CONTAINER layer object (ibValueLayerObject) — NOT a control; it is PART OF a
@@ -262,7 +271,9 @@ private:
 	bool                        m_treeExpanded = true;        // designer tree node open-state
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(wxT("CommandBar"), _("Command bar"));
-	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("AutoFill"), _("Auto fill"), true);
+	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("AutoFill"), _("Auto fill"),
+		_("Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."),
+		true);
 };
 
 // One command SOURCE entry available to a form — the shared gather behind BOTH the navigator panel and the

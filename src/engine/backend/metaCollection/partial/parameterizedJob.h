@@ -269,47 +269,47 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one job row: the work the job does when it runs, with that row's own parameters, and the row's write handlers. Runs on the server, in a background session, when the row's schedule falls due or it is started by hand."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the job kind as a whole rather than of one row: its exported procedures and functions are called on the manager."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectParameterizedJob::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), &ibValueMetaObjectParameterizedJob::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectParameterizedJob::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectParameterizedJob::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectParameterizedJob::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a job row opens with. Empty: the form is generated from the row's attributes."), &ibValueMetaObjectParameterizedJob::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of job rows opens with. Empty: a generated form showing the folder's description and parent."), &ibValueMetaObjectParameterizedJob::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the list of job rows opens with. Empty: the list form is generated."), &ibValueMetaObjectParameterizedJob::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a job row for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectParameterizedJob::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for a row's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectParameterizedJob::FillFormFolderSelect);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ibPropertyCategory* m_categoryJob = ibPropertyObject::CreatePropertyCategory(wxT("Job"), _("Job"));
-	ibPropertyBoolean* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, wxT("Use"), _("Use"), true);
+	ibPropertyBoolean* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, wxT("Use"), _("Use"), _("The developer's switch for the whole job kind: off, none of its rows run, whatever their own Active and schedules say. A row's Active is the administrator's switch for that row alone."), true);
 
 	// The DEFAULT a new row starts from. The designer declares, the base holds (§ 8) — so a
 	// schedule edited here does not reach rows that already exist, which is correct for a default
 	// and is why the card can always be opened to change one row's own.
-	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, wxT("Schedule"), _("Schedule"));
+	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, wxT("Schedule"), _("Schedule"), _("The schedule a NEW job row starts with. Each row keeps its own schedule after that, so changing this one does not move rows that already exist."));
 
 	// Retry on failure — the pair the manager reads. Zero attempts (the default) is the honest
 	// setting for work that is not safe to repeat.
-	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryCount"), _("Retry count on failure"), 0);
-	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryInterval"), _("Retry interval on failure"), 10);
+	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryCount"), _("Retry count on failure"), _("How many more times a run that failed is started again. 0 (the default) never repeats it - the honest setting for work that is not safe to do twice."), 0);
+	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryInterval"), _("Retry interval on failure"), _("Seconds to wait before starting a failed run again (used only when the retry count is above 0)."), 10);
 
 	// The row's own columns. Attribute usage is `Items`, the default — so a FOLDER carries none of
 	// them and its card shows Description and Parent, like any catalog group. That is a model and
 	// form fact, not a storage one: items and folders share one table.
 	ibPropertyContainer<>* m_propertyAttributeActive = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Active"), _("Active"), wxEmptyString, false, true));
+		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Active"), _("Active"), _("The administrator's switch for this row: an inactive row keeps its settings but is not run by its schedule."), false, true));
 	ibPropertyContainer<>* m_propertyAttributeSchedule = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Schedule"), _("Schedule"), wxEmptyString, g_valueScheduleCLSID));
+		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Schedule"), _("Schedule"), _("This row's own schedule - when the job runs with this row's parameters. Starts as the kind's default schedule and is changed per row."), g_valueScheduleCLSID));
 	ibPropertyContainer<>* m_propertyAttributeLastRun = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateDate(wxT("LastRun"), _("Last run"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime));
+		ibValueMetaObjectCompositeData::CreateDate(wxT("LastRun"), _("Last run"), _("When the row's job last started - written by the job manager; the next run is counted from it."), ibDateFractions::ibDateFractions_DateTime));
 	// NextRun is DERIVED — the column exists so the requisite has a name, a type and a place on a
 	// form, but nothing ever writes it: the value is generated when it is read (see the object's
 	// GetValueByMetaID). No index, therefore, and no ordering by it — there is nothing in the
 	// column to order by.
 	ibPropertyContainer<>* m_propertyAttributeNextRun = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateDate(wxT("NextRun"), _("Next run"), wxEmptyString, ibDateFractions::ibDateFractions_DateTime));
+		ibValueMetaObjectCompositeData::CreateDate(wxT("NextRun"), _("Next run"), _("When the row's job is due next, worked out from its schedule and last run each time it is read. Nothing stores it, so it cannot be written, indexed or ordered by."), ibDateFractions::ibDateFractions_DateTime));
 
 	// "May run it by hand" is deliberately its own right: editing an exchange's settings and
 	// firing the exchange are plausibly different roles, and the mechanism for saying so is next

@@ -360,11 +360,11 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as CalculationRegisters.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectCalculationRegister::FillFormList);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectCalculationRegister::FillFormList);
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 
@@ -374,13 +374,13 @@ private:
 	// calculation types, no displacement relation to read, and therefore no priority to fold with.
 	// Exactly one chart, said the way the accounting register says its own (propertyChartOfAccounts.h).
 	ibPropertyChartOfCalculationTypes* m_propertyChartOfCalculationTypes =
-		ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, wxT("ChartOfCalculationTypes"), _("Chart of calculation types"));
+		ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, wxT("ChartOfCalculationTypes"), _("Chart of calculation types"), _("The chart of calculation types the register is bound to. Every record's CalculationType is a reference into it, and its sections decide the calculation: Displacing - which types cut a record's days, Base - which results its base is made of, Leading - which changes make it stale. Required: the register is not saved without it."));
 
 	// The grain of the registration period — see GetPeriodicity. A month unless said otherwise; a
 	// configuration saved before the property existed reads as a month too (ibProperty::SetNodeValue:
 	// an absent value leaves the constructor's standing).
 	ibPropertyEnum<ibValueEnumCalcPeriodicity>* m_propertyPeriodicity =
-		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCalcPeriodicity>>(m_categoryData, wxT("Periodicity"), _("Periodicity"), ibCalcPeriodicity::eCalcPeriodMonth);
+		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCalcPeriodicity>>(m_categoryData, wxT("Periodicity"), _("Periodicity"), _("The grain of the registration period: day, month (the default), quarter or year. A record is registered for the start of its period; a reading as of a moment takes the periods up to the one the moment falls in, and a base without a base period spans the record's registration period at this grain."), ibCalcPeriodicity::eCalcPeriodMonth);
 
 	// Action period configuration + its standard attributes (predefined). The attributes exist for the
 	// life of the register (stable metaIDs -> stable fld<metaID> columns), but only enter the schema
@@ -388,17 +388,17 @@ private:
 	// ⭐ THE PERIODS ARE DAYS, and an END IS INCLUSIVE: a sick leave 12.06–16.06 is five days (Max's
 	// example, 2026-09-10 — "12.06.2023 0:00:00 .. 16.06.2023 0:00:00", five calendar days). A calculation
 	// is in force over whole days; a second-precise value there only invites a time of day nothing reads.
-	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), false);
-	ibPropertyContainer<>* m_propertyAttributeActionPeriod       = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriod"),       _("Action period"),       wxEmptyString, ibDateFractions::ibDateFractions_Date, false));
-	ibPropertyContainer<>* m_propertyAttributeActionPeriodStart  = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodStart"),  _("Action period start"),  wxEmptyString, ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeActionPeriodEnd    = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodEnd"),    _("Action period end"),    wxEmptyString, ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeRegistrationPeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("RegistrationPeriod"), _("Registration period"), wxEmptyString, ibDateFractions::ibDateFractions_Date, true));
-	ibPropertyContainer<>* m_propertyAttributeStorno             = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Storno"), _("Storno"), wxEmptyString, false, false));
+	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), _("Records carry an action period: the days a record is in force (ActionPeriodStart to ActionPeriodEnd, both inclusive) and the month it is for (ActionPeriod). Needed for displacement: the register's ActualActionPeriod reads what the Displacing types leave of each record. Switching it adds or drops the three columns."), false);
+	ibPropertyContainer<>* m_propertyAttributeActionPeriod       = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriod"),       _("Action period"),       _("The period the record is FOR: a correction of June registered in July is for June. A record's position - dimensions, type, this period and its days - is what stornos, displacement and recalculation marks are matched by."), ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeActionPeriodStart  = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodStart"),  _("Action period start"),  _("The first day the record is in force (whole days, the day itself included). With the end it gives the days displacement cuts and the fact reads pieces of."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeActionPeriodEnd    = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodEnd"),    _("Action period end"),    _("The last day the record is in force, included: a sick leave 12.06-16.06 is five days. A record whose end is before its start has no days and cuts nothing."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeRegistrationPeriod = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("RegistrationPeriod"), _("Registration period"), _("The period the record was entered in, at the start of the register's periodicity. A correction of a closed month is registered in the current one. Readings as of a moment (the Period argument of the virtual tables) and a base without a base period go by it."), ibDateFractions::ibDateFractions_Date, true));
+	ibPropertyContainer<>* m_propertyAttributeStorno             = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("Storno"), _("Storno"), _("Marks a record that reverses an earlier one: the same position, the figures with the sign turned, registered now. A position's records net out - a storno counts minus one - so a displacer taken back cuts nothing; a storno also answers the recalculation marks of its position."), false, false));
 
 	// Use recalculation (IsUseRecalculation), and the identity of the marks' table: a holder created with the register
 	// and saved with it, the way a derived table's identity is held (registerQueryLowering.h). A register created
 	// before it existed gets its number when recalculation is switched on (OnPropertyChanged).
-	ibPropertyBoolean* m_propertyUseRecalculation = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseRecalculation"), _("Use recalculation"), false);
+	ibPropertyBoolean* m_propertyUseRecalculation = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseRecalculation"), _("Use recalculation"), _("Keep a table of recalculation marks for this register. A record written in any register whose types the Leading section names marks the records of this one it makes stale (same shared dimensions, meeting in time); the platform answers a mark when the marked recorder is written again or a storno corrects the position. Queried as CalculationRegister.<Register>.Recalculation. Switching it creates or drops the table."), false);
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_recalculation{
 		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("Recalculation"), _("Recalculation")) };
 
@@ -412,12 +412,12 @@ private:
 	// The calculation-type standard attribute — an empty-typed reference whose type is set to the bound
 	// chart of calculation types by SetChartOfCalculationTypes (like the recorder's type is set by its
 	// posting documents). Always a predefined attribute of a calculation register.
-	ibPropertyContainer<>* m_propertyAttributeCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), wxEmptyString));
+	ibPropertyContainer<>* m_propertyAttributeCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), _("Which calculation type of the bound chart the record is. The chart's sections over this type decide what displaces the record, what its base is made of and which changes mark it for recalculation.")));
 
-	ibPropertyBoolean* m_propertyUseBasePeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseBasePeriod"), _("Use base period"), false);
+	ibPropertyBoolean* m_propertyUseBasePeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseBasePeriod"), _("Use base period"), _("Records carry a base period (BasePeriodStart to BasePeriodEnd): the span GetBase reads the base records over, by action period or by registration as the chart's base dependence says. Off: the base spans the record's registration period at the register's periodicity."), false);
 	// NOT required: only a record whose type has a base reads one — a salary line has no base period.
-	ibPropertyContainer<>* m_propertyAttributeBasePeriodStart = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodStart"), _("Base period start"), wxEmptyString, ibDateFractions::ibDateFractions_Date, false));
-	ibPropertyContainer<>* m_propertyAttributeBasePeriodEnd   = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodEnd"),   _("Base period end"),   wxEmptyString, ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeBasePeriodStart = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodStart"), _("Base period start"), _("The first day of the span the record's base is read over - a vacation paid from the three months before it, say. Only a record whose type has a Base section reads one; a salary line leaves it empty."), ibDateFractions::ibDateFractions_Date, false));
+	ibPropertyContainer<>* m_propertyAttributeBasePeriodEnd   = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("BasePeriodEnd"),   _("Base period end"),   _("The last day of the span the record's base is read over, included."), ibDateFractions::ibDateFractions_Date, false));
 
 	friend class ibValueRecordSetObjectCalculationRegister;
 

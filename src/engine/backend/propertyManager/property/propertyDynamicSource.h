@@ -23,6 +23,8 @@ public:
 		: ibProperty(cat, name, new ibVariantDataDynamicSource()) {}
 	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label)
 		: ibProperty(cat, name, label, new ibVariantDataDynamicSource()) {}
+	ibPropertyDynamicSource(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+		: ibProperty(cat, name, label, helpString, new ibVariantDataDynamicSource()) {}
 
 	// The selected source queryable — data lives in the variant; the dynamic list reads it
 	// through here (facade). The setter stores it into the variant.

@@ -193,8 +193,11 @@ protected:
 private:
 
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
-	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), ibItemMode::ibItemMode_Item);
-	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(wxT("NumberLine"), _("N"), wxEmptyString, 6, 0));
+	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"),
+		_("In a catalog with folders: which nodes have this tabular section - items (the default), folders, or both. The other kind's form and record simply do not offer it."),
+		ibItemMode::ibItemMode_Item);
+	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(wxT("NumberLine"), _("N"),
+		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0));
 };
 
 // ibValueMetaObjectTableDataRam — RAM-only tabular section (data processors / reports). A thin

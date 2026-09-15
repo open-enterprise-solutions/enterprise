@@ -28,10 +28,11 @@ public:
 			static_cast<ibValueMetaObject*>(m_owner);
 		wxASSERT(parent);
 		m_metaObject = parent->CreateMetaObjectAndSetParent<T>(args...);
+		m_propHelp = m_metaObject->GetComment();   // a third argument is the module's comment, and the property's help
 	}
 
 	ibPropertyInnerModule(ibPropertyCategory* cat, T* metaObject)
-		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), wxNullVariant), m_metaObject(metaObject)
+		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), wxNullVariant), m_metaObject(metaObject)
 	{
 	}
 
@@ -204,7 +205,8 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));
+	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"),
+		_("The module's code: procedures, functions and variables of its owner (an object, manager, record set or command). Its event handlers are called by the platform by name; its exported methods are callable on the owner's values."));
 };
 
 class BACKEND_API ibValueMetaObjectCommonModule : public ibValueMetaObjectModuleBase {
@@ -268,9 +270,12 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));
+	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"),
+		_("The common module's code: procedures and functions shared by the whole configuration. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."));
 	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(wxT("Common module"), _("Common module"));
-	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, wxT("GlobalModule"), _("Global module"), false);
+	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, wxT("GlobalModule"), _("Global module"),
+		_("Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."),
+		false);
 };
 
 class BACKEND_API ibValueMetaObjectManagerModule : public ibValueMetaObjectCommonModule {

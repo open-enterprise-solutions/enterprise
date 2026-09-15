@@ -85,7 +85,8 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, wxT("Picture"), _("Picture"));
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, wxT("Picture"), _("Picture"),
+		_("The section's icon in the navigation panel. Empty: the configuration's own icon is shown."));
 #pragma region role
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), _("Use"));
 #pragma endregion

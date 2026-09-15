@@ -244,31 +244,31 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one calculation type: its write handlers (BeforeWrite, OnWrite, SetNewCode...) and the procedures they call."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the chart as a whole rather than of one type: its exported procedures and functions are called on the manager, as ChartsOfCalculationTypes.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), false);
-	ibPropertyEnum<ibValueEnumBaseDependence>* m_propertyBaseDependence = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumBaseDependence>>(m_categoryData, wxT("BaseDependence"), _("Base dependence"), ibBaseDependence::eBaseNone);
-	ibPropertyChartOfCalculationTypes* m_propertyBaseCharts = ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, wxT("BaseCharts"), _("Base charts of calculation types"), ibPropertyChoiceMode::Mult);
+	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), _("The types are in force over DAYS, not only registered in a month. A calculation register on this chart may keep action periods only when this is on (it refuses to save otherwise), and only then does the Displacing section cut anything."), false);
+	ibPropertyEnum<ibValueEnumBaseDependence>* m_propertyBaseDependence = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumBaseDependence>>(m_categoryData, wxT("BaseDependence"), _("Base dependence"), _("Which period of a base record puts it into a base (GetBase). By action period: the days the base record is in force that fall inside the base period, prorated. By registration period: a base record counts whole when it is registered inside the base period. No base (the default): the types take no base."), ibBaseDependence::eBaseNone);
+	ibPropertyChartOfCalculationTypes* m_propertyBaseCharts = ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, wxT("BaseCharts"), _("Base charts of calculation types"), _("The other charts whose types this chart's Base and Leading sections may name - a tax chart whose base is the accruals of another chart, say. This chart's own types may always be named."), ibPropertyChoiceMode::Mult);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Predefined tabular sections "Displacing", "Base", "Leading" — one meta class, named by the property.
 	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
 	ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>* m_propertyDisplacingTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Displacing"), _("Displacing calculation types"));
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Displacing"), _("Displacing calculation types"), _("For each type, the types that displace it: a record of a named type cuts the days it overlaps out of this type's record for the same dimension values (a sick leave out of a salary). Read as it stands - a change applies at once to records already written."));
 	ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>* m_propertyBaseTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Base"), _("Base calculation types"));
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Base"), _("Base calculation types"), _("For each type, the types whose results make up its base: GetBase sums the records of the named types over the base period, the way the base dependence says (a vacation paid from the salary and bonuses before it)."));
 	ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>* m_propertyLeadingTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Leading"), _("Leading calculation types"));
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectCalculationTypeRelationTable>>(m_categoryData, wxT("Leading"), _("Leading calculation types"), _("For each type, the types whose change makes its records stale: a record of a named type written for the same dimension values and meeting in time marks this type's records for recalculation (in a register that keeps recalculation)."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectChartOfCalculationTypes::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), &ibValueMetaObjectChartOfCalculationTypes::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectChartOfCalculationTypes::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectChartOfCalculationTypes::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectChartOfCalculationTypes::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form a calculation type opens with. Empty: the form is generated from its attributes and sections."), &ibValueMetaObjectChartOfCalculationTypes::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of calculation types opens with. Empty: a generated form."), &ibValueMetaObjectChartOfCalculationTypes::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the chart's list opens with. Empty: the list form is generated."), &ibValueMetaObjectChartOfCalculationTypes::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose a calculation type for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectChartOfCalculationTypes::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for a type's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectChartOfCalculationTypes::FillFormFolderSelect);
 
 	friend class ibValueRecordDataObjectChartOfCalculationTypes;
 	friend class ibMetaData;

@@ -91,9 +91,10 @@ private:
 	ibMetaID     m_commandId = wxNOT_FOUND;
 
 	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Command name"), wxT(""));
-	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Command caption"), wxT(""));
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommon, wxT("Picture"), _("Picture"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The command's name: how buttons and command bars on the form refer to it. Unique among the form's commands."), wxT(""));
+	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("The command's caption: the text of a button or menu item that runs it. Empty: made from the name. Can be written per language."), wxT(""));
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommon, wxT("Picture"), _("Picture"),
+		_("The command's icon on buttons and command bars that show pictures."));
 
 	// The handler event — a parameterless form-runtime procedure (empty args → "Procedure <name>()"), run by the
 	// projection through the string CallAsEvent. The inspector's event editor generates / opens it in the form module.

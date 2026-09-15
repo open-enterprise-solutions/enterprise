@@ -154,8 +154,8 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one report object: its attributes' handlers and procedures - what prepares parameters and runs the composer when the report is built from its form or from code."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the report kind as a whole rather than of one report object: its exported procedures and functions are called on the manager, as Reports.<Name>.<Function>()."));
 
 	// The default composer is offered from the report's OWN composers — the same shape the default
 	// form is chosen with, so the two questions are answered by one kind of control.
@@ -173,8 +173,8 @@ private:
 	}
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectReport::FillFormObject);
-	ibPropertyList* m_propertyDefComposer = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultComposer"), _("Default composer"), &ibValueMetaObjectReport::FillComposer);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form the report opens with. Empty: a generated form with the report's settings and a result area."), &ibValueMetaObjectReport::FillFormObject);
+	ibPropertyList* m_propertyDefComposer = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultComposer"), _("Default composer"), _("Which of the report's composers (its query, fields, groupings and variants) the report builds with when none is named - the one its form shows and Compose uses."), &ibValueMetaObjectReport::FillComposer);
 
 	friend class ibValueRecordDataObjectReport;
 	friend class ibMetaData;

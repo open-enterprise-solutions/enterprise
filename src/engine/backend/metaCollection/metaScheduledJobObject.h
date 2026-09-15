@@ -100,19 +100,19 @@ protected:
 private:
 
 	ibPropertyCategory* m_categoryJob = ibPropertyObject::CreatePropertyCategory(wxT("Job"), _("Job"));
-	ibPropertyBoolean*  m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, wxT("Use"), _("Use"), true);
-	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, wxT("Schedule"), _("Schedule"));
+	ibPropertyBoolean*  m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, wxT("Use"), _("Use"), _("Whether the job runs by its schedule. Off: the job stays declared and can still be started by hand, but the job manager never starts it."), true);
+	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, wxT("Schedule"), _("Schedule"), _("When the job runs: the days, times and repeats the job manager starts it by. It runs on the server in a background session of its own."));
 
 	// Retry on failure — the pair the manager reads (jobManager.h). Default 0 attempts: repeating
 	// work that failed is only safe when the author says it is.
-	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryCount"), _("Retry count on failure"), 0);
-	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryInterval"), _("Retry interval on failure"), 10);
+	ibPropertyInteger* m_propertyRetryCount = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryCount"), _("Retry count on failure"), _("How many more times a run that failed is started again. 0 (the default) never repeats it - the honest setting for work that is not safe to do twice."), 0);
+	ibPropertyInteger* m_propertyRetryInterval = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryJob, wxT("RetryInterval"), _("Retry interval on failure"), _("Seconds to wait before starting a failed run again (used only when the retry count is above 0)."), 10);
 
 	// The handler module — a MANAGER module (registered, compiled with the session), unlike a
 	// command's private one.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyJobModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, wxT("JobModule"), _("Job module"));
+			m_categoryContext, wxT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."));
 
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), _("Use"));
 

@@ -265,16 +265,16 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ObjectModule"), _("Object module"), _("Code of one account: its write handlers (BeforeWrite, OnWrite, SetNewCode...) and the procedures they call. Runs wherever an account is written - a form, a script or a background job."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the chart as a whole rather than of one account: its exported procedures and functions are called on the manager, as ChartsOfAccounts.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 
-	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), &ibValueMetaObjectChartOfAccounts::FillFormObject);
-	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), &ibValueMetaObjectChartOfAccounts::FillFormFolder);
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectChartOfAccounts::FillFormList);
-	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectChartOfAccounts::FillFormSelect);
-	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectChartOfAccounts::FillFormFolderSelect);
+	ibPropertyList* m_propertyDefFormObject = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormObject"), _("Default Object Form"), _("The form an account opens with. Empty: the form is generated from the account's attributes."), &ibValueMetaObjectChartOfAccounts::FillFormObject);
+	ibPropertyList* m_propertyDefFormFolder = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolder"), _("Default Folder Form"), _("The form a folder of accounts opens with. Empty: a generated form."), &ibValueMetaObjectChartOfAccounts::FillFormFolder);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the chart's list opens with. Empty: the list form is generated."), &ibValueMetaObjectChartOfAccounts::FillFormList);
+	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), _("The form used to choose an account for a field of this type. Empty: the list form opens in choice mode."), &ibValueMetaObjectChartOfAccounts::FillFormSelect);
+	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an account's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectChartOfAccounts::FillFormFolderSelect);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Own predefined attributes for Chart of Accounts
@@ -293,16 +293,16 @@ private:
 		// Through the ATTRIBUTE's own flag rather than a rule written at the write path: fill-check is
 		// the mechanism the platform already has for "this must be filled in", it shows the field as
 		// required in the form, and a rule of ours would be a second answer to the same question.
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, /*fillCheck*/ true, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
+		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), _("The account's side: Active (its balance is a debit), Passive (a credit) or Active/Passive (either, shown as it falls). Required - every posting asks which side an amount moves, and an account without a side takes none."), g_enumAccountTypeCLSID, /*fillCheck*/ true, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
 
 	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
+		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), _("An off-balance account is a separate circuit outside the double entry: a posting may name it on one side only, with no correspondent account, and its figures are not summed into the balance that debits and credits must agree on."), ibItemMode::ibItemMode_Folder_Item));
 
 	ibPropertyContainer<>* m_propertyAttributeQuantitative = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Quantitative"), _("Quantitative"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
+		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Quantitative"), _("Quantitative"), _("Marks an account kept in quantity as well as in money. A flag for the configuration to read - posting code and reports decide what to do with it; the platform itself does not act on it."), ibItemMode::ibItemMode_Folder_Item));
 
 	ibPropertyContainer<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
+		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), _("Marks an account kept in a currency as well as in the accounting currency. A flag for the configuration to read - posting code and reports decide what to do with it; the platform itself does not act on it."), ibItemMode::ibItemMode_Folder_Item));
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Chart of Characteristic Types binding — the CONTOUR: which values an account dimension of this
@@ -315,20 +315,20 @@ private:
 	// "Data" they were invisible where a reader looks for them — the Accounting section showed the
 	// account's own flags and nothing about its analytics, so the section read as if it were the whole
 	// story and the two questions that shape every register built on this chart were elsewhere.
-	ibPropertyChartOfCharacteristicTypes* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyChartOfCharacteristicTypes>(m_categoryAccounting, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
+	ibPropertyChartOfCharacteristicTypes* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyChartOfCharacteristicTypes>(m_categoryAccounting, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"), _("The chart whose items are the account dimension kinds (the analytics an account may be kept by, such as counterparty or item) and whose types say what values each kind may hold. An account picks its kinds from it in Account dimension kinds."));
 
 	// The two answers stand side by side on purpose, because they are different questions:
 	// the chart above says WHICH VALUES an account dimension may hold, this number says HOW MANY
 	// dimension slots exist. Neither is derivable from the other — the same characteristic chart
 	// serves charts of accounts with different analytical depth.
 	ibPropertyUInteger* m_propertyMaxAccountDimensionCount = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryAccounting,
-		wxT("MaxAccountDimensionCount"), _("Max account dimension count"), 3);
+		wxT("MaxAccountDimensionCount"), _("Max account dimension count"), _("How many dimension slots an account of this chart can have (3 by default). An accounting register on the chart gets that many dimension columns on each side; an account uses as many as it lists kinds."), 3);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Predefined tabular section "AccountDimensionKinds" — own meta class with predefined columns
 	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
 	ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>* m_propertyAccountDimensionKindsTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, wxT("AccountDimensionKinds"), _("Account dimension kinds"));
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, wxT("AccountDimensionKinds"), _("Account dimension kinds"), _("Each account's analytics: the dimension kinds it is kept by, one row per slot in order - row N fills the register's dimension N. A row may say Summary only: turnovers are kept by that kind, balances are not broken down by it."));
 
 	// The kinds section unfolded — one attribute per position, count declared by MaxAccountDimensionCount.
 	// Created by SyncAccountDimensionKindColumns and never destroyed: lowering the ceiling deactivates

@@ -136,10 +136,14 @@ class FRONTEND_API ibFormAttributeValue :
 		ibMetaID     m_attributeId = wxNOT_FOUND;
 
 		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Attribute name"), wxT(""));
-		ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Attribute caption (form label)"), wxT(""));
-		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
-		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"), &ibFormAttribute::FillFillCheck, 0);
+		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The attribute's name: how the form module reads and writes it (by bare name) and how a control's data path names it. Unique on the form."), wxT(""));
+		ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("The attribute's caption: the label of a control bound to it and its column header. Empty: made from the name. Can be written per language."), wxT(""));
+		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"),
+			_("Which values the attribute holds: a primitive, a reference, an object, or a list type such as a dynamic list or a value table. The type decides which controls can be bound to it and what they edit."),
+			ibValueTypes::TYPE_STRING);
+		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"),
+			_("Whether the attribute must be filled. Show error: ThisForm.CheckFilling() reports it when empty and answers False. Checked only when code calls CheckFilling() - the form does not check on its own."),
+			&ibFormAttribute::FillFillCheck, 0);
 	};
 
 public:

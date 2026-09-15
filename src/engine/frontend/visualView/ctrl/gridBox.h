@@ -165,7 +165,8 @@ private:
 	std::shared_ptr<bool> m_aliveToken = std::make_shared<bool>(true);
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"));
+	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+		_("The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."));
 
 	// ⭐⭐ COMPOSE ON OPEN — the report builds itself as the control is created, with no press of
 	// Compose (Max, 2026-08-26). A report normally waits because the reader sets its parameters
@@ -181,7 +182,9 @@ private:
 	// all pass through there, and a report that re-read itself on each of them would be reading the
 	// database because a window moved.
 	ibPropertyBoolean*  m_propertyComposeOnOpen = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryData, wxT("ComposeOnOpen"), _("Compose on open"), wxT(""), false);
+		m_categoryData, wxT("ComposeOnOpen"), _("Compose on open"),
+		_("Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."),
+		false);
 
 	// ⭐⭐ DETAIL PROCESSING — the first event this control has ever had, and it is named after the
 	// QUESTION rather than after the gesture that asks it (Max, 2026-08-26: "there is no such event

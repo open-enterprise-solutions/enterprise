@@ -99,7 +99,9 @@ private:
 	ibStandardCommandSet m_actionArray;
 
 	ibPropertyCategory* m_categoryAction = ibPropertyObject::CreatePropertyCategory(wxT("Action"), _("Toolbar"));
-	ibPropertyList* m_actSource = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryAction, wxT("ActionSource"), _("Source"), &ibValueToolbar::GetActionSource, wxNOT_FOUND);
+	ibPropertyList* m_actSource = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryAction, wxT("ActionSource"), _("Source"),
+		_("Whose standard commands the toolbar's items can run: the form itself (Write, Close and so on) or one of the form's tables (Add, Copy, Delete and so on). An item picks its command from this source's list."),
+		&ibValueToolbar::GetActionSource, wxNOT_FOUND);
 
 	friend class ibValueForm;
 };
@@ -237,12 +239,19 @@ private:
 
 	ibPropertyCategory* m_categoryToolbar = ibPropertyObject::CreatePropertyCategory(wxT("ToolBarItem"), _("Item"));
 
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Title"), _("Title"), wxT(""));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryToolbar, wxT("Representation"), _("Representation"), ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryToolbar, wxT("Picture"), _("Picture"));
-	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("ContextMenu"), _("Context menu"), false);
-	ibPropertyTString* m_properyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Tooltip"), _("Tooltip"), wxEmptyString);
-	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("Enabled"), _("Enabled"), true);
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Title"), _("Title"),
+		_("The item's caption. Empty: the caption of the standard command it runs. Can be written per language."), wxT(""));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryToolbar, wxT("Representation"), _("Representation"),
+		_("What the item shows: text, picture, or both. Auto: what its standard command prefers (Close is a picture alone, Add a picture with text); picture and text when it runs no standard command."),
+		ibRepresentation::ibRepresentation_Auto);
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryToolbar, wxT("Picture"), _("Picture"),
+		_("The item's icon. Empty: the picture of the standard command it runs."));
+	ibPropertyBoolean* m_propertyContextMenu = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("ContextMenu"), _("Context menu"),
+		_("Whether the item gets a drop-down arrow beside it. The menu the arrow opens is a placeholder for now, with no items of its own."), false);
+	ibPropertyTString* m_properyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryToolbar, wxT("Tooltip"), _("Tooltip"),
+		_("Text shown when the mouse pointer rests over the item. Empty: the caption of the standard command it runs."), wxEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryToolbar, wxT("Enabled"), _("Enabled"),
+		_("Whether the item can be pressed. Off: it is shown greyed out."), true);
 
 	ibEventAction* m_eventAction = ibPropertyObject::CreateEvent<ibEventAction>(m_categoryToolbar, wxT("Action"), _("Action"), wxArrayString{ wxT("Control") }, &ibValueToolBarItem::GetToolAction, wxNOT_FOUND);
 

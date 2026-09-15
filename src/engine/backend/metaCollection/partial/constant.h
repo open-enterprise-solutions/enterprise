@@ -239,14 +239,14 @@ protected:
 
 private:
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"), _("Code that runs when the constant's value is written: its BeforeWrite and OnWrite handlers, from the constant's form or from code (Constants.<Name>.Set)."));
 
 	// The VALUE properties — moved here from the attribute base the constant used to inherit. They
 	// are what the user edits, so they belong on the object the designer shows, and the inner column
 	// reads them back rather than holding a second copy.
 	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(wxT("Value"), _("Value"));
-	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
-	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, wxT("FillCheck"), _("Fill check"));
+	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, wxT("Type"), _("Type"), _("The type of the constant's value - a primitive (string, number, date, boolean) or a reference. The one stored value is kept in the system table of constants and converted to this type when read."), ibValueTypes::TYPE_STRING);
+	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, wxT("FillCheck"), _("Fill check"), _("Refuse to write an empty value: the constant's form shows the field as required, and a write leaving it empty fails with a message naming it."));
 
 	// The one column of sys_const — a predefined child, created with the constant and reachable only
 	// through it. No metaID of its own (it reports the constant's), so nothing to serialize.

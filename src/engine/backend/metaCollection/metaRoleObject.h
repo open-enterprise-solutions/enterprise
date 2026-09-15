@@ -71,14 +71,17 @@ private:
 	// itself, and auto-registers with the module manager on run.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyRoleModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, wxT("RoleModule"), _("Role module"));
+			m_categoryContext, wxT("RoleModule"), _("Role module"),
+			_("The role's row-level access policy: procedures OnAccessRead(Source, Operation, Allowed) and OnAccessWrite(Source, Operation, Allowed). Each folds a filter into Source (Where, Join or restrict) and sets Allowed = True; a handler that does not set it denies the operation. A role without a handler leaves the source alone."));
 
 	// Declared BEFORE the property that uses it — members are constructed in declaration order,
 	// whatever the initialiser list says (docs/portability.md §1.8).
 	ibPropertyCategory* m_categoryAccess = ibPropertyObject::CreatePropertyCategory(wxT("Access"), _("Access"));
 	ibPropertyEnum<ibValueEnumRoleCompositionMode>* m_propertyComposition =
 		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRoleCompositionMode>>(
-			m_categoryAccess, wxT("Composition"), _("Composition"), ibRoleCompositionMode_Union);
+			m_categoryAccess, wxT("Composition"), _("Composition"),
+			_("How the role combines with the user's other roles. Permitting (the default): the role adds rights, one permitting role granting is enough. Restricting: the role grants nothing and subtracts - what it denies stays denied whatever the others grant (a data separator such as organisation or division). Verdict: (permitting OR ...) AND restricting AND ...; role order never matters."),
+			ibRoleCompositionMode_Union);
 };
 
 #endif 

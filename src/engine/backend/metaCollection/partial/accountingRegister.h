@@ -859,11 +859,11 @@ private:
 		return true;
 	}
 
-	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"));
-	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"));
+	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyObjectModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordSetModule"), _("Record set module"), _("Code that runs with a record set of the register: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."));
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyManagerModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("ManagerModule"), _("Manager module"), _("Code of the register as a whole rather than of one set: its exported procedures and functions are called on the manager, as AccountingRegisters.<Name>.<Function>()."));
 
 	ibPropertyCategory* m_categoryForm = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
-	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), &ibValueMetaObjectAccountingRegister::FillFormList);
+	ibPropertyList* m_propertyDefFormList = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormList"), _("Default List Form"), _("The form the register's list of postings opens with. Empty: the list form is generated from the register's fields."), &ibValueMetaObjectAccountingRegister::FillFormList);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Chart of Accounts binding — determines the type of Account field
@@ -880,9 +880,9 @@ private:
 	// ON by default: double entry is what an accounting register is FOR, and a one-sided one is the
 	// special case (a register of quantities, a memo book). Defaulting to off meant every new register
 	// started as the exception and had to be corrected into the rule.
-	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("Correspondence"), _("Correspondence"), true);
+	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("Correspondence"), _("Correspondence"), _("Whether a line is a whole posting or one side of it. On (the default): a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off: a line carries RecordType and one Account, a posting is two lines."), true);
 
-	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"));
+	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"), _("The chart of accounts the register is kept by: Account (or AccountDr / AccountCr) is a reference into it, and its account dimension kinds decide the register's dimension slots and what each may hold. Required."));
 
 	// SPLIT TOTALS — spread one logical totals row across several physical ones, so concurrent posters
 	// stop queueing on the same row. OFF by default, and deliberately a switch rather than anything
@@ -897,15 +897,15 @@ private:
 	// posting at once stop queueing behind the same row; the cost is rows that a read folds back
 	// together, which the read does anyway. A register is written to concurrently as the ordinary
 	// case, so the contended shape is the one to start from.
-	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), true);
+	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), _("Spread one logical totals row over several physical ones, so sessions posting at the same time stop queueing on the same row (cash, revenue and VAT accounts are hit by every document). A read sums the parts back, as it reads anyway. On by default; switching it changes the totals tables."), true);
 
 	// Predefined attributes: RecordType (Debit/Credit)
 	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumAccountingRecordTypeCLSID, false, ibValueEnumAccountingRegisterRecordType::CreateDefEnumValue()));
+		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), _("Debit or credit - the side of the account a line moves, in a register without correspondence (one side per line)."), g_enumAccountingRecordTypeCLSID, false, ibValueEnumAccountingRegisterRecordType::CreateDefEnumValue()));
 
 	// Predefined attribute: Account (reference to Chart of Accounts - polymorphic)
 	ibPropertyContainer<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), _("The account a line is posted to - an account of the register's chart; its dimension kinds decide what the line's dimension slots hold."), false, ibItemMode::ibItemMode_Item));
 
 	// THE DIMENSION SLOTS — created by SyncAccountDimensionSlots, not declared here.
 	//

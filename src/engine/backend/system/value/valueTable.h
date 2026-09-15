@@ -147,7 +147,7 @@ public:
 			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
 			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Column name"), wxT(""));
 			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Column caption (header)"), wxT(""));
-			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
+			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. String by default."), ibValueTypes::TYPE_STRING);
 			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, wxT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
 
 			friend ibValueModelTableColumnCollection;

@@ -22,10 +22,12 @@ public:
 			static_cast<ibValueMetaObject*>(m_owner);
 		wxASSERT(parent);
 		m_metaObject = parent->CreateMetaObjectAndSetParent<T>(args...);
+		m_propHelp = m_metaObject->GetComment();   // a third argument is the attribute's comment, and the property's help
 	}
 
+	// The help is the held attribute's comment — what it says about itself is what the property shows.
 	ibPropertyContainer(ibPropertyCategory* cat, T* metaObject)
-		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), wxNullVariant), m_metaObject(metaObject)
+		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), wxNullVariant), m_metaObject(metaObject)
 	{
 	}
 

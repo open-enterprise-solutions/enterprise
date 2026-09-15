@@ -141,20 +141,20 @@ private:
 
 	ibPropertyCategory* m_categoryCommand      = ibPropertyObject::CreatePropertyCategory(wxT("Command"), _("Command"));
 	// Interface area — where the command sits once included in a section; default Normal. GetCommandSection reads it.
-	ibPropertyEnum<ibValueEnumInterfaceCommandSection>* m_propertyInterfaceArea = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumInterfaceCommandSection>>(m_categoryCommand, wxT("InterfaceArea"), _("Interface area"), ibInterfaceCommandSection_Default);
-	ibPropertyPicture*  m_propertyPicture      = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommand, wxT("Picture"), _("Picture"));
-	ibPropertyTString*  m_propertyTooltip      = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommand, wxT("Tooltip"), _("Tooltip"), wxEmptyString);
-	ibPropertyBoolean*  m_propertyModifiesData = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommand, wxT("ModifiesData"), _("Modifies data"), true);
+	ibPropertyEnum<ibValueEnumInterfaceCommandSection>* m_propertyInterfaceArea = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumInterfaceCommandSection>>(m_categoryCommand, wxT("InterfaceArea"), _("Interface area"), _("Which group of a section the command sits in once the section includes it - the ordinary commands, create, reports or service. Normal by default."), ibInterfaceCommandSection_Default);
+	ibPropertyPicture*  m_propertyPicture      = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommand, wxT("Picture"), _("Picture"), _("The icon shown beside the command's caption in a section, a command bar or a menu. Empty: caption only."));
+	ibPropertyTString*  m_propertyTooltip      = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommand, wxT("Tooltip"), _("Tooltip"), _("The hint shown when the pointer rests on the command, one text per language. Empty: the synonym is shown."), wxEmptyString);
+	ibPropertyBoolean*  m_propertyModifiesData = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommand, wxT("ModifiesData"), _("Modifies data"), _("Declares that running the command changes data, so it has no place where data is only viewed. Saved with the command; nothing hides or disables it by this yet."), true);
 	// Default TYPE_STRING (a VALID variant, like an attribute's Type) — a primitive is not a reference, so an
 	// untouched command reads as NOT parameterized (shown everywhere). TYPE_EMPTY builds a broken type variant
 	// whose GetValueAsTypeDesc dereferences garbage — never default a type property to it.
-	ibPropertyType*     m_propertyParamType    = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommand, wxT("ParameterType"), _("Parameter type"), ibValueTypes::TYPE_STRING);
+	ibPropertyType*     m_propertyParamType    = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommand, wxT("ParameterType"), _("Parameter type"), _("What the command is run FOR. Naming one or more reference types makes it a typed command: it is offered only on forms carrying data of such a type, and CommandProcessing receives that reference as its parameter. A primitive type (the default) leaves it untyped - offered everywhere."), ibValueTypes::TYPE_STRING);
 
 	// inner handler module (PLAIN module, like Constant's record module) — carries CommandProcessing,
 	// serialises itself; compiled on invocation by ibValueCommandDataObject, never a common module.
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyCommandModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(
-			m_categoryContext, wxT("CommandModule"), _("Command module"));
+			m_categoryContext, wxT("CommandModule"), _("Command module"), _("The command's code: CommandProcessing(CommandParameter, ExecuteParameters) runs when the command is invoked, with the typed command's reference as the parameter. Compiled when the command is run."));
 
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(wxT("Use"), _("Use"));
 

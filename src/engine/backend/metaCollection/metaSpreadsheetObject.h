@@ -36,7 +36,8 @@ class BACKEND_API ibValueMetaObjectSpreadsheet : public ibValueMetaObjectSpreads
 protected:
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("Template"), _("Template"));
-	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));
+	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"),
+		_("The template's spreadsheet: cells, named areas and parameters a print form is assembled from. Code gets it with the owner's GetTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."));
 };
 
 class BACKEND_API ibValueMetaObjectCommonSpreadsheet : public ibValueMetaObjectSpreadsheetBase {
@@ -50,7 +51,8 @@ class BACKEND_API ibValueMetaObjectCommonSpreadsheet : public ibValueMetaObjectS
 protected:
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("CommonTemplate"), _("Common template"));
-	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"));
+	ibPropertySpreadsheet* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertySpreadsheet>(m_categoryTemplate, wxT("TemplateData"), _("Template data"),
+		_("The common template's spreadsheet: cells, named areas and parameters shared by the whole configuration. Code gets it with GetCommonTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."));
 };
 
 #endif 

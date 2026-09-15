@@ -22,6 +22,7 @@ public:
 	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
 
 	// NOTHING CHOSEN — asked of the property itself, so a rule reads "is this binding empty" rather
 	// than reaching for a type count. A calculation register with this empty cannot type its

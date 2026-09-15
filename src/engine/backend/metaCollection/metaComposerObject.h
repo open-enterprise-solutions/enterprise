@@ -127,7 +127,8 @@ private:
 	// serialisation the same two symmetric lines every other metatype has — one property out, one
 	// property in — and what keeps its node's CHILDREN area for metaobjects alone.
 	ibPropertyCategory*    m_categoryComposer = ibPropertyObject::CreatePropertyCategory(wxT("Composer"), _("Composer"));
-	ibPropertyComposition* m_propertyComposition = ibPropertyObject::CreateProperty<ibPropertyComposition>(m_categoryComposer, wxT("CompositionData"), _("Composition data"));
+	ibPropertyComposition* m_propertyComposition = ibPropertyObject::CreateProperty<ibPropertyComposition>(m_categoryComposer, wxT("CompositionData"), _("Composition data"),
+		_("The composition this composer declares: its query (the data), resources (what is totalled), parameters, structure (groupings, table, charts) and settings variants. It is the DEFAULT of the user's settings - saved user settings replace it. The report's first composer is its default one: its generated form is built from it, so such a report needs no form of its own."));
 
 
 	// Stated once, never derived: the column face answers "a composition" for every composer.

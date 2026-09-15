@@ -114,7 +114,7 @@ private:
 	// performed it; an untyped column then stored a type tag and no reference, and the relation read
 	// back empty.)
 	ibPropertyContainer<>* m_propertyCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryRelation,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), wxEmptyString, /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
+		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("CalculationType"), _("Calculation type"), _("The type this row names - the one that displaces, feeds the base of, or leads the type owning the row, depending on the section. A type of this chart or of one of its base charts. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
 };
 
 #endif

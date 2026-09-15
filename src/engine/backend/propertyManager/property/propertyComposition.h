@@ -27,6 +27,8 @@ public:
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyComposition(ibPropertyCategory* cat, const wxString& name, const wxString& label, const ibCompositionDescription& desc)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject(), desc)) {}
 

@@ -45,7 +45,9 @@ private:
 	// finds the switch.
 	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(wxT("Accounting"), _("Accounting"));
 	ibPropertyBoolean*  m_propertyBalance = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryAccounting, wxT("Balance"), _("Balance"), true);
+		m_categoryAccounting, wxT("Balance"), _("Balance"),
+		_("Accounting registers only: whether an entry must balance in this resource (debits equal credits) and whether balances are read in it on both sides. On by default - the amount is what a posting is; turn it off for a quantity or a currency amount, which legitimately differ between the sides."),
+		true);
 };
 
 #endif
