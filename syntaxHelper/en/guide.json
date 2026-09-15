@@ -68,6 +68,94 @@
         "guide.linq"
       ],
       "reviewed": true
+    },
+    {
+      "id": "guide.declaredTypes",
+      "name_local": "Declared types — say what a parameter or a variable takes",
+      "name_en": "Declared types — say what a parameter or a variable takes",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Procedure <Name>(<Type> <param>[ = <default>], ...)    <Type> <name>;",
+      "description": "THE TYPE STANDS BEFORE THE NAME: `Procedure OnClick(AnyControl element)`, `Array rows;`. It is optional - no type means anything - and it is WRITTEN FOR THE READER: whoever researches the code, a person or an assistant, sees what a routine takes without reading its body, and a type name that does not exist is a compile error rather than a surprise at run time. So declare the parameters of anything written for others to call.\n\nWHAT CAN BE DECLARED:\n\n- the primitives: `Number`, `String`, `Date`, `Boolean`;\n- a value class by its registered name: `Array`, `Structure`, `Table` (the value table)…;\n- a FAMILY - a filter that creates nothing, and lets a whole kind through, members added tomorrow included:\n    `Any` - anything, said rather than left unsaid\n    `AnyRef` - any reference (catalog, document, chart…)\n    `AnyObject` - any data object\n    `AnyManager` - any manager\n    `AnyControl` - any form control\n    `AnyValue` - any general-purpose value (array, structure, value table)\n    `AnyEnum` - any enumeration\n    `CatalogRef`, `DocumentRef`, `ChartOfAccountsRef`… - any reference OF ONE METATYPE, whichever object.\n\nEMPTY ALWAYS FITS. A parameter nobody passed or a reference not filled in is the empty value: the declaration says what the value IS when there is one, not that there is one.\n\nWHAT DOES NOT WORK YET (measured 2026-09-15):\n- `Val` together with a type - `Val Number n` does not compile. A typed parameter is written without `Val`.\n- one configuration object's reference, `CatalogRef.Goods item` - declare the family (`CatalogRef item`) and let the name say which catalog.\n- the editor's completion does not read a declared type yet; the declaration serves the reader and the compiler.\n\n`type_list` (the assistant's tool) answers which type names exist.",
+      "syntax_block": "Procedure <Name>(<Type> <param>) { }",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// an event handler: any form control\nProcedure OnClick(AnyControl element)\n{\n    Message(element);\n}\n\n// any reference - whichever catalog, document or chart\nFunction Describe(AnyRef link)\n{\n    Return String(link);\n}\n\n// any document reference; a flag with its default\nProcedure Repost(DocumentRef doc, Boolean silent = False) Public\n{\n    If (Not silent) { Message(doc); }\n}\n\n// locals, declared the same way\nProcedure Collect()\n{\n    Array rows;\n    Table lines;\n    Structure totals;\n    Number count = 0;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "kw.Function",
+        "kw.Val",
+        "fn.TypeOf"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.cached",
+      "name_local": "Cached functions — an answer used again (settings, the policy for a period)",
+      "name_en": "Cached functions — an answer used again (settings, the policy for a period)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Function <Name>(<params>) [Public|Private|Protected] Cached { ... }",
+      "description": "WHAT IS CACHED IS WHAT A FUNCTION RETURNS. `Cached` after the parameter list keeps the answer per combination of argument values: the first call with a combination runs the body, every later call with the same values gets the kept answer without entering the function. That is the whole point, which is why only a Function can be Cached - a Procedure returns nothing, and the modifier is refused there.\n\nWHEN TO WRITE IT - the same value is asked for again and again, and the answer depends on the arguments only:\n- the accounting policy for a period, asked for every line of every document;\n- settings and switches;\n- a rate for (currency, date);\n- anything worked out from metadata.\nA loop over ten thousand rows asking `InventoryMethod(period)` reads the register once per period, not ten thousand times. So whenever code reads the same setting or policy in more than one place, or inside a loop, the reading goes into a Cached function and every caller simply asks it.\n\nIT MAY RETURN ANYTHING, and the answer lives AS LONG AS ITS OWNER - there is nothing to clear and no timer:\n- a common module: the whole session;\n- an object module: while that object lives;\n- a form module: while the form is open.\nEvery caller with the same arguments gets the SAME value - a returned structure or table is one object for all of them.\n\nNOT FOR:\n- a function with side effects: the second call does not run;\n- an answer that depends on something besides the arguments (the current date, data written since): it is seen again only when the owner is gone - for a common module, the next session.\n\nArguments are compared BY VALUE: the number 1 and the string \"1\" are different keys. A call that raised is not kept.",
+      "syntax_block": "Function <Name>(<params>) Public Cached {\n    Return <Value>;\n}",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// the policy for a period: read once per period, however often it is asked -\n// in a common module, for the whole session\nFunction InventoryMethod(Date period) Public Cached\n{\n    Return ReadPolicy(period);\n}\n\nFunction ReadPolicy(Date period) Private\n{\n    If (period < Date(2026, 1, 1)) { Return \"Average\"; }\n    Return \"FIFO\";\n}\n\n// the caller just asks, as often as it needs\nvar method = \"\";\nfor (i = 1 To 1000) {\n    method = InventoryMethod(Date(2026, 3, 1));   // the body ran once\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Cached",
+        "kw.Function",
+        "guide.declaredTypes"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.basedOn",
+      "name_local": "Entering on the basis — one object made from another (an invoice from an order)",
+      "name_en": "Entering on the basis — one object made from another (an invoice from an order)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "Procedure Filling(Source, StandartProcessing)",
+      "description": "ONE OBJECT ENTERED FROM ANOTHER - an invoice from an order, a payment from an invoice - is three pieces the platform already has. Nothing is written but the filling itself.\n\n1. WHAT MAY BE ENTERED FROM WHAT is a binding on the SOURCE: its `ListGeneration` property lists the kinds that can be made from it (the designer's property grid, or `metadata_bind` with `ListGeneration`). Empty: nothing is entered from it.\n\n2. THE PERSON presses the standard *Generate* command of the source's form. It offers exactly the kinds in that list, creates the chosen one and opens its form.\n\n3. THE NEW OBJECT FILLS ITSELF, in its own object module, in the handler `Filling(Source, StandartProcessing)`. `Source` is the reference it was entered from - the order. The same handler runs for a plain new object too, with `Source` empty - that is where its defaults go - so the first lines of the handler tell the two apart. Setting `StandartProcessing = False` REFUSES the entry: the object is not created and no form opens. Use it when this source cannot give such an object (an order already closed).\n\nFROM CODE the same filling is asked with `Fill`: `var doc = Documents.Invoice.CreateDocument(); doc.Fill(order); doc.Write();` - the new object's own `Filling` runs with that source. So the rule lives in ONE place, whether a person or a routine enters the object.\n\nWHAT TO CARRY OVER is craft, not mechanism - the pattern `entered-from` (pattern_read): attributes of the same name carry over; the rate, the currency of a till and the number are worked out afresh for the new document; lines are filled from what is STILL OUTSTANDING on the source (`document-chains`), not copied from its lines as written.",
+      "syntax_block": "Procedure Filling(Source, StandartProcessing) {\n    If (Not ValueIsFilled(Source)) { Return; }\n    <fill from Source>\n}",
+      "parameters": "Source - the reference the object is entered from; empty for a plain new object. StandartProcessing - True on entry; set it to False to refuse creating the object.",
+      "return_descr": "",
+      "example": "// the object module of the document being ENTERED (here: a receipt entered from an order)\nProcedure Filling(Source, StandartProcessing)\n{\n    If (Not ValueIsFilled(Source)) {\n        Return;                        // a plain new document: defaults only\n    }\n    // the header by name; the lines from what the order still has open\n    Counterparty = Source.Counterparty;\n    Warehouse = Source.Warehouse;\n    foreach (line In Source.Goods) {\n        var row = Goods.Add();\n        row.Item = line.Item;\n        row.Quantity = line.Quantity;\n    }\n}\n\n// the same, asked from code\nvar doc = Documents.GoodsReceipt.CreateDocument();\ndoc.Fill(order);\ndoc.Write();",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Procedure",
+        "fn.ValueIsFilled",
+        "guide.cached"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "guide.ownedCatalogs",
+      "name_local": "Subordinate catalogs — items that live with an owner (units of an item, contracts of a counterparty)",
+      "name_en": "Subordinate catalogs — items that live with an owner (units of an item, contracts of a counterparty)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "ListOwner = <owner catalog>    item.Owner",
+      "description": "A CATALOG WHOSE ITEMS BELONG TO AN ITEM OF ANOTHER - the units of measure of a product, its characteristics, the contracts or bank accounts of a counterparty - is declared in METADATA, not written in code. The subordinate catalog's `ListOwner` names the catalogs that own it: the designer's property grid, `metadata_bind` with `ListOwner`, or `ListOwner` among `metadata_create`'s properties. Like any catalog it may be hierarchical as well.\n\nWHAT IT GIVES:\n- every item and folder gets the predefined attribute `Owner`, typed by that list - a reference to the owner's item (several owner catalogs make it a composite type);\n- `Owner` is REQUIRED: an item without one is refused on write;\n- `Owner` is an ordinary column - `SELECT ... FROM Catalog.Units WHERE Owner = &Item`, and in LINQ `From u In Data.Catalogs.Units Where u.Owner = item`.\n\nWHEN: the thing makes sense only with its owner - units, packings, characteristics, contracts, a counterparty's bank accounts. What many owners share (a currency, a warehouse) is not subordinate.\n\nHOW IT BEHAVES FOR THE PERSON. A subordinate list is shown for ONE owner, and a choice on a document line offers only the items of the line's owner - a contract of the document's counterparty, a unit of the line's product. That is the point of subordination, and it is the PLATFORM's to do, by the owner - not each configuration's. So when building a configuration, LOOK whether the list and the choice are narrowed; where they are not, that is a requirement to raise with the platform's owner, not a workaround to write into every form. A QUERY is another matter: it reads what it is asked, so a query over one owner's items filters by `Owner` itself.",
+      "syntax_block": "var <item> = Catalogs.<Subordinate>.CreateElement();\n<item>.Owner = <ownerRef>;\n<item>.Write();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// the catalog Units has ListOwner = Goods (set in metadata, not here)\nvar unit = Catalogs.Units.CreateElement();\nunit.Owner = item;                 // required\nunit.Description = \"box of 12\";\nunit.Write();\n\n// the units of one product\nvar units = From u In Data.Catalogs.Units Where u.Owner = item Select u;",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "guide.linq",
+        "guide.basedOn"
+      ],
+      "reviewed": true
     }
   ]
 }

@@ -3661,7 +3661,14 @@ const std::vector<ibMcpPattern>& Patterns()
 		"changes only if it belonged to somebody else; the price type only if it belonged to the old\n"
 		"party; and where clearing is unavoidable, SAY SO rather than doing it silently.\n"
 		"* AND \"IS IT STILL ADMISSIBLE\" IS A NAMED FUNCTION, not a condition written at each place\n"
-		"that changes an owner. There are half a dozen such places and they must all agree.") },
+		"that changes an owner. There are half a dozen such places and they must all agree.\n"
+		"\n"
+		"NOTE: IN THIS PLATFORM THE MECHANISM IS ALREADY THERE, and only the filling is written. What\n"
+		"may be entered from what is the SOURCE's `ListGeneration` (metadata_bind); the person uses its\n"
+		"form's standard Generate command; the new object fills itself in its object module's\n"
+		"`Filling(Source, StandartProcessing)` - `Source` empty for a plain new object, and\n"
+		"`StandartProcessing = False` refusing the entry - and code asks the same with\n"
+		"`doc.Fill(source)`. The syntax helper's guide.basedOn has the handler written out.") },
 
 	{ wxT("traceability"),
 	  ibMcpText("Tracking an individual thing: serial numbers, certificates, shelf life, issued items."),
@@ -4132,9 +4139,11 @@ const std::vector<ibMcpPattern>& Patterns()
 		" By COUNTERPARTY alone - one running balance per partner. The primitive level: it\n"
 		" works, and it cannot answer \"which of the two agreements is this against\".\n"
 		" By CONTRACT, which is what people usually mean. A Contracts catalogue whose OWNER is\n"
-		" the counterparty - subordinate to it, so a contract cannot exist without one and the\n"
-		" choice lists are narrowed by construction. The contract carries its period of\n"
-		" validity and its CURRENCY.\n"
+		" the counterparty - subordinate to it (`ListOwner`), so a contract cannot exist without\n"
+		" one, and the choice of a contract on a document offers only the document's\n"
+		" counterparty's contracts. That narrowing is the PLATFORM's, by the owner: where it is\n"
+		" missing, it is asked of the platform, not worked round form by form\n"
+		" (guide.ownedCatalogs). The contract carries its period of validity and its CURRENCY.\n"
 		"\n"
 		"THE CONTRACT'S CURRENCY DECIDES THE BEHAVIOUR, which is why it belongs to the contract\n"
 		"and not to the document. Settlements are then kept in a register whose dimensions include\n"

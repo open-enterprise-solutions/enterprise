@@ -224,7 +224,7 @@ private:
 	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), _("The form used to choose a folder - for an item's Parent. Empty: the list form opens showing folders only."), &ibValueMetaObjectCatalog::FillFormFolderSelect);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	ibPropertyOwner* m_propertyOwner = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ListOwner"), _("List owner"), _("The catalogs whose items own this catalog's items - contracts owned by counterparties, say. When set, every item has an Owner, the list is shown for one owner at a time, and an item is chosen within its owner. Empty: the catalog is not subordinate."));
+	ibPropertyOwner* m_propertyOwner = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, wxT("ListOwner"), _("List owner"), _("The catalogs whose items own this catalog's items - contracts owned by counterparties, say. When set, every item has an Owner and is not written without one. The list and the choice are not narrowed to one owner by themselves yet - a query or a form filters by Owner. Empty: the catalog is not subordinate."));
 
 	//default array 
 	ibPropertyContainer<>* m_propertyAttributeOwner = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Owner"), _("Owner"), _("The item of an owner catalog this item belongs to; its type is set by List owner. Required when the catalog is subordinate."), true, ibItemMode::ibItemMode_Folder_Item));

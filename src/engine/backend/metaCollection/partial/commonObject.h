@@ -1355,6 +1355,18 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		ApplyHierarchyType();
 	}
 
+	// How a reference to an item reads - by its Description or by its Code (ibDataPresentation). Read by
+	// the presentation template below, which every road that shows a reference is built from.
+	ibDataPresentation GetReferencePresentation() const { return m_propertyDataPresentation->GetValueAsEnum(); }
+	// …stated by a kind that is named by its code (a chart of accounts) at construction; a loaded
+	// configuration's own choice replaces it.
+	void SetReferencePresentation(ibDataPresentation presentation) { m_propertyDataPresentation->SetValue(presentation); }
+	// …and the attribute that IS the presentation: what a reference reads as, and what a list of the
+	// items is ordered by (ibCreateHierarchyList's presentation column) - one declaration, both roads.
+	ibValueMetaObjectAttributePredefined* GetDataPresentationAttribute() const {
+		return GetReferencePresentation() == ibDataPresentation_Code ? GetDataCode() : GetDataDescription();
+	}
+
 	// A catalog / chart IS hierarchical by its class — it returns its parent attribute (the record queryable forwards
 	// here, no cast). Body in commonObjectMetaQuery.cpp (attribute→column upcast complete there).
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;
@@ -1408,9 +1420,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// the base classes — it can be left in the base"*, and *"we require it of the base metadata — base
 	// enumeration, base hierarchy, base document — and each overrides it at its own level"*).
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, wxString& out) const override;
-	// …its Description, and nothing around it.
+	// …its Description, or its Code where the kind is named by it (DataPresentation) - and nothing around it.
 	virtual bool GenerateDataDesc(ibDataDescParameter& out) const override {
-		out = { wxEmptyString, GetDataDescription() };
+		out = { wxEmptyString, GetDataPresentationAttribute() };
 		return true;
 	}
 
@@ -1545,6 +1557,9 @@ protected:
 	// shown as one — and the settings that belong to the same subject have a place to land next to it.
 	ibPropertyCategory* m_categoryHierarchy = ibPropertyObject::CreatePropertyCategory(wxT("Hierarchy"), _("Hierarchy"));
 	ibPropertyEnum<ibValueEnumHierarchyType>* m_propertyHierarchyType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHierarchyType>>(m_categoryHierarchy, wxT("HierarchyType"), _("Hierarchy type"), _("How the items are arranged. Folders and items (the default): folders hold items and other folders, and the list walks them as a tree. Items: any item may hold others (a chart of accounts). Subordination: a Parent is recorded but the list stays flat. None: no parent at all. It decides what Parent may point to and whether IsFolder exists."), ibHierarchyType::eFoldersAndItems);
+
+	// HOW AN ITEM READS wherever a reference to it is shown - see ibDataPresentation.
+	ibPropertyEnum<ibValueEnumDataPresentation>* m_propertyDataPresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDataPresentation>>(m_categoryPresentation, wxT("DataPresentation"), _("Data presentation"), _("How a reference to an item reads wherever it is shown - in a field, a list, a report: by its Description (the default for a catalog) or by its Code (the default for a chart of accounts, whose accounts are named by their numbers)."), ibDataPresentation_Description);
 
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("PredefinedName"), _("Predefined name"), _("The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));

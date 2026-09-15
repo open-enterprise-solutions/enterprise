@@ -5571,6 +5571,14 @@ msgstr "Ієрархія папок та елементів"
 msgid "Hierarchy type"
 msgstr "Вид ієрархії"
 
+#: src/engine/backend/metaCollection/partial/commonObject.h
+msgid "Data presentation"
+msgstr "Основне представлення"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h
+msgid "How a reference to an item reads wherever it is shown - in a field, a list, a report: by its Description (the default for a catalog) or by its Code (the default for a chart of accounts, whose accounts are named by their numbers)."
+msgstr "Як посилання на елемент виглядає скрізь, де воно показане, — у полі, у списку, у звіті: за найменуванням (типово в довідника) або за кодом (типово в плану рахунків, де рахунок називають його номером)."
+
 #: src/engine/designer/win/editor/codeEditor/codeEditorDesigner.cpp
 msgid "Breakpoint condition..."
 msgstr "Умова точки зупинки..."

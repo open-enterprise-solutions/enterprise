@@ -1151,6 +1151,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 	// A property absent from this pair does not survive the session that set it, and the failure is
 	// silent because the default keeps working.
 	node.SetProperty(m_propertyHierarchyType->GetName(), m_propertyHierarchyType->GetNodeValue());
+	node.SetProperty(m_propertyDataPresentation->GetName(), m_propertyDataPresentation->GetNodeValue());
 
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
@@ -1182,6 +1183,10 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 	// Restate it on the Parent field at once: everything that asks what a parent may be asks the
 	// FIELD, so a configuration loaded and never edited must already say what it declares.
 	ApplyHierarchyType();
+
+	// Absent from a configuration saved before it existed: the kind's own default stands (SetNodeValue
+	// leaves an empty value alone) - Description for a catalog, Code for a chart of accounts.
+	m_propertyDataPresentation->SetNodeValue(node.GetProperty(m_propertyDataPresentation->GetName()));
 
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }

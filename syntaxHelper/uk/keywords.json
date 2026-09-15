@@ -647,9 +647,10 @@
       "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // курс читається один раз на пару (валюта, дата)\n    Return <Значення>;\nEndFunction",
       "parameters": "Ключем слугують значення аргументів, і порівнюються вони ЗА ЗНАЧЕННЯМ: число 1 і рядок \"1\" — різні ключі. Функція без аргументів обчислюється один раз.",
       "return_descr": "",
-      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// викликається у циклі по 10000 рядків — база читається один раз\nFor Each Row In Rows Do\n    Row.Currency = Settings().Currency;\nEndDo;",
+      "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// викликається у циклі по 10000 рядків — база читається один раз\nforeach (row In rows) {\n    row.Currency = Settings().Currency;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "guide.cached",
         "kw.Function",
         "kw.Public",
         "kw.Private",

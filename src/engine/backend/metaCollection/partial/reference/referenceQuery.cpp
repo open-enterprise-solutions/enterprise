@@ -12,6 +12,7 @@
 #include "backend/logger/logger.h"        // a read that FAILED is said out loud, unlike a row that is absent
 #include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
 #include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
+#include "backend/stringUtils.h"          // a typed text against a code: the whole of it, case aside
 
 #include <algorithm>    // the batch's list, sorted and halved
 #include <functional>   // std::less over the tables' addresses
@@ -206,15 +207,17 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		// Does this row answer to `findData`? The SEARCHED attributes first (a catalog's code and
 		// description), then the presentation, which is what a kind with no searchable fields of its
 		// own — an enumeration — is recognised by.
+		// Case aside, as the database's own match may be: "milk" finds "Milk".
 		bool Matches(const wxString& findData) const
 		{
+			const wxString wanted = findData.Lower();
 			for (const auto object : m_metaObject->GetSearchedAttributeObjectArray()) {
 				const auto it = m_listObjectValue.find(object->GetMetaID());
-				if (it != m_listObjectValue.end() && it->second.GetString().Contains(findData))
+				if (it != m_listObjectValue.end() && it->second.GetString().Lower().Contains(wanted))
 					return true;
 			}
 			wxString desc;
-			return m_metaObject->GenerateDataDesc(this, desc) && desc.Contains(findData);
+			return m_metaObject->GenerateDataDesc(this, desc) && desc.Lower().Contains(wanted);
 		}
 
 		//get metaData from object
@@ -240,8 +243,37 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 	// legitimate list) from "at least a hundred and one" (no list at all).
 	static const size_t kQuickListCeiling = 100;
 	try {
+		// ⭐ AN EMPTY REQUEST IS "EVERYTHING", and it is the commonest one — it is what a quick choice
+		// asks. `Contains(wxEmptyString)` is true of every string, so the old code proved that per row
+		// by materialising every attribute of it first. Nothing about the row can change the answer,
+		// so nothing about the row is read.
+		const bool everything = findData.IsEmpty();
+
 		ibDataQueryBuilder q;
 		q.From(m_metaObject->GetQueryable());
+
+		// ⭐⭐ THE TEXT IS LOOKED FOR IN THE DATABASE, NOT AMONG THE FIRST HUNDRED ROWS. The read below
+		// took the table's first 101 rows with no condition and matched the text among them, so in a
+		// chart of accounts or a catalog of any size the item typed for was found only if it happened
+		// to be near the front - "63" found nothing, while the account was there (Max, 2026-09-16:
+		// "the search looks by name - it should be by code or by name"). Where every attribute the kind
+		// is searched by holds text (a catalog's and a chart's Code and Description), each is asked to
+		// CONTAIN it, joined by OR, and the ceiling below then counts matches, not rows. A kind searched
+		// by something else too (a document by its date) keeps the scan: text cannot be asked of a date.
+		std::vector<ibValueMetaObjectAttributeBase*> searched = m_metaObject->GetSearchedAttributeObjectArray();
+		const bool textOnly = !searched.empty() && std::all_of(searched.begin(), searched.end(),
+			[](const ibValueMetaObjectAttributeBase* attribute) {
+				return attribute != nullptr && attribute->ContainType(ibValueTypes::TYPE_STRING);
+			});
+		if (!everything && textOnly) {
+			ibQueryPredicatePtr any;
+			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
+				ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(
+					ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(wxT("%") + findData + wxT("%")) });
+				any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, leaf) : leaf;
+			}
+			q.Where(any);
+		}
 
 		ibReadPageRequest page;
 		page.m_count = static_cast<int>(kQuickListCeiling) + 1;
@@ -258,11 +290,27 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 		// there is nothing to infer and nothing that a change of sort can move out from under this.
 		const ibBackendQueryColumn* const keyCol = m_metaObject->GetDataReference()->GetQueryColumn();
 
-		// ⭐ AN EMPTY REQUEST IS "EVERYTHING", and it is the commonest one — it is what a quick choice
-		// asks. `Contains(wxEmptyString)` is true of every string, so the old code proved that per row
-		// by materialising every attribute of it first. Nothing about the row can change the answer,
-		// so nothing about the row is read.
-		const bool everything = findData.IsEmpty();
+		// ⭐ HOW WELL A ROW ANSWERS, so the best comes first - the caller that types takes the FIRST
+		// (ibValueTextCtrl::TextProcessing). By the searched attributes in their order (a code before a
+		// description): the whole of it, then its beginning, then anywhere in it. "63" is account 63,
+		// before 631 and before a name that happens to hold the digits.
+		std::vector<std::pair<int, ibValue>> ranked;
+		const auto rankOf = [&](const ibDataQueryResult& row) {
+			int attributeAt = 0;
+			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
+				if (attribute != nullptr) {
+					const wxString text = row.GetValue(attribute->GetQueryColumn()).GetString();
+					if (stringUtils::CompareString(text, findData))
+						return attributeAt * 3;
+					if (text.Lower().StartsWith(findData.Lower()))
+						return attributeAt * 3 + 1;
+					if (text.Lower().Contains(findData.Lower()))
+						return attributeAt * 3 + 2;
+				}
+				++attributeAt;
+			}
+			return attributeAt * 3;   // matched by its presentation only
+		};
 
 		// ⭐⭐ THE IDENTITY COLUMN ALREADY *IS* THE REFERENCE — there is nothing to convert.
 		//
@@ -285,18 +333,21 @@ bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector
 				return false;
 			}
 			if (everything || ibValueDataObjectComparator(m_metaObject, rowReference->GetGuid().GetGuid(), selection).Matches(findData))
-				listValue.push_back(rowValue);
+				ranked.emplace_back(everything ? 0 : rankOf(selection), rowValue);
 		}
 		// Over the ceiling — hand back NOTHING rather than a truncated list. A list cut off at a
 		// hundred looks complete and is not, so the value a person wants may simply be absent from it
 		// with nothing said; refusing sends them to the selection form, where everything is reachable.
-		if (listValue.size() > kQuickListCeiling) {
-			listValue.clear();
+		if (ranked.size() > kQuickListCeiling)
 			return false;
-		}
 
-		std::sort(listValue.begin(), listValue.end(),
-				[](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
+		// The best answer first, and within one rank by what each reads as.
+		std::stable_sort(ranked.begin(), ranked.end(),
+			[](const std::pair<int, ibValue>& a, const std::pair<int, ibValue>& b) {
+				return a.first != b.first ? a.first < b.first : a.second.GetString() < b.second.GetString();
+			});
+		for (const std::pair<int, ibValue>& entry : ranked)
+			listValue.push_back(entry.second);
 		return listValue.size() > 0;
 	}
 	catch (...) { return false; }

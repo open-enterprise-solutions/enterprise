@@ -165,7 +165,29 @@ public:
 		ibControlTextEditor* textEditor = wxDynamicCast(ctrl, ibControlTextEditor);
 		if (textEditor == nullptr)
 			return false;
-		value = textEditor->GetValue();
+		const wxString text = textEditor->GetValue();
+
+		// ⭐⭐ A TYPED TEXT IS LOOKED FOR, as a form's field and a table's cell look for it (FindValue:
+		// by code or by description, the best answer first). Handed on raw, "66" reached the condition
+		// as a STRING against an account field and matched nothing - the search "did not work" because
+		// it was never asked (Max, 2026-09-16). What the field's TYPE makes of the text - a reference or
+		// an enumeration found by it, a number or a date read from it (ibValue::FindValue) - is written
+		// as the value itself, the one road a form's field takes; a text the type cannot read goes on
+		// as text, for the model to take as before.
+		if (m_side == kFilterColRight && !text.IsEmpty()) {
+			if (const ibFilterNodeDescription* item = GetSelectedItem()) {
+				if (!item->m_right.IsField()) {
+					const ibValue typed = ibValueTypeDescription::AdjustValue(item->m_left.m_type, m_editor->GetMetaData());
+					std::vector<ibValue> found;
+					if (typed.FindValue(text, found) && !found.empty()) {
+						SetControlValue(found.front());
+						return false;   // written already - the model has nothing more to take from the text
+					}
+				}
+			}
+		}
+
+		value = text;
 		return true;
 	}
 

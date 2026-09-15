@@ -968,11 +968,28 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	//    the result that many bytes too early, over the code in front of the literal;
 	//  - it did not know comments, so one quote in a `//` line turned every literal below it inside out.
 	// The stream's m_numUtf8String IS a wxSTC position, and a comment never becomes a token.
+	//
+	// ⚠ A STREAM OF ITS OWN, NOT THE EDITOR'S KEPT ONE. m_tc is patched edit by edit (OnTextChange), and
+	// after the text is replaced WHOLE - a SetText on a live editor, a delete-all then an insert-all - the
+	// patched stream is not the text any more: CI measured it (CodeEditorFix, four tests on 0dfc2f81), the
+	// first literal of a fresh editor found and every literal after a second SetText lost. The question is
+	// asked on a click, not a keystroke, so the text is simply read again by the same lexer in the same
+	// mode; the patching is a question of its own, for the colouring and the folds that read it.
 	const int caret = GetCurrentPos();
-	const std::vector<ibLexem>& lexems = m_tc.GetLexems();
+	ibTranslateCode stream;
+	stream.SetLexemMode(ibLexemMode::Editing);
+	stream.Load(GetText());
+	try {
+		stream.PrepareLexem();
+	}
+	catch (...) {
+		return span;
+	}
+	const std::vector<ibLexem>& lexems = stream.GetLexems();
 
-	// The last token whose stretch starts at or before the caret. A token's recorded start is where
-	// the lexer began looking for it, so its stretch takes in the whitespace and comments in front.
+	// The last token that starts at or before the caret. A token's recorded position is where the token
+	// itself starts - the lexer skips the whitespace and comments in front first - so a caret just past a
+	// closing quote, or in the gap after it, still falls to the literal until the next token begins.
 	size_t at = lexems.size();
 	for (size_t i = 0; i < lexems.size(); ++i) {
 		if (lexems[i].m_lexType == ENDPROGRAM || static_cast<int>(lexems[i].m_numUtf8String) > caret)

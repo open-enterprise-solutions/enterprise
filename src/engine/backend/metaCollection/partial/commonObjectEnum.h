@@ -38,6 +38,25 @@ class ibValueEnumHierarchyType : public ibValueEnumeration<ibHierarchyType> {
 	}
 };
 constexpr ibClassID g_enumHierarchyTypeCLSID = enum_to_clsid("EN_HRTP");
+
+// HOW A REFERENCE TO AN ITEM READS, wherever it is shown - a field, a list, a report: by its Description
+// or by its Code. A catalog is named by what it is called; a chart of accounts by its number, because
+// that is how an accountant names an account (Max, 2026-09-16: "accountants give the account, not its
+// name"). One declaration on the kind, read by the one template every presentation is built from.
+enum ibDataPresentation {
+	ibDataPresentation_Description = 1,
+	ibDataPresentation_Code,
+};
+
+class ibValueEnumDataPresentation : public ibValueEnumeration<ibDataPresentation> {
+	public:
+	ibValueEnumDataPresentation() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibDataPresentation_Description, wxT("Description"), _("Description"));
+		AddEnumeration(ibDataPresentation_Code, wxT("Code"), _("Code"));
+	}
+};
 #pragma endregion
 
 #endif

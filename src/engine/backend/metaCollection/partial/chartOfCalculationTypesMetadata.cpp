@@ -86,11 +86,11 @@ ibSourceDataObject* ibValueMetaObjectChartOfCalculationTypes::CreateSourceObject
 	case eFormFolder:
 		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
@@ -122,7 +122,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetListForm(const 
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCalculationTypes::eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn()),   // migrated onto the universal dynamic list (hierarchy via queryable)
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()),   // migrated onto the universal dynamic list (hierarchy via queryable)
 		formGuid
 	);
 }
@@ -132,7 +132,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetSelectForm(cons
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCalculationTypes::eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }
@@ -142,7 +142,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetFolderSelectFor
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCalculationTypes::eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataDescription()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
+		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
 		formGuid
 	);
 }

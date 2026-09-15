@@ -499,10 +499,12 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// THE LEXER READS IT, in the mode the editor reads a text being written: strings, comments and
 	// brackets are its business, and a keyword after a dot (`o.Select`) is a name, as it decides.
 	//
-	// ⚠ A LEXEM NOTES WHERE THE LEXER BEGAN LOOKING FOR IT - the end of the one before - so the next
-	// lexem's position is exactly where a token ENDS, with no whitespace or comment after it. A `;`
-	// is added so the last clause ends the same way: the end marker would note the end of the text,
-	// trailing comment and all.
+	// ⚠ A LEXEM NOTES WHERE ITS TOKEN STARTS - the lexer skips the whitespace and the comments in front
+	// before it records the position (IsEnd -> SkipSpaces). Where a token ENDS is recorded nowhere, and
+	// the first cut of this reader took it for "where the next one starts": every condition then carried
+	// the comment after it, and a dot followed by a space looked like a dot followed by a name. CI on
+	// 991d4d53, Linux and macOS alike - so the end is read here (tokenEnd). A `;` is added so the last
+	// clause has a token after it too.
 	const wxString source = text + wxT("\n;");
 	ibTranslateCode lexer;
 	lexer.SetLexemMode(ibLexemMode::Editing);
@@ -518,10 +520,38 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	if (lex.empty())
 		return false;
 
-	// The text of tokens [a, b): from where token `a` really starts - past the whitespace and the line
-	// comments the lexer skipped to reach it - to where token `b` was looked for, which is where the
-	// last one of the stretch ended.
 	const size_t end = lex.size() - 1;   // the ENDPROGRAM marker
+
+	// WHERE TOKEN `i` ENDS: a string at its closing quote (a doubled one is part of it), a date at its
+	// closing apostrophe, anything else at the first whitespace or comment - and never past the start of
+	// the token after it.
+	const auto tokenEnd = [&](size_t i) -> unsigned int {
+		const unsigned int from = lex[i].m_numString;
+		const unsigned int limit = i + 1 < lex.size() ? lex[i + 1].m_numString : (unsigned int)source.length();
+		if (from >= source.length())
+			return from;
+		const wxUniChar open = source[from];
+		if (lex[i].m_lexType == CONSTANT && (open == wxT('"') || open == wxT('\''))) {
+			for (unsigned int at = from + 1; at < source.length(); ++at) {
+				if (source[at] != open)
+					continue;
+				if (open == wxT('"') && at + 1 < source.length() && source[at + 1] == wxT('"')) {
+					++at;       // a doubled quote is a quote inside the string
+					continue;
+				}
+				return at + 1;
+			}
+			return limit;
+		}
+		unsigned int at = from;
+		while (at < limit && !wxIsspace(source[at])
+			&& !(source[at] == wxT('/') && at + 1 < limit && source[at + 1] == wxT('/')))
+			++at;
+		return at > from ? at : std::min(from + 1, limit);
+	};
+
+	// The text of tokens [a, b): from where token `a` starts to where token `b - 1` ends - no whitespace
+	// and no comment on either side.
 	const auto skipGap = [&source](unsigned int at) {
 		while (at < source.length()) {
 			const wxUniChar c = source[at];
@@ -539,7 +569,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		if (b <= a || b > end + 1)
 			return wxString();
 		const unsigned int from = skipGap(lex[a].m_numString);
-		const unsigned int to = lex[std::min(b, end)].m_numString;
+		const unsigned int to = tokenEnd(std::min(b, end) - 1);
 		return wxString(source.Mid(from, to > from ? to - from : 0)).Trim(true).Trim(false);
 	};
 	const auto isDelimiter = [&](size_t i, wxUniChar c) {
@@ -556,9 +586,8 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			return lex[i].m_numData;
 		if (lex[i].m_lexType != IDENTIFIER || i == 0 || !isDelimiter(i - 1, wxT('.')))
 			return -1;
-		const unsigned int at = lex[i].m_numString;   // where the lexer began looking: right after the dot
-		if (at >= source.length() || !wxIsspace(source[at]))
-			return -1;
+		if (lex[i].m_numString <= tokenEnd(i - 1))
+			return -1;   // the name touches its dot: `o.Select` is a name, as the lexer says
 		for (const int key : { KEY_FROM, KEY_JOIN, KEY_IN, KEY_ON, KEY_EQUALS, KEY_WHERE, KEY_GROUP, KEY_BY, KEY_INTO,
 				KEY_ORDERBY, KEY_ASCENDING, KEY_DESCENDING, KEY_SKIP, KEY_TAKE, KEY_SELECT, KEY_DISTINCT })
 			if (stringUtils::CompareString(lex[i].m_valData.GetString(), Word(key)))
@@ -631,7 +660,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		return false;
 	}
 	if (consumed != nullptr)
-		*consumed = std::min<size_t>(lex[std::min(stop, end)].m_numString, text.length());
+		*consumed = std::min<size_t>(stop > 0 ? tokenEnd(std::min(stop, end) - 1) : 0, text.length());   // where its last token ends
 
 	// The positions of `keys` inside [from, to), at the clause's own depth zero - the modifiers
 	// (`In`, `On`, `Equals`, `By`, `Into`) and the commas between keys and columns.
