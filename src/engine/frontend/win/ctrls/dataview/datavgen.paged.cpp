@@ -124,6 +124,7 @@ void ibDataViewCtrl::SetPagedRestoreSelection(const ibDataViewItem& item)
 
 void ibDataViewCtrl::SchedulePagedRefresh(const ibDataViewItem& preferSelection)
 {
+
 			// Latest-selection-wins: a series of ItemInserted events (e.g. LoadData
 	// repopulating the table) produces successive items; the last one
 	// is the most reasonable focus anchor for the user.
@@ -165,6 +166,7 @@ void ibDataViewCtrl::PagedRefresh(const ibDataViewItem& preferSelection)
 	// land in a single freeze window.
 	const bool skipCapture = m_pagedSkipRestoreCapture;
 	m_pagedSkipRestoreCapture = false;
+
 	const ibDataViewItem topItem = skipCapture
 		? ibDataViewItem() : GetTopItem();
 	// Explicit prefer (caller asked for a specific focus target —
@@ -324,6 +326,23 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		if (m_tableAreaWin) m_tableAreaWin->Freeze();
 		m_pagedFrozenForBootstrap = true;
 	}
+	// ⭐ WHAT STOOD OPEN, READ AT THE LAST MOMENT - here, and not when the refresh was asked for. Between
+	// the asking and this point the control keeps living: the form selects its current row, which unfolds
+	// that row's parents, and a capture taken earlier holds a tree that was still flat. The tree on screen
+	// NOW is the one being thrown away, so it is the one to remember. Top-down, so a parent stands before
+	// the child under it and is reopened first - a child is only findable once its parent is open again.
+	ibDataViewItemArray openBefore;
+	if (m_root != nullptr) {
+		std::function<void(const ibDataViewTreeNode*)> gather = [&](const ibDataViewTreeNode* node) {
+			for (auto* child : node->GetChildNodes()) {
+				if (child == nullptr || !child->IsOpen()) continue;
+				openBefore.Add(child->GetItem());
+				gather(child);
+			}
+		};
+		gather(m_root);
+	}
+
 	if (needsWipe) {
 		DestroyTree();
 		m_root              = ibDataViewTreeNode::CreateRootNode();
@@ -506,6 +525,27 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		}
 	}
 
+	// ⭐ AND THE GROUPS THE USER HAD OPEN GO BACK BEFORE ANYTHING IS COUNTED IN ROWS. Reopening changes
+	// what row a node sits on, so it happens here - after the tree is filled, before focus and selection
+	// are restored by row number. Parent-before-child (the capture's order) is what lets each node be
+	// found: a child only becomes visible once its parent stands open again.
+	for (size_t i = 0; i < openBefore.GetCount(); ++i) {
+		const int row = FindVisibleRowInTree(openBefore[i]);
+		if (row == wxNOT_FOUND) continue;   // that group is not in this page - nothing to open
+		ibDataViewTreeNode* node = GetTreeNodeByRow(static_cast<unsigned int>(row));
+		if (node == nullptr || node->IsOpen()) continue;
+		if (!node->HasChildren()) node->SetHasChildren(true);
+		if (node->GetChildNodes().empty()) {
+			// The children this group had are not in the page - the page is the level the list stands on.
+			// Asked for here, one read per group that was open, which is what unfolding one costs anyway.
+			ibDataViewItemArray kids;
+			const unsigned int kn = model->GetFirstFetch(openBefore[i], ibDataViewItem(), batch, kids);
+			for (unsigned int k = 0; k < kn; ++k)
+				node->InsertChild(this, MakeChildNode(node, kids[k]), k);
+		}
+		node->ToggleOpen(this);
+	}
+
 	// If the user had a focused / selected row before the refresh,
 	// find the same business row in the new ordering by data-compare
 	// (ibDataViewItem::operator== now dispatches to ibDataViewObject's
@@ -614,6 +654,16 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 	// Stated ONCE, here, rather than corrected in each branch: every one of them means "put THIS
 	// row at the top", and this is the translation from the row they name to the number the scroll
 	// speaks.
+	// ⭐ A SCROLL CAN ONLY LAND ONCE THE SIZE IS KNOWN. `UpdateDisplay` above only marks the control
+	// dirty — the recalculation happens later, on idle — so until then the scrolling area still has the
+	// dimensions of the tree that was just thrown away, and every ScrollTo below is CLAMPED against it.
+	// With a wiped buffer that clamp is zero, which is why a refresh that had positioned its read
+	// perfectly well still came back at the top, with the row the person was reading one line below the
+	// last visible one (Max, 2026-09-16: *"it is always one position lower, that is why I do not see
+	// it"*). The backward top-up already knew this and recalculates before its own scroll; the reset
+	// simply never did.
+	RecalculateDisplay();
+
 	const int frozenRows = wxMax(0, m_countFrozenHierarchicalRows);
 	const auto scrollToRow = [this, frozenRows](int absoluteRow) {
 		ScrollTo(wxMax(0, absoluteRow - frozenRows), -1);

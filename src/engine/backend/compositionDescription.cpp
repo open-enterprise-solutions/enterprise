@@ -22,6 +22,7 @@
 #include "backend/metaData.h"                      // ibMetaData::Deserialize — the door a caller HANDS IN
 
 #include "backend/backend_exception.h"             // ibBackendCoreException — a setting that cannot apply is refused
+#include "backend/backend_localization.h"          // a variant's caption is read in the configuration's language
 #include "backend/compiler/valueSerialization.h"    // ibReadNodeType — whose value is in this node
 #include "backend/system/value/composition/valueComposerField.h"   // the declared value this tier vends
 
@@ -152,6 +153,20 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
 }
 
 } // namespace
+
+// A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration. The
+// synonym is stored as a translated text; a language missing from it is answered inside the localizer,
+// and a synonym written plainly (no languages in it at all) is its own caption.
+wxString ibVariantDescription::GetPresentation() const
+{
+	if (!m_synonym.IsEmpty()) {
+		wxString caption;
+		if (ibBackendLocalization::GetTranslateGetRawLocText(m_synonym, caption) && !caption.IsEmpty())
+			return caption;
+		return m_synonym;
+	}
+	return m_name;
+}
 
 // (A LEVEL'S FIELD had a pair of its own here, writing {path, unfold} into a node. What a level
 //  groups by is its GROUPING — ibGroupDescriptionMemory already writes exactly that pair, so the

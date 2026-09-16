@@ -139,6 +139,16 @@ public:
 	// after editing the text — SetValue does not fire OnPropertyChanged).
 	void ApplySource() { RebuildSource(); }
 
+	// ⭐ ARRANGING IS ASKING TOO. Reading a description stores what a composition IS and works out
+	// nothing, so before the first Compose the composer had never been shown the query - and the
+	// settings window, which stands on what the composer says composes, opened on an EMPTY structure.
+	// A person then saw "Report" and nothing under it, arranged nothing, pressed Compose, and only
+	// then found the author's groupings (Max, 2026-09-16: *"until you compose it, the settings do not
+	// load"*). Composing and the paged fetch already ask this of themselves; opening the window that
+	// ARRANGES the composition is the same question, so it is public and asked there too. It does
+	// nothing when the composer already stands on this very text.
+	void EnsureSourceBuilt();
+
 	// The source's DESCRIPTOR (holder) — the composer reaches the source's command
 	// interface through it and stays metadata-blind itself.
 	const ibQueryableSourceDescriptor* GetSourceDescriptor() const { return m_propertySource->GetDescriptor(); }
@@ -443,10 +453,9 @@ private:
 	// the settings window had applied the source in between (Max, 2026-08-24: "the source is known —
 	// that is not true").
 	//
-	// The reading side of that rule was simply never written. Asked at both entrances — Compose and
-	// the paged fetch — and it does nothing when the composer is already built for this very text,
-	// which is what the marker below records.
-	void EnsureSourceBuilt();
+	// The reading side of that rule was simply never written. Asked at every entrance — Compose, the
+	// paged fetch, and ARRANGING (below) — and it does nothing when the composer is already built for
+	// this very text, which is what the marker below records.
 	wxString m_sourceBuiltFor;   // the query text RebuildSource last ran on; empty = never built
 
 	// DROP the filter / sort / grouping lines whose field the composition no longer

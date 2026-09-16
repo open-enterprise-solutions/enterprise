@@ -18,6 +18,24 @@
 #include "backend/settings/settingsComposer.h"              // ibSettingsCategory — which shelf a list's settings sit on
 #include "form.h"
 
+namespace {
+// ⭐ A FILTER CHANGES WHICH ROWS EXIST, AND THE ROW THE PERSON WAS READING MUST NOT GO WITH THEM
+// (Max, 2026-09-16: *"I put a filter on and take it off again, and the value flies away somewhere -
+// and it is the one we were looking at"*). Taking a filter off puts back every row it had been
+// hiding, so a list that comes back looking at the same TOP row is looking somewhere else entirely.
+//
+// The box already knows which row that is — GetCurrentLine(), kept for every other purpose — so
+// nothing is captured or remembered here. This is the other half: after the filter is on or off and
+// the rows are re-read, the row is asked for again. `Select` on a paged list is the door that knows
+// how: it positions the coming read on that row and brings it into view. A row the new filter
+// excludes is simply not found, and the list opens at the top - the only honest answer there.
+void KeepInView(ibTableViewCtrl* ctrl, const ibDataViewItem& row)
+{
+	if (ctrl != nullptr && row.IsOk())
+		ctrl->Select(row);
+}
+} // namespace
+
 //****************************************************************************
 //*                              actionData                                  *
 //****************************************************************************
@@ -235,7 +253,12 @@ void ibValueModelTableBox::Command_ShowListSettings()
 	// which is not serialised by the schema (Max, 2026-08-24).
 	// …and the CONFIGURATION is handed in by the box: it knows which one it is showing, and a window
 	// that went looking would be guessing between the several that are open (Max, 2026-08-24).
-	ibDialogListSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), m_tableModel, GetMetaData());
+	// …and the row being read comes back into view afterwards — see KeepInView above.
+	auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
+	const ibDataViewItem standing = GetCurrentLine() != nullptr
+		? GetCurrentLine()->GetLineItem() : ibDataViewItem();
+	if (ibDialogListSettings::ShowUserSettings(dynamic_cast<wxWindow*>(GetInnerWx()), m_tableModel, GetMetaData()))
+		KeepInView(ctrl, standing);
 }
 
 // ⭐⭐ THE SAME SHELF A REPORT HAS, addressed the same way: by the LEAF OF THE BINDING, so the
@@ -254,12 +277,17 @@ void ibValueModelTableBox::Command_ShowSavedSettings(bool restore)
 	const wxString objectKey = SettingsObjectKey();
 
 	if (restore) {
+		auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
+		const ibDataViewItem standing = GetCurrentLine() != nullptr
+			? GetCurrentLine()->GetLineItem() : ibDataViewItem();
 		if (ibDialogComposerSettings::ShowRestoreSettings(over, m_tableModel->GetModelComposer(),
-				ibSettingsCategory::List, objectKey, GetMetaData()))
+				ibSettingsCategory::List, objectKey, GetMetaData())) {
 			// ⚠ A LIST IS NOT A REPORT: it re-reads AT ONCE. The report's sheet stays the one that was
 			// built until somebody says Compose; here the rows on screen are the answer to the setting
 			// that was just replaced, so leaving them would show the previous setting's rows.
 			m_tableModel->RefetchAll();
+			KeepInView(ctrl, standing);   // …and the row being read comes back into view with them
+		}
 		return;
 	}
 
@@ -294,6 +322,7 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 		settings.m_filter.Append(name, ibComparisonKind_Equal, value);
 		m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 		m_tableModel->RefetchAll();
+		KeepInView(ctrl, sel);   // the row whose value this filter is — it stays in view
 	}
 }
 
@@ -310,10 +339,17 @@ void ibValueModelTableBox::Command_ClearFilter()
 	// setting that exists answers every part). "Clear the filter" means no filter, which is what the
 	// person pressing it asked for; going back to the developer's is `ClearUserSettings`, a different
 	// verb that drops the setting whole.
+	// The row being read outlives the clearing — without it the list comes back at the old top row
+	// with every previously hidden row now standing between the two, and the value is off screen.
+	auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
+	const ibDataViewItem standing = GetCurrentLine() != nullptr
+		? GetCurrentLine()->GetLineItem() : ibDataViewItem();
+
 	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
 	settings.m_filter.Clear();
 	m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
 	m_tableModel->RefetchAll();
+	KeepInView(ctrl, standing);
 }
 
 // ⭐⭐ WHAT IS ON THE SCREEN, AS A DOCUMENT — «Output list».

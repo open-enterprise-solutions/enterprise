@@ -1728,6 +1728,12 @@ private:
 	ibDataViewItem m_pagedRestoreSelection;
 	ibDataViewItem m_pagedRestoreFocus;
 
+	// ⭐ WHAT STOOD OPEN IS RESTORE-STATE TOO — but it is read at the WIPE, not here. Between the asking
+	// of a refresh and its arrival the control keeps living: the form selects its current row, which
+	// unfolds that row's parents, so a set captured when the refresh was asked for is already out of
+	// date when the tree is thrown away (2026-09-16, found with the "dataview.tree" probes). See
+	// OnPagedFetchResetComplete, where the capture and the reopening sit together.
+
 	// WHERE ON SCREEN the focus sat — its distance from the visible top, in rows.
 	// Captured only where the scroll ANCHOR is deliberately dropped (a sort: the
 	// anchor's cursor key means nothing in the new ordering), because that is the

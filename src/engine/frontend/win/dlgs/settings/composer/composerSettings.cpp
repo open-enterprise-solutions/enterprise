@@ -1944,8 +1944,10 @@ bool ibDialogComposerSettings::PickVariant(wxWindow* parent, ibDataComposer& com
 		// WHAT THE PICKER SHOWS — the synonym, else the name, else its place in the list. The last is
 		// not a caption anybody wrote; it is what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
-		wxString caption = variants[i].m_synonym;
-		if (caption.IsEmpty()) caption = variants[i].m_name;
+		// …READ IN THE CONFIGURATION'S LANGUAGE, by the variant itself. The synonym is WRITTEN DOWN as
+		// a translated text, and put in a menu as it stands it showed the reader the whole line -
+		// `en = 'Trial balance'; ru = '…'; uk = '…';` (2026-09-16).
+		wxString caption = variants[i].GetPresentation();
 		if (caption.IsEmpty()) caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
 
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings, because there is no stored
@@ -2011,6 +2013,12 @@ bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, ibValueSpreads
 	ibValueDataComposition* composition = dynamic_cast<ibValueDataComposition*>(model);
 	if (composition == nullptr)
 		return false;   // a drawn document describes nothing — there is no setting to arrange
+
+	// ⭐ FIRST, THE COMPOSITION IS ASKED TO RESOLVE ITSELF. Reading the report stored what it IS and
+	// worked nothing out; the author's variants reach the composer when the source is built, and until
+	// then what composes is empty — so this window opened on a bare "Report" with no structure under
+	// it until somebody had pressed Compose once. Arranging is an asking, like composing.
+	composition->EnsureSourceBuilt();
 
 	// THE COPY — what Cancel drops, and what OK becomes.
 	// ⭐ WHAT IS IN FORCE — the reader's where they set one, the author's where they did not, asked

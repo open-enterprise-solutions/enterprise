@@ -837,6 +837,14 @@ struct ibVariantDescription {
 	wxString              m_synonym;   // what the picker shows; empty = derive it from the name
 	ibSettingsDescription m_settings;
 
+	// ⭐ WHAT A PERSON READS — the synonym IN THE CONFIGURATION'S LANGUAGE, else the name. The synonym
+	// is written down as a translated text (`en = '…'; ru = '…'; uk = '…';`), which is a FORM of
+	// storage and not a caption: handed straight to a menu it put that whole line in front of the
+	// reader (2026-09-16). Every reader of a variant's caption asks here, so the language is decided
+	// in one place - and the two localizations stay apart: the buttons around it are the PLATFORM's,
+	// this text is the CONFIGURATION's and comes from the configuration.
+	BACKEND_API wxString GetPresentation() const;   // exported: the windows that show a variant live in the frontend
+
 	bool operator==(const ibVariantDescription& o) const {
 		return m_name == o.m_name && m_synonym == o.m_synonym && m_settings == o.m_settings;
 	}

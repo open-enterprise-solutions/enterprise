@@ -1027,13 +1027,8 @@ wxString ibValueDataComposition::GetSourceCaption() const
 	// its own class name, so every report built on a query opened under the heading "DataComposition"
 	// (the payroll demo, 2026-09-10).
 	const ibCompositionDescription& desc = GetCompositionDesc();
-	if (!desc.m_variants.empty() && !desc.m_variants.front().m_synonym.IsEmpty()) {
-		const wxString& synonym = desc.m_variants.front().m_synonym;
-		wxString caption;
-		if (ibBackendLocalization::GetTranslateGetRawLocText(synonym, caption) && !caption.IsEmpty())
-			return caption;
-		return synonym;   // one written plainly is its own caption
-	}
+	if (!desc.m_variants.empty() && !desc.m_variants.front().m_synonym.IsEmpty())
+		return desc.m_variants.front().GetPresentation();
 
 	return GetClassName();
 }
