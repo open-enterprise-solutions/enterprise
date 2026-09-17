@@ -71,6 +71,14 @@ BACKEND_API wxString ibSqlAliasOf(const wxString& outputName);
 // projection and the read of one output cannot disagree about which kind it is.
 BACKEND_API bool ibIsPlainScalarType(const ibTypeDescription& type);
 
+// ⭐ …AND DOES ITS ONE FIELD HAND IT BACK AS WHAT IT IS. A number, a string and a date come back from their field as
+// themselves. A boolean is kept in an integer field and comes back as 1 or 0: a walked leaf read by its name answered
+// `1` for `Ref.Posted` and `Account.OffBalance` on every road that reads a walk that way (measured 2026-09-17), so a
+// report comparing it with TRUE compared a number. Such a value travels as a spread under a prefix, the way a
+// reference does, and the column's own read turns it back. Asked wherever a walk is PROJECTED to be read back — the
+// comparison and the typed empty keep asking ibIsPlainScalarType, since a field compares fine as the number it is.
+BACKEND_API bool ibReadsBackAsItself(const ibTypeDescription& type);
+
 // ⭐⭐ THE OWNER REFERENCE OF A TABULAR SECTION'S LINE — sixteen bytes naming the row's OWNER.
 //
 // It was called the ROW KEY, and once that was true: every table carried a scaffold column

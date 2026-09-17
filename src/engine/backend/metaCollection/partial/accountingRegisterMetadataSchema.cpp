@@ -15,6 +15,8 @@
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegValueField
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"       // ibCanMaterialize — ask L2-2, never a dialect
 #include "backend/appData.h"                                        // db_query
+#include "backend/valueInfo.h"                                      // ibReference — the width of a zero id
+#include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — the account's empty reference
 
 // ⭐⭐ THE STORED NAME OF A SIDE'S TURNOVER COLUMN — `<the resource's own field>TurnoverDr|Cr`, spelled
 // HERE and only here, for the CREATE VIEW that makes it and for the source a query reads the view
@@ -283,15 +285,25 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// `{row}.fld<AccountCr>_RTRef <> 0` is false for every movement it will ever write. WHETHER the
 		// credit side is declared is the mode's since 2026-09-16 — see the declaration at the end: a
 		// one-sided register no longer lists the credit account, so no trigger may be built against it.
+		//
+		// 🛑 AND AN EMPTY ACCOUNT IS AN EMPTY REFERENCE, which `_RTRef <> 0` alone does not see. The side an
+		// off-balance entry leaves unnamed is written like any empty reference — its tag, the chart's table,
+		// a ZERO id — so its `_RTRef` is the chart's and the row went into that side's totals under an empty
+		// account: `Balance` grew a row crediting 1 000 to nobody and the books stopped agreeing by that much
+		// (measured 2026-09-17 on the rehearsal ledger). A filled account and an empty one differ in the id
+		// alone, so the guard asks it (a byte string, spelled by the engine — {binary:}); `_RTRef <> 0` stays
+		// for a cell nobody wrote. The regeneration asks the same question of the value: not an empty
+		// reference of the account's type, and not an unwritten cell.
 		{
-			wxString typeRefField;
-			for (const wxString& field : ibRegFieldsOf(account))
-				if (field.EndsWith(wxT("_RTRef")))
-					typeRefField = field;
+			// The fields are asked by their ROLE — the layout names them, this does not spell them.
+			const wxString typeRefField = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceType);
+			const wxString idField      = ibRegFieldOfRole(account->GetQueryColumn(), ibColumnRole::ReferenceId);
 
-			if (!typeRefField.IsEmpty()) {
-				m.Guard(wxT("{row}.") + typeRefField + wxT(" <> 0"),
-					ibQueryPredicate::Leaf(ibQueryCondition{ account->GetQueryColumn(), ibQueryFilterOp::NotEqual, ibValue() }));
+			if (!typeRefField.IsEmpty() && !idField.IsEmpty()) {
+				const wxString zeroId(wxT('0'), sizeof(ibReference) * 2);
+				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc());
+				m.Guard(wxT("({row}.") + typeRefField + wxT(" <> 0) AND ({row}.") + idField + wxT(" <> {binary:") + zeroId + wxT("})"),
+					ibRegSideNamed(account->GetQueryColumn(), emptyAccount));
 			}
 		}
 

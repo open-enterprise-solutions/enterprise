@@ -1176,6 +1176,82 @@ const ibBackendQueryColumn* SelfReferenceColumn(const ibBackendQueryable* q)
 	return keys.empty() ? nullptr : keys.front();
 }
 
+ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBackendQueryColumn* refCol,
+                                    const std::vector<const ibBackendQueryColumn*>& path, size_t seg,
+                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey);
+
+// The field a walk reaches, for every row of `owner`: a table of (owner's own key, the leaf under path.back()'s id),
+// path[seg] being a column of `owner`. The last segment is read as it stands; a reference is followed into every
+// table it may point at (WalkedLeafOfTargets) and joined back by its value. Empty, with `keyOut` null, when the
+// owner is no reference target or does not have the column.
+ibQueryRamTable WalkedLeafByKey(const ibBackendQueryable* owner, const std::vector<const ibBackendQueryColumn*>& path,
+                                size_t seg, ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& keyOut)
+{
+	keyOut = nullptr;
+	const ibBackendQueryColumn* key  = SelfReferenceColumn(owner);
+	const ibBackendQueryColumn* here = owner != nullptr ? owner->ResolveColumnByName(path[seg]->GetName()) : nullptr;
+	if (key == nullptr || here == nullptr)
+		return ibQueryRamTable();
+	const ibBackendQueryColumn* leaf = path.back();
+
+	ibQueryRamTable own = MaterialiseLeaf(owner, holder, {}, { key, here });
+	if (seg + 1 == path.size()) {
+		ibQueryRamTable filed;
+		filed.AddColumn(key->GetColumnId(), key->GetName(), key->GetTypeDesc());
+		filed.AddColumn(leaf->GetColumnId(), leaf->GetName(), leaf->GetTypeDesc());
+		for (long row = 0; row < own.RowCount(); ++row) {
+			const long added = filed.AppendRow();
+			filed.SetCell(added, key->GetColumnId(), own.TakeCell(row, key->GetColumnId()));
+			filed.SetCell(added, leaf->GetColumnId(), own.TakeCell(row, here->GetColumnId()));
+		}
+		keyOut = key;
+		return filed;
+	}
+
+	const ibBackendQueryColumn* targetKey = nullptr;
+	const ibQueryRamTable reached = WalkedLeafOfTargets(owner, here, path, seg + 1, holder, targetKey);
+	if (targetKey == nullptr)
+		return ibQueryRamTable();
+	keyOut = key;
+	return ibQueryComposer::JoinRamTables(own, reached, here, targetKey, { key, leaf }, { true, false }, ibQueryJoinKind::Left);
+}
+
+// …and the same over EVERY table the reference `refCol` of `owner` may point at, laid into one table filed under the
+// first target's key: a reference value carries its own type, so a row of one table can only meet its own.
+ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBackendQueryColumn* refCol,
+                                    const std::vector<const ibBackendQueryColumn*>& path, size_t seg,
+                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey)
+{
+	fileKey = nullptr;
+	std::vector<const ibBackendQueryable*> targets;
+	if (const ibBackendQueryable* single = owner->GetProvider().ResolveReferenceTarget(owner, refCol))
+		targets.push_back(single);
+	else
+		targets = owner->GetProvider().ResolveReferenceTargets(owner, refCol);
+
+	const ibBackendQueryColumn* leaf = path.back();
+	ibQueryRamTable filed;
+	for (const ibBackendQueryable* target : targets) {
+		if (seg < path.size() && !ibDbTableProvider::WalkEnters(target, path[seg]))
+			continue;   // a CAST names the one type the walk goes into
+		const ibBackendQueryColumn* key = nullptr;
+		ibQueryRamTable part = WalkedLeafByKey(target, path, seg, holder, key);
+		if (key == nullptr)
+			continue;
+		if (fileKey == nullptr) {
+			fileKey = key;
+			filed.AddColumn(key->GetColumnId(), key->GetName(), key->GetTypeDesc());
+			filed.AddColumn(leaf->GetColumnId(), leaf->GetName(), leaf->GetTypeDesc());
+		}
+		for (long row = 0; row < part.RowCount(); ++row) {
+			const long added = filed.AppendRow();
+			filed.SetCell(added, fileKey->GetColumnId(), part.TakeCell(row, key->GetColumnId()));
+			filed.SetCell(added, leaf->GetColumnId(), part.TakeCell(row, leaf->GetColumnId()));
+		}
+	}
+	return filed;
+}
+
 // RAM dot-walk resolution for a COMPUTED source (register slice / balance / turnover / subquery). Each
 // ibDotWalkColumn (ref segments + leaf) is resolved by materialising every reference hop's TARGET as a RAM
 // table (MaterialiseLeaf) and LEFT-joining it onto the computed rows, keyed on (segment ref column, target
@@ -1183,8 +1259,8 @@ const ibBackendQueryColumn* SelfReferenceColumn(const ibBackendQueryable* q)
 // leaf column lands in `rows` keyed by GetColumnId, so projection / filter / sort read it like a plain
 // column. `present` accumulates every column now in `rows` (the source's own + each brought-in leaf) so the
 // caller's DISTINCT / sort / limit rebuilds keep them. Sibling paths sharing a ref prefix reuse ONE join
-// (joined). A non-single-target (composite) reference hop is SKIPPED — the leaf stays a null cell (mirrors
-// the door's single-target guard), never a throw. (docs/query-language-arc.md §22 computed dot-walk)
+// (joined). A COMPOSITE reference hop fans out into every table it may point at (WalkedLeafOfTargets) and
+// brings the leaf of the whole remaining walk. (docs/query-language-arc.md §22 computed dot-walk)
 ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQueryable* primary,
                                         const ibDataQuerySpec& spec,
                                         std::vector<const ibBackendQueryColumn*>& present)
@@ -1245,8 +1321,32 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 			// ResolveComputedDotWalks → SelfReferenceColumn, access violation, faulting local `q`).
 			// Looking at the document behind a movement is the most ordinary thing anybody does with
 			// a turnover report.
-			if (tgtQ == nullptr)
-				break;   // not a single-target reference — the leaf stays absent, a null cell
+			if (tgtQ == nullptr) {
+				// ⭐⭐ A COMPOSITE REFERENCE THAT BRINGS THE FIELD ITSELF is read from EVERY table it may point at
+				// that has that field, and the rows are laid into one table filed under one key — a reference
+				// value carries its own type, so a counterparty's row can only meet a counterparty. Skipped, the
+				// leaf read back EMPTY on every row: `T.AccountDimension1.Description` over an accounting reading
+				// answered "" for coffee and tea alike, and `WHERE NOT … LIKE "Test%"` kept every test item
+				// (2026-09-17). A composite hop in the MIDDLE of a walk still ends it — the next hop would have
+				// to fan out per table, which this join chain does not do.
+				if (curQ == nullptr)
+					break;
+				const ibBackendQueryColumn* bring = path.back();
+				const wxString joinKey = prefixKey + wxString::Format(wxT("%p|%p"), (const void*)refCol, (const void*)bring);
+				if (joined.find(joinKey) == joined.end()) {
+					const ibBackendQueryColumn* fileKey = nullptr;
+					ibQueryRamTable filed = WalkedLeafOfTargets(curQ, refCol, path, i + 1, spec.m_holder, fileKey);
+					if (fileKey == nullptr)
+						break;   // no table this reference may point at reaches the field — the cell stays empty
+					std::vector<const ibBackendQueryColumn*> outCols = present;
+					std::vector<bool> fromLeft(present.size(), true);
+					outCols.push_back(bring);  fromLeft.push_back(false);
+					rows = ibQueryComposer::JoinRamTables(rows, filed, refCol, fileKey, outCols, fromLeft, ibQueryJoinKind::Left);
+					present.push_back(bring);
+					joined[joinKey] = true;
+				}
+				break;
+			}
 
 			const ibBackendQueryColumn* tgtKey = SelfReferenceColumn(tgtQ);
 			const ibBackendQueryColumn* bring  = path[i + 1];   // the next hop's ref column, or the final leaf

@@ -70,6 +70,7 @@
 #include "backend/session/session.h"
 
 #include <algorithm>
+#include <functional>      // ConditionOnPass — the test rebuilt over whichever column a pass reads
 #include <unordered_map>   // value-keyed indexes — see ibValueHash / ibValueSeqHash (value.h)
 #include <unordered_set>
 #include <set>
@@ -626,33 +627,352 @@ ibQueryPredicatePtr AccountDimensionCondition(const ibValueMetaObjectAccountingR
 	return folded;
 }
 
-// The caller's condition over the register's own DIMENSIONS. Re-pointed at this source's columns by
-// name, exactly as the accumulation register does — the filter is written once and applies to
-// whichever surface a reading happens to stand on.
-// ⭐ A LEAF IS FILTERED ON THE FIELD THE SIDE HOLDS IT IN. Named a side (the per-pass readings), a
-// condition on a non-balance dimension is asked of that side's half — the same column the pass groups
-// by, and on the credit surface the only one there is. Named none (a reading of the movements, where
-// one row carries both), the leaf stands as written.
-void WhereCondition(ibDataQueryBuilder& b, const ibBackendQueryable* source, const ibQueryPredicatePtr& filter,
-	const ibValueMetaObjectAccountingRegister* reg = nullptr, bool creditSide = false)
+// ⭐⭐ THE CONDITION OF A READING, ASKED OF THE SURFACE ONE PASS STANDS ON.
+//
+// A condition written into a virtual table's parameters is a SELECTION, made before anything is folded: the
+// table arrives already narrowed (Max, 2026-09-17: "a virtual table does not pick out of a big array, it
+// hands you the filtered table at once"). So it cannot stay the query's — it goes down into every pass, as
+// the WHOLE tree the author wrote: NOT, OR, a walk through a reference (`NOT Account.OffBalance`), IN, IS
+// NULL, REFS.
+//
+// What it is written against is the reading's own columns (the condition scope — ibAcctConditionScope), and
+// those are not the columns a pass reads. `Account` is the debit account on one pass and the credit account
+// on the other; `CorrAccount` is the opposite one; a breakdown column is a slot of the pass's side, or —
+// asked BY KIND — whichever slot that kind stands in, which differs per account; a dimension kept per side
+// is the side's half. So each column is found again for the pass, by its IDENTITY (the id the shape gave
+// it), and the tree is rebuilt over what was found. A walk keeps its path and becomes a correlated EXISTS
+// (m_asExists): a filter through a reference must never multiply a row it keeps.
+
+// Where a column the condition names is read on one pass: one column, or — a breakdown asked for BY KIND —
+// every slot of the side with its kind column beside it, because the kind stands in a different slot on
+// each account.
+struct ibAcctConditionColumn
 {
-	const auto fieldName = [reg, creditSide](const ibBackendQueryColumn* col) {
-		if (reg != nullptr)
-			for (const auto dimension : reg->GetDimensionArrayObject())
-				if (dimension != nullptr && dimension->GetName() == col->GetName())
-					if (const ibBackendQueryColumn* field = reg->GetRegisterDimension(creditSide, dimension))
-						return field->GetName();
-		return col->GetName();
+	const ibBackendQueryColumn* m_column = nullptr;
+	std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> m_byKind;   // (kind slot, slot)
+	ibValue                     m_kind;
+	// Read on the OPPOSITE side of a row about one account — the correspondent, which a stored side does
+	// not carry: a pass that has to read it stands on the movements.
+	bool                        m_correspondent = false;
+
+	bool IsFound() const { return m_column != nullptr || !m_byKind.empty(); }
+};
+
+ibAcctConditionColumn ConditionColumnOn(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* source,
+                                        ibAcctShape shape, bool creditSide,
+                                        const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                                        const ibBackendQueryColumn* named)
+{
+	ibAcctConditionColumn out;
+	if (reg == nullptr || source == nullptr || named == nullptr)
+		return out;
+
+	const ibMetaID id = named->GetColumnId();
+	const bool paired = PairedRow(reg, shape);
+	const bool bothSidesOnOneRow = shape == ibAcctShape::Records || shape == ibAcctShape::DrCrTurnovers;
+
+	const auto is = [id](const ibValueMetaObjectAttributeBase* attribute) {
+		return attribute != nullptr && id == attribute->GetMetaID();
+	};
+	// …or a column the shape composed over it (ibRegDerivedColumnId) — `Account` of both sides, `CorrAccount`,
+	// a breakdown column, `CurrencyCorr`.
+	const auto composedOver = [id](const ibValueMetaObjectAttributeBase* attribute) {
+		return attribute != nullptr && id == ibRegDerivedColumnId(attribute->GetMetaID());
+	};
+	const auto found = [&](const ibBackendQueryColumn* column, bool correspondent = false) {
+		out.m_column        = column;
+		out.m_correspondent = correspondent;
+		return out;
+	};
+	const auto on = [&](const ibValueMetaObjectAttributeBase* attribute, bool correspondent = false) {
+		return found(attribute != nullptr ? ColumnOn(source, attribute) : nullptr, correspondent);
 	};
 
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(filter, leaves);
-	for (const auto& leaf : leaves) {
-		const ibBackendQueryColumn* here = leaf.first != nullptr && source != nullptr
-			? source->ResolveColumnByName(fieldName(leaf.first)) : nullptr;
-		if (here != nullptr)
-			b.Where(here, leaf.second);
+	// --- the accounts ---------------------------------------------------------------------------------
+	const ibValueMetaObjectAttributeBase* account   = reg->GetRegisterAccount();
+	const ibValueMetaObjectAttributeBase* accountCr = reg->GetRegisterAccountCr();
+	const ibValueMetaObjectAttributeBase* own       = creditSide && accountCr != nullptr ? accountCr : account;
+	const ibValueMetaObjectAttributeBase* opposite  = accountCr == nullptr ? nullptr : (creditSide ? account : accountCr);
+	if (is(account))
+		return on(paired ? account : own);
+	if (composedOver(account))
+		return on(own);
+	if (is(accountCr))
+		return on(accountCr);
+	if (composedOver(accountCr))
+		return on(opposite, /*correspondent*/ true);
+
+	// --- the breakdown ----------------------------------------------------------------------------------
+	for (unsigned int no = 0; no < reg->GetAccountDimensionCount(); no++) {
+		for (const bool side : { false, true }) {
+			const ibValueMetaObjectAttributeBase* slot = reg->GetAccountDimensionSlot(side, no);
+			const ibValueMetaObjectAttributeBase* kind = reg->GetAccountDimensionKindSlot(side, no);
+			const bool valueColumn = is(slot) || composedOver(slot);
+			const bool kindColumn  = is(kind) || composedOver(kind);
+			if (!valueColumn && !kindColumn)
+				continue;
+
+			// A paired row numbers each side's slots under that side. A row about one account numbers the
+			// ACCOUNT's under the debit slots — read on this pass's own side — and its correspondent's under
+			// the credit ones, read on the other.
+			const bool readSide      = paired ? side : (side ? !creditSide : creditSide);
+			const bool correspondent = !paired && side;
+			const std::vector<ibValue>& kinds = side ? kindsCr : kindsDr;
+
+			if (kindColumn)
+				return on(reg->GetAccountDimensionKindSlot(readSide, no), correspondent);
+			if (kinds.empty())
+				return on(reg->GetAccountDimensionSlot(readSide, no), correspondent);
+			if (no >= kinds.size())
+				return out;
+
+			out.m_kind          = kinds[no];
+			out.m_correspondent = correspondent;
+			for (unsigned int idx = 0; idx < reg->GetAccountDimensionCount(); idx++) {
+				const ibValueMetaObjectAttributeBase* anySlot = reg->GetAccountDimensionSlot(readSide, idx);
+				const ibValueMetaObjectAttributeBase* anyKind = reg->GetAccountDimensionKindSlot(readSide, idx);
+				if (anySlot != nullptr && anyKind != nullptr)
+					out.m_byKind.push_back({ ColumnOn(source, anyKind), ColumnOn(source, anySlot) });
+			}
+			return out;
+		}
 	}
+
+	// --- the dimensions ---------------------------------------------------------------------------------
+	for (const auto dimension : reg->GetDimensionArrayObject()) {
+		if (dimension == nullptr)
+			continue;
+		const ibValueMetaObjectAttributeBase* debit  = reg->GetFieldSide(/*creditSide*/ false, dimension);
+		const ibValueMetaObjectAttributeBase* credit = reg->GetFieldSide(/*creditSide*/ true, dimension);
+		if (is(dimension))
+			return bothSidesOnOneRow ? on(dimension)
+			                         : found(ColumnOn(source, reg->GetRegisterDimension(creditSide, dimension)));
+		if (is(debit))
+			return on(debit);
+		if (is(credit))
+			return on(credit);
+		if (composedOver(credit))
+			return found(ColumnOn(source, reg->GetRegisterDimension(!creditSide, dimension)), /*correspondent*/ true);
+	}
+
+	// --- a movement line's own fields, where a row IS a line ----------------------------------------------
+	// Anywhere else they are what the reading folds away (the period is its boundaries, a figure its sum), and
+	// a selection by them would change the answer's meaning rather than narrow it.
+	if (shape == ibAcctShape::Records)
+		if (const ibValueMetaObjectAttributeBase* attribute = reg->FindAnyAttributeObjectByFilter(id))
+			return on(attribute);
+
+	return out;
+}
+
+// Does the condition name the CORRESPONDENT of a row about one account? A stored side keeps one account, so
+// such a pass has to stand on the movements — the routing the correspondent account argument already takes.
+bool ConditionNamesCorrespondent(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
+                                 const ibQueryPredicatePtr& condition)
+{
+	if (!condition || reg == nullptr)
+		return false;
+	const auto names = [&](const ibBackendQueryColumn* column) {
+		return column != nullptr
+			&& ConditionColumnOn(reg, reg->GetQueryable(), shape, false, {}, {}, column).m_correspondent;
+	};
+	switch (condition->m_kind) {
+	case ibQueryPredicateKind::Leaf:
+		return names(condition->m_leaf.m_path.empty() ? condition->m_leaf.m_col : condition->m_leaf.m_path.front());
+	case ibQueryPredicateKind::IsNull:
+	case ibQueryPredicateKind::RefType:
+		return names(condition->m_path.empty() ? condition->m_col : condition->m_path.front());
+	default:
+		for (const ibQueryPredicatePtr& child : condition->m_children)
+			if (ConditionNamesCorrespondent(reg, shape, child))
+				return true;
+		return false;
+	}
+}
+
+ibQueryPredicatePtr ConditionOnPass(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* source,
+                                    ibAcctShape shape, bool creditSide,
+                                    const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                                    const ibQueryPredicatePtr& condition);
+
+// A computed side of a comparison (`Quantity * Price > 100` on a listing), its columns found again for the pass.
+ibQueryColumnExprPtr ConditionExprOnPass(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* source,
+                                         ibAcctShape shape, bool creditSide,
+                                         const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                                         const ibQueryColumnExprPtr& expr)
+{
+	if (!expr)
+		return expr;
+	auto here = std::make_shared<ibQueryColumnExpr>(*expr);
+	if (here->m_kind == ibQueryColumnExprKind::Column && here->m_col != nullptr) {
+		const ibAcctConditionColumn found = ConditionColumnOn(reg, source, shape, creditSide, kindsDr, kindsCr, here->m_col);
+		// ⚠ ONE COLUMN, AND ITS FIRST FIELD. A breakdown by kind is a different slot per account — a CASE, not a
+		// column to compute over — and a named field is spelled after the column it was written against.
+		if (found.m_column == nullptr || !here->m_field.IsEmpty())
+			ibRegRefuseConditionColumn(here->m_col);
+		here->m_col = found.m_column;
+	}
+	const auto again = [&](const ibQueryColumnExprPtr& e) {
+		return ConditionExprOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, e);
+	};
+	here->m_lhs  = again(here->m_lhs);
+	here->m_rhs  = again(here->m_rhs);
+	here->m_else = again(here->m_else);
+	for (ibQueryColumnExprPtr& arg : here->m_args)
+		arg = again(arg);
+	for (auto& branch : here->m_cases) {
+		branch.first  = ConditionOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, branch.first);
+		branch.second = again(branch.second);
+	}
+	return here;
+}
+
+ibQueryPredicatePtr ConditionOnPass(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* source,
+                                    ibAcctShape shape, bool creditSide,
+                                    const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                                    const ibQueryPredicatePtr& condition)
+{
+	if (!condition || reg == nullptr || source == nullptr)
+		return nullptr;
+
+	const auto again = [&](const ibQueryPredicatePtr& child) {
+		return ConditionOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, child);
+	};
+
+	// One test of one column, rebuilt over the column the pass reads — or, by kind, over each slot with its
+	// kind beside it. `nullWhereAbsent`: the test is IS NULL, which an account with no such kind passes too —
+	// the reading reports its column empty.
+	const auto over = [&](const ibBackendQueryColumn* named, bool nullWhereAbsent,
+	                      const std::function<ibQueryPredicatePtr(const ibBackendQueryColumn*)>& rebuild) {
+		const ibAcctConditionColumn found = ConditionColumnOn(reg, source, shape, creditSide, kindsDr, kindsCr, named);
+		if (!found.IsFound())
+			ibRegRefuseConditionColumn(named);
+		if (found.m_column != nullptr)
+			return rebuild(found.m_column);
+
+		ibQueryPredicatePtr holds, carries;
+		for (const auto& slot : found.m_byKind) {
+			ibQueryCondition kindIs;
+			kindIs.m_col   = slot.first;
+			kindIs.m_value = found.m_kind;
+			const ibQueryPredicatePtr standsHere = ibQueryPredicate::Leaf(kindIs);
+			carries = OrWith(carries, standsHere);
+			holds   = OrWith(holds, AndWith(standsHere, rebuild(slot.second)));
+		}
+		return nullWhereAbsent ? OrWith(holds, ibQueryPredicate::Not(carries)) : holds;
+	};
+
+	switch (condition->m_kind) {
+	case ibQueryPredicateKind::And:
+	case ibQueryPredicateKind::Or: {
+		ibQueryPredicatePtr folded;
+		for (const ibQueryPredicatePtr& child : condition->m_children) {
+			const ibQueryPredicatePtr one = again(child);
+			folded = condition->m_kind == ibQueryPredicateKind::And ? AndWith(folded, one) : OrWith(folded, one);
+		}
+		return folded;
+	}
+	case ibQueryPredicateKind::Not:
+		return condition->m_children.empty() ? nullptr : ibQueryPredicate::Not(again(condition->m_children.front()));
+
+	case ibQueryPredicateKind::Leaf: {
+		ibQueryCondition leaf = condition->m_leaf;
+		if (leaf.m_semiJoin)
+			ibBackendCoreException::Error(_("a reading's condition cannot hold a semi-join - write it as IN (SELECT ...)"));
+
+		if (leaf.m_expr) {
+			leaf.m_expr      = ConditionExprOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, leaf.m_expr);
+			leaf.m_valueExpr = ConditionExprOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, leaf.m_valueExpr);
+			return ibQueryPredicate::Leaf(leaf);
+		}
+
+		const bool walks = !leaf.m_path.empty();
+		const ibBackendQueryColumn* head = walks ? leaf.m_path.front() : leaf.m_col;
+
+		// ⭐ `IN HIERARCHY` HERE IS A SELECTION — the fold by it is the account argument's, which took the plain
+		// account names before this (SplitAccountCondition). So the word is resolved into the subtree it stands
+		// for, read through the column on the movements (or the row a walk ends at), and the leaf is an IN.
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+			const ibBackendQueryable* owner = reg->GetQueryable();
+			const ibAcctConditionColumn onLines = ConditionColumnOn(reg, owner, shape, creditSide, kindsDr, kindsCr, head);
+			const ibBackendQueryColumn* column = onLines.m_column != nullptr ? onLines.m_column
+				: (!onLines.m_byKind.empty() ? onLines.m_byKind.front().second : nullptr);
+			for (size_t hop = 1; column != nullptr && walks && hop < leaf.m_path.size(); ++hop) {
+				owner  = owner->GetProvider().ResolveReferenceTarget(owner, column);
+				column = owner != nullptr ? owner->ResolveColumnByName(leaf.m_path[hop]->GetName()) : nullptr;
+			}
+			if (column == nullptr)
+				ibRegRefuseConditionColumn(head);
+			leaf.m_values = ibQueryHierarchyScope(owner, column, leaf.m_values, leaf.m_unfold).Accepted();
+			leaf.m_unfold = ibQueryDimUnfold::Elements;
+			leaf.m_op     = ibQueryFilterOp::In;
+		}
+
+		return over(head, /*nullWhereAbsent*/ false, [&](const ibBackendQueryColumn* column) {
+			ibQueryCondition here = leaf;
+			if (walks) {
+				here.m_path.front() = column;
+				here.m_asExists     = true;
+			}
+			else {
+				here.m_col = column;
+			}
+			return ibQueryPredicate::Leaf(here);
+		});
+	}
+
+	case ibQueryPredicateKind::IsNull:
+	case ibQueryPredicateKind::RefType: {
+		if (condition->m_expr)
+			ibBackendCoreException::Error(_("a reading's condition tests a field, not a computed value"));
+		const bool walks = condition->m_path.size() > 1;
+		const bool isNull = condition->m_kind == ibQueryPredicateKind::IsNull && !condition->m_negated;
+		return over(walks ? condition->m_path.front() : condition->m_col, isNull,
+			[&](const ibBackendQueryColumn* column) {
+				auto here = std::make_shared<ibQueryPredicate>(*condition);
+				if (walks)
+					here->m_path.front() = column;
+				else
+					here->m_col = column;
+				return ibQueryPredicatePtr(here);
+			});
+	}
+	}
+	return nullptr;
+}
+
+// The condition, applied to one pass of a reading built through the door. `creditSide` is the pass's side;
+// a reading whose row carries both sides (the matrix, a correspondence listing) passes the debit one and
+// the columns name their sides themselves.
+void WhereCondition(ibDataQueryBuilder& b, const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* source,
+                    ibAcctShape shape, bool creditSide,
+                    const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                    const ibQueryPredicatePtr& filter)
+{
+	if (const ibQueryPredicatePtr here = ConditionOnPass(reg, source, shape, creditSide, kindsDr, kindsCr, filter))
+		b.Where(here);
+}
+
+// ⭐ THE ACCOUNT ARGUMENT, TAKEN APART. What the reading FOLDS by is a list of accounts — `Account IN
+// HIERARCHY (&A)`, `Account = &B` — and that list is only ever what the top-level AND says about the account
+// itself. Everything else written into the slot (`NOT Account.OffBalance`, `Account.Code LIKE "6%"`, an OR of
+// two accounts) is a SELECTION, and it joins the condition. `namesAccount` says which leaf is a plain naming
+// of this slot's account.
+void SplitAccountCondition(const ibQueryPredicatePtr& condition,
+                           const std::function<bool(const ibQueryCondition&)>& namesAccount,
+                           ibQueryPredicatePtr& accounts, ibQueryPredicatePtr& selection)
+{
+	if (!condition)
+		return;
+	if (condition->m_kind == ibQueryPredicateKind::And) {
+		for (const ibQueryPredicatePtr& child : condition->m_children)
+			SplitAccountCondition(child, namesAccount, accounts, selection);
+		return;
+	}
+	if (condition->m_kind == ibQueryPredicateKind::Leaf && namesAccount(condition->m_leaf))
+		accounts = AndWith(accounts, condition);
+	else
+		selection = AndWith(selection, condition);
 }
 
 // ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING — and a reading over the MOVEMENTS is the
@@ -672,6 +992,19 @@ void WhereActive(ibDataQueryBuilder& b, const ibValueMetaObjectAccountingRegiste
 	if (const ibValueMetaObjectAttributeBase* active = reg->GetRegisterActive())
 		if (const ibBackendQueryColumn* here = ColumnOn(source, active))
 			b.Where(here, ibValue(true));
+}
+
+// …and the totals' OTHER guard, for a pass that stands on one side: that side names an account
+// (ibRegSideNamed). A stored total never took an unnamed side in; a pass over the raw movements has to leave
+// it out itself — the unnamed side of an off-balance entry, or it reports under an empty account.
+void WhereSideNamed(ibDataQueryBuilder& b, const ibBackendQueryable* source, const ibValueMetaObjectAttributeBase* sideAccount,
+                    bool onMovements)
+{
+	if (!onMovements || sideAccount == nullptr)
+		return;
+	if (const ibBackendQueryColumn* here = ColumnOn(source, sideAccount))
+		if (const ibQueryPredicatePtr named = ibRegSideNamed(here, ibValueTypeDescription::AdjustValue(here->GetTypeDesc())))
+			b.Where(named);
 }
 
 // ⭐ A BOUNDARY IS A DATE, AND MAY NAME THE DOCUMENT AT IT. The date half is applied here; the
@@ -1411,19 +1744,9 @@ bool AnyFigureKeptByBreakdown(const ibValueMetaObjectAccountingRegister* reg)
 	return false;
 }
 
-// The field a reference column keeps its identity in — what a row is compared to a raw key by.
-wxString ReferenceIdField(const ibBackendQueryColumn* column)
-{
-	if (column != nullptr)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(column))
-			if (slot.m_role == ibColumnRole::ReferenceId)
-				return slot.m_name;
-	return wxString();
-}
-
 // ⭐ THE ACCOUNT'S KINDS TABLE AS THE SERVER READINGS ASK IT — the rows, the owner's key field, the kind and the
 // turnovers-only flag. The owner is ONE raw key field, the account a spread reference: paired by role they share
-// nothing, so a row's account identity (ReferenceIdField) is compared with the owner key itself. `m_rows` is null
+// nothing, so a row's account identity (its ReferenceId field, ibRegFieldOfRole) is compared with the owner key itself. `m_rows` is null
 // where the chart has no such table to ask.
 struct ibAcctKindsTable
 {
@@ -1485,7 +1808,7 @@ ibQueryExprPtr FullAnalyticsOnServer(const ibValueMetaObjectAccountingRegister* 
 	const wxString& rowAlias, const ibBackendQueryColumn* accountCol, const wxString& k)
 {
 	const ibAcctKindsTable table = KindsTableOf(reg);
-	const wxString accountId = ReferenceIdField(accountCol);
+	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
 	if (kinds.empty() || table.m_rows == nullptr || accountId.IsEmpty())
 		return nullptr;
 	ibQueryExprPtr anyAsked;
@@ -1532,7 +1855,7 @@ ibQueryRelPtr JoinSubcontoKinds(const ibValueMetaObjectAccountingRegister* reg, 
 {
 	// ⚠ THE OWNER IS ONE RAW KEY FIELD (KindsTableOf): paired by role with the account the join said nothing at all.
 	const ibAcctKindsTable table = KindsTableOf(reg);
-	const wxString accountId = ReferenceIdField(accountCol);
+	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
 	if (table.m_rows == nullptr || accountId.IsEmpty())
 		return rel;
 
@@ -2064,12 +2387,13 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 			WherePeriodAtMost(b, periodCol, ColumnOn(source, GetRegisterRecorder()), bound);
 
 		WhereActive(b, this, source, /*onMovements*/ source == movements);
+		WhereSideNamed(b, source, pass.m_account, /*onMovements*/ source == movements);
 
 		// "The balance of 51" on this pass's own account column; "…in correspondence with 62" on the other.
 		WhereAccount(b, accountCol, scopeAccount);
 		if (opposite != nullptr)
 			WhereAccount(b, ColumnOn(source, opposite), scopeCorr);
-		WhereCondition(b, source, filter, this, pass.m_creditSide);
+		WhereCondition(b, this, source, ibAcctShape::Balance, pass.m_creditSide, kindsDr, kindsCr, filter);
 		// …and the breakdown half of the same condition, asked of THIS pass's slots.
 		if (const ibQueryPredicatePtr slots = AccountDimensionCondition(this, source, pass.m_creditSide, condition))
 			b.Where(slots);
@@ -2315,6 +2639,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 		// …and a row cut by the correspondent is the movements' too: a stored row has one account.
 		const bool useTotals = HasMaterializedViews()
 			&& (!IsCorrespondence() || oppositeFilter == nullptr)
+			&& !ConditionNamesCorrespondent(this, ibAcctShape::Turnovers, filter)
 			&& !finerThanStored
 			&& !byCorrespondent;
 
@@ -2346,11 +2671,12 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 			WherePeriodRange(b, periodCol, ColumnOn(source, GetRegisterRecorder()), begin, end);
 
 		WhereActive(b, this, source, /*onMovements*/ source == movements);
+		WhereSideNamed(b, source, pass.m_account, /*onMovements*/ source == movements);
 
 		WhereAccount(b, accountCol, scopeAccount);
 		if (opposite != nullptr)
 			WhereAccount(b, ColumnOn(source, opposite), scopeCorr);
-		WhereCondition(b, source, filter, this, pass.m_creditSide);
+		WhereCondition(b, this, source, ibAcctShape::Turnovers, pass.m_creditSide, kindsDr, kindsCr, filter);
 		// …and the breakdown half of the same condition, asked of THIS pass's slots.
 		if (const ibQueryPredicatePtr slots = AccountDimensionCondition(this, source, pass.m_creditSide, condition))
 			b.Where(slots);
@@ -2587,7 +2913,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	WhereActive(b, this, movements, /*onMovements*/ true);
 	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
 	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
-	WhereCondition(b, movements, filter);
+	WhereCondition(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, kindsCr, filter);
 
 	// ⭐⭐ A PAIRED ROW HAS TWO SETS OF SLOTS, AND THE CONDITION IS ABOUT THE ROW.
 	//
@@ -2714,7 +3040,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	WhereActive(b, this, movements, /*onMovements*/ true);
 	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
 	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
-	WhereCondition(b, movements, filter);
+	WhereCondition(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, kindsCr, filter);
 
 	if (const ibQueryPredicatePtr slots = OrWith(
 			AccountDimensionCondition(this, movements, /*creditSide*/ false, condition),
@@ -3659,7 +3985,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 	ibDataQueryBuilder b;
 	b.From(movements);
 	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), RecorderColumnOf(this), begin, end);
-	WhereCondition(b, movements, filter);
+	WhereCondition(b, this, movements, ibAcctShape::Records, /*creditSide*/ false, kindsDr, kindsCr, filter);
 
 	// Both sides of a paired line answer the same question — see the correspondence matrix above. A
 	// one-sided register has one set of slots and there is no second half to ask.
@@ -3749,7 +4075,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 	b.From(movements);
 	b.WithAccessPolicy(nullptr);
 	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), RecorderColumnOf(this), begin, end);
-	WhereCondition(b, movements, filter);
+	WhereCondition(b, this, movements, ibAcctShape::Records, /*creditSide*/ false, kindsDr, kindsCr, filter);
 
 	if (const ibQueryPredicatePtr slots = OrWith(
 			AccountDimensionCondition(this, movements, /*creditSide*/ false, condition),
@@ -3958,26 +4284,22 @@ std::vector<ibAcctServerKey> ServerKeys(const ibValueMetaObjectAccountingRegiste
 //
 // The dimension is recognised by the COLUMN'S ID, which a published column keeps as its dimension's own
 // metaID — not by the name, which two things may share.
-std::vector<ibQueryExprPtr> ServerFilters(const ibValueMetaObjectAccountingRegister* reg,
-                                          const ibQueryPredicatePtr& filter,
+//
+// ⭐⭐ THE WHOLE CONDITION, NOT ITS FLAT EQUALITIES. This took the leaves an AND of `=` holds and dropped the
+// rest without a word — a NOT, an OR, a walk through the account were simply not asked, and the read came
+// back wider than the question. The condition is now found again on the side's surface (ConditionOnPass —
+// the same finding the RAM passes make) and lowered whole by the door that writes every other WHERE.
+std::vector<ibQueryExprPtr> ServerFilters(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
+                                          const ibQueryPredicatePtr& filter, const std::vector<ibValue>& kinds,
                                           const ibQueryHierarchyScope& accounts, bool creditSide)
 {
 	std::vector<ibQueryExprPtr> out;
 	const ibMetaData* metaData = reg->GetMetaData();
 
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(filter, leaves);
-	for (const auto& leaf : leaves) {
-		const ibBackendQueryColumn* column = leaf.first;
-		if (column == nullptr)
-			continue;
-		for (const auto dimension : reg->GetDimensionArrayObject())
-			if (dimension != nullptr && dimension->GetMetaID() == column->GetColumnId())
-				if (const ibBackendQueryColumn* half = reg->GetRegisterDimension(creditSide, dimension))
-					column = half;
-		if (const ibQueryExprPtr one = ibRegCompositeIR(column, metaData, leaf.second, ibQueryBinOp::Eq))
-			out.push_back(one);
-	}
+	const ibBackendQueryable* view = reg->GetTurnoverViewQueryable(creditSide);
+	if (const ibQueryPredicatePtr here = ConditionOnPass(reg, view, shape, creditSide, kinds, {}, filter))
+		if (const ibQueryExprPtr lowered = ibDbTableProvider::BuildPredicateIR(view, here))
+			out.push_back(lowered);
 
 	const ibValueMetaObjectAttributeBase* account = creditSide ? reg->GetRegisterAccountCr() : reg->GetRegisterAccount();
 	if (!accounts.IsEmpty() && account != nullptr) {
@@ -4061,7 +4383,8 @@ struct ibAcctServerFigure
 // back as the names the key answers under, the period among them when the read is cut into periods.
 ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* published,
                              ibAcctShape shape, bool creditSide, ibMaterializeReadSpec spec,
-                             const ibQueryPredicatePtr& filter, const ibQueryHierarchyScope& accounts,
+                             const ibQueryPredicatePtr& filter, const std::vector<ibValue>& kinds,
+                             const ibQueryHierarchyScope& accounts,
                              const std::vector<ibAcctServerFigure>& figures, const wxString& alias,
                              std::vector<wxString>& keyNames)
 {
@@ -4077,7 +4400,7 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
 
 	// The filters ride INSIDE the subquery, so the selection happens on the server before the outer
 	// query sees a row — which is the whole point of handing the door a relation instead of rows.
-	spec.m_filters = ServerFilters(reg, filter, accounts, creditSide);
+	spec.m_filters = ServerFilters(reg, shape, filter, kinds, accounts, creditSide);
 
 	// ⭐ THE PHYSICAL NAMES ARE ASKED FOR, NOT SPELLED — a read spec naming a column the view does not
 	// have returns NULLs rather than an error. The logical side is `ibAcctFigure`; the physical side is
@@ -4124,13 +4447,14 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
 // side has no surface to read.
 ibQueryRelPtr ServerRead(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* published,
                          ibAcctShape shape, const ibMaterializeReadSpec& spec,
-                         const ibQueryPredicatePtr& filter, const ibQueryHierarchyScope& accounts,
+                         const ibQueryPredicatePtr& filter, const std::vector<ibValue>& kinds,
+                         const ibQueryHierarchyScope& accounts,
                          const std::vector<ibAcctServerFigure>& figures, const wxString& alias,
                          std::vector<wxString>& keyNames)
 {
 	std::vector<ibQueryRelPtr> sides;
 	for (bool creditSide : SidesOf(reg)) {
-		ibQueryRelPtr side = ServerSideRead(reg, published, shape, creditSide, spec, filter, accounts, figures,
+		ibQueryRelPtr side = ServerSideRead(reg, published, shape, creditSide, spec, filter, kinds, accounts, figures,
 			alias + (creditSide ? wxT("_cr") : wxT("_dr")), keyNames);
 		if (side == nullptr)
 			return nullptr;
@@ -4232,7 +4556,8 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 	for (const ibAcctTakeFigure& figure : figures)
 		asksTurnoversOnly = asksTurnoversOnly || figure.m_take == ibAcctTake::UnlessTurnoversOnly;
 	const ibAcctKindsTable kinds = KindsTableOf(reg);
-	const wxString accountId = ReferenceIdField(how.m_asStand->ResolveColumnByName(PublishedAccountName(reg, how.m_shape)));
+	const ibBackendQueryColumn* accountCol = how.m_asStand->ResolveColumnByName(PublishedAccountName(reg, how.m_shape));
+	const wxString accountId = accountCol != nullptr ? ibRegFieldOfRole(accountCol, ibColumnRole::ReferenceId) : wxString();
 	std::vector<bool> flagged(stand.size(), false);
 	ibQueryRelPtr source = ibSubquery(read, r);
 	wxString below = r;
@@ -4498,8 +4823,8 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	if (readShape == nullptr)
 		return nullptr;
 	std::vector<wxString> turnKeys, keyNames;
-	ibQueryRelPtr turnRead = ServerRead(reg, readShape, shape, t, filter, accounts, turnovers, alias + wxT("_ptr"), turnKeys);
-	ibQueryRelPtr openRead = ServerRead(reg, readShape, shape, o, filter, accounts, openings, alias + wxT("_por"), keyNames);
+	ibQueryRelPtr turnRead = ServerRead(reg, readShape, shape, t, filter, kinds, accounts, turnovers, alias + wxT("_ptr"), turnKeys);
+	ibQueryRelPtr openRead = ServerRead(reg, readShape, shape, o, filter, kinds, accounts, openings, alias + wxT("_por"), keyNames);
 	if (turnRead == nullptr || openRead == nullptr)
 		return nullptr;
 
@@ -4649,8 +4974,9 @@ bool ibAcctTurnoverQueryable::CanReadOnServer() const
 	if (!AccountArgumentsReadOnServer(m_accountDr, m_accountCr))
 		return false;
 
-	// A ROW CUT BY THE CORRESPONDENT names two accounts, and a stored side keeps one (ComputeTurnover).
-	if (m_byCorrespondent)
+	// A ROW CUT BY THE CORRESPONDENT names two accounts, and a stored side keeps one (ComputeTurnover) — and so
+	// does a row SELECTED by it: the condition asks the other account of the movement.
+	if (m_byCorrespondent || ConditionNamesCorrespondent(m_reg, m_shape, m_filter))
 		return false;
 
 	// A BREAKDOWN ASKED FOR BY KIND is read as the slots stand and re-keyed over the read (RegroupServerRead). The
@@ -4726,7 +5052,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 	const ibBackendQueryable* readShape = m_kindsDr.empty() ? this : m_reg->GetShapeQueryable(m_shape, {}, {}, Fold());
 	if (readShape == nullptr)
 		return nullptr;
-	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter,
+	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter, m_kindsDr,
 		ServerAccounts(m_reg, this, m_shape, m_accountDr), figures, innerAlias, keyNames);
 	if (read != nullptr && !m_kindsDr.empty()) {
 		ibAcctRegroup how;
@@ -4929,7 +5255,7 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const wxString& alias) c
 	const ibBackendQueryable* readShape = rekeys ? m_reg->GetShapeQueryable(m_shape, {}, {}, Fold()) : this;
 	if (readShape == nullptr)
 		return nullptr;
-	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter,
+	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter, m_kindsDr,
 		ServerAccounts(m_reg, this, m_shape, m_accountDr), figures, innerAlias, keyNames);
 	if (read != nullptr && rekeys) {
 		ibAcctRegroup how;
@@ -5201,7 +5527,7 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 	const ibBackendQueryable* readShape = rekeys ? m_reg->GetShapeQueryable(m_shape, {}, {}, Fold()) : this;
 	if (readShape == nullptr)
 		return nullptr;
-	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter,
+	ibQueryRelPtr read = ServerRead(m_reg, readShape, m_shape, r, m_filter, m_kindsDr,
 		ServerAccounts(m_reg, this, m_shape, m_accountDr), figures, innerAlias, keyNames);
 	if (read != nullptr && rekeys) {
 		ibAcctRegroup how;
@@ -5540,10 +5866,12 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 
 	m_pendingAccountDr = at(layout.m_accountDr);
 	m_pendingAccountCr = at(layout.m_accountCr);
+	m_pendingCondition = at(layout.m_condition);
 	m_pendingRead      = read;
 	const ibBackendQueryable* q = CreateQueryable(paParams, lSizeArray);
 	m_pendingAccountDr.reset();
 	m_pendingAccountCr.reset();
+	m_pendingCondition.reset();
 	m_pendingRead      = ibQueryReadColumns();
 	return q;
 }
@@ -5586,14 +5914,46 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 	// paParams carries an empty value (the lowering put one there so the positions still line up), so
 	// the parse above found nothing to build from — but a SCRIPT call has no second entrance at all,
 	// and its value-built condition must survive. Overwriting unconditionally would erase it.
-	if (m_pendingAccountDr) call.m_accountDr = m_pendingAccountDr;
-	if (m_pendingAccountCr) call.m_accountCr = m_pendingAccountCr;
+	// ⭐⭐ AN ACCOUNT ARGUMENT IS TWO THINGS, and only one of them is a fold. The plain naming of the account —
+	// `Account IN HIERARCHY (&A)`, `Account = &B` — says which accounts the rows are about and which one each is
+	// reported under; the rest of what was written there (`NOT Account.OffBalance`, an OR, a walk into the
+	// chart) SELECTS among them, and joins the condition, which every pass applies before it folds.
+	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
+	const auto takeAccounts = [&](const ibQueryPredicatePtr& written, const ibValueMetaObjectAttributeBase* account,
+	                              const wxString& publishedName, ibQueryPredicatePtr& into) {
+		if (!written || account == nullptr)
+			return;
+		const ibBackendQueryColumn* published = scope != nullptr ? scope->ResolveColumnByName(publishedName) : nullptr;
+		const auto namesAccount = [&](const ibQueryCondition& leaf) {
+			if (leaf.m_col == nullptr || !leaf.m_path.empty() || leaf.m_expr || leaf.m_semiJoin)
+				return false;
+			if (leaf.m_op != ibQueryFilterOp::Equal && leaf.m_op != ibQueryFilterOp::In)
+				return false;
+			const ibMetaID id = leaf.m_col->GetColumnId();
+			return id == account->GetMetaID() || (published != nullptr && id == published->GetColumnId());
+		};
+		ibQueryPredicatePtr accounts, selection;
+		SplitAccountCondition(written, namesAccount, accounts, selection);
+		into          = accounts;
+		call.m_filter = AndWith(call.m_filter, selection);
+	};
+	const bool symmetricSides = m_shape == ibAcctShape::DrCrTurnovers;
+	if (m_pendingAccountDr)
+		takeAccounts(m_pendingAccountDr, m_reg->GetRegisterAccount(),
+			PublishedAccountName(m_reg, m_shape), call.m_accountDr);
+	if (m_pendingAccountCr && m_reg->GetRegisterAccountCr() != nullptr)
+		takeAccounts(m_pendingAccountCr, m_reg->GetRegisterAccountCr(),
+			symmetricSides ? m_reg->GetRegisterAccountCr()->GetName() : ibValueMetaObjectAccountingRegister::CorrAccountColumnName(),
+			call.m_accountCr);
+
+	// …and the CONDITION itself, written against the reading's columns, applied inside it.
+	call.m_filter = AndWith(call.m_filter, m_pendingCondition);
 
 	// Built and KEPT by the base — the same call gives the same object back, and a query that reads
 	// this table twice keeps both alive. ⚠ THE CONSUMED CONDITIONS ARE PART OF THE CALL: their slots in
 	// paParams are empty, so a key of paParams alone handed a query with one account the companion
 	// built for another (MakeCompanionFor, queryableFactory.h).
-	const std::vector<ibQueryPredicatePtr> consumed{ m_pendingAccountDr, m_pendingAccountCr };
+	const std::vector<ibQueryPredicatePtr> consumed{ m_pendingAccountDr, m_pendingAccountCr, m_pendingCondition };
 	switch (m_shape) {
 	case ibAcctShape::Balance:
 		return MakeCompanionFor<ibAcctBalanceQueryable>(consumed, paParams, lSizeArray, m_reg,
@@ -5690,8 +6050,9 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 		parameter.m_description = consumed
 			? _("A condition on the ACCOUNT, consumed by the reading itself: `IN HIERARCHY` reports "
 			    "the subordinate accounts folded under the one named, which a filter applied around "
-			    "the reading could never do. Accounts only - everything else has the general "
-			    "Condition slot.")
+			    "the reading could never do. Any condition on the account is taken - NOT, OR, "
+			    "`NOT Account.OffBalance`, `Account.Code LIKE \"6%\"` - and selects the rows before "
+			    "they are folded.")
 			: _("A condition on the reading's own columns, applied inside it so it narrows what is "
 			    "folded rather than dropping finished rows.");
 
@@ -5880,13 +6241,12 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	}
 }
 
-// ⭐⭐ THE ACCOUNT SLOTS ADMIT ACCOUNTS AND NOTHING ELSE — so that is all they are offered.
+// ⭐⭐ THE ACCOUNT SLOTS ARE ABOUT THE ACCOUNT — so the account is all they are offered.
 //
-// `AccountCondition` / `…Dr` / `…Cr` / `CorrAccountCondition` are CONSUMED by this source: the
-// predicate written there never reaches a WHERE, it is read back into the hierarchy scope that
-// decides which accounts are admitted and which one each row is reported under
-// (ScopeFromAccountCondition). A leaf about anything else cannot be applied — there is nowhere to
-// apply it — so it is dropped, and a filter that vanishes reports MORE than was asked for.
+// `AccountCondition` / `…Dr` / `…Cr` / `CorrAccountCondition` are CONSUMED by this source: the plain
+// naming of the account written there becomes the hierarchy scope that decides which one each row is
+// reported under (ScopeFromAccountCondition), and whatever else is said about the account — through it
+// (`Account.OffBalance`), under NOT, in an OR — selects the rows before the fold (SplitAccountCondition).
 //
 // The general `Condition` is the place for everything else, and it answers with the list above.
 void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,

@@ -38,6 +38,12 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// ⭐ THE CONDITION IS CONSUMED — resolved against the movements (GetConditionScope) and applied INSIDE the
+	// reading, before the fold, on whichever surface it stands (ibRegConditionOn). The same for all three tables.
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the catalogue of a query
 	// constructor, and any other reader that wants the shape rather than the rows. Answered
 	// from the VIEW's shape, which is metadata-only, so no companion is built and no database
@@ -60,6 +66,10 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 	// …AND WITH THE CALL'S ARGUMENTS, because the periodicity decides which columns exist.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
@@ -84,6 +94,10 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
 	                        const std::vector<ibValue>& args) const override;
@@ -897,12 +911,27 @@ inline wxString ibAccumRegisterBalanceDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+// What a query's condition is resolved against: the movements, where every dimension is a column.
+inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::GetConditionScope() const
+{
+	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+}
+
+inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
 	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Period);
 	// The runtime value becomes the condition right here, at the door — everything below sees a predicate.
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter));
+	// A QUERY's condition arrives as one already (the consumed slot); a script's is a value in the same slot.
+	const ibQueryPredicatePtr filter = ibRegBothConditions(
+		ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter)),
+		ibRegConsumedCondition(conditions, ibRegBalanceArg::Filter));
 	// Built and KEPT by the base — the same call gives the same object back, and a query that reads
-	// this table twice keeps both alive (queryableFactory.h, MakeCompanion).
-	return MakeCompanion<ibBalanceQueryable>(paParams, lSizeArray, m_reg, period, filter);
+	// this table twice keeps both alive (queryableFactory.h, MakeCompanion). The condition is part of the call.
+	return MakeCompanionFor<ibBalanceQueryable>(conditions, paParams, lSizeArray, m_reg, period, filter);
 }
 
 inline void ibAccumRegisterBalanceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
@@ -926,12 +955,8 @@ inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQ
 		moment.m_type = m_reg->GetRegisterPeriod()->GetTypeDesc();
 	out.push_back(moment);
 
-	ibQuerySourceParameter condition;
-	condition.m_name      = wxT("Condition");
-	condition.m_description      = _("A condition on the DIMENSIONS, applied inside the reading - so it "
-	                          "narrows what is folded rather than dropping rows after the fold.");
-	condition.m_condition = true;
-	out.push_back(condition);
+	// The condition slot every virtual table has, declared once (registerQueryLowering.h).
+	ibAppendRegisterConditionParameter(out);
 }
 
 // A BALANCE IS FILTERED BY ITS DIMENSIONS, never by a resource. The resource is what the table
@@ -960,10 +985,23 @@ inline wxString ibAccumRegisterTurnoverDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::GetConditionScope() const
+{
+	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+}
+
+inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
 	const ibValue begin  = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Begin);
 	const ibValue end    = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::End);
 	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Periodicity);
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Filter));
+	const ibQueryPredicatePtr filter = ibRegBothConditions(
+		ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Filter)),
+		ibRegConsumedCondition(conditions, ibRegTurnoverArg::Filter));
 
 	// ⭐ THE PERIODICITY IS THE GROUPING KEY OF THE FOLD. Nothing = the interval read WHOLE, one row
 	// per key; a unit = a row per key AND per period, the period travelling out as `Period`.
@@ -978,7 +1016,7 @@ inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQuerya
 	// so an hour is as answerable as a month.
 	const ibRegFold fold = ibReadRegisterFold(period);
 
-	return MakeCompanion<ibTurnoverQueryable>(paParams, lSizeArray, m_reg, begin, end, filter, fold);
+	return MakeCompanionFor<ibTurnoverQueryable>(conditions, paParams, lSizeArray, m_reg, begin, end, filter, fold);
 }
 
 inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
@@ -1046,6 +1084,17 @@ inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionScope() const
+{
+	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+}
+
+inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
 	// Periodicity is the READ granularity and rides here rather than on the metaobject — one register
 	// serves monthly, weekly and quarterly readings of the same data with no schema change.
 	// Absent = Month. The condition is FIFTH; it was read from the fourth while the fill method was
@@ -1054,7 +1103,9 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 	const ibValue end    = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::End);
 	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Periodicity);
 	const ibValue fill   = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::FillMethod);
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Filter));
+	const ibQueryPredicatePtr filter = ibRegBothConditions(
+		ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Filter)),
+		ibRegConsumedCondition(conditions, ibRegBalTurnArg::Filter));
 
 	// ⚠ THE DEFAULT IS THE ONE WITH THE BOUNDARIES, and that is what this table produces: each row
 	// carries the balance as its period opens and as it closes. Asking for MOVEMENTS ONLY is the
@@ -1070,7 +1121,7 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 	// over the whole interval", which is a different computation, not a default granularity.
 	const ibRegFold fold = ibReadRegisterFold(period);
 
-	return MakeCompanion<ibBalanceAndTurnoverQueryable>(paParams, lSizeArray,
+	return MakeCompanionFor<ibBalanceAndTurnoverQueryable>(conditions, paParams, lSizeArray,
 		m_reg, begin, end, fold, filter);
 }
 

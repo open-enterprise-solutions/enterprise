@@ -213,11 +213,12 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 			wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()");
 		m.m_dropTriggerTemplate  = wxT("DROP TRIGGER IF EXISTS {name} ON {table}");
 		m.m_dropFunctionTemplate = wxT("DROP FUNCTION IF EXISTS {name}()");
+		m.m_binaryLiteralTemplate = wxT("'\\x{hex}'::bytea");   // X'…' is a BIT string here, not a bytea
 		m.m_deltaUpsertTemplate =
 			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
 		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
 		m.m_deltaSourceAlias  = wxT("excluded");
-		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
 		// NULL-safe like the default, though ON CONFLICT never spends it: leaving a plain `=` here
 		// would be a trap for whoever makes this template used (PostgreSQL 15 has MERGE), and the
 		// defect it causes — an empty key column matching nothing and inserting a duplicate — costs

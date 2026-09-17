@@ -19,6 +19,23 @@ static ibValue TruncateToPeriod(const ibValue& period, ibTotalsPeriod unit)
 	return ibValue(ibTruncateToPeriod(period.GetDateTime(), unit));
 }
 
+// …and the manager's own line, before anything asks by its key: a write, a read, a delete all name the month a
+// monthly register keeps, whatever day the caller set.
+template <class TMeta>
+static void TruncateLinePeriod(const TMeta* meta, ibValueModel::ibValueModelReturnLine* line)
+{
+	const ibTotalsPeriod unit = meta->GetPeriodicityUnit();
+	if (unit == ibTotalsPeriod::Second || line == nullptr || meta->GetRegisterPeriod() == nullptr)
+		return;
+	const ibMetaID period = meta->GetRegisterPeriod()->GetMetaID();
+	ibValue written;
+	line->GetValueByMetaID(period, written);
+	line->SetValueByMetaID(period, TruncateToPeriod(written, unit));
+}
+
+// The key the manager's fields name (commonObjectManagerQuery.cpp).
+ibUniqueKeyPair ibRecordKeyOf(const ibValueMetaObjectRegisterData* meta, ibValueModel::ibValueModelReturnLine* line);
+
 // The set's own part of it: every line's period and the key's, truncated first — the delete by the key and the lines
 // written after it then name the same month.
 bool ibValueRecordSetObjectInformationRegister::SaveData(bool replace, bool clearTable)
@@ -129,13 +146,7 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				// The record's period truncated before anything asks by it — the probe for a record already there asks
 				// by the month a monthly register keeps.
-				const ibTotalsPeriod unit = m_metaObject->GetPeriodicityUnit();
-				if (unit != ibTotalsPeriod::Second && m_recordLine != nullptr) {
-					const ibMetaID period = m_metaObject->GetRegisterPeriod()->GetMetaID();
-					ibValue written;
-					m_recordLine->GetValueByMetaID(period, written);
-					m_recordLine->SetValueByMetaID(period, TruncateToPeriod(written, unit));
-				}
+				TruncateLinePeriod(m_metaObject, m_recordLine);
 
 				// A REGISTER'S KEY FLOATS OVER ITS DIMENSIONS, so editing one does not modify a record — it
 				// REPLACES it: the old key is gone from the table and a row under a new key is what remains.
@@ -143,7 +154,7 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 				// taken now, before the write.
 				const ibRowMetaValues keyBefore = m_objGuid.GetKeyValues();
 
-				if (!SaveData()) {
+				if (!SaveData(replace)) {   // Write(False) adds and nothing else — SaveData refuses a taken key
 					scope.SafeRollBackTransaction();
 					ibBackendCoreException::Error(_("Register '%s': failed to store the record"),
 						m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
@@ -192,6 +203,7 @@ bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 				{
 					scope.SafeBeginTransaction();
 
+					TruncateLinePeriod(m_metaObject, m_recordLine);   // deleted by the month it is kept under
 					if (!DeleteData()) {
 						scope.SafeRollBackTransaction();
 						ibBackendCoreException::Error(_("Register '%s': failed to delete the record"),
@@ -393,7 +405,9 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		pvarRetValue = m_recordSet->IsModified();
 		return true;
 	case recordManager::enReadRecordManager:
-		m_recordSet->Read();
+		// By the key its own fields name — the set read with no key is every record (ReadData says the rest).
+		TruncateLinePeriod(m_metaObject, m_recordLine);
+		pvarRetValue = ReadData(ibRecordKeyOf(m_metaObject, m_recordLine));
 		return true;
 	case recordManager::enSelectedRecordManager:
 		pvarRetValue = m_recordSet->Selected();

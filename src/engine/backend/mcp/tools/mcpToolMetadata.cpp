@@ -1846,9 +1846,48 @@ public:
 		if (const ibDataNode* shape = params.FindChild(ArgTypeShape().Name())) {
 
 			ibTypeDescription described;
-			ibDataValue carried = ibDataValue::Child(std::make_shared<ibDataNode>(*shape));
+			const std::shared_ptr<ibDataNode> copy = std::make_shared<ibDataNode>(*shape);
 
-			if (!ibTypeDescriptionMemory::ReadNode(carried, described, metaData)) {
+			// ⭐ A TYPE IN THE LIST MAY BE SAID BY ITS NAME — `"Types": ["Number"]` — the way `type` says one.
+			// The reader takes only the objects metadata_get writes, and a bare name reached it as a value of
+			// the wrong kind: the call died inside with "ibDataValue: wrong value kind (expected 6, got 4)",
+			// which tells the caller nothing (2026-09-17). A name is resolved here the two ways `type` resolves
+			// one, and anything else in the list is refused in words.
+			if (const ibDataValue* types = copy->FindField(wxT("Types")); types != nullptr && types->Kind() == ibDataKind::Array) {
+				std::vector<ibDataValue> entries;
+				for (const ibDataValue& item : types->AsArray()) {
+					if (item.Kind() == ibDataKind::Child) {
+						entries.push_back(item);
+						continue;
+					}
+					if (item.Kind() != ibDataKind::String) {
+						refusal = ibMcpText("Each entry of Types is a type's name (\"Number\", \"CatalogRef.Goods\") or the object "
+							"metadata_get gives for one.");
+						return false;
+					}
+					const wxString name = item.AsString();
+					ibClassID named = 0;
+					if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(name))
+						named = ctor->GetClassType();
+					else if (const ibCtorAbstractType* builtin = ibValue::GetAvailableCtor(name))
+						named = builtin->GetClassType();
+					if (named == 0) {
+						refusal = wxString::Format(
+							ibMcpText("'%s' in Types is not a type this configuration knows. type_list shows the names."), name);
+						return false;
+					}
+					const std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+					entry->AddField(wxT("TypeId"), ibDataValue::String(wxString::Format(wxT("%llu"), static_cast<unsigned long long>(named))));
+					entries.push_back(ibDataValue::Child(entry));
+				}
+				copy->SetField(wxT("Types"), ibDataValue::Array(entries));
+			}
+			ibDataValue carried = ibDataValue::Child(copy);
+
+			bool readable = false;
+			try { readable = ibTypeDescriptionMemory::ReadNode(carried, described, metaData); }
+			catch (...) { readable = false; }   // a value of the wrong kind anywhere in the shape — refused below, in words
+			if (!readable) {
 				refusal = ibMcpText("That is not a type description this platform can read. Send back the "
 					"shape metadata_get gives, with your changes in it.");
 				return false;

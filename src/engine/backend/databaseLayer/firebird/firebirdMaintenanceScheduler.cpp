@@ -4,6 +4,7 @@
 #include "backend/appData.h"
 #include "backend/job/jobManager.h"
 #include "backend/session/session.h"
+#include "backend/diagnostics/journal.h"   // ibJournalInfo — a sweep pass says why it ran and what it cleared
 
 // THE SCHEDULE SAYS WHEN THE WORK IS DUE — that is the whole point of having one. It used to say
 // "ask every 60 seconds", with the real cadences (sweep every 6 h, backup/restore weekly) hidden in
@@ -16,7 +17,14 @@
 // JOB NAME across every process on the base, so a restart changes nothing and a peer that already
 // did the work is seen. Sweep and backup are separate jobs because they are separate cadences —
 // folding them into one meant neither could be expressed.
-static constexpr int kSweepEverySeconds  = 6 * 3600;        // cheap; several times a day is fine
+// ⭐ THE SWEEP IS ASKED FOR BY THE GARBAGE, NOT BY THE CLOCK. The job looks every quarter of an hour and
+// sweeps only when the gap between the oldest interesting transaction and the oldest snapshot has grown
+// past the threshold — the very test Firebird's own automatic sweep applied, which is switched off now
+// (sweep_interval 0, firebirdDatabaseLayer.cpp) so that this job is the one owner and every pass is in
+// the journal. A quiet base is never swept for nothing; a base a test run filled with rolled-back rows
+// is swept within fifteen minutes, visibly.
+static constexpr int       kSweepEverySeconds = 15 * 60;
+static constexpr long long kSweepBacklog      = 5000;
 static constexpr int kBackupWindowStart  = 2;               // 02:00 local
 static constexpr int kBackupWindowEnd    = 5;               // 05:00 local
 static constexpr int kBackupEveryDays    = 7;
@@ -83,8 +91,27 @@ ibDatabaseLayerFirebird* DriverOf(ibSession* session, std::shared_ptr<ibDatabase
 bool ibFirebirdMaintenanceJob::RunSweep(ibSession* session)
 {
 	std::shared_ptr<ibDatabaseLayer> keepAlive;
-	if (ibDatabaseLayerFirebird* const fb = DriverOf(session, keepAlive))
-		fb->RunSweepNow([run = session->RunState()] { return ibRunCancelled(run); });
+	ibDatabaseLayerFirebird* const fb = DriverOf(session, keepAlive);
+	if (fb == nullptr)
+		return false;
+
+	long long backlog = 0;
+	if (!fb->GetSweepBacklog(backlog)) {
+		ibJournalWarning(wxT("firebird.sweep"), wxT("the sweep backlog could not be read (MON$DATABASE) - no sweep this time"));
+		return false;
+	}
+	if (backlog <= kSweepBacklog)
+		return false;   // nothing worth a pass — and nothing said, every quarter of an hour
+
+	ibJournalInfo(wxT("firebird.sweep"), wxT("sweeping: %lld transactions of garbage (threshold %lld)"), backlog, kSweepBacklog);
+	const wxLongLong started = wxGetLocalTimeMillis();
+	const bool ok = fb->RunSweepNow([run = session->RunState()] { return ibRunCancelled(run); });
+	const long long seconds = (wxGetLocalTimeMillis() - started).GetValue() / 1000;
+
+	long long left = -1;
+	fb->GetSweepBacklog(left);
+	ibJournalInfo(wxT("firebird.sweep"), wxT("sweep %s in %lld s, %lld transactions of garbage left"),
+		ok ? wxString(wxT("done")) : wxString(wxT("did not finish")), seconds, left);
 	return false;   // one pass does the whole thing — nothing to continue next tick
 }
 

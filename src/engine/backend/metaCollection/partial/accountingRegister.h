@@ -294,6 +294,7 @@ private:
 	// behind would attach itself to the NEXT one, which is the quiet kind of wrong.
 	ibQueryPredicatePtr                  m_pendingAccountDr;
 	ibQueryPredicatePtr                  m_pendingAccountCr;
+	ibQueryPredicatePtr                  m_pendingCondition;
 	ibQueryReadColumns                   m_pendingRead;
 
 	// The scope conditions are resolved against — made on the first ask and kept, because a lowered

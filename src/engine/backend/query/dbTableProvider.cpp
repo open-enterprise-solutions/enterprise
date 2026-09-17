@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dbTableProvider.h"   // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
+#include "queryable.h"         // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
 #include "backend/diagnostics/journal.h"   // ibJournal — why a server fold was declined, and what was lowered
@@ -33,6 +34,8 @@
 #include <algorithm>    // std::find / std::remove — column-list housekeeping (the ROLLUP rows are no longer sorted here: the server orders them)
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
 #include <functional>   // std::function — the recursive dot-walk predicate-tree lowering in BuildPageIR
+#include <memory>       // CastLeaf — the narrowed fields, made once
+#include <mutex>        // …and made under a lock: queries run on several threads
 
 // ==========================================================================
 // Name-substitution primitives (ibMetaIRBuilder) — query-native conditions /
@@ -602,9 +605,23 @@ public:
 	                                         bool pathAsExists = false);
 	// A dot-walk RLS condition on the WRITE path -> a CORRELATED EXISTS (a write cannot JOIN). Scans the
 	// reference-target chain, correlates the first hop back to the outer write row, and folds the leaf.
+	// `negated`: the condition is asked NOT to hold of the row the walk reaches — which still requires that row.
 	static ibQueryExprPtr BuildDotWalkExists(const ibBackendQueryable* queryable,
 	                                         const ibQueryCondition& c,
-	                                         const wxString& mainQual);
+	                                         const wxString& mainQual,
+	                                         bool negated = false);
+	// NOT of a condition tree whose walks are EXISTS — pushed down to the walks, so the answer is SQL's own: a
+	// field reached through a reference that reaches nothing is NULL, and neither it nor its negation holds.
+	static ibQueryExprPtr BuildNegatedExpr(const ibBackendQueryable* queryable,
+	                                       const ibQueryPredicatePtr& predicate,
+	                                       const wxString& mainQual,
+	                                       bool pathAsExists);
+	// The walk under it, for any test of the row the path ends at (IS NULL and REFS take it too): `test`
+	// is handed that row's queryable and alias.
+	static ibQueryExprPtr BuildPathExists(const ibBackendQueryable* queryable,
+	                                      const std::vector<const ibBackendQueryColumn*>& path,
+	                                      const wxString& mainQual,
+	                                      const std::function<ibQueryExprPtr(const ibBackendQueryable*, const wxString&)>& test);
 	// An RLS `restrict … join …` SEMI-JOIN -> a CORRELATED EXISTS over the inner permission source: the outer
 	// row passes iff a permitting row exists. `EXISTS(SELECT * FROM <inner> sj WHERE <inner Where over sj>
 	// AND sj.<innerKey> <op> outer.<outerKey>)`. The inner's own conditions (incl. inner dot-walk -> nested
@@ -1289,12 +1306,27 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 			acc = OrFold(acc, BuildPredicateExpr(queryable, child, mainQual, pathAsExists));
 		return acc;
 	}
-	case ibQueryPredicateKind::Not: {
-		ibQueryExprPtr inner = predicate->m_children.empty()
-			? nullptr : BuildPredicateExpr(queryable, predicate->m_children.front(), mainQual, pathAsExists);
-		return inner ? ibNot(inner) : nullptr;
-	}
+	case ibQueryPredicateKind::Not:
+		return predicate->m_children.empty()
+			? nullptr : BuildNegatedExpr(queryable, predicate->m_children.front(), mainQual, pathAsExists);
 	case ibQueryPredicateKind::IsNull: {
+		// ⭐ THROUGH A REFERENCE, ASKED OF THE TARGET ROW. `Ref.Field IS NULL` holds when the reference
+		// reaches no row OR the row it reaches holds nothing — which is exactly "no target row holds a
+		// value": NOT EXISTS over the path. Asked of the outer row's own fields instead, it tested the
+		// wrong table and matched on whatever the reference itself held.
+		if (pathAsExists && predicate->m_path.size() > 1) {
+			const ibQueryExprPtr held = BuildPathExists(queryable, predicate->m_path, mainQual,
+				[&predicate](const ibBackendQueryable* owner, const wxString& alias) -> ibQueryExprPtr {
+					const ibBackendQueryColumn* col = owner->ResolveColumnByName(predicate->m_col->GetName());
+					if (col == nullptr)
+						return nullptr;
+					ibQueryExprPtr allNull;
+					for (const wxString& f : ColumnValueFields(col))
+						allNull = AndFold(allNull, ibIsNull(ibColQ(alias, f), false));
+					return allNull ? ibNot(allNull) : nullptr;
+				});
+			return predicate->m_negated ? held : ibNot(held);
+		}
 		// A metadata reference / composite column spans several physical fields; IS NULL holds only when
 		// they are ALL null (AND-fold), IS NOT NULL when ANY is set (NOT of that). For a raw / single-field
 		// column this collapses to one ibIsNull. Column-based: fields come off the column, no attribute.
@@ -1315,6 +1347,20 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 	// A column with no reference pair (a plain number, a string) can never point anywhere, and says so
 	// as FALSE rather than as an error: `WHERE Code REFS Catalog.Goods` is a question with an answer.
 	case ibQueryPredicateKind::RefType: {
+		// …and through a reference, the tag of the column the walk ends at — on the target row.
+		// NOT REFS is asked inside too: the row the walk reaches has to be there for its tag to be anything.
+		if (pathAsExists && predicate->m_path.size() > 1) {
+			return BuildPathExists(queryable, predicate->m_path, mainQual,
+				[&predicate](const ibBackendQueryable* owner, const wxString& alias) -> ibQueryExprPtr {
+					const ibBackendQueryColumn* col = owner->ResolveColumnByName(predicate->m_col->GetName());
+					if (col == nullptr)
+						return nullptr;
+					const ibQueryExprPtr test = TypeTagTest(col, predicate->m_refTypeClsid, alias);
+					if (!test)
+						return AlwaysPredicate(predicate->m_negated, col, alias);
+					return predicate->m_negated ? ibNot(test) : test;
+				});
+		}
 		const ibQueryExprPtr test = TypeTagTest(predicate->m_col, predicate->m_refTypeClsid, mainQual);
 		if (!test)
 			return AlwaysPredicate(predicate->m_negated, predicate->m_col, mainQual);   // a type this column can never hold
@@ -1322,6 +1368,65 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 	}
 	}
 	return nullptr;
+}
+
+// ⭐⭐ NOT, PUSHED DOWN TO THE WALKS. A walk lowered as EXISTS answers FALSE where the reference reaches nothing,
+// and NOT of that is TRUE — while the same condition written through a join reads the field as NULL, and NOT of
+// NULL keeps nothing. One condition, two answers, and it showed as one row: `NOT AccountDr.Code = "28"` kept the
+// off-balance line whose debit side names no account when put inside a reading, and dropped it in the WHERE
+// (2026-09-17). So NOT goes down by De Morgan until it meets a walk, and there it is asked INSIDE the EXISTS —
+// the reached row has to be there, and the condition must not hold of it. A leaf that does not walk is NOT of
+// itself, as it always was.
+ibQueryExprPtr ibMetaIRBuilder::BuildNegatedExpr(const ibBackendQueryable* queryable,
+                                                 const ibQueryPredicatePtr& predicate,
+                                                 const wxString& mainQual,
+                                                 bool pathAsExists)
+{
+	if (!predicate)
+		return nullptr;
+	const auto plainNot = [&]() -> ibQueryExprPtr {
+		const ibQueryExprPtr positive = BuildPredicateExpr(queryable, predicate, mainQual, pathAsExists);
+		return positive ? ibNot(positive) : nullptr;
+	};
+
+	switch (predicate->m_kind) {
+	case ibQueryPredicateKind::And: {
+		ibQueryExprPtr acc;
+		for (const ibQueryPredicatePtr& child : predicate->m_children)
+			acc = OrFold(acc, BuildNegatedExpr(queryable, child, mainQual, pathAsExists));
+		return acc;
+	}
+	case ibQueryPredicateKind::Or: {
+		ibQueryExprPtr acc;
+		for (const ibQueryPredicatePtr& child : predicate->m_children)
+			acc = AndFold(acc, BuildNegatedExpr(queryable, child, mainQual, pathAsExists));
+		return acc;
+	}
+	case ibQueryPredicateKind::Not:
+		return predicate->m_children.empty()
+			? nullptr : BuildPredicateExpr(queryable, predicate->m_children.front(), mainQual, pathAsExists);
+	case ibQueryPredicateKind::Leaf: {
+		const ibQueryCondition& c = predicate->m_leaf;
+		if ((pathAsExists || c.m_asExists) && !c.m_path.empty() && !c.m_semiJoin)
+			return BuildDotWalkExists(queryable, c, mainQual, /*negated*/ true);
+		return plainNot();
+	}
+	case ibQueryPredicateKind::IsNull:
+	case ibQueryPredicateKind::RefType: {
+		// Both carry their own negation; flipped, they are built the way they would have been written.
+		auto flipped = std::make_shared<ibQueryPredicate>(*predicate);
+		flipped->m_negated = !predicate->m_negated;
+		return BuildPredicateExpr(queryable, flipped, mainQual, pathAsExists);
+	}
+	}
+	return plainNot();
+}
+
+ibQueryExprPtr ibDbTableProvider::BuildPredicateIR(const ibBackendQueryable* queryable,
+                                                   const ibQueryPredicatePtr& predicate,
+                                                   const wxString& qualifier)
+{
+	return ibMetaIRBuilder::BuildPredicateExpr(queryable, predicate, qualifier, /*pathAsExists*/ true);
 }
 
 ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
@@ -1344,47 +1449,84 @@ ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
 // resolve a reference target / self-reference field THROWS (dropping it would widen the filter -> wrong rows).
 ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* queryable,
                                                    const ibQueryCondition& c,
-                                                   const wxString& mainQual)
+                                                   const wxString& mainQual, bool negated)
 {
-	const std::vector<const ibBackendQueryColumn*>& path = c.m_path;
+	return BuildPathExists(queryable, c.m_path, mainQual,
+		[&c, negated](const ibBackendQueryable* owner, const wxString& alias) -> ibQueryExprPtr {
+			// Leaf condition on the last target — qualified by its alias, FLAT: the walk is this function's, so
+			// the copy carries neither the path nor the tag that asks for it. Handed over with them, a leaf
+			// marked m_asExists came straight back here, and back again. The leaf column is found again on the
+			// row the walk reached: a composite reference reaches several tables, and each spells the field its
+			// own way.
+			ibQueryCondition flat = c;
+			flat.m_path.clear();
+			flat.m_asExists = false;
+			flat.m_col = c.m_col != nullptr ? owner->ResolveColumnByName(c.m_col->GetName()) : nullptr;
+			if (c.m_col != nullptr && flat.m_col == nullptr)
+				return nullptr;
+			const ibQueryExprPtr leaf = BuildConditionExpr(owner, flat, alias, /*pathAsExists*/ false);
+			return negated && leaf ? ibNot(leaf) : leaf;
+		});
+}
+
+// The walk itself, for any test put to the row it ends at — a comparison (above), IS NULL, REFS.
+ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const ibBackendQueryable* queryable,
+                                                const std::vector<const ibBackendQueryColumn*>& path,
+                                                const wxString& mainQual,
+                                                const std::function<ibQueryExprPtr(const ibBackendQueryable*, const wxString&)>& test)
+{
 	if (path.size() < 2)
-		throw std::logic_error("BuildDotWalkExists: a dot-walk write condition needs at least ref + leaf");
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			_("a walk through a reference needs the reference and the field it reaches"));
 
-	// First hop: ref0 on the outer source -> target t0, correlated to the outer write row.
-	const ibBackendQueryColumn* ref0 = queryable->ResolveColumnByName(path[0]->GetName());
-	const ibBackendQueryable*   t0   = ref0 ? queryable->GetProvider().ResolveReferenceTarget(queryable, ref0) : nullptr;
-	if (ref0 == nullptr || t0 == nullptr || SelfReferenceField(t0).empty())
-		throw std::logic_error("BuildDotWalkExists: unresolved first reference hop on the write path");
-
-	ibQueryRelPtr    from  = ibScan(t0->GetQueryTableName(), wxT("ex0"));
-	const ibBackendQueryable* owner = t0;
-	wxString ownerAlias = wxT("ex0");
-
-	// Middle hops: each further reference joins its target into the subquery.
-	for (size_t i = 1; i + 1 < path.size(); ++i) {
-		const ibBackendQueryColumn* refI = owner->ResolveColumnByName(path[i]->GetName());
-		const ibBackendQueryable*   tI   = refI ? owner->GetProvider().ResolveReferenceTarget(owner, refI) : nullptr;
-		if (refI == nullptr || tI == nullptr || SelfReferenceField(tI).empty())
-			throw std::logic_error("BuildDotWalkExists: unresolved reference hop on the write path (composite mid-path not supported)");
-		const wxString alias = wxString::Format(wxT("ex%d"), static_cast<int>(i));
-		from = ibJoin(from, ibScan(tI->GetQueryTableName(), alias),
-		              SelfReferenceMatch(tI, alias, ibColQ(ownerAlias, FirstSqlFieldOfColumn(refI))),
-		              ibQueryJoinType::Inner);
-		owner = tI; ownerAlias = alias;
-	}
-
-	// Correlation back to the OUTER write row: ex0.<selfref> = <outer>.<ref0 field>. The outer is the write
-	// TABLE itself (DELETE / UPDATE — mainQual empty) or the derived-row alias "src" (guarded INSERT create).
-	// A bare name would ambiguously bind INSIDE the subquery, so qualify the outer column explicitly.
+	// Correlation back to the OUTER row: <target>.<selfref> = <outer>.<ref field>. The outer is the table itself
+	// (DELETE / UPDATE, a single-table read — mainQual empty) or the alias the statement gave it. A bare name
+	// would bind INSIDE the subquery, so the outer column is qualified explicitly.
 	const wxString outerQual = mainQual.IsEmpty() ? queryable->GetQueryTableName() : mainQual;
-	ibQueryExprPtr correlation = SelfReferenceMatch(t0, wxT("ex0"), ibColQ(outerQual, FirstSqlFieldOfColumn(ref0)));
 
-	// Leaf condition on the last target (c.m_col is the leaf column) — qualified by its alias, flat (no path).
-	ibQueryExprPtr leaf = BuildConditionExpr(owner, c, ownerAlias, /*pathAsExists*/ false);
+	// ⭐ HOP BY HOP, EVERY TABLE A HOP CAN REACH. A reference that may point at several tables (an analytics slot:
+	// a counterparty, an item, a contract) is walked into each of them that has the next field, and the walks
+	// are ORed — each correlated by the reference's row key, the way the read's own composite walk joins them
+	// (CompositeLeaf). Nested EXISTS rather than a join chain inside one subquery: a hop is one row at most, so
+	// the two say the same, and nesting is what lets every hop fan out on its own.
+	int aliases = 0;
+	std::function<ibQueryExprPtr(const ibBackendQueryable*, const wxString&, size_t)> hop =
+		[&](const ibBackendQueryable* owner, const wxString& ownerQual, size_t seg) -> ibQueryExprPtr {
+			const ibBackendQueryColumn* ref = owner->ResolveColumnByName(path[seg]->GetName());
+			if (ref == nullptr)
+				return nullptr;
+			std::vector<const ibBackendQueryable*> targets;
+			if (const ibBackendQueryable* single = owner->GetProvider().ResolveReferenceTarget(owner, ref))
+				targets.push_back(single);
+			else
+				targets = owner->GetProvider().ResolveReferenceTargets(owner, ref);
 
-	// EXISTS only tests row presence -> SELECT * (a bare ibFilter renders as SELECT *; no projected const,
-	// which sidesteps FB's untyped-placeholder -804). Correlation AND leaf as the subquery WHERE.
-	return ibExists(ibFilter(from, AndFold(correlation, leaf)));
+			ibQueryExprPtr any;
+			for (const ibBackendQueryable* target : targets) {
+				if (target == nullptr || SelfReferenceField(target).empty()
+				    || target->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr
+				    || !ibDbTableProvider::WalkEnters(target, path[seg + 1]))   // a CAST names the one type the walk goes into
+					continue;
+				const wxString alias = wxString::Format(wxT("ex%d"), aliases++);
+				const ibQueryExprPtr inner = seg + 2 == path.size() ? test(target, alias) : hop(target, alias, seg + 1);
+				if (!inner)
+					continue;
+				const ibQueryExprPtr correlation = SelfReferenceMatch(target, alias, ibColQ(ownerQual, FirstSqlFieldOfColumn(ref)));
+				// EXISTS only tests row presence -> SELECT * (a bare ibFilter renders as SELECT *; no projected
+				// const, which sidesteps FB's untyped-placeholder -804).
+				any = OrFold(any, ibExists(ibFilter(ibScan(target->GetQueryTableName(), alias), AndFold(correlation, inner))));
+			}
+			return any;
+		};
+
+	const ibQueryExprPtr walked = hop(queryable, outerQual, 0);
+	// No table the reference reaches has the field — a condition that can hold for no row. Refused rather than
+	// answered FALSE: a walk that resolves nowhere is a name the author got wrong, and silence would hide it.
+	if (!walked)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			wxString::Format(_("'%s' cannot be walked to: no table '%s' refers to has that field"),
+				path.back()->GetName(), path.front()->GetName()));
+	return walked;
 }
 
 ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, const wxString& outerQual)
@@ -1863,6 +2005,8 @@ public:
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
 			const ibBackendQueryColumn* refCol = path[i];
 			const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
+			if (tgtQ == nullptr)
+				tgtQ = ibDbTableProvider::CastTarget(path[i + 1]);   // a reference with several types, narrowed to one by a CAST
 			const wxString tgtRefField = (tgtQ != nullptr) ? SelfReferenceField(tgtQ) : wxString();
 			if (tgtQ == nullptr || tgtRefField.empty()) return false;
 			prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
@@ -1912,6 +2056,19 @@ public:
 	//
 	// The distinction it draws is the right one: NULL means the path did not reach (this row's type has no
 	// such field), while an EMPTY reference means it reached and the field is blank.
+	// ⭐⭐ …AND A COMPARISON WANTS THE NULL TOO. It asks about the value the walk reached, and a row the walk
+	// did not reach has none: `NOT CAST(Analytics AS Catalog.Counterparties).Description LIKE "Test%"` kept
+	// every goods and fixed-asset row, because the padding made their description an empty string that is
+	// not like "Test%" (measured 2026-09-17). A single-type walk and the in-memory road answer NULL there,
+	// and a NULL is neither like nor not like anything. So a comparison takes the walk unpadded — a SCALAR
+	// leaf only, as before: a reference leaf is compared through its target (Resolve).
+	ibQueryExprPtr CompositeComparand(const std::vector<const ibBackendQueryColumn*>& path)
+	{
+		if (path.empty() || !TypedScalarEmpty(path.back()))
+			return nullptr;
+		return CompositeLeaf(path, /*withTypedEmpty*/ false);
+	}
+
 	ibQueryExprPtr CompositeLeaf(const std::vector<const ibBackendQueryColumn*>& path, bool withTypedEmpty)
 	{
 		if (path.size() < 2) return nullptr;
@@ -1943,6 +2100,7 @@ public:
 				// segment — no point in 15 LEFT JOINs for a field on 1. The deeper tail still self-skips.
 				for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 					if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
+					if (!ibDbTableProvider::WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
 					const wxString f = SelfReferenceField(tq);
 					if (f.empty()) continue;
 					walk(AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1, out);
@@ -1970,7 +2128,7 @@ public:
 				where = AndFold(where, ibMetaIRBuilder::BuildConditionExpr(m_root, c, mainQual));
 				continue;
 			}
-			if (ibQueryExprPtr lhs = CompositeLeaf(c.m_path, /*withTypedEmpty*/ true)) {   // composite scalar leaf -> COALESCE <op> value
+			if (ibQueryExprPtr lhs = CompositeComparand(c.m_path)) {   // composite scalar leaf -> COALESCE <op> value
 				where = AndFold(where, ibBinOp(FilterOpToBinOp(c.m_op), lhs, ibConst(c.m_value)));
 				continue;
 			}
@@ -1980,6 +2138,46 @@ public:
 			where = AndFold(where, ibMetaIRBuilder::BuildConditionExpr(tq, c, a));
 		}
 		return where;
+	}
+
+	// Does this tree hold a walk asked as EXISTS?
+	static bool HasExistsWalk(const ibQueryPredicatePtr& p)
+	{
+		if (!p) return false;
+		if (p->m_kind == ibQueryPredicateKind::Leaf)
+			return p->m_leaf.m_asExists && !p->m_leaf.m_path.empty();
+		for (const ibQueryPredicatePtr& c : p->m_children)
+			if (HasExistsWalk(c)) return true;
+		return false;
+	}
+
+	// NOT of a tree that holds such a walk, pushed down by De Morgan until it meets one — null when the tree
+	// holds none, and the plain NOT stands.
+	ibQueryExprPtr NegatedWalks(const ibQueryPredicatePtr& p, const wxString& mainQual)
+	{
+		if (!HasExistsWalk(p))
+			return nullptr;
+		switch (p->m_kind) {
+		case ibQueryPredicateKind::Leaf:
+			return ibMetaIRBuilder::BuildDotWalkExists(m_root, p->m_leaf, mainQual, /*negated*/ true);
+		case ibQueryPredicateKind::And:
+		case ibQueryPredicateKind::Or: {
+			ibQueryExprPtr acc;
+			for (const ibQueryPredicatePtr& c : p->m_children) {
+				ibQueryExprPtr one = NegatedWalks(c, mainQual);
+				if (!one) {
+					const ibQueryExprPtr positive = Predicate(c, mainQual);
+					one = positive ? ibNot(positive) : nullptr;
+				}
+				acc = p->m_kind == ibQueryPredicateKind::And ? OrFold(acc, one) : AndFold(acc, one);
+			}
+			return acc;
+		}
+		case ibQueryPredicateKind::Not:
+			return p->m_children.empty() ? nullptr : Predicate(p->m_children.front(), mainQual);
+		default:
+			return nullptr;
+		}
 	}
 
 	// The boolean predicate TREE, path-aware — a dot-walk leaf joins via Resolve and qualifies by its join
@@ -1993,7 +2191,7 @@ public:
 			if (!p->m_leaf.m_path.empty()) {
 				if (p->m_leaf.m_asExists)   // RLS semi-join: correlated EXISTS (filters, no multiply) — NOT a JOIN alias
 					return ibMetaIRBuilder::BuildConditionExpr(m_root, p->m_leaf, mainQual);
-				if (ibQueryExprPtr lhs = CompositeLeaf(p->m_leaf.m_path, /*withTypedEmpty*/ true))   // composite scalar leaf
+				if (ibQueryExprPtr lhs = CompositeComparand(p->m_leaf.m_path))   // composite scalar leaf
 					return ibBinOp(FilterOpToBinOp(p->m_leaf.m_op), lhs, ibConst(p->m_leaf.m_value));
 				wxString a; const ibBackendQueryable* tq = nullptr;
 				if (!Resolve(p->m_leaf.m_path, a, tq) || tq == nullptr)
@@ -2013,6 +2211,10 @@ public:
 			return acc;
 		}
 		case ibQueryPredicateKind::Not: {
+			// A walk asked as EXISTS takes its negation inside (ibMetaIRBuilder::BuildNegatedExpr says why).
+			if (!p->m_children.empty())
+				if (ibQueryExprPtr pushed = NegatedWalks(p->m_children.front(), mainQual))
+					return pushed;
 			ibQueryExprPtr in = p->m_children.empty() ? nullptr : Predicate(p->m_children.front(), mainQual);
 			return in ? ibNot(in) : nullptr;
 		}
@@ -2165,7 +2367,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				const wxString base = gcol->GetPhysicalName();
 				// A SCALAR leaf is one field under the alias — the flat read's test (TypedScalarEmpty), so the
 				// lowering's by-alias read and this projection cannot disagree about what a scalar is.
-				const bool scalar = TypedScalarEmpty(gcol) != nullptr;
+				const bool scalar = TypedScalarEmpty(gcol) != nullptr && ibReadsBackAsItself(gcol->GetTypeDesc());
 				for (const wxString& field : ColumnFieldNames(gcol)) {
 					const ibQueryExprPtr gexpr = qualCol(qual, field);
 					q.GroupBy(gexpr);
@@ -3225,8 +3427,10 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				// mid-hop cannot be joined and keeps the RAM fold, which handles it.
 				if (!f.m_path.empty()) {
 					const ibBackendQueryable* walk = q;
-					for (size_t s = 0; s + 1 < f.m_path.size() && walk != nullptr; ++s)
-						walk = walk->GetProvider().ResolveReferenceTarget(walk, f.m_path[s]);
+					for (size_t s = 0; s + 1 < f.m_path.size() && walk != nullptr; ++s) {
+						const ibBackendQueryable* const next = walk->GetProvider().ResolveReferenceTarget(walk, f.m_path[s]);
+						walk = next != nullptr ? next : ibDbTableProvider::CastTarget(f.m_path[s + 1]);   // …or the one type a CAST named
+					}
 					if (walk == nullptr)
 						RollupDecline(wxT("dot-walked dimension '%s' has an unresolvable hop"), f.m_col->GetName());
 				}
@@ -3268,8 +3472,10 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 			for (const auto& gp : *spec.m_groupPaths) {
 				if (gp.empty()) continue;
 				const ibBackendQueryable* walk = q;
-				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s)
-					walk = walk->GetProvider().ResolveReferenceTarget(walk, gp[s]);
+				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s) {
+					const ibBackendQueryable* const next = walk->GetProvider().ResolveReferenceTarget(walk, gp[s]);
+					walk = next != nullptr ? next : ibDbTableProvider::CastTarget(gp[s + 1]);   // …or the one type a CAST named
+				}
 				if (walk == nullptr)
 					RollupDecline(wxT("a dot-walked group key has an unresolvable hop"));
 			}
@@ -4293,7 +4499,9 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				// the register Recorder case: a recorder is a composite of MANY document types (15+) and the
 				// pulled field exists on only one — the walk joins ONLY the types that have it and COALESCEs.
 				// nullptr for a pure single-target path or a non-scalar leaf (handled below).
-				if (ibQueryExprPtr e = chain.CompositeLeaf(fp, /*withTypedEmpty*/ true)) {
+				// (A leaf its one field would not hand back as itself — a boolean — takes the spread below.)
+				const bool readsBack = ibReadsBackAsItself(leaf->GetTypeDesc());
+				if (ibQueryExprPtr e = readsBack ? chain.CompositeLeaf(fp, /*withTypedEmpty*/ true) : nullptr) {
 					projection.push_back(ibQueryProjItem{ e, alias });
 					continue;
 				}
@@ -4303,7 +4511,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				{
 					wxString a; const ibBackendQueryable* tq = nullptr;
 					if (resolvePath(fp, a, tq) && tq != nullptr) {
-						if (ibQueryExprPtr empty = TypedScalarEmpty(leaf)) {
+						if (ibQueryExprPtr empty = readsBack ? TypedScalarEmpty(leaf) : nullptr) {
 							ibQueryExprPtr colE = ibCol(a, FirstSqlFieldOfColumn(leaf));
 							projection.push_back(ibQueryProjItem{ ibCase({ { ibIsNull(colE), empty } }, colE), alias });
 						}
@@ -4349,6 +4557,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 							sawComposite = true;
 							for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 								if (tq->ResolveColumnByName(fp[seg + 1]->GetName()) == nullptr) continue;
+								if (!ibDbTableProvider::WalkEnters(tq, fp[seg + 1])) continue;   // a CAST names the one type the walk goes into
 								const wxString f = SelfReferenceField(tq);
 								if (f.empty()) continue;
 								collect(chain.AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1);
@@ -4964,7 +5173,8 @@ const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBack
 {
 	if (queryable == nullptr || refColumn == nullptr)
 		return nullptr;
-	const ibTypeDescription& td = refColumn->GetTypeDesc();
+	// What the column HOLDS, not what it declares (GetTypeValueDesc): see ResolveReferenceTargets.
+	const ibTypeDescription& td = refColumn->GetTypeValueDesc();
 	if (td.GetClsidList().size() != 1)
 		return nullptr;                                  // polymorphic / non-typed -> use ResolveReferenceTargets
 	const ibClassID clsid = td.GetFirstClsid();
@@ -4980,6 +5190,13 @@ const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBack
 // ALL reference targets of a COLUMN — one queryable per reference type in the column's (possibly
 // composite) type. Loops the whole CLSID list: a composite "Catalog.A or Catalog.B" yields both
 // queryables; a non-reference alternative (bit-check) and a target vending no queryable are skipped.
+//
+// ⚠ THE TYPES A VALUE HERE MAY BE, NOT THE DECLARATION (GetTypeValueDesc). They differ for a
+// characteristic — an accounting register's analytics slot declares ONE class, the chart's
+// characteristic, which is no reference and which no value carries. Asked by the declaration, every walk
+// through the stored register's analytics was refused ("'AccountDimensionDr1' is not a single-target
+// reference") while the same walk over its virtual tables, whose columns are typed by what they hold,
+// answered (2026-09-17).
 std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTargets(const ibBackendQueryable* queryable,
                                                                                   const ibBackendQueryColumn* refColumn) const
 {
@@ -4989,7 +5206,7 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTarget
 	const ibMetaData* metaData = queryable->GetMetaData();
 	if (metaData == nullptr)
 		return targets;
-	for (const ibClassID& clsid : refColumn->GetTypeDesc().GetClsidList()) {
+	for (const ibClassID& clsid : refColumn->GetTypeValueDesc().GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
 		const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
@@ -4998,6 +5215,55 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTarget
 				targets.push_back(q);
 	}
 	return targets;
+}
+
+namespace {
+// The field a CAST reached on the type it named — the field in every respect, its id included, and the
+// type besides. A twin by construction (it answers as its origin), with the identity left as the origin's:
+// it is not a second reading of the table, it is the same reading that is not to be taken anywhere else.
+class ibCastLeafColumn final : public ibAliasColumn
+{
+public:
+	ibCastLeafColumn(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf)
+		: ibAliasColumn(leaf), m_target(target) {}
+	ibMetaID GetColumnId() const override { return Origin()->GetColumnId(); }
+	const ibBackendQueryable* Target() const { return m_target; }
+private:
+	const ibBackendQueryable* m_target;
+};
+} // namespace
+
+// Made once per (type, field) and kept: both belong to the configuration and outlive every query that
+// names them, and the column holds nothing of its own but the two pointers — whatever it is asked, it
+// asks them.
+const ibBackendQueryColumn* ibDbTableProvider::CastLeaf(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf)
+{
+	if (target == nullptr || leaf == nullptr)
+		return leaf;
+	static std::mutex guard;
+	static std::map<std::pair<const ibBackendQueryable*, const ibBackendQueryColumn*>, std::unique_ptr<ibCastLeafColumn>> made;
+	const std::lock_guard<std::mutex> lock(guard);
+	std::unique_ptr<ibCastLeafColumn>& slot = made[{ target, leaf }];
+	if (!slot)
+		slot = std::make_unique<ibCastLeafColumn>(target, leaf);
+	return slot.get();
+}
+
+const ibBackendQueryable* ibDbTableProvider::CastTarget(const ibBackendQueryColumn* next)
+{
+	const ibCastLeafColumn* const cast = dynamic_cast<const ibCastLeafColumn*>(next);
+	return cast != nullptr ? cast->Target() : nullptr;
+}
+
+// Compared by the metaobject behind the two, not by pointer alone: the type the CAST resolved and the
+// target a reference resolves may be two queryables over one table.
+bool ibDbTableProvider::WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next)
+{
+	const ibBackendQueryable* const named = CastTarget(next);
+	if (named == nullptr || named == target)
+		return true;
+	return target != nullptr && named->GetSourceMetaObject() != nullptr
+	    && named->GetSourceMetaObject() == target->GetSourceMetaObject();
 }
 
 // ⭐⭐ THE FLAT LIST IS IN HAND, AND ITS REFERENCES ARE TOLD WHAT THEY SAY. A reference leaves a row RAW —

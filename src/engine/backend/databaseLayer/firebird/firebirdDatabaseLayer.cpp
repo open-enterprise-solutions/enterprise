@@ -286,7 +286,7 @@ const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect(
 		// The assigned column is NOT qualified: inside MERGE … WHEN MATCHED THEN UPDATE SET,
 		// Firebird takes a bare column name on the left — a `t.col = …` there is a syntax error,
 		// and the parser reports it at the following token rather than at the qualifier.
-		m.m_deltaUpdateItem     = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaUpdateItem     = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
 		// NULL-safe — see the note on the default in databaseLayer.h. Firebird is the engine that
 		// actually SPENDS this template (its delta is a MERGE), so it is the one where a plain `=`
 		// turned an empty dimension into a duplicate-key refusal on every write.
@@ -619,16 +619,19 @@ bool ibDatabaseLayerFirebird::Open()
 		dpbBuffer.push_back(sizeof(sTimeZone) - 1);
 		dpbBuffer.append(sTimeZone);
 
-		// sweep_interval — how many transactions between automatic
-		// sweep passes (background MVCC garbage collection that frees
-		// pages occupied by dead row versions). FB default is 20000;
-		// we tighten to 5000 so active-OLTP databases don't accumulate
-		// as much dead-version bloat before sweep reclaims it. Sweep
-		// runs in the background on the connection that triggers it
-		// (typical impact: brief CPU spike, no DML pause). Encoded
-		// as 4-byte little-endian per legacy DPB.
+		// ⭐⭐ SWEEP HAS ONE OWNER, AND IT IS THE JOB. sweep_interval tells Firebird to start a sweep on its
+		// own once the transaction gap passes the number — in the thread of whichever connection trips
+		// it, with nothing in the journal and nobody in the session list. It stood at 5000 here while
+		// the `firebird.sweep` job existed to do the same work visibly: two owners, and the invisible
+		// one won. A base left with thousands of rolled-back rows by a test run spun a core for minutes
+		// inside enterprise.exe with no statement anywhere (Max, 2026-09-17: "do you actually own
+		// this?"). So where we maintain the base ourselves (a local standalone file — the job's own
+		// eligibility), the interval is 0: automatic sweep off, the job decides by the gap
+		// (firebirdMaintenanceScheduler.cpp). A remote server's own setting is its owner's and is not
+		// touched. Encoded as 4-byte little-endian per legacy DPB; the value is written to the header.
+		if (m_strServer.IsEmpty() && ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone)
 		{
-			const uint32_t sweepInterval = 5000;
+			const uint32_t sweepInterval = 0;
 			dpbBuffer.push_back(isc_dpb_sweep_interval);
 			dpbBuffer.push_back(4);
 			dpbBuffer.push_back((char)(sweepInterval       & 0xFF));
@@ -863,6 +866,25 @@ bool ibDatabaseLayerFirebird::RunSweepNow(const std::function<bool()>& cancelled
 
 	return ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelled)
 	    == ibFirebirdMaintenance::Status::Ok;
+}
+
+bool ibDatabaseLayerFirebird::GetSweepBacklog(long long& transactions)
+{
+	ibDatabaseResultSet* rs = nullptr;
+	try {
+		rs = RunQueryWithResults(wxT("SELECT MON$OLDEST_TRANSACTION, MON$OLDEST_SNAPSHOT FROM MON$DATABASE"));
+	}
+	catch (const ibBackendException&) {
+		ResetErrorCodes();
+		return false;
+	}
+	const bool read = rs != nullptr && rs->Next();
+	if (read)
+		transactions = rs->GetResultLong(2) - rs->GetResultLong(1);
+	if (rs != nullptr)
+		CloseResultSet(rs);
+	ResetErrorCodes();
+	return read;
 }
 
 bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::function<bool()>& cancelled)

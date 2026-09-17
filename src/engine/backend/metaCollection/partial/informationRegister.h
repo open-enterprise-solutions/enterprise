@@ -34,6 +34,12 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// ⭐ THE CONDITION IS CONSUMED — resolved against the register's own table (GetConditionScope) and applied
+	// while the slice is taken (ComputeSlice), not ANDed around the finished slice.
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
 	// WHAT COLUMNS A SLICE HAS, without running it. A slice REPORTS the register's own columns —
 	// its companion does not redirect navigation, unlike the accumulation register's views — so the
 	// answer is the register's, asked once and not restated here. Without this the base answers
@@ -393,15 +399,29 @@ wxString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
 template <typename TSlice>
 const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+template <typename TSlice>
+const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::GetConditionScope() const
+{
+	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+}
+
+template <typename TSlice>
+const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
 	// build the call-scoped slice companion from the params (as-of period, dimension filter) and own it
 	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
 	// The runtime value becomes the condition right here, at the door — the same converter every
-	// register uses, so everything below sees a predicate.
-	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg,
-		(lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue());
+	// register uses, so everything below sees a predicate. A query's arrives as one (slot 1, consumed).
+	const ibQueryPredicatePtr filter = ibRegBothConditions(
+		ibRegFilterPredicate(m_reg, (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue()),
+		ibRegConsumedCondition(conditions, 1));
 	// Built and KEPT by the base — the same call gives the same object back, and two slices as of two
 	// different dates in one query both stay alive (queryableFactory.h, MakeCompanion).
-	return this->template MakeCompanion<TSlice>(paParams, lSizeArray, m_reg, period, filter);
+	return this->template MakeCompanionFor<TSlice>(conditions, paParams, lSizeArray, m_reg, period, filter);
 }
 
 template <typename TSlice>
@@ -426,10 +446,12 @@ void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQue
 
 	ibQuerySourceParameter condition;
 	condition.m_name      = wxT("Condition");
-	condition.m_description = _("A condition on the DIMENSIONS, applied while the slice is taken - "
-	                            "so it chooses which keys are sliced, not which of the finished "
-	                            "rows survive.");
-	condition.m_condition = true;
+	condition.m_description = _("A condition applied while the slice is taken - on the DIMENSIONS it "
+	                            "chooses which keys are sliced, so only those are read; on anything "
+	                            "else it tests the record the slice found. Any predicate is taken: "
+	                            "NOT, OR, IN, a walk through a reference (Item.Code = \"01\").");
+	condition.m_condition        = true;
+	condition.m_consumedBySource = true;
 	out.push_back(condition);
 }
 

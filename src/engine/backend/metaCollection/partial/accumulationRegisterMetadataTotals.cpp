@@ -124,12 +124,9 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	if (periodCol != nullptr && !cPeriod.IsEmpty())
 		b.WhereCompare(periodCol, ibQueryFilterOp::LessEqual, cPeriod);
 
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(cFilter, leaves);
-	for (const auto& leaf : leaves)
-		if (const ibBackendQueryColumn* onView = leaf.first != nullptr
-				? source->ResolveColumnByName(leaf.first->GetName()) : nullptr)
-			b.Where(onView, leaf.second);
+	// The condition, whole, on the surface this reads — selected before it is folded (ibRegConditionOn).
+	if (const ibQueryPredicatePtr condition = ibRegConditionOn(source, cFilter, ibRegSelectsByDimensions(this)))
+		b.Where(condition);
 
 	std::vector<const ibBackendQueryColumn*> keyCols;
 	for (const auto dimension : GetDimensionArrayObject())
@@ -321,14 +318,8 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// The condition names DIMENSIONS; this read stands on the view, so each leaf is re-pointed at the
 	// view's own column of that name. The filter is written once and applies to whichever surface a
 	// reading happens to stand on.
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(cFilter, leaves);
-	for (const auto& leaf : leaves) {
-		const ibBackendQueryColumn* onView = leaf.first != nullptr
-			? source->ResolveColumnByName(leaf.first->GetName()) : nullptr;
-		if (onView != nullptr)
-			b.Where(onView, leaf.second);
-	}
+	if (const ibQueryPredicatePtr condition = ibRegConditionOn(source, cFilter, ibRegSelectsByDimensions(this)))
+		b.Where(condition);
 
 	// GROUP BY the keys — and by the truncated period when a granularity was asked for, which is the
 	// whole of "the periodicity decides the fold".
@@ -542,18 +533,15 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				? source->ResolveColumnByName(dimension->GetName()) : nullptr)
 			keyOnView.push_back(onView);
 
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(cFilter, leaves);
+	const ibQueryPredicatePtr condition = ibRegConditionOn(source, cFilter, ibRegSelectsByDimensions(this));
 
 	// One shape for both reads: the surface, the rights opt-out, the keys, the condition.
 	auto openRead = [&](ibDataQueryBuilder& b) {
 		b.From(source);
 		b.WithAccessPolicy(nullptr);   // a total filtered by the caller's rights is a wrong total
 		RestrictToStoredArm(b, this, source);
-		for (const auto& leaf : leaves)
-			if (const ibBackendQueryColumn* onView = leaf.first != nullptr
-					? source->ResolveColumnByName(leaf.first->GetName()) : nullptr)
-				b.Where(onView, leaf.second);
+		if (condition)
+			b.Where(condition);
 		for (const ibBackendQueryColumn* key : keyOnView)
 			b.GroupBy(key);
 	};
@@ -828,11 +816,21 @@ const ibBackendQueryable* ibAccumulationTotalsQueryable::NavigationSource() cons
 
 namespace {
 
-// The dimension filter, resolved to (physical column, value) pairs L2-2 applies inside the read.
+// The condition, as what L2-2 applies inside the read of the turnovers surface: the whole tree, found again on
+// the surface's columns and lowered by the door that writes every other WHERE. It took the flat `=` leaves
+// once, and a NOT, an OR or a walk through a reference was left out of the read without a word.
 std::vector<ibQueryExprPtr> ReadFilters(
 	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter)
 {
-	return ibRegFilterExprs(filter, reg != nullptr ? reg->GetMetaData() : nullptr);
+	std::vector<ibQueryExprPtr> out;
+	if (reg == nullptr || !filter)
+		return out;
+	const ibBackendQueryable* view = reg->GetViewQueryable(reg->GetTurnoverViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
+	if (const ibQueryPredicatePtr condition = ibRegConditionOn(view, filter, ibRegSelectsByDimensions(reg)))
+		if (const ibQueryExprPtr lowered = ibDbTableProvider::BuildPredicateIR(view, condition))
+			out.push_back(lowered);
+	return out;
 }
 
 // Every dimension's physical fields — the key of any read over the surface.

@@ -164,8 +164,19 @@ TEST(MaterializeRenderer, NoDialectYieldsAnEmptyBundle) {
 TEST(MaterializeRenderer, AccumulatesRatherThanReplaces) {
     Fixture f;
     const wxString text = CreateText(RenderSqlite(f.spec));
-    EXPECT_TRUE(text.Contains(wxT("qty_in = Reg7_T.qty_in + excluded.qty_in")));
-    EXPECT_TRUE(text.Contains(wxT("qty_out = Reg7_T.qty_out + excluded.qty_out")));
+    EXPECT_TRUE(text.Contains(wxT("qty_in = COALESCE(Reg7_T.qty_in, 0) + excluded.qty_in")));
+    EXPECT_TRUE(text.Contains(wxT("qty_out = COALESCE(Reg7_T.qty_out, 0) + excluded.qty_out")));
+}
+
+// …and a NULL on either side is a zero, not an absorber. A figure column added to a totals table that
+// already had rows is NULL in each of them, and `NULL + x` is NULL: the posted figure vanished into the
+// row (measured 2026-09-17). The stored side is COALESCEd in the update item, the incoming side where the
+// value is rendered — so a new row is never born NULL either.
+TEST(MaterializeRenderer, ANullFigureNeitherAbsorbsNorIsInserted) {
+    Fixture f;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_TRUE(text.Contains(wxT("COALESCE(Reg7_T.qty_in, 0)")));
+    EXPECT_TRUE(text.Contains(wxT("COALESCE(CASE WHEN NEW.rectype_ = 0 THEN NEW.qty ELSE 0 END, 0)")));   // the incoming value, NULL-safe where it is rendered
 }
 
 // A delete must REVERSE the movement. The sign rides in the VALUE (a negated contribution),
@@ -212,6 +223,16 @@ TEST(MaterializeRenderer, GuardBecomesAWhereOnTheDelta) {
     const wxString text = CreateText(RenderSqlite(f.spec));
     EXPECT_TRUE(text.Contains(wxT("WHERE NEW.wh IS NOT NULL")));
     EXPECT_TRUE(text.Contains(wxT("WHERE OLD.wh IS NOT NULL")));
+}
+
+// A trigger binds no parameters, so a byte string a guard compares with is spelled by the engine
+// (m_binaryLiteralTemplate) — the empty reference's zero id, which is all that tells it from a filled one.
+TEST(MaterializeRenderer, ABinaryInAGuardIsSpelledByTheEngine) {
+    Fixture f;
+    f.spec.m_guard = wxT("{row}.wh_RRRef <> {binary:00ff}");
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_TRUE(text.Contains(wxT("WHERE NEW.wh_RRRef <> X'00ff'")));
+    EXPECT_FALSE(text.Contains(wxT("{binary:")));
 }
 
 // Without a guard there must be no dangling WHERE — the unconditional case pays nothing.
@@ -346,6 +367,15 @@ TEST(MaterializeRenderer, PostgresEmitsAndDropsItsFunctions) {
     const wxString drops = sql.DropText();
     EXPECT_EQ(CountOf(drops, wxT("DROP FUNCTION")), 3);
 }
+
+// …and PostgreSQL spells it as a bytea: X'…' is a bit string there, and comparing it with a bytea fails.
+TEST(MaterializeRenderer, PostgresSpellsABinaryAsBytea) {
+    Fixture f;
+    f.spec.m_guard = wxT("{row}.wh_RRRef <> {binary:00ff}");
+    const ibMaterializeSql sql = RenderMaterialization(
+        f.spec, &ibDatabaseLayerPostgres::MaterializationDialect(), ibDatabaseLayerPostgres::Dialect());
+    EXPECT_TRUE(CreateText(sql).Contains(wxT("NEW.wh_RRRef <> '\\x00ff'::bytea")));
+}
 #endif  // OES_USE_POSTGRESQL
 
 #ifdef OES_USE_FIREBIRD
@@ -360,7 +390,7 @@ TEST(MaterializeRenderer, FirebirdRendersAMergeDelta) {
         f.spec, &ibDatabaseLayerFirebird::MaterializationDialect(), ibDatabaseLayerFirebird::Dialect()));
     EXPECT_TRUE(text.Contains(wxT("MERGE INTO Reg7_T t")));
     EXPECT_TRUE(text.Contains(wxT("WHEN MATCHED THEN UPDATE SET")));
-    EXPECT_TRUE(text.Contains(wxT("qty_in = t.qty_in + s.qty_in")));   // FB rejects a qualified column LEFT of SET
+    EXPECT_TRUE(text.Contains(wxT("qty_in = COALESCE(t.qty_in, 0) + s.qty_in")));   // FB rejects a qualified column LEFT of SET; NULL-safe on the stored side
     EXPECT_FALSE(text.Contains(wxT("ON CONFLICT")));
     EXPECT_FALSE(text.Contains(wxT("UPDATE OR INSERT")));
     // No placeholder may survive into emitted SQL.

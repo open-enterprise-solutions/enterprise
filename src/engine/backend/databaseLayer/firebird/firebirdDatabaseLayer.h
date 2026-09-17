@@ -146,6 +146,11 @@ public:
 	bool RunSweepNow(const std::function<bool()>& cancelled);
 	bool RunBackupRestoreNow(const std::function<bool()>& cancelled);
 
+	// How many transactions of garbage a sweep would clear — the oldest snapshot minus the oldest
+	// interesting transaction, off MON$DATABASE: the number Firebird's own automatic sweep watched,
+	// asked by the job that owns sweeping now. False when the monitoring table cannot be read.
+	bool GetSweepBacklog(long long& transactions);
+
 	// May WE maintain this base ourselves? See m_localMaintenanceEligible below — decided here,
 	// acted on by the startup sequence once sys_job exists.
 	bool IsLocalMaintenanceEligible() const { return m_localMaintenanceEligible; }

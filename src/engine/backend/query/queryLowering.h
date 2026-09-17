@@ -132,6 +132,16 @@ public:
 	BACKEND_API static int PruneUnresolved(ibQueryPackage& package,
 	                                       const std::map<wxString, ibValue>& params);
 
+	// ⭐ WHAT IS FILTERED AROUND A VIRTUAL TABLE THAT ITS OWN PARAMETERS WOULD TAKE — one sentence per such
+	// condition, saying which table, which condition and which parameter it belongs in.
+	//
+	// Not a refusal: the query is correct and answers the same rows. It is the most expensive correct
+	// query there is — around the table the register is read and folded WHOLE and most of it thrown away,
+	// inside it the rows are selected before the fold (Max, 2026-09-17: "a virtual table hands you the
+	// filtered table at once"). A condition qualifies when every field it names is one the table offers
+	// for that parameter (FillConditionExplorer — the same list the constructor's mouse picks from).
+	BACKEND_API static std::vector<wxString> FiltersAroundVirtualTables(const ibQueryPackage& package);
+
 	// WHICH AGGREGATES CAN BE TAKEN OVER A VALUE OF THIS TYPE — the ONE door, read two ways.
 	//
 	//   SUM / AVG — a NUMBER. There is no sum of dates and no average of references.

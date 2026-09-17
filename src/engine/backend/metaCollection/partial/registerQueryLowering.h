@@ -17,8 +17,10 @@
 #include "backend/query/tempTableQueryable.h" // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
 #include "backend/query/schemaSnapshot.h"     // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
 #include "backend/query/queryColumn.h"        // ibBackendQueryColumn::SyntheticId — a derived column's number
+#include "backend/query/queryHierarchy.h"     // ibQueryHierarchyScope — IN HIERARCHY in a reading's condition, resolved
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
+#include <algorithm>   // std::find — the running grid names each figure once
 #include <functional>
 #include <map>
 #include <memory>
@@ -366,6 +368,21 @@ inline ibQueryPredicatePtr ibRegMovementArm(const ibBackendQueryColumn* recorder
 	return recorderCol != nullptr ? ibQueryPredicate::Null(recorderCol, /*negated*/ true) : nullptr;
 }
 
+// ⭐ THE SIDE OF A POSTING NAMES AN ACCOUNT — the one rule, for the totals it accumulates into and for every
+// reading of the movements that stands on one side. An off-balance entry leaves its other side unnamed, and
+// an unnamed account is an EMPTY REFERENCE (`emptyAccount`, the column's typed empty) — or, in a row written
+// before the column existed, no value at all. Neither is an account, and neither takes a row: left in, the
+// credit pass of the movements reported turnovers under an empty account in correspondence with 01
+// (measured 2026-09-17). The totals trigger says the same in its own words (accountingRegisterMetadataSchema.cpp).
+inline ibQueryPredicatePtr ibRegSideNamed(const ibBackendQueryColumn* account, const ibValue& emptyAccount)
+{
+	if (account == nullptr)
+		return nullptr;
+	return ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+		ibQueryPredicate::Leaf(ibQueryCondition{ account, ibQueryFilterOp::NotEqual, ibValue() }),
+		ibQueryPredicate::Leaf(ibQueryCondition{ account, ibQueryFilterOp::NotEqual, emptyAccount }));
+}
+
 // Fill a read spec's cut. `TSpec` is ibMaterializeReadSpec — taken as a template parameter so this
 // header needs no L2-2 include; every caller has one already.
 template <typename TReg, typename TSpec>
@@ -441,7 +458,12 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 // Empty when the interval has no two ends, or when it has more than `maxPeriods` periods — a calendar the SERVER
 // is handed goes into the SQL as a row per period (ibRegCalendarRelation), and a daily one over ten years is the
 // live path's. The live path fills its empty periods from the same calendar with no cap (0).
-inline constexpr size_t ibRegMaxServerCalendar = 400;
+//
+// 🛑 200, NOT 400: every period of the calendar is a SELECT of its own inside the statement, and Firebird refuses
+// a statement with more than 256 contexts ("Too many Contexts of Relation/Procedure/Views") — the reads, the
+// registers, the chart around it take their share. A daily balance over nine months (273 periods) refused on a
+// base with a thousand movements (2026-09-17), where the RAM road answers the same rows.
+inline constexpr size_t ibRegMaxServerCalendar = 200;
 inline std::vector<wxDateTime> ibRegCalendarOf(const ibValue& from, const ibValue& to, ibTotalsPeriod unit,
                                                size_t maxPeriods = ibRegMaxServerCalendar)
 {
@@ -474,14 +496,6 @@ inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<wxDateTime>& period
 	return calendar;
 }
 
-// Two fields that hold the same value, NULL included — a join over a grid of keys meets fields that are NULL
-// by construction (an untagged key read as its typed empty), and a plain `=` loses every such key.
-inline ibQueryExprPtr ibRegSameOrBothNull(const ibQueryExprPtr& a, const ibQueryExprPtr& b)
-{
-	return ibBinOp(ibQueryBinOp::Or, ibBinOp(ibQueryBinOp::Eq, a, b),
-		ibBinOp(ibQueryBinOp::And, ibIsNull(a), ibIsNull(b)));
-}
-
 // A figure's typed zero — what a side that stores nothing answers, and what a sum of nothing is. Typed, because
 // the arms of a UNION and the branches of a COALESCE must agree on what the column is.
 inline ibQueryExprPtr ibRegTypedZero()
@@ -507,11 +521,19 @@ struct ibRegRunningFigure {
 //   opening    the read of each key's balance entering the interval, grouped over EVERY row up to the end and
 //              not pruned, so it is also the set of every key that holds a balance or moves in the interval;
 //   turnovers  the read of each key's movement per calendar period, inside the interval;
-//   grid       opening × calendar, LEFT JOIN turnovers on the period and the key (NULL-safe, field by field).
+//   grid       two arms laid one under the other and summed by key and period — opening × calendar (every key,
+//              every period, no movement) and the turnovers (the periods that moved, no entering balance).
 //
 // Published: every key, the period, each `passThrough` column of the turnover read (zero where the period did
 // not move), and for each running figure its opening and closing — closing = the entering balance plus the
 // period's movement summed along the key's periods so far (peers included), opening = closing − the period's.
+//
+// ⭐⭐ SUMMED, NOT JOINED. The turnovers were LEFT JOINed to the grid on the period and the key, each key field
+// matched NULL-safely as `a = b OR (a IS NULL AND b IS NULL)`. An OR in a join condition is one no engine can
+// hash or look up by index: Firebird re-ran the whole turnover read — sorts, windows, both surfaces — for every
+// row of the grid, and a year of month-by-month balances over 2 625 postings took 313 s inside the engine with
+// one core spinning and nothing in the journal (measured 2026-09-17). A GROUP BY over the two arms asks the same
+// question with one sort, and it matches NULL keys by itself: a group key compares NULLs as one value.
 //
 // 🛑 The key set is the opening read and not a DISTINCT over a union of both reads: rendered on Firebird, that
 // DISTINCT merged into the union's first arm and the statement failed at BLR level (measured 2026-09-16).
@@ -523,38 +545,80 @@ inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQue
 	if (openRead == nullptr || turnRead == nullptr || periods.empty())
 		return nullptr;
 	const wxString aO = alias + wxT("_po"), aT = alias + wxT("_pt"), aC = alias + wxT("_pc");
+	const wxString aU = alias + wxT("_pu"), aS = alias + wxT("_ps");
 	const auto orZero = [](const ibQueryExprPtr& e) {
 		return ibCast(ibFunc(wxT("COALESCE"), { e, ibRegTypedZero() }), ibTypeNumber(18, 6));
+	};
+
+	// The figures each arm carries: what the turnover read moves (the pass-through columns and each running
+	// figure's movement, once each) and what the opening read holds. An arm answers the other's with a zero.
+	std::vector<wxString> moved, held;
+	const auto once = [](std::vector<wxString>& names, const wxString& name) {
+		if (std::find(names.begin(), names.end(), name) == names.end())
+			names.push_back(name);
+	};
+	for (const wxString& name : passThrough)
+		once(moved, name);
+	for (const ibRegRunningFigure& figure : running) {
+		once(moved, figure.m_turnover);
+		once(held, figure.m_opening);
+	}
+
+	// The period is cast on both arms: the calendar's constant and the read's truncated column meet in one
+	// UNION column, and a union takes one type.
+	const auto arm = [&](const wxString& from, bool balances, const ibQueryExprPtr& period) {
+		std::vector<ibQueryProjItem> items;
+		for (const wxString& name : keyNames)
+			items.push_back({ ibCol(from, name), name });
+		items.push_back({ ibCast(period, ibTypeDate()), periodField });
+		for (const wxString& name : moved)
+			items.push_back({ balances ? ibRegTypedZero() : orZero(ibCol(from, name)), name });
+		for (const wxString& name : held)
+			items.push_back({ balances ? orZero(ibCol(from, name)) : ibRegTypedZero(), name });
+		return items;
 	};
 
 	// "Every row with every row" — said over a column, because two bare parameters compared (`? = ?`) have no
 	// type for the engine to prepare (Firebird: -804 Data type unknown). A calendar row always has its period.
 	const ibQueryExprPtr always = ibBinOp(ibQueryBinOp::Eq, ibCol(aC, periodField), ibCol(aC, periodField));
-	ibQueryRelPtr grid = ibJoin(ibSubquery(openRead, aO), ibSubquery(ibRegCalendarRelation(periods, periodField), aC),
-		always, ibQueryJoinType::Inner);
-	ibQueryExprPtr onTurn = ibBinOp(ibQueryBinOp::Eq, ibCol(aC, periodField), ibCol(aT, periodField));
-	for (const wxString& name : keyNames)
-		onTurn = ibBinOp(ibQueryBinOp::And, onTurn, ibRegSameOrBothNull(ibCol(aO, name), ibCol(aT, name)));
-	grid = ibJoin(grid, ibSubquery(turnRead, aT), onTurn, ibQueryJoinType::Left);
+	const ibQueryRelPtr everyPeriod = ibProject(
+		ibJoin(ibSubquery(openRead, aO), ibSubquery(ibRegCalendarRelation(periods, periodField), aC), always, ibQueryJoinType::Inner),
+		arm(aO, /*balances*/ true, ibCol(aC, periodField)));
+	const ibQueryRelPtr moves = ibProject(ibSubquery(turnRead, aT), arm(aT, /*balances*/ false, ibCol(aT, periodField)));
+
+	// Summed by key and period: one row per key per period, its movement if it moved and its entering balance.
+	std::vector<ibQueryProjItem> sums;
+	std::vector<ibQueryExprPtr> groupKeys;
+	for (const wxString& name : keyNames) {
+		sums.push_back({ ibCol(aU, name), name });
+		groupKeys.push_back(ibCol(aU, name));
+	}
+	sums.push_back({ ibCol(aU, periodField), periodField });
+	groupKeys.push_back(ibCol(aU, periodField));
+	for (const wxString& name : moved)
+		sums.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
+	for (const wxString& name : held)
+		sums.push_back({ ibCast(ibFunc(wxT("SUM"), { ibCol(aU, name) }), ibTypeNumber(18, 6)), name });
+	const ibQueryRelPtr summed = ibAggregate(ibSubquery(ibUnionAll(everyPeriod, moves), aU), std::move(sums), std::move(groupKeys));
 
 	std::vector<ibQueryExprPtr> partition;
 	std::vector<ibQueryProjItem> projection;
 	for (const wxString& name : keyNames) {
-		partition.push_back(ibCol(aO, name));
-		projection.push_back({ ibCol(aO, name), name });
+		partition.push_back(ibCol(aS, name));
+		projection.push_back({ ibCol(aS, name), name });
 	}
-	projection.push_back({ ibCol(aC, periodField), periodField });
+	projection.push_back({ ibCol(aS, periodField), periodField });
 	for (const wxString& name : passThrough)
-		projection.push_back({ orZero(ibCol(aT, name)), name });
+		projection.push_back({ ibCol(aS, name), name });
 	for (const ibRegRunningFigure& figure : running) {
-		const ibQueryExprPtr turn = orZero(ibCol(aT, figure.m_turnover));
-		const ibQueryExprPtr closing = ibBinOp(ibQueryBinOp::Add, orZero(ibCol(aO, figure.m_opening)),
+		const ibQueryExprPtr turn = ibCol(aS, figure.m_turnover);
+		const ibQueryExprPtr closing = ibBinOp(ibQueryBinOp::Add, ibCol(aS, figure.m_opening),
 			ibWindowed(ibFunc(wxT("SUM"), { turn }),
-				ibQueryWindow{ partition, { ibQuerySortKey{ ibCol(aC, periodField), ibQuerySortDir::Asc } }, ibQueryFrame::RangeThroughPeers }));
+				ibQueryWindow{ partition, { ibQuerySortKey{ ibCol(aS, periodField), ibQuerySortDir::Asc } }, ibQueryFrame::RangeThroughPeers }));
 		projection.push_back({ ibBinOp(ibQueryBinOp::Sub, closing, turn), figure.m_openingOut });
 		projection.push_back({ closing, figure.m_closingOut });
 	}
-	return ibProject(grid, std::move(projection));
+	return ibProject(ibSubquery(summed, aS), std::move(projection));
 }
 
 // --- register-side convenience over the column-layout tier ---------------------------------------
@@ -856,23 +920,182 @@ inline ibQueryExprPtr ibRegSameValueIR(const ibBackendQueryColumn* a, const wxSt
 	return pred;
 }
 
-// A filter predicate as the conditions a read spec applies - one per leaf, spread over the
-// column's own fields. A leaf's GetPhysicalName() is the base name of a column the table does not
-// have when the dimension is a reference, and every such reading failed with "Column unknown".
-inline std::vector<ibQueryExprPtr> ibRegFilterExprs(const ibQueryPredicatePtr& filter,
-                                                    const ibMetaData* metaData)
+// The condition a query wrote into slot `slot` of a table's parameters, as the lowering handed it over
+// (ibQueryableSourceDescriptor::CreateQueryable) — null when nothing was written there.
+inline ibQueryPredicatePtr ibRegConsumedCondition(const std::vector<ibQueryPredicatePtr>& conditions, int slot)
 {
-	std::vector<ibQueryExprPtr> out;
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
-	ibRegFlatLeaves(filter, leaves);
-	for (const auto& leaf : leaves) {
-		if (leaf.first == nullptr)
-			continue;
-		const ibQueryExprPtr one = ibRegCompositeIR(leaf.first, metaData, leaf.second, ibQueryBinOp::Eq);
-		if (one)
-			out.push_back(one);
+	return slot >= 0 && static_cast<size_t>(slot) < conditions.size() ? conditions[slot] : nullptr;
+}
+
+// Is this column one the rows of a register are KEPT by — a dimension? What a reading's condition selects by
+// before the fold (ibRegConditionOn), asked by the column's identity.
+template <typename TRegister>
+std::function<bool(const ibBackendQueryColumn*)> ibRegSelectsByDimensions(const TRegister* reg)
+{
+	return [reg](const ibBackendQueryColumn* column) {
+		if (reg == nullptr || column == nullptr)
+			return false;
+		for (const auto dimension : reg->GetDimensionArrayObject())
+			if (dimension != nullptr && dimension->GetMetaID() == column->GetColumnId())
+				return true;
+		return false;
+	};
+}
+
+// Does every field the condition names satisfy `names`? A computed side answers no — it is not a field.
+inline bool ibRegConditionOnlyNames(const ibQueryPredicatePtr& condition,
+                                    const std::function<bool(const ibBackendQueryColumn*)>& names)
+{
+	if (!condition)
+		return true;
+	switch (condition->m_kind) {
+	case ibQueryPredicateKind::Leaf:
+		if (condition->m_leaf.m_expr || condition->m_leaf.m_semiJoin)
+			return false;
+		return names(condition->m_leaf.m_path.empty() ? condition->m_leaf.m_col : condition->m_leaf.m_path.front());
+	case ibQueryPredicateKind::IsNull:
+	case ibQueryPredicateKind::RefType:
+		if (condition->m_expr)
+			return false;
+		return names(condition->m_path.size() > 1 ? condition->m_path.front() : condition->m_col);
+	default:
+		for (const ibQueryPredicatePtr& child : condition->m_children)
+			if (!ibRegConditionOnlyNames(child, names))
+				return false;
+		return true;
 	}
-	return out;
+}
+
+// Two conditions that both have to hold; either may be absent.
+inline ibQueryPredicatePtr ibRegBothConditions(const ibQueryPredicatePtr& a, const ibQueryPredicatePtr& b)
+{
+	if (!a) return b;
+	if (!b) return a;
+	return ibQueryPredicate::Compose(ibQueryPredicateKind::And, a, b);
+}
+
+// A column a reading's condition named and the rows cannot be selected by. RAISES: dropped, the leaf would
+// widen the answer — more rows than were asked for, and nothing to say so.
+inline void ibRegRefuseConditionColumn(const ibBackendQueryColumn* named)
+{
+	ibBackendCoreException::Error(
+		_("'%s' cannot select the rows of this reading: a condition inside a virtual table narrows what is "
+		  "folded, so it may name what the rows are kept by - the dimensions, and on an accounting register "
+		  "the accounts and their breakdown. A figure is known only after the fold and a period is the "
+		  "reading's own boundaries - put those into the query's WHERE"),
+		named != nullptr ? named->GetName() : wxString());
+}
+
+// ⭐⭐ A READING'S CONDITION, FOUND AGAIN ON THE SURFACE IT READS.
+//
+// A condition written into a virtual table's parameters is a SELECTION made before anything is folded — the
+// table arrives already narrowed, which is the whole point of writing it there rather than into the WHERE
+// around the table (Max, 2026-09-17). So the whole tree the author wrote goes down into the read: NOT, OR, IN,
+// IS NULL, REFS, and a walk through a reference, which stays a walk and becomes a correlated EXISTS — a filter
+// never multiplies a row it keeps.
+//
+// It is written against the reading's CONDITION SCOPE (GetConditionScope), and read on whichever surface the
+// reading stands on — the totals view, the movements, a slice. Found there BY NAME: these registers publish
+// their fields under the fields' own names. (The accounting register finds its own by identity and per side —
+// `Account` is a different column on each — see ConditionOnPass.) `selects` says which columns the rows can
+// be selected by before the fold; any other is refused.
+inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, const ibQueryPredicatePtr& condition,
+                                            const std::function<bool(const ibBackendQueryColumn*)>& selects);
+
+inline ibQueryColumnExprPtr ibRegConditionExprOn(const ibBackendQueryable* source, const ibQueryColumnExprPtr& expr,
+                                                 const std::function<bool(const ibBackendQueryColumn*)>& selects)
+{
+	if (!expr)
+		return expr;
+	auto here = std::make_shared<ibQueryColumnExpr>(*expr);
+	if (here->m_kind == ibQueryColumnExprKind::Column && here->m_col != nullptr) {
+		const ibBackendQueryColumn* found = selects(here->m_col) ? source->ResolveColumnByName(here->m_col->GetName()) : nullptr;
+		if (found == nullptr)
+			ibRegRefuseConditionColumn(here->m_col);
+		here->m_col = found;
+	}
+	const auto again = [&](const ibQueryColumnExprPtr& e) { return ibRegConditionExprOn(source, e, selects); };
+	here->m_lhs  = again(here->m_lhs);
+	here->m_rhs  = again(here->m_rhs);
+	here->m_else = again(here->m_else);
+	for (ibQueryColumnExprPtr& arg : here->m_args)
+		arg = again(arg);
+	for (auto& branch : here->m_cases) {
+		branch.first  = ibRegConditionOn(source, branch.first, selects);
+		branch.second = again(branch.second);
+	}
+	return here;
+}
+
+inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, const ibQueryPredicatePtr& condition,
+                                            const std::function<bool(const ibBackendQueryColumn*)>& selects)
+{
+	if (!condition || source == nullptr)
+		return nullptr;
+
+	const auto find = [&](const ibBackendQueryColumn* named) {
+		const ibBackendQueryColumn* here = named != nullptr && selects(named)
+			? source->ResolveColumnByName(named->GetName()) : nullptr;
+		if (here == nullptr)
+			ibRegRefuseConditionColumn(named);
+		return here;
+	};
+
+	auto here = std::make_shared<ibQueryPredicate>(*condition);
+	for (ibQueryPredicatePtr& child : here->m_children)
+		child = ibRegConditionOn(source, child, selects);
+
+	switch (here->m_kind) {
+	case ibQueryPredicateKind::Leaf: {
+		ibQueryCondition& leaf = here->m_leaf;
+		if (leaf.m_semiJoin)
+			ibBackendCoreException::Error(_("a reading's condition cannot hold a semi-join - write it as IN (SELECT ...)"));
+		if (leaf.m_expr) {
+			leaf.m_expr      = ibRegConditionExprOn(source, leaf.m_expr, selects);
+			leaf.m_valueExpr = ibRegConditionExprOn(source, leaf.m_valueExpr, selects);
+			break;
+		}
+		const bool walks = !leaf.m_path.empty();
+		const ibBackendQueryColumn* column = find(walks ? leaf.m_path.front() : leaf.m_col);
+
+		// `IN HIERARCHY` is resolved into the subtree it stands for, read through the column the walk ends at —
+		// nothing below the lowering folds by the word, and a provider must never see it.
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+			const ibBackendQueryable* owner = source;
+			const ibBackendQueryColumn* lhs = column;
+			for (size_t hop = 1; lhs != nullptr && walks && hop < leaf.m_path.size(); ++hop) {
+				owner = owner->GetProvider().ResolveReferenceTarget(owner, lhs);
+				lhs   = owner != nullptr ? owner->ResolveColumnByName(leaf.m_path[hop]->GetName()) : nullptr;
+			}
+			if (lhs == nullptr)
+				ibRegRefuseConditionColumn(leaf.m_col);
+			leaf.m_values = ibQueryHierarchyScope(owner, lhs, leaf.m_values, leaf.m_unfold).Accepted();
+			leaf.m_unfold = ibQueryDimUnfold::Elements;
+			leaf.m_op     = ibQueryFilterOp::In;
+		}
+
+		if (walks) {
+			leaf.m_path.front() = column;
+			leaf.m_asExists     = true;
+		}
+		else {
+			leaf.m_col = column;
+		}
+		break;
+	}
+	case ibQueryPredicateKind::IsNull:
+	case ibQueryPredicateKind::RefType:
+		if (here->m_expr)
+			ibBackendCoreException::Error(_("a reading's condition tests a field, not a computed value"));
+		if (here->m_path.size() > 1)
+			here->m_path.front() = find(here->m_path.front());
+		else
+			here->m_col = find(here->m_col);
+		break;
+	default:
+		break;
+	}
+	return here;
 }
 
 // ⭐⭐ THE STORAGE NAME IS ASKED FOR, NEVER SPELLED.
@@ -960,16 +1183,26 @@ inline void ibFillRegisterIntervalParameters(const ibTypeDescription& periodType
 	out.push_back(end);
 }
 
-// AND THE CONDITION, always last of the required ones and always a condition slot — the same shape
-// every virtual table of every register has.
+// AND THE CONDITION, always a condition slot — the same shape every virtual table of every register has.
+//
+// ⭐⭐ CONSUMED BY THE SOURCE, EVERY TIME. It was sugar — ANDed into the WHERE around the table — while its own
+// description promised "applied inside the reading", and the two are not the same query: around the table the
+// whole register is read and folded and then most of it thrown away. Inside, the reading selects first and
+// folds only what was asked for, which is the reason a virtual table has parameters at all (Max, 2026-09-17).
+// So each register takes it (GetConditionScope + the four-argument CreateQueryable) and lowers it into every
+// read it makes (ibRegConditionOn; the accounting register's ConditionOnPass).
 inline void ibAppendRegisterConditionParameter(std::vector<ibQuerySourceParameter>& out)
 {
 	ibQuerySourceParameter condition;
 	condition.m_name      = wxT("Condition");
 	condition.m_description      = _("A condition on the DIMENSIONS, applied inside the reading - so it "
-	                          "narrows what is folded rather than dropping rows after the fold. "
-	                          "Written as a predicate (Warehouse = &Warehouse), not as a value.");
-	condition.m_condition = true;
+	                          "selects the rows BEFORE they are folded, and the table arrives already "
+	                          "narrowed. Written as a predicate (Warehouse = &Warehouse), and any predicate "
+	                          "is taken: NOT, OR, IN, a walk through a reference (Warehouse.Code = \"01\"). "
+	                          "Put a table's filters HERE rather than into the WHERE around it - there the "
+	                          "whole register is read and folded first.");
+	condition.m_condition        = true;
+	condition.m_consumedBySource = true;
 	out.push_back(condition);
 }
 

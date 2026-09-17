@@ -25,6 +25,7 @@
 #include "backend/metaCollection/partial/accountingRegister.h"     // ibAcctArgs — the layout a call is read by
 #include "backend/metaCollection/partial/chartOfAccountsEnum.h"   // ibAccountType — the fold the balance applies
 
+#include <algorithm>   // std::find — the condition surface's own columns
 #include <set>
 #include "backend/system/value/valuePointInTime.h"
 #include "backend/system/value/valueBoundary.h"
@@ -656,4 +657,140 @@ TEST(AccumArgs, ThePeriodicityFollowsTheIntervalHereToo) {
     // A balance is a moment and a condition, and nothing has moved there.
     EXPECT_EQ(0, static_cast<int>(ibRegBalanceArg::Period));
     EXPECT_EQ(1, static_cast<int>(ibRegBalanceArg::Filter));
+}
+
+// =============================================================================
+// A virtual table's condition is applied INSIDE the reading (2026-09-17)
+// =============================================================================
+//
+// The condition written into a table's parameters selects the rows before they are folded. These pin the
+// shared half every register by-name takes (ibRegConditionOn): the whole tree goes down, each column found
+// again on the surface the reading stands on, a walk kept as a walk and marked for EXISTS, a column the
+// rows cannot be selected by refused rather than dropped.
+
+namespace {
+
+class ConditionColumn : public ibBackendQueryColumn {
+public:
+	ConditionColumn(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	wxString           GetName()         const override { return m_name; }
+	wxString           GetPhysicalName() const override { return m_name; }
+	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
+	ibMetaID           GetColumnId()     const override { return m_id; }
+private:
+	wxString                  m_name;
+	ibMetaID                  m_id;
+	mutable ibTypeDescription m_type;
+};
+
+class ConditionSurface : public ibBackendQueryable {
+public:
+	explicit ConditionSurface(const wxString& name) : m_name(name) {}
+	void Add(const ibBackendQueryColumn* column) { m_columns.push_back(column); }
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+		for (const ibBackendQueryColumn* column : m_columns)
+			if (column->GetName().IsSameAs(name, false))
+				return column;
+		return nullptr;
+	}
+	bool OwnsColumn(const ibBackendQueryColumn* column) const override {
+		return std::find(m_columns.begin(), m_columns.end(), column) != m_columns.end();
+	}
+	wxString GetQueryTableName() const override { return m_name; }
+	ibMetaID GetQueryTableId() const override { return 1; }
+	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
+	const ibMetaData* GetMetaData() const override { return nullptr; }
+private:
+	wxString m_name;
+	ibUniqueKey m_key;
+	std::vector<const ibBackendQueryColumn*> m_columns;
+};
+
+const ibMetaID kWarehouseId = 101, kItemId = 102, kQuantityId = 103, kCodeId = 201;
+
+ibQueryPredicatePtr Equal(const ibBackendQueryColumn* column, const ibValue& value,
+                          const std::vector<const ibBackendQueryColumn*>& path = {})
+{
+	ibQueryCondition leaf;
+	leaf.m_col   = column;
+	leaf.m_value = value;
+	leaf.m_path  = path;
+	return ibQueryPredicate::Leaf(leaf);
+}
+
+const auto kDimensionsOnly = [](const ibBackendQueryColumn* column) {
+	return column != nullptr && (column->GetColumnId() == kWarehouseId || column->GetColumnId() == kItemId);
+};
+
+} // namespace
+
+TEST(VirtualTableCondition, TheWholeTreeIsFoundAgainOnTheSurfaceItReads) {
+	// Written against the movements, read on the totals view: same names, other columns.
+	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId);
+	ConditionColumn viewWarehouse(wxT("Warehouse"), kWarehouseId), viewItem(wxT("Item"), kItemId);
+	ConditionSurface view(wxT("Turnovers"));
+	view.Add(&viewWarehouse);
+	view.Add(&viewItem);
+
+	const ibQueryPredicatePtr written = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
+		ibQueryPredicate::Not(Equal(&warehouse, ibValue(wxT("Main")))),
+		ibQueryPredicate::Null(&item, /*negated*/ false));
+
+	const ibQueryPredicatePtr onView = ibRegConditionOn(&view, written, kDimensionsOnly);
+	ASSERT_TRUE(onView);
+	ASSERT_EQ(ibQueryPredicateKind::Or, onView->m_kind);
+	ASSERT_EQ(2u, onView->m_children.size());
+	ASSERT_EQ(ibQueryPredicateKind::Not, onView->m_children[0]->m_kind);
+	EXPECT_EQ(&viewWarehouse, onView->m_children[0]->m_children[0]->m_leaf.m_col);
+	EXPECT_EQ(&viewItem, onView->m_children[1]->m_col);
+
+	// …and the tree the author wrote is left as written.
+	EXPECT_EQ(&warehouse, written->m_children[0]->m_children[0]->m_leaf.m_col);
+}
+
+TEST(VirtualTableCondition, AWalkThroughAReferenceStaysAWalkAndIsAskedAsExists) {
+	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), code(wxT("Code"), kCodeId);
+	ConditionColumn viewWarehouse(wxT("Warehouse"), kWarehouseId);
+	ConditionSurface view(wxT("Balance"));
+	view.Add(&viewWarehouse);
+
+	const ibQueryPredicatePtr onView = ibRegConditionOn(&view,
+		Equal(&code, ibValue(wxT("01")), { &warehouse, &code }), kDimensionsOnly);
+	ASSERT_TRUE(onView);
+	ASSERT_EQ(2u, onView->m_leaf.m_path.size());
+	EXPECT_EQ(&viewWarehouse, onView->m_leaf.m_path.front());   // the head is the surface's own column
+	EXPECT_EQ(&code, onView->m_leaf.m_path.back());             // the leaf stays the target's
+	EXPECT_TRUE(onView->m_leaf.m_asExists);                     // a filter never multiplies a row
+}
+
+TEST(VirtualTableCondition, AColumnTheRowsCannotBeSelectedByIsRefusedNotDropped) {
+	// A figure exists only after the fold: dropped, the leaf would widen the answer without a word.
+	ConditionColumn quantity(wxT("Quantity"), kQuantityId);
+	ConditionColumn viewQuantity(wxT("Quantity"), kQuantityId);
+	ConditionSurface view(wxT("Balance"));
+	view.Add(&viewQuantity);
+
+	EXPECT_THROW(ibRegConditionOn(&view, Equal(&quantity, ibValue(5)), kDimensionsOnly), ibBackendException);
+}
+
+TEST(VirtualTableCondition, WhatAConditionNamesDecidesWhereItMayStand) {
+	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId), quantity(wxT("Quantity"), kQuantityId);
+
+	const ibQueryPredicatePtr keysOnly = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+		Equal(&warehouse, ibValue(wxT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(wxT("Tea")))));
+	EXPECT_TRUE(ibRegConditionOnlyNames(keysOnly, kDimensionsOnly));
+
+	const ibQueryPredicatePtr withAFigure = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
+		Equal(&warehouse, ibValue(wxT("Main"))), Equal(&quantity, ibValue(0)));
+	EXPECT_FALSE(ibRegConditionOnlyNames(withAFigure, kDimensionsOnly));
+}
+
+TEST(VirtualTableCondition, EveryRegistersConditionSlotIsConsumedByTheTable) {
+	// Sugar around the table read and folded the whole register first; the slot is the table's own.
+	std::vector<ibQuerySourceParameter> declared;
+	ibAppendRegisterConditionParameter(declared);
+	ASSERT_EQ(1u, declared.size());
+	EXPECT_TRUE(declared.front().m_condition);
+	EXPECT_TRUE(declared.front().m_consumedBySource);
 }

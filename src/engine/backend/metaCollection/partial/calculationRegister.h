@@ -54,6 +54,12 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// ⭐ THE CONDITION IS CONSUMED — resolved against the fact surface (GetConditionScope) and applied by the
+	// reading itself: narrowing every table read where it can, and over the pieces exactly (ComputeRows).
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
@@ -678,8 +684,10 @@ BACKEND_API ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* r
 class ibCalcFactQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectCalculationRegister> {
 public:
 	ibCalcFactQueryable(const ibValueMetaObjectCalculationRegister* reg, const ibValue& moment = ibValue(),
-		const ibValue& actionFrom = ibValue(), const ibValue& actionTo = ibValue())
-		: ibComputedRegisterQueryable(reg), m_moment(moment), m_actionFrom(actionFrom), m_actionTo(actionTo) {}
+		const ibValue& actionFrom = ibValue(), const ibValue& actionTo = ibValue(),
+		const ibQueryPredicatePtr& condition = nullptr)
+		: ibComputedRegisterQueryable(reg), m_moment(moment), m_actionFrom(actionFrom), m_actionTo(actionTo),
+		  m_condition(condition) {}
 
 	// The shape, on every road — metadata only.
 	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetFactSurface(); }
@@ -690,6 +698,7 @@ public:
 private:
 	ibValue m_moment;                   // the moment of registration read up to (ibCalcViewArg); empty — every period
 	ibValue m_actionFrom, m_actionTo;   // the days of action the records meet; empty — any
+	ibQueryPredicatePtr m_condition;    // written into the parentheses, on the surface's columns; null — none
 };
 
 //********************************************************************************************

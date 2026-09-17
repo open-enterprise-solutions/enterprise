@@ -1752,7 +1752,11 @@ void ibQueryStatement::SetParamAccumulate(int p, const ibNumber& delta)
 {
 	if (p < 1 || p > static_cast<int>(m_columns.size()))
 		return;
-	Put(p, ibBinOp(ibQueryBinOp::Add, ibCol(m_columns[p - 1]), ibConst(ibValue(delta))));
+	// NULL-safe on the stored side: `NULL + delta` is NULL, and the addition vanished (a figure column added to
+	// a table that already had rows — measured 2026-09-17 when the totals fold moved a quantity into such a row).
+	Put(p, ibBinOp(ibQueryBinOp::Add,
+		ibFunc(wxT("COALESCE"), { ibCol(m_columns[p - 1]), ibConst(ibValue(ibNumber())) }),
+		ibConst(ibValue(delta))));
 }
 
 ibDmlStatement ibQueryStatement::BuildDml() const

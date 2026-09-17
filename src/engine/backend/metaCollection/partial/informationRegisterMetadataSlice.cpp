@@ -26,7 +26,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 — structured IR for the slice self-join (ComputeSlice)
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
 
-#include <set>   // the partition-key names a pushed-down filter is checked against
+#include <functional>   // the condition split by what it names
 
 
 // ibValueMetaObjectInformationRegister::ComputeSlice — THE one place the period-slice
@@ -133,11 +133,42 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 
 	if (meta->GetPeriodicity() != ibPeriodicity::eNonPeriodic ||
 		meta->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
-		// The condition arrives already converted (ibRegFilterPredicate) — one converter for every
-		// register, so a script's Structure and a query's condition are the same thing by the time they
-		// get here.
-		std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> selFilter;
-		ibRegFlatLeaves(cFilter, selFilter);
+		// The condition arrives already a predicate — a script's Structure through ibRegFilterPredicate, a
+		// query's written into the table's parameters (the consumed slot) — and it arrives WHOLE: NOT, OR, IN,
+		// a walk through a reference. It is taken apart by WHAT IT NAMES, because that decides where it may
+		// stand without changing what a slice is:
+		//
+		//   the KEYS ONLY   a condition on the dimensions narrows which keys are sliced and changes nothing
+		//                   inside any of them — it goes under the slice, and a price asked for one item
+		//                   reads that item's prices and no one else's;
+		//   anything else   a resource, the recorder: filtered BEFORE the slice it would answer "the last
+		//                   record that has this price" instead of "the last record, if it has this price" —
+		//                   so it stands over the finished slice, where it means what it says.
+		//
+		// Each half is lowered by the door that writes every other WHERE (a walk is a correlated EXISTS).
+		const ibBackendQueryable* registerTable = meta->GetQueryable();
+		ibQueryPredicatePtr byKey, overSlice;
+		{
+			const std::function<bool(const ibBackendQueryColumn*)> anyField = [](const ibBackendQueryColumn*) { return true; };
+			const std::function<bool(const ibBackendQueryColumn*)> isKey = ibRegSelectsByDimensions(meta);
+			std::function<void(const ibQueryPredicatePtr&)> split = [&](const ibQueryPredicatePtr& node) {
+				if (!node)
+					return;
+				if (node->m_kind == ibQueryPredicateKind::And) {
+					for (const ibQueryPredicatePtr& child : node->m_children)
+						split(child);
+					return;
+				}
+				if (ibRegConditionOnlyNames(node, isKey))
+					byKey = ibRegBothConditions(byKey, node);
+				else
+					overSlice = ibRegBothConditions(overSlice, node);
+			};
+			split(ibRegConditionOn(registerTable, cFilter, anyField));
+		}
+		const auto lowered = [&](const ibQueryPredicatePtr& condition, const wxString& qualifier) {
+			return ibDbTableProvider::BuildPredicateIR(registerTable, condition, qualifier);
+		};
 
 		// Build the slice query through L2 (structured IR, dialect-free) instead of
 		// hand-concatenated SQL: an aggregate subquery finds the boundary period per
@@ -233,36 +264,19 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 				sliceFields.push_back(rankRecorderId);
 			}
 
-			// ⭐⭐ THE DIMENSION FILTER RIDES DOWN — but only the part that is SAFE to push.
+			// ⭐⭐ THE KEY HALF OF THE CONDITION RIDES DOWN, under the ranking — see the split above. A condition on
+			// a PARTITION key narrows which partitions exist and changes nothing inside any of them.
 			//
-			// A condition on a PARTITION key narrows which partitions exist and changes nothing inside
-			// any of them, so pushing it under the ranking is free: the slice of warehouse X is the
-			// same rows whether the other warehouses were read and discarded or never read. That is
-			// worth a great deal — the aggregate road ranks the WHOLE table and filters the finished
-			// slice, so asking for one price reads every price.
-			//
-			// A condition on anything else is NOT free: filtering by recorder before the ranking would
-			// answer "the last record BY THAT DOCUMENT" instead of "the last record, if that document
-			// wrote it". Those stay outside, over the finished slice, where they mean what they say.
-			std::set<wxString> partitionNames;
-			for (const auto object : meta->GetDimensionArrayObject())
-				if (object != nullptr) partitionNames.insert(object->GetName());
-			for (const auto object : meta->GetResourceArrayObject())
-				if (object != nullptr) partitionNames.insert(object->GetName());
-
+			// 🛑 The resources were counted among the partition keys here, so a filter by price went under the
+			// ranking and answered "the last record with that price" — while the aggregate road filtered the
+			// finished slice, and the two roads disagreed. A resource is what a slice ANSWERS with.
 			ibDatabaseQueryBuilder ranked;
 			ranked.From(table);
 			if (meta->HasRecorder())
 				ranked.Where(ibRegCompositeIR(meta->GetRegisterActive()->GetQueryColumn(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
 			ranked.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp));
-
-			std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> keptOutside;
-			for (auto filter : selFilter) {
-				if (filter.first != nullptr && partitionNames.count(filter.first->GetName()) > 0)
-					ranked.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
-				else
-					keptOutside.push_back(filter);
-			}
+			if (byKey)
+				ranked.Where(lowered(byKey, table));
 
 			std::vector<ibQueryProjItem> rankedProj;
 			for (const wxString& f : sliceFields)
@@ -285,8 +299,8 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			                    ibCol(wxT("sliceTable"), wxT("slice_rank")), ibConst(ibValue(1))))
 			     .Project(sliceProj);
 
-			for (auto filter : keptOutside)
-				slice.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
+			if (overSlice)
+				slice.Where(lowered(overSlice, wxT("sliceTable")));
 
 			sliceIr = slice.Build();
 		}
@@ -335,6 +349,9 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 
 		l1.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp))
 		  .Project(l1proj);
+		// The key half of the condition narrows the keys a boundary is looked for (see the split above).
+		if (byKey)
+			l1.Where(lowered(byKey, table));
 		for (const ibQueryExprPtr& gk : groupKeys) l1.GroupBy(gk);
 
 		// The fields the boundary is keyed by — the same set at every level below.
@@ -404,11 +421,11 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		  .Join(ibScan(table, wxT("T2")), onPred, ibQueryJoinType::Inner)
 		  .Project(l2proj);
 
-		// Level 3 — dimension filter over the joined slice: SELECT * FROM (l2) AS lastTable WHERE dims.
+		// Level 3 — the rest of the condition over the joined slice: SELECT * FROM (l2) AS lastTable WHERE ….
 		ibDatabaseQueryBuilder l3;
 		l3.From(ibSubquery(l2.Build().m_root, wxT("lastTable")));
-		for (auto filter : selFilter)
-			l3.Where(ibRegCompositeIR(filter.first, GetMetaData(), filter.second, ibQueryBinOp::Eq));
+		if (overSlice)
+			l3.Where(lowered(overSlice, wxT("lastTable")));
 
 		sliceIr = l3.Build();
 

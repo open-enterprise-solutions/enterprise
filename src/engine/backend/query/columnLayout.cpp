@@ -114,6 +114,11 @@ bool ibIsPlainScalarType(const ibTypeDescription& type)
 		    || type.ContainType(ibValueTypes::TYPE_DATE) || type.ContainType(ibValueTypes::TYPE_BOOLEAN));
 }
 
+bool ibReadsBackAsItself(const ibTypeDescription& type)
+{
+	return ibIsPlainScalarType(type) && !type.ContainType(ibValueTypes::TYPE_BOOLEAN);
+}
+
 const wxString& ibOwnerRefField()
 {
 	// Built from the ONE suffix table rather than written out: this column and a reference key hold

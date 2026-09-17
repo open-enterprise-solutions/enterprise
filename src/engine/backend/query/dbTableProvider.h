@@ -47,6 +47,18 @@ public:
 	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 
+	// ⭐⭐ A WALK NARROWED BY CAST. `CAST(Analytics AS Catalog.Goods).Description` walks into the goods and
+	// nowhere else: a counterparty in the same slot answers NULL, not its own description. The narrowing
+	// is carried by the walk itself — the field reached on the named type stands in the path as a column
+	// that knows the type (CastLeaf) — so every road that walks a path reads it where it forks:
+	//   · CastTarget — the type a CAST named for the walk that continues with `next` (null: an ordinary walk);
+	//   · WalkEnters — may a reference with several types be walked into `target` on its way to `next`.
+	// The column answers every other question as the field it stands for, its id included, so a row filed
+	// under it and a projection reading it cannot tell the two apart.
+	static BACKEND_API const ibBackendQueryColumn* CastLeaf(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf);
+	static BACKEND_API const ibBackendQueryable*   CastTarget(const ibBackendQueryColumn* next);
+	static BACKEND_API bool                        WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next);
+
 	// The flat list read from this base is in hand: the references it made — this base's own — are told
 	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
 	void ReadReferences() const override;
@@ -161,6 +173,15 @@ public:
 	// that reads a declared name without carrying the declaration is not a slower query — it is one
 	// the engine cannot parse ("table unknown"). Whoever writes the FROM owes the WITH.
 	static void AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir);
+
+	// ⭐ A CONDITION, AS THE EXPRESSION A STATEMENT FILTERS BY — for a caller that writes its own SELECT
+	// over this table and needs the condition INSIDE it (a register reading its totals asks for the
+	// rows before it folds them). The whole tree: AND / OR / NOT, IS NULL, REFS, a comparison; a walk
+	// through a reference is a correlated EXISTS, so the filter never multiplies a row. `qualifier` is
+	// what the statement calls the table (empty: its own name).
+	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const ibBackendQueryable* queryable,
+	                                                   const ibQueryPredicatePtr& predicate,
+	                                                   const wxString& qualifier = wxEmptyString);
 
 private:
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the

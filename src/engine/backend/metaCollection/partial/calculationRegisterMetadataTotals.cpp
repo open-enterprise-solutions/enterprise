@@ -460,7 +460,21 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	if (dated(m_actionTo))
 		terms.push_back({ recordStart, m_actionTo, ibQueryBinOp::Le, false });
 
-	for (const ibQueryCondition& c : extra) {
+	// What narrows the tables: the conditions of the WHERE around the reading (`extra`), and the plain AND of the
+	// one written into its parentheses — the whole of which is then applied over the pieces, below.
+	std::vector<ibQueryCondition> narrowedBy = extra;
+	std::function<void(const ibQueryPredicatePtr&)> conjuncts = [&](const ibQueryPredicatePtr& node) {
+		if (!node)
+			return;
+		if (node->m_kind == ibQueryPredicateKind::And)
+			for (const ibQueryPredicatePtr& child : node->m_children)
+				conjuncts(child);
+		else if (node->m_kind == ibQueryPredicateKind::Leaf)
+			narrowedBy.push_back(node->m_leaf);
+	};
+	conjuncts(m_condition);
+
+	for (const ibQueryCondition& c : narrowedBy) {
 		ibQueryBinOp op;
 		if (c.m_col == nullptr || !c.m_path.empty() || c.m_expr || c.m_semiJoin || !binOp(c.m_op, op))
 			continue;
@@ -523,6 +537,14 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	ibDatabaseQueryBuilder q;
 	q.From(ibSubquery(relation, wxT("v")));
 	q.Project(proj);
+	// ⭐ THE CONDITION OF THE PARENTHESES, WHOLE, OVER THE PIECES. The narrowing above rides what an index can —
+	// the plain AND, by what it implies of a record; this is what the author wrote, on the columns the table
+	// shows (a piece's own days among them), NOT and OR and a walk included. It cannot be left to the WHERE
+	// around the table: nothing puts it there any more.
+	if (m_condition)
+		if (const ibQueryExprPtr exact = ibDbTableProvider::BuildPredicateIR(surface,
+				ibRegConditionOn(surface, m_condition, [](const ibBackendQueryColumn*) { return true; }), wxT("v")))
+			q.Where(exact);
 	ibQueryResult rs = q.Execute();
 	while (rs.Next()) {
 		const long row = out.AppendRow();
@@ -549,21 +571,35 @@ wxString ibCalcFactSourceDescriptor::GetName() const
 	return m_meta->GetName() + wxT(".") + ibCalcFactName;
 }
 
-// Built and KEPT by the base — the same call gives the same object back (queryableFactory.h, MakeCompanion).
 const ibBackendQueryable* ibCalcFactSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+// What a query's condition is resolved against: the surface the reading publishes — `ActionPeriodStart` there is a
+// PIECE's first day, and the condition means what the table shows.
+const ibBackendQueryable* ibCalcFactSourceDescriptor::GetConditionScope() const
+{
+	return m_meta != nullptr ? m_meta->GetFactSurface() : nullptr;
+}
+
+// Built and KEPT by the base — the same call gives the same object back (queryableFactory.h, MakeCompanion); the
+// condition is part of the call.
+const ibBackendQueryable* ibCalcFactSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	if (!m_meta->IsUseActionPeriod())
 		return nullptr;
-	return MakeCompanion<ibCalcFactQueryable>(paParams, lSizeArray, m_meta,
+	return MakeCompanionFor<ibCalcFactQueryable>(conditions, paParams, lSizeArray, m_meta,
 		ibRegArg(paParams, lSizeArray, ibCalcViewArg::Period),
-		ibRegArg(paParams, lSizeArray, ibCalcViewArg::BeginOfActionPeriod), ibRegArg(paParams, lSizeArray, ibCalcViewArg::EndOfActionPeriod));
+		ibRegArg(paParams, lSizeArray, ibCalcViewArg::BeginOfActionPeriod), ibRegArg(paParams, lSizeArray, ibCalcViewArg::EndOfActionPeriod),
+		ibRegConsumedCondition(conditions, ibCalcViewArg::Condition));
 }
 
 // FOUR ARGUMENTS, ALL OPTIONAL — AS OF WHICH MOMENT OF REGISTRATION (Period), FOR WHICH DAYS OF ACTION, THEN THE CONDITION
 // (ibCalcViewArg): `ActualActionPeriod(, &MonthStart, &MonthEnd, Employee = &Employee)`. Each time is typed by the
-// register's own attribute of that period. The condition is not consumed: it goes into the WHERE like any condition,
-// and from there what it says of the records reaches the reading (ComputeRows) — the same road as when it is written
-// in the WHERE itself.
+// register's own attribute of that period. The condition is CONSUMED: the reading narrows every table it reads by
+// what the condition says of the records, and applies the whole of it over the pieces (ComputeRows).
 void ibCalcFactSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
 	const auto time = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {

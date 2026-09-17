@@ -289,10 +289,12 @@ struct ibDialectDictionary
 	// The longest name a RELATION ALIAS may have (0 = no limit). A longer one is rendered as its head plus a
 	// hash of the whole name, the same at its definition and at every reference (ibQueryRenderer::AliasIdent).
 	//
-	// 🛑 Firebird: aliases that agree in their first 31 characters are not told apart in nested derived
-	// tables — `AccumulationRegister1144_BalanceAndTurnovers` over `…_g` over `…_pt` over `…_tr` failed at BLR
-	// level ("expected record selection expression clause"), and the same statement with the outer alias
-	// renamed `x` ran (measured 2026-09-16 on the vendored 5.0.5).
+	// 🛑 Firebird: a relation inside nested derived tables is named in the BLR by the aliases around it, JOINED,
+	// under a one-byte length — past ~210 characters the request fails at BLR level ("expected record
+	// selection expression clause"). Measured 2026-09-16 (`AccumulationRegister1144_BalanceAndTurnovers` over
+	// `…_g` over `…_pt` over `…_tr`) and read then as aliases sharing their first 31 characters; 2026-09-17
+	// showed it is the PATH: one statement ran with its outer alias 20 characters long and failed at 26 (the
+	// vendored 5.0.5). Firebird's bound is therefore short (see its dialect).
 	unsigned int m_maxAliasLength = 0;
 
 	// ⭐ A NAME WITHIN A LIMIT — itself when it fits, otherwise its head plus a hash of the WHOLE name. Deterministic,
@@ -661,7 +663,11 @@ struct ibMaterializationDialect
 		wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
 
 	// One accumulate item, comma-joined into {update}. Placeholders: {target} {source} {col}.
-	wxString m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+	// ⭐⭐ NULL-SAFE ON THE TARGET. A figure column added to a totals table that already had rows is NULL in
+	// every one of them, and `NULL + x` is NULL: the movement's figure vanished into the row it was added
+	// to (measured 2026-09-17 — a quantity added to the ledger read 0 where 140 had been posted). The
+	// incoming value is made safe where it is rendered (RenderDelta), the stored one here.
+	wxString m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");
 	// One key-equality item, AND-joined into {keyMatch}. Same placeholders.
 	// ⭐⭐ NULL-SAFE, AND THE INDEX IS WHY. A key column may legitimately be empty — a register
 	// dimension nobody filled in stores NULL in all three of its physical fields — and plain `=`
@@ -723,6 +729,14 @@ struct ibMaterializationDialect
 	wxString m_keyHashJoin = wxT(" || '.' || ");
 	// {expr} — the joined parts, digested into what the column stores.
 	wxString m_keyHashDigest;
+
+	// --- a byte string written INTO trigger and view text ----------------------
+	// A trigger body binds no parameters, so a binary value it compares with is spelled as a literal: a
+	// guard names it `{binary:<hex digits>}`, and the renderer fills this template's {hex}. `X'…'` is the
+	// standard binary string (Firebird, SQLite, MySQL); PostgreSQL's bytea is written differently. What asks
+	// for it: an EMPTY REFERENCE differs from a filled one only in its id field (zero bytes), so "the row
+	// names an account" is that field compared with the zero id.
+	wxString m_binaryLiteralTemplate = wxT("X'{hex}'");
 
 	// --- the totals table itself ----------------------------------------------
 	// Appended after the CREATE TABLE column list — PostgreSQL " WITH (fillfactor = 80)",

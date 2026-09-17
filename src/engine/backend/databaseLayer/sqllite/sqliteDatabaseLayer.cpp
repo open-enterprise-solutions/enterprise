@@ -194,7 +194,7 @@ const ibMaterializationDialect& ibDatabaseLayerSQLite::MaterializationDialect()
 			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
 		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
 		m.m_deltaSourceAlias  = wxT("excluded");
-		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaUpdateItem   = wxT("{col} = COALESCE({target}.{col}, 0) + {source}.{col}");   // NULL-safe — see the default
 		// NULL-safe like the default — SQLite spells it `IS`, which is the same operator under
 		// another name. Unused by ON CONFLICT, kept true so it is not a trap. See databaseLayer.h.
 		m.m_deltaKeyMatchItem = wxT("{target}.{col} IS {source}.{col}");   // unused by ON CONFLICT — rendered, not spent

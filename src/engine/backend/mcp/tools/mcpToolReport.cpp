@@ -1818,7 +1818,8 @@ public:
 			"totalled. Refused, and nothing stored, when the text does not parse or names "
 			"something this configuration does not have: query_sources and query_fields say what "
 			"it does have, and report_fields then lists what the stored query offers to group and "
-			"total by.");
+			"total by. `tableParameters` lists each WHERE condition a virtual table's own parameters "
+			"would take - move it inside the brackets, so the table selects before it folds.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1855,6 +1856,14 @@ public:
 				// Against THIS configuration, named explicitly: a tool is not standing inside one.
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 				ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+
+				// Stored as written — and told, in the same answer, which WHERE condition reads the whole
+				// register first while the table's own parameter would select before the fold.
+				std::vector<ibDataValue> advice;
+				for (const wxString& sentence : ibQueryLowering::FiltersAroundVirtualTables(package))
+					advice.push_back(ibDataValue::String(sentence));
+				if (!advice.empty())
+					result.AddField(wxT("tableParameters"), ibDataValue::Array(advice));
 
 				// 🛑⭐⭐ A JOIN IS NOT REFUSED HERE, and the attempt to refuse it is worth keeping as
 				// a warning to whoever reads this next. A composer's query with a JOIN used to fail

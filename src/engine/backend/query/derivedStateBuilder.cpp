@@ -406,8 +406,9 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			{
 				ibDataQueryBuilder add = SystemQuery(holder);
 				Aim(add, absorber);
+				// A figure the shard row never held sums to NULL — nothing to move, so a zero, never a NULL bind.
 				for (size_t n = 0; n < spec.m_deltas.size(); n++)
-					add.AddValue(spec.m_deltas[n].m_column, src.m_sums[n]);
+					add.AddValue(spec.m_deltas[n].m_column, ibValue(src.m_sums[n].GetNumber()));
 				if (!add.Update())
 					return false;
 			}

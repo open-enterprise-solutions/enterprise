@@ -273,6 +273,20 @@ wxString Fill(wxString tpl, const wxString& key, const wxString& value)
 	return tpl;
 }
 
+// Every `{binary:<hex>}` in a guard, spelled as the engine writes a byte string (m_binaryLiteralTemplate).
+wxString FillBinaryLiterals(wxString text, const ibMaterializationDialect& mat)
+{
+	static const wxString open = wxT("{binary:");
+	for (size_t at = text.find(open); at != wxString::npos; at = text.find(open)) {
+		const size_t close = text.find(wxT('}'), at);
+		if (close == wxString::npos)
+			break;
+		const wxString hex = text.Mid(at + open.length(), close - at - open.length());
+		text = text.Left(at) + Fill(mat.m_binaryLiteralTemplate, wxT("hex"), hex) + text.Mid(close + 1);
+	}
+	return text;
+}
+
 wxString Join(const std::vector<wxString>& items, const wxString& sep)
 {
 	wxString out;
@@ -425,7 +439,9 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 	const wxString source = mat.m_deltaSourceAlias;
 
 	for (const ibMaterializeDelta& d : spec.m_deltas) {
-		wxString value = overRow(d.m_valueExpr);
+		// NULL-SAFE ON THE SOURCE: a movement written before its figure existed holds NULL there, and a NULL
+		// delta inserted as a new row's figure makes that row absorb every later addition (m_deltaUpdateItem).
+		wxString value = wxT("COALESCE(") + overRow(d.m_valueExpr) + wxT(", 0)");
 		if (negate)
 			value = wxT("-(") + value + wxT(")");
 		columns.push_back(d.m_column);
@@ -450,7 +466,7 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 	// A guarded delta is a SELECT with a WHERE, and a source-less SELECT cannot carry one on every
 	// engine — hence the dummy relation, whose spelling already lives in the query dictionary
 	// (RDB$DATABASE / DUAL) and is therefore not restated in the materialization one.
-	const wxString guard = overRow(spec.m_guard);
+	const wxString guard = FillBinaryLiterals(overRow(spec.m_guard), mat);
 	wxString from, where;
 	if (!dialect.m_selectFromDual.IsEmpty())
 		from = wxT(" FROM ") + dialect.m_selectFromDual;
@@ -573,6 +589,7 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 // ---------------------------------------------------------------------------
 wxString RenderMovementArm(const ibMaterializeSpec& spec,
                            const ibMaterializeView& view,
+                           const ibMaterializationDialect& mat,
                            const ibDialectDictionary& dialect)
 {
 	auto overRow = [&](wxString e) { return Fill(std::move(e), wxT("row"), spec.m_source); };
@@ -610,7 +627,7 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 	// would add rows the totals below it deliberately never counted.
 	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_source;
 	if (!spec.m_guard.IsEmpty())
-		body += wxT(" WHERE ") + overRow(spec.m_guard);
+		body += wxT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), mat);
 
 	return body;
 }
@@ -722,7 +739,7 @@ wxString RenderView(const ibMaterializeSpec& spec,
 		body += wxT(" WHERE ") + nonZero;   // nothing was grouped, so the same test belongs in WHERE
 
 	if (view.m_withMovements)
-		body += wxT(" UNION ALL ") + RenderMovementArm(spec, view, dialect);
+		body += wxT(" UNION ALL ") + RenderMovementArm(spec, view, mat, dialect);
 
 	return Fill(Fill(mat.m_createViewTemplate, wxT("name"), view.m_name), wxT("body"), body);
 }

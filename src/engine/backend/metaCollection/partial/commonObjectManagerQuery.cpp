@@ -103,18 +103,52 @@ bool ibValueRecordManagerObject::ExistData()
 	return success;
 }
 
+// ⭐⭐ A RECORD IS READ BY ITS KEY, AND WHAT IS READ IS WHAT THE MANAGER THEN HOLDS. The set is read afresh under
+// the key — which clears the line the manager was holding — so the manager takes the record found, and the set
+// remembers the key it was found under: a Write after it replaces THAT record, a Delete removes THAT record.
+// Nothing under the key leaves the manager as the caller filled it, and not read.
+//
+// 🛑 It used to keep the old line pointer: after a script's Read the fields still showed what had been set (a
+// price of 0), and the set, read with no key at all, was marked read — so the Delete that followed removed every
+// record of the register (measured 2026-09-17: twenty deletes of one price each left a table of five rows).
 bool ibValueRecordManagerObject::ReadData(const ibUniqueKeyPair& key)
 {
-	if (m_recordSet->ReadData(key)) {
-		if (m_recordLine == nullptr) {
-			m_recordLine = m_recordSet->GetRowAt(
-				m_recordSet->GetItem(0)
-			);
+	std::vector<std::pair<ibMetaID, ibValue>> filled;
+	if (m_recordLine != nullptr)
+		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
+			ibValue value;
+			m_recordLine->GetValueByMetaID(object->GetMetaID(), value);
+			filled.emplace_back(object->GetMetaID(), value);
 		}
+	m_recordLine = nullptr;   // the set is read afresh; the line it held goes with it
+
+	if (m_recordSet->ReadData(key)) {
+		m_recordLine = m_recordSet->GetRowAt(m_recordSet->GetItem(0));
+		m_recordSet->m_keyValues = key.GetKeyValues();
+		m_objGuid.SetKeyValues(key.GetKeyValues());
 		return true;
 	}
 
+	m_recordSet->m_selected = false;
+	PrepareEmptyObject(nullptr);
+	for (const auto& field : filled)
+		m_recordLine->SetValueByMetaID(field.first, field.second);
 	return false;
+}
+
+// The key the manager's own fields name — every dimension of the register, the period among them.
+ibUniqueKeyPair ibRecordKeyOf(const ibValueMetaObjectRegisterData* meta, ibValueModel::ibValueModelReturnLine* line)
+{
+	ibUniqueKeyPair key = meta->CreateUniqueKeyPair();
+	ibRowMetaValues values;
+	if (line != nullptr)
+		for (const auto object : meta->GetGenericDimensionArrayObject()) {
+			ibValue value;
+			line->GetValueByMetaID(object->GetMetaID(), value);
+			values.insert_or_assign(object->GetMetaID(), value);
+		}
+	key.SetKeyValues(values);
+	return key;
 }
 
 bool ibValueRecordManagerObject::SaveData(bool replace)
@@ -123,10 +157,16 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 		&& !DeleteData())
 		return false;
 
-	if (ExistData()) {
-		wxString fillError =
-			wxString::Format(_("This entry already exists. It is not possible to write a new value!"));
-		ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
+	// ⭐⭐ A RECORD UNDER A KEY THAT IS TAKEN IS A REPLACEMENT WHEN REPLACEMENT WAS ASKED FOR. `Write(True)` —
+	// the default — means "this is the record under this key now", whether one was there or not, and the
+	// set's write below replaces by the key. The probe used to refuse it regardless: a price written again
+	// for the same item, a rate for a month already rated, failed with "failed to store the record" and a
+	// message box nobody reads in a script (measured 2026-09-17, both kinds of information register). Only
+	// `Write(False)` asks to add and nothing else — and the door then says why it will not, in words.
+	if (!replace && ExistData()) {
+		ibBackendCoreException::Error(
+			_("Register '%s': a record with these key values already exists. Write(True) replaces it."),
+			m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
 		return false;
 	}
 
@@ -145,8 +185,12 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 	return false;
 }
 
+// A manager deletes ONE record: the one it read, or — never read — the one its fields name. Never the set with no
+// key, which is the whole register (see ReadData).
 bool ibValueRecordManagerObject::DeleteData()
 {
+	if (!m_recordSet->m_selected || m_recordSet->m_keyValues.empty())
+		m_recordSet->m_keyValues = ibRecordKeyOf(m_metaObject, m_recordLine).GetKeyValues();
 	return m_recordSet->DeleteRecordSet();
 }
 

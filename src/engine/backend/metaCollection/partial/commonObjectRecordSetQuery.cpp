@@ -425,8 +425,14 @@ bool ibValueRecordSetObject::DeleteData()
 	// every movement there is" was that the loop above happened to add no condition, which is a
 	// distinction nothing in the code could see and nobody reviewing it could notice. The
 	// behaviour is unchanged; what changes is that the wide case now leaves a trace.
+	//
+	// ⚠ A TRACE, NOT A DIALOG. A warning line also puts a modal box in front of whoever runs the application, and
+	// a clearing written from code in the background put two of them at once (the second a pile of six) in front
+	// of somebody who had asked for nothing (2026-09-17). Clearing a register is a thing code is allowed to do; the
+	// journal is where it is found afterwards. The accident it used to follow — a record manager deleting with no
+	// key — is closed where it happened (ibValueRecordManagerObject::DeleteData).
 	if (!keyed)
-		ibJournalWarning(wxT("register"),_("Register '%s': the record set carries no key, so writing it clears every record"),
+		ibJournalInfo(wxT("register"), wxT("Register '%s': the record set carries no key, so writing it clears every record"),
 			m_metaObject->GetSynonym());
 
 	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.
