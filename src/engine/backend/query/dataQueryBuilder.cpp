@@ -394,6 +394,20 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBacken
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias)
+{
+	if (path.size() < 2 || alias.IsEmpty())
+		return GroupBy(path);
+	for (size_t i = 0; i < m_groupBy.size(); ++i)
+		if (m_groupPaths[i] == path && m_groupAliases[i] == alias)
+			return *this;   // grouping by a key twice is grouping by it once — see GroupBy(col)
+	m_groupBy.push_back(path.back());
+	m_groupPaths.push_back(path);
+	m_groupExprs.emplace_back();
+	m_groupAliases.push_back(alias);
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& expr, const wxString& alias)
 {
 	if (!expr || alias.IsEmpty())

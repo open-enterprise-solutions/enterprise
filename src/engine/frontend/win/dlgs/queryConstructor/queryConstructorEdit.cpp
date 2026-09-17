@@ -466,6 +466,13 @@ public:
 				row.m_code = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
 					wxSize(FromDIP(360), FromDIP(90)));
 				ibStyleQueryText(row.m_code);
+				// …AND A FIELD, NOT A FILE. A condition here is a few lines at most; a column of line numbers
+				// beside it and a horizontal bar under it (drawn as a bare thumb in a short pane) made the
+				// three condition boxes look like three different controls. The reference shows a plain
+				// multi-line box: no margin, and a long condition wraps instead of scrolling sideways.
+				row.m_code->SetMarginWidth(0, 0);
+				row.m_code->SetUseHorizontalScrollBar(false);
+				row.m_code->SetWrapMode(wxSTC_WRAP_WORD);
 				row.m_code->SetText(written);
 				ibMarkQueryParameters(row.m_code);
 				row.m_code->SetReadOnly(m_readOnly);

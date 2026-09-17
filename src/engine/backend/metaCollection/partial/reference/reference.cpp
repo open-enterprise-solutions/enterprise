@@ -1043,14 +1043,26 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 		pvarRetValue = new ibValueGuid(m_objGuid);
 		return true;
 	case enPointInTime: {
-		// A REFERENCE'S MOMENT IS ITS IDENTITY; the DATE is added by the family that has one (the
-		// document overrides this method with its own date). No virtual asking every class "do you
-		// have a date" and no list of the ones that do -- the two classes each answer for themselves.
+		// A REFERENCE'S MOMENT IS ITS IDENTITY — and, for a family that records facts, its DATE with it.
+		//
+		// 🛑 The date was meant to come from an override on the document's reference, and no such override
+		// exists: every reference is this class. So `Ref.PointInTime()` of a document came back with an unset
+		// date — a moment that is no point on the timeline — and a register reading bounded by it read the
+		// bound as absent: "up to receipt No. 2" answered with every posting there is (measured 2026-09-17).
+		// The date is the recorder's own attribute, read the way `Ref.Date` reads it; the document OBJECT
+		// answers the same way (documentObject.cpp).
 		//
 		// It carries THIS reference, not a copy: `GetValue(true)` is the verb for handing out this
 		// very value, where a second ibValueReferenceDataObject over the same (type, guid) would be
 		// a second object for one identity -- the thing a reference exists to prevent.
-		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetValue(true));
+		wxDateTime when;
+		const ibValueMetaObjectRecordDataRecorderRef* recorder = nullptr;
+		if (!IsEmptyRef() && m_metaObject->ConvertToValue(recorder) && recorder != nullptr) {
+			ibValue date;
+			if (GetValueByMetaID(recorder->GetDocumentDate()->GetMetaID(), date) && date.GetType() == ibValueTypes::TYPE_DATE)
+				when = date.GetDateTime();
+		}
+		pvarRetValue = new ibValuePointInTime(when, GetValue(true));
 		return true;
 	}
 	}

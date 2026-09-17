@@ -228,13 +228,9 @@ const ibColumnSlot* SlotByName(const std::vector<ibColumnSlot>& layout, const wx
 	return nullptr;
 }
 
-// Two physical slots render to the same SQL type? (qualifier change -> ALTER). Compares the canonical
-// L2 type, so an alter fires only when the column's physical type actually changes.
-bool SameSlotType(const ibColumnType& a, const ibColumnType& b)
-{
-	return a.m_kind == b.m_kind && a.m_length == b.m_length && a.m_precision == b.m_precision
-	    && a.m_scale == b.m_scale && a.m_datePrec == b.m_datePrec && a.m_fixed == b.m_fixed;
-}
+// (The "same SQL type?" test moved to the layout tier as ibSameFieldType (columnLayout.h) — the
+//  derived-table rebuild decision asks the identical question of a key column and must get the
+//  identical answer. An alter still fires here only when the physical type actually changes.)
 
 bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 {
@@ -313,7 +309,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			if (d.m_role != ibColumnRole::Discriminator)
 				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
 		}
-		else if (!SameSlotType(s->m_type, d.m_type)) {
+		else if (!ibSameFieldType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
 			if (s->m_role == ibColumnRole::Date
 			    && s->m_type.m_datePrec != ibDatePrec::Time && d.m_type.m_datePrec == ibDatePrec::Time) {

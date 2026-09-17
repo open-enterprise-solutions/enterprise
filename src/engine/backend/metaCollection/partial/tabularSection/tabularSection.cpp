@@ -19,6 +19,17 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
+// A row's column BY ID — among the section's own column list, not the table's children. The list carries what
+// the owner puts into the table as well: the account's kinds table shows a tick-box per breakdown accounting
+// kind its chart declares, and a column the list shows is a column a row has.
+static const ibValueMetaObjectAttributeBase* ibSectionColumnById(const ibValueMetaObjectTableData* table, const ibMetaID& id)
+{
+	for (const ibValueMetaObjectAttributeBase* attribute : table->GetGenericAttributeArrayObject())
+		if (attribute != nullptr && attribute->GetMetaID() == id)
+			return attribute;
+	return nullptr;
+}
+
 ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const wxString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnByName(colName);
@@ -95,7 +106,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		
 		if (node != nullptr) {
-			const ibValueMetaObjectAttributeBase* attribute = m_metaTable->FindAnyAttributeObjectByFilter(id);
+			const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
 			wxASSERT(attribute);
 			if (attribute == nullptr) return false;
 			const bool ok = node->SetValue(
@@ -122,8 +133,9 @@ bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem&
 	}
 
 	if (appData->DesignerMode()) {
-		const ibValueMetaObjectAttributeBase* attribute = m_metaTable->FindAnyAttributeObjectByFilter(id);
-		wxASSERT(attribute);
+		const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
+		if (attribute == nullptr)
+			return false;   // not found, or switched off — as SetValueByMetaID above answers it
 		pvarMetaVal = attribute->CreateValue();
 		return true;
 	}

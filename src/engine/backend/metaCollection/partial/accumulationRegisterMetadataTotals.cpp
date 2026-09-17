@@ -21,6 +21,10 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
+#include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
+
 // ============================================================================
 // Balance / turnover COMPUTE — on the register metaobject (its own aggregate-query
 // knowledge, built as L2 IR). Each returns a RAM table the companion queryable hands
@@ -78,9 +82,8 @@ static void RestrictToStoredArm(ibDataQueryBuilder& b,
 	if (reg == nullptr || view == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
 		return;
 
-	const ibBackendQueryColumn* mark = view->ResolveColumnByName(reg->GetRegisterRecorder()->GetName());
-	if (mark != nullptr)
-		b.Where(ibQueryPredicate::Null(mark, /*negated*/ false));
+	if (const ibQueryPredicatePtr stored = ibRegStoredArm(view->ResolveColumnByName(reg->GetRegisterRecorder()->GetName())))
+		b.Where(stored);
 }
 
 // ⛔ THE NUMERIC PIN IS GONE TOO, and its absence is the point: it existed to stop a hand-built
@@ -90,16 +93,6 @@ static void RestrictToStoredArm(ibDataQueryBuilder& b,
 // (ibRegPhysicalOf — "ask the view for the storage name, never spell it" — moved to
 //  registerQueryLowering.h on 2026-08-13: the accounting register's server reading needs the same
 //  rule, and a rule about not writing a name twice should not itself be written twice.)
-
-// The id the seeding gave a column. The read stores BY ID, and the id belongs to the view — asking
-// the table for it is what keeps this file from knowing how the view numbers its columns.
-static ibMetaID RamColumnIdByName(const ibQueryRamTable& table, const wxString& name)
-{
-	for (const ibQueryRamColumn& col : table.Columns())
-		if (col.m_name == name)
-			return col.m_id;
-	return 0;
-}
 
 // ⭐⭐ A BALANCE IS THE TURNOVERS, FOLDED UP TO A MOMENT — and the turnovers are already stored.
 //
@@ -244,6 +237,17 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 
 	if (m_fold.FromMovements())
 		return true;    // a recorder is not a calendar interval; no rolled-up total carries one
+
+	// A calendar over an interval with both ends reports EVERY period of it, and the server spells that
+	// calendar into the statement a row per period — past the limit of ibRegCalendarOf (a daily one over
+	// years) it is the live path's, which walks the same periods in memory.
+	if (m_fold.IsCalendar() && m_reg->GetRegisterType() == ibRegisterType::eBalances) {
+		const ibValue from = ibReadRegisterBound(m_begin).m_date;
+		const ibValue to   = ibReadRegisterBound(m_end).m_date;
+		if (from.GetType() == TYPE_DATE && to.GetType() == TYPE_DATE
+		    && ibRegCalendarOf(from, to, m_fold.m_unit).empty() && !from.GetDateTime().IsLaterThan(to.GetDateTime()))
+			return true;
+	}
 
 	// Periodised. The running balance is a window, so this road exists only where the engine has
 	// them — and where it does not, the live path answers exactly as it did before.
@@ -515,17 +519,17 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// The period column is named after the register's OWN period attribute — the view names it that
 	// way, so every reader must ask rather than assume the word.
 	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
-	const ibMetaID periodId   = RamColumnIdByName(retTable, periodName);
+	const ibMetaID periodId   = retTable.ColumnIdByName(periodName);
 
 	std::vector<ibBalanceFoldSlot> slots;
 	std::vector<ibValueMetaObjectAttributeBase*> resources;
 	for (const auto object : GetResourceArrayObject()) {
 		ibBalanceFoldSlot s;
-		s.m_opening  = RamColumnIdByName(retTable, object->GetName() + ibRegFigure::OpeningBalance);
-		s.m_receipt  = RamColumnIdByName(retTable, object->GetName() + ibRegFigure::Receipt);
-		s.m_expense  = RamColumnIdByName(retTable, object->GetName() + ibRegFigure::Expense);
-		s.m_turnover = RamColumnIdByName(retTable, object->GetName() + ibRegFigure::Turnover);
-		s.m_closing  = RamColumnIdByName(retTable, object->GetName() + ibRegFigure::ClosingBalance);
+		s.m_opening  = retTable.ColumnIdByName(object->GetName() + ibRegFigure::OpeningBalance);
+		s.m_receipt  = retTable.ColumnIdByName(object->GetName() + ibRegFigure::Receipt);
+		s.m_expense  = retTable.ColumnIdByName(object->GetName() + ibRegFigure::Expense);
+		s.m_turnover = retTable.ColumnIdByName(object->GetName() + ibRegFigure::Turnover);
+		s.m_closing  = retTable.ColumnIdByName(object->GetName() + ibRegFigure::ClosingBalance);
 		slots.push_back(s);
 		resources.push_back(object);
 	}
@@ -597,6 +601,23 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	}
 
 	// --- 2. RECEIPT / EXPENSE inside the interval, per key and truncated period -----------------
+	// Read into groups per key first, not straight into the table: the periods a key did not move in are
+	// added to its group (step 2a) and the group is ordered (step 2b) before anything reaches the fold.
+	struct ibPeriodRow {
+		ibValue              m_period;
+		std::vector<ibValue> m_receipt;
+		std::vector<ibValue> m_expense;
+	};
+	std::vector<std::pair<std::vector<ibValue>, std::vector<ibPeriodRow>>> groups;
+	std::unordered_map<std::vector<ibValue>, size_t, ibValueSeqHash, ibValueSeqEqual> groupIndex;
+	const auto groupFor = [&](std::vector<ibValue> key) -> std::vector<ibPeriodRow>& {
+		const auto found = groupIndex.find(key);
+		if (found != groupIndex.end())
+			return groups[found->second].second;
+		groupIndex.emplace(key, groups.size());
+		groups.push_back({ std::move(key), {} });
+		return groups.back().second;
+	};
 	{
 		ibDataQueryBuilder b;
 		openRead(b);
@@ -619,20 +640,17 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		try {
 			ibDataQueryResult sel = b.SelectAggregate();
 			while (sel.Next()) {
-				const long row = retTable.AppendRow();
-				size_t k = 0;
-				for (const auto dimension : GetDimensionArrayObject()) {
-					if (dimension == nullptr || k >= keyOnView.size())
-						continue;
-					retTable.SetCell(row, dimension->GetMetaID(), sel.GetValue(keyOnView[k++]));
-				}
+				std::vector<ibValue> keyValues;
+				for (const ibBackendQueryColumn* key : keyOnView)
+					keyValues.push_back(sel.GetValue(key));
+				ibPeriodRow read;
 				if (periodCol != nullptr)
-					retTable.SetCell(row, periodId, sel.GetColumn(periodName));
+					read.m_period = sel.GetColumn(periodName);
 				for (size_t i = 0; i < resources.size(); i++) {
-					retTable.SetCell(row, slots[i].m_receipt, sel.GetColumn(resources[i]->GetName() + ibRegFigure::Receipt));
-					if (withSign)
-						retTable.SetCell(row, slots[i].m_expense, sel.GetColumn(resources[i]->GetName() + ibRegFigure::Expense));
+					read.m_receipt.push_back(sel.GetColumn(resources[i]->GetName() + ibRegFigure::Receipt));
+					read.m_expense.push_back(withSign ? sel.GetColumn(resources[i]->GetName() + ibRegFigure::Expense) : ibValue());
 				}
+				groupFor(std::move(keyValues)).push_back(std::move(read));
 			}
 		}
 		// The movement inside the interval. Read as nothing, it says every period was quiet — and the
@@ -640,6 +658,77 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		catch (const ibBackendException& err) {
 			ibJournalError(wxT("register.totals"), wxT("period figures failed: %s"), err.GetErrorDescription());
 			throw;
+		}
+	}
+
+	// --- 2a. every key carried in, and every period of the interval for every key --------------------------
+	//
+	// ⭐⭐ A KEY THAT CARRIED A BALANCE IN AND SAW NOTHING MOVE IS STILL A ROW — "opening = closing". Read by the
+	// movements alone it had no row at all, on every periodicity, the whole interval included. With a calendar
+	// periodicity it stands in the period the balance is carried into.
+	//
+	// ⭐⭐ AND WITH A CALENDAR PERIODICITY OVER AN INTERVAL WITH BOTH ENDS, EVERY PERIOD: a month with a balance
+	// and no movement is a row with zero movement, a month with neither is pruned below (Max, 2026-09-16, the
+	// owner's rule for the accounting register and "the same here"). The server road reads the same grid
+	// (ibRegRunningGrid); without both ends neither road invents periods.
+	const ibValue beginDate = ibReadRegisterBound(cBegin).m_date;
+	const ibValue endDate   = ibReadRegisterBound(cEnd).m_date;
+	const bool calendarFold = withSign && periodCol != nullptr && cFold.IsCalendar();
+	const wxDateTime firstPeriod = calendarFold && beginDate.GetType() == TYPE_DATE
+		? ibTruncateToPeriod(beginDate.GetDateTime(), cFold.m_unit) : wxDateTime();
+	for (const auto& entry : opening) {
+		if (groupIndex.find(entry.first) != groupIndex.end())
+			continue;
+		ibPeriodRow carried;
+		if (firstPeriod.IsValid())
+			carried.m_period = ibValue(firstPeriod);
+		carried.m_receipt.assign(resources.size(), ibValue());
+		carried.m_expense.assign(resources.size(), ibValue());
+		groupFor(entry.first).push_back(std::move(carried));
+	}
+	if (firstPeriod.IsValid() && endDate.GetType() == TYPE_DATE) {
+		// The same calendar the server grid stands on, uncapped: the live path is where a long one goes.
+		const std::vector<wxDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), endDate, cFold.m_unit, /*maxPeriods*/ 0);
+		for (auto& group : groups) {
+			std::unordered_set<ibValue, ibValueHash, ibValueEqual> present;
+			for (const ibPeriodRow& row : group.second)
+				present.insert(row.m_period);
+			for (const wxDateTime& period : calendar) {
+				if (present.find(ibValue(period)) == present.end()) {
+					ibPeriodRow still;
+					still.m_period = ibValue(period);
+					still.m_receipt.assign(resources.size(), ibValue());
+					still.m_expense.assign(resources.size(), ibValue());
+					group.second.push_back(std::move(still));
+				}
+			}
+		}
+	}
+
+	// --- 2b. poured in the order the roll needs -------------------------------------------------------------
+	// Every row of one key together, its periods ascending. The roll is sequential (a period's opening IS the
+	// previous closing), and the order a GROUP BY answers in is the engine's business, not a promise.
+	for (auto& group : groups) {
+		std::stable_sort(group.second.begin(), group.second.end(), [](const ibPeriodRow& a, const ibPeriodRow& b) {
+			// static_cast, not a functional cast: wxLongLong_t is `long long` outside MSVC (docs/portability.md).
+			const auto dateOf = [](const ibValue& v) { return v.GetType() == TYPE_DATE ? v.GetDate() : static_cast<wxLongLong_t>(0); };
+			return dateOf(a.m_period) < dateOf(b.m_period);
+		});
+		for (const ibPeriodRow& read : group.second) {
+			const long row = retTable.AppendRow();
+			size_t k = 0;
+			for (const auto dimension : GetDimensionArrayObject()) {
+				if (dimension == nullptr || k >= group.first.size())
+					continue;
+				retTable.SetCell(row, dimension->GetMetaID(), group.first[k++]);
+			}
+			if (periodCol != nullptr)
+				retTable.SetCell(row, periodId, read.m_period);
+			for (size_t i = 0; i < resources.size(); i++) {
+				retTable.SetCell(row, slots[i].m_receipt, read.m_receipt[i]);
+				if (withSign)
+					retTable.SetCell(row, slots[i].m_expense, read.m_expense[i]);
+			}
 		}
 	}
 
@@ -945,6 +1034,71 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	if (out == nullptr || src == nullptr)
 		return nullptr;
 
+	// ⭐⭐ PER CALENDAR PERIOD, EVERY PERIOD — a month where a balance stands and nothing moved is a row with zero
+	// movement, a month with neither is no row (Max, 2026-09-16, said of the accounting register and "the same
+	// will be true here"). The window below answers only the periods something moved in, so a calendar
+	// periodicity over an interval with both ends is read on the calendar grid instead — the same grid the
+	// accounting register's periodised reading stands on (ibRegRunningGrid, registerQueryLowering.h). A
+	// register without balances has nothing to carry into an empty period and keeps the window.
+	const bool withSign = (m_reg->GetRegisterType() == ibRegisterType::eBalances);
+	const std::vector<wxDateTime> calendar = (periodised && withSign && m_fold.IsCalendar())
+		? ibRegCalendarOf(r.m_from, r.m_to, m_fold.m_unit) : std::vector<wxDateTime>();
+	if (!calendar.empty()) {
+		// The movement per key per period, inside the interval.
+		ibMaterializeReadSpec t = r;
+		t.m_fromGrain = ibValue(calendar.front());
+		// The balance each key carries in — NOT pruned, and grouped over every row up to the end, so it is also
+		// the set of every key that holds a balance or moves in the interval.
+		ibMaterializeReadSpec o = r;
+		o.m_grain        = ibMaterializeGrain::Whole;
+		o.m_fromGrain    = ibValue();
+		o.m_dropZeroRows = false;
+
+		std::vector<wxString> passThrough, published;
+		std::vector<ibRegRunningFigure> running;
+		for (const auto res : m_reg->GetResourceArrayObject()) {
+			if (res == nullptr)
+				continue;
+			const wxString base = res->GetName();
+			const wxString turn = ibRegPhysicalOf(src, base + ibRegFigure::Turnover);
+			const wxString receipt  = ibRegPhysicalOf(out, base + ibRegFigure::Receipt);
+			const wxString expense  = ibRegPhysicalOf(out, base + ibRegFigure::Expense);
+			const wxString turnover = ibRegPhysicalOf(out, base + ibRegFigure::Turnover);
+			const wxString opening  = ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance);
+			const wxString closing  = ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance);
+			t.m_columns.push_back({ receipt,  ibRegPhysicalOf(src, base + ibRegFigure::Receipt), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			t.m_columns.push_back({ expense,  ibRegPhysicalOf(src, base + ibRegFigure::Expense), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			t.m_columns.push_back({ turnover, turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true });
+			o.m_columns.push_back({ opening,  turn, wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true });
+			passThrough.insert(passThrough.end(), { receipt, expense, turnover });
+			running.push_back({ turnover, opening, opening, closing });
+			published.insert(published.end(), { opening, receipt, expense, turnover, closing });
+		}
+
+		const wxString aG = alias + wxT("_g");
+		const ibQueryRelPtr grid = ibRegRunningGrid(RenderMaterializedRead(o, alias + wxT("_or")), RenderMaterializedRead(t, alias + wxT("_tr")),
+			calendar, r.m_periodColumn, r.m_keyColumns, passThrough, running, alias);
+		if (grid == nullptr)
+			return nullptr;
+
+		// A period of the grid that holds no balance and saw no movement is no row — the same "any figure
+		// non-zero" the window read prunes by.
+		ibQueryExprPtr anyFigure;
+		std::vector<ibQueryProjItem> projection;
+		for (const wxString& key : r.m_keyColumns)
+			projection.push_back({ ibCol(aG, key), key });
+		projection.push_back({ ibCol(aG, r.m_periodColumn), r.m_periodColumn });
+		for (const wxString& name : published) {
+			const ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Ne, ibCol(aG, name), ibRegTypedZero());
+			anyFigure = anyFigure ? ibBinOp(ibQueryBinOp::Or, anyFigure, one) : one;
+			projection.push_back({ ibCol(aG, name), name });
+		}
+		ibQueryRelPtr rows = ibSubquery(grid, aG);
+		if (anyFigure)
+			rows = ibFilter(rows, anyFigure);
+		return ibSubquery(ibProject(rows, std::move(projection)), alias);
+	}
+
 	for (const auto res : m_reg->GetResourceArrayObject()) {
 		if (res == nullptr)
 			continue;
@@ -954,13 +1108,16 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		const wxString exp  = ibRegPhysicalOf(src, base + ibRegFigure::Expense);
 
 		if (periodised) {
-			// The period IS the condition here: rows are grouped by it, so each figure of a period is
-			// a plain sum of that period's rows. Only the two balances look outside their own row —
-			// backwards, along the periods, which is exactly what a running form does.
+			// Rows are grouped by the period, so each figure of a period is a sum of that period's rows.
+			// Only the two balances look outside their own row — backwards, along the periods, which is
+			// exactly what a running form does.
+			// ⚠ …AND THE MOVEMENTS ARE STILL CONDITIONED TO THE INTERVAL. The read carries the history
+			// the balances are made of, the morning before an interval that starts at noon among it, and
+			// a period's receipt summed over everything it holds would count that morning.
 			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::OpeningBalance), turn, wxString(), ibMaterializeAgg::RunningSumExcludingCurrent, ibMaterializeWhen::Always, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
-			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::Always, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Receipt),        rec,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Expense),        exp,  wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
+			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::Turnover),       turn, wxString(), ibMaterializeAgg::Value,                      ibMaterializeWhen::InRange, true });
 			r.m_columns.push_back({ ibRegPhysicalOf(out, base + ibRegFigure::ClosingBalance), turn, wxString(), ibMaterializeAgg::RunningSum,                 ibMaterializeWhen::Always, true });
 			continue;
 		}

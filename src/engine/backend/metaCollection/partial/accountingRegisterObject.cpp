@@ -595,6 +595,33 @@ bool IsOffBalanceAccount(const ibValue& account, std::unordered_map<ibValue, boo
 
 } // namespace
 
+// DOES THIS ACCOUNT KEEP THAT KIND OF ACCOUNTING? The kinds a chart declares are boolean fields of the
+// account, so the question goes to the account itself — the same shape, and the same memory, as the
+// off-balance answer above. An empty account keeps nothing; an account whose chart never declared the
+// kind answers no, which is the honest answer for a figure that has nothing to belong to.
+bool ibValueMetaObjectAccountingRegister::IsAccountingKindKept(const ibValue& account, const ibMetaID& kind,
+	std::unordered_map<ibValue, bool, ibValueHash, ibValueEqual>& cache)
+{
+	if (account.IsEmpty())
+		return false;
+
+	const auto found = cache.find(account);
+	if (found != cache.end())
+		return found->second;
+
+	bool keeps = false;
+
+	ibValueReferenceDataObject* reference = nullptr;
+	if (account.ConvertToValue(reference) && reference != nullptr) {
+		ibValue flag;
+		if (reference->GetValueByMetaID(kind, flag))
+			keeps = flag.GetBoolean();
+	}
+
+	cache[account] = keeps;
+	return keeps;
+}
+
 void ibValueRecordSetObjectAccountingRegister::CheckDoubleEntry() const
 {
 	const ibValueMetaObjectAccountingRegister* meta = GetAccountingMetaObject();
@@ -707,8 +734,112 @@ void ibValueRecordSetObjectAccountingRegister::CheckDoubleEntry() const
 	}
 }
 
+// ⭐⭐ WHAT THE ACCOUNT DOES NOT KEEP IS EMPTIED — see the note beside the declaration. The kinds of
+// accounting a chart declares are boolean fields OF THE ACCOUNT, so the account itself is asked, and
+// the answer is remembered per kind: a posting names the same few accounts over and over.
+//
+// ⚠ WITH A CORRESPONDENCE LINE, EITHER SIDE KEEPS IT. One line, two accounts and one set of figures:
+// a currency amount is real if EITHER the debit or the credit account is a currency account, and
+// blanking it because the other side is not would throw away the half that is meant. Telling the two
+// sides apart is what a NON-BALANCE dimension is for — a value of its own per side — and until those
+// halves exist there is one value, so one value is what is judged.
+void ibValueRecordSetObjectAccountingRegister::ApplyAccountingKinds()
+{
+	const ibValueMetaObjectAccountingRegister* meta = GetAccountingMetaObject();
+	if (meta == nullptr)
+		return;
+
+	const ibValueMetaObjectAttributeBase* account = meta->GetRegisterAccount();
+	if (account == nullptr)
+		return;
+
+	// WHICH FIELDS NAME A KIND — asked once for the whole set, not per row. A field also says WHICH
+	// SIDE judges it: a non-balance dimension holds a value per side, so its debit half answers to the
+	// debit account and its credit half to the credit one. Everything else is one value for the line,
+	// and one value is kept if either side keeps the kind.
+	struct ibFigureOfKind { ibMetaID m_field; ibMetaID m_kind; ibAcctJudgedBy m_by; };
+	std::vector<ibFigureOfKind> figures;
+	const auto judge = [&figures, meta](const ibValueMetaObjectAttributeBase* field, const ibMetaDescription& kind) {
+		const ibValueMetaObjectAttributeBase* debit  = meta->GetFieldSide(/*creditSide*/ false, field);
+		const ibValueMetaObjectAttributeBase* credit = meta->GetFieldSide(/*creditSide*/ true, field);
+		if (debit == nullptr || credit == nullptr) {
+			figures.push_back({ field->GetMetaID(), kind.GetByIdx(0), ibAcctJudgedBy::EitherAccount });
+			return;
+		}
+		figures.push_back({ debit->GetMetaID(),  kind.GetByIdx(0), ibAcctJudgedBy::Account });
+		figures.push_back({ credit->GetMetaID(), kind.GetByIdx(0), ibAcctJudgedBy::CreditAccount });
+	};
+
+	for (const ibValueMetaObjectDimension* dimension : meta->GetDimensionArrayObject()) {
+		if (dimension == nullptr) continue;
+		const ibMetaDescription& kind = dimension->GetAccountingKind();
+		if (!kind.IsOk()) continue;
+
+		// ⭐ ONE ENTRY PER ATTRIBUTE THE LINE HOLDS IT IN — the field itself, judged by either side; or,
+		// kept per side, its two side attributes, each judged by its own account.
+		judge(dimension, kind);
+	}
+	// A FIGURE SPLITS FOR THE SAME REASON A DIMENSION DOES, and is judged the same way: a quantity or
+	// an amount in currency is held per side, so the debit half answers to the debit account and the
+	// credit half to the credit one — the goods account keeps a quantity, the supplier account does
+	// not, and one entry between them fills exactly one of the two.
+	for (const ibValueMetaObjectResource* resource : meta->GetResourceArrayObject()) {
+		if (resource == nullptr) continue;
+		const ibMetaDescription& kind = resource->GetAccountingKind();
+		if (!kind.IsOk()) continue;
+
+		judge(resource, kind);
+	}
+
+	if (figures.empty())
+		return;   // nothing is kept conditionally — every figure belongs to every account
+
+	const ibValueMetaObjectAttributeBase* accountCr =
+		meta->IsCorrespondence() ? meta->GetRegisterAccountCr() : nullptr;
+
+	// One memory per kind: account -> does it keep this kind.
+	std::map<ibMetaID, std::unordered_map<ibValue, bool, ibValueHash, ibValueEqual>> kept;
+
+	for (long row = 0; row < GetRowCount(); row++) {
+		const ibDataViewItem item = GetItem(row);
+
+		ibValue debitAccount, creditAccount;
+		GetValueByMetaID(item, account->GetMetaID(), debitAccount);
+		if (accountCr != nullptr)
+			GetValueByMetaID(item, accountCr->GetMetaID(), creditAccount);
+
+		for (const ibFigureOfKind& figure : figures) {
+			auto& memory = kept[figure.m_kind];
+
+			bool keeps = false;
+			switch (figure.m_by) {
+			case ibAcctJudgedBy::Account:
+				keeps = meta->IsAccountingKindKept(debitAccount, figure.m_kind, memory);
+				break;
+			case ibAcctJudgedBy::CreditAccount:
+				// One-sided register: the line is a debit OR a credit and its account is the one read
+				// above, so the credit half has no account of its own to answer for it.
+				keeps = accountCr != nullptr && meta->IsAccountingKindKept(creditAccount, figure.m_kind, memory);
+				break;
+			case ibAcctJudgedBy::EitherAccount:
+				keeps = meta->IsAccountingKindKept(debitAccount, figure.m_kind, memory)
+					|| (accountCr != nullptr && meta->IsAccountingKindKept(creditAccount, figure.m_kind, memory));
+				break;
+			case ibAcctJudgedBy::CorrAccount:
+				break;   // a line has no correspondent of its own — that is a reading's cut
+			}
+
+			if (!keeps)
+				SetValueByMetaID(item, figure.m_field, ibValue());
+		}
+	}
+}
+
 bool ibValueRecordSetObjectAccountingRegister::WriteRecordSet(bool replace, bool clearTable)
 {
+	// THE KINDS ARE APPLIED FIRST — the balance below must not weigh a figure this account does not
+	// keep, and the base must not store one.
+	ApplyAccountingKinds();
 	// BEFORE the write, not inside it: a set that does not balance is not a posting, and the cheapest
 	// place to say so is before a transaction has been opened for it.
 	CheckDoubleEntry();

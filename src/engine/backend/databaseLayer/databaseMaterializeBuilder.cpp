@@ -894,28 +894,45 @@ ibMaterializeSql RenderMaterialization(const ibMaterializeSpec& spec,
 // put SQL shaping in the layer that should only be naming columns.
 // ============================================================================
 
+static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValue& at,
+                                      const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+                                      bool atMost, bool excluding);
+
 namespace {
 
 // The predicate a conditional column is summed under. Unbounded sides simply drop out — an absent
 // interval start makes "before the start" empty, which is the honest reading of "no start given".
+//
+// ⭐ A BOUNDARY IS A MOMENT, AND HERE TOO. The arm cut below compares a boundary as an instant AND the
+// document at it; this sorts a row BEFORE or INSIDE the interval, and when the movements carry the rows
+// on both sides of the lower boundary (an opening balance of an interval that starts at noon) it is the
+// only place that decides which side a posting at that very instant stands on. Spelled by the same
+// function, so the two cannot place one posting on two sides.
 ibQueryExprPtr WhenPredicate(const ibMaterializeReadSpec& spec, ibMaterializeWhen when)
 {
 	const bool hasFrom = (spec.m_from.GetType() == TYPE_DATE);
 	const bool hasTo   = (spec.m_to.GetType()   == TYPE_DATE);
 	const ibQueryExprPtr period = ibCol(spec.m_periodColumn);
 
+	const auto inFromOn = [&]() {
+		return BoundedByMoment(period, spec.m_from, spec.m_boundaryHead, /*atMost*/ false, spec.m_fromExcluding);
+	};
+	const auto upToTo = [&]() {
+		return BoundedByMoment(period, spec.m_to, spec.m_boundaryTail, /*atMost*/ true, spec.m_toExcluding);
+	};
+
 	switch (when) {
 		case ibMaterializeWhen::Always:
 			return nullptr;
 		case ibMaterializeWhen::BeforeFrom:
-			return hasFrom ? ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_from)) : nullptr;
+			return hasFrom ? ibNot(inFromOn()) : nullptr;
 		case ibMaterializeWhen::UpToTo:
-			return hasTo ? ibBinOp(ibQueryBinOp::Le, period, ibConst(spec.m_to)) : nullptr;
+			return hasTo ? upToTo() : nullptr;
 		case ibMaterializeWhen::InRange: {
 			ibQueryExprPtr p;
-			if (hasFrom) p = ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from));
+			if (hasFrom) p = inFromOn();
 			if (hasTo) {
-				ibQueryExprPtr hi = ibBinOp(ibQueryBinOp::Le, period, ibConst(spec.m_to));
+				ibQueryExprPtr hi = upToTo();
 				p = p ? ibBinOp(ibQueryBinOp::And, p, hi) : hi;
 			}
 			return p;
@@ -1110,12 +1127,40 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			q.Where(fromTotal);
 		}
 		else {
-			// THE STORED ARM TAKES WHOLE GRAINS ONLY -- those that begin at or after the head split
-			// and end before the floor. A partial grain at either end is the movements' business,
-			// because a stored row cannot be asked for half of itself.
+			// ⭐⭐ DOES ANY FIGURE LOOK BEFORE THE LOWER BOUNDARY? A turnover looks only inside the
+			// interval, so everything before its start can be left out of both arms. An opening or a
+			// closing balance — and any running form, which accumulates from the first period — needs
+			// that history, and the arms have to carry it.
+			//
+			// 🛑 They did not. The stored arm began at the head split and the movement arm was bounded
+			// below by the start of the interval, so for an interval starting INSIDE a grain everything
+			// before its start was in neither arm: the opening balance read zero and the closing one
+			// lost every earlier posting. Measured 2026-09-16 against the movements themselves, on a
+			// correspondence ledger read from 14.07 13:00 to 16.09 11:00 — coffee opened at 0 instead of
+			// 45 000 and closed at -41 400 instead of 3 600.
+			bool readsHistory = false;
+			for (const ibMaterializeReadColumn& c : spec.m_columns)
+				if (c.m_when == ibMaterializeWhen::BeforeFrom || c.m_when == ibMaterializeWhen::UpToTo
+				    || c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
+					readsHistory = true;
+
+			const bool headSplit = spec.m_headSplit.GetType() == TYPE_DATE;
+			const bool headGrain = readsHistory && headSplit && spec.m_headGrain.GetType() == TYPE_DATE;
+			const ibQueryExprPtr inHeadGrain = headGrain
+				? ibBinOp(ibQueryBinOp::And,
+					ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_headGrain)),
+					ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_headSplit)))
+				: nullptr;
+
+			// THE STORED ARM TAKES WHOLE GRAINS ONLY, and ends before the floor. A partial grain at
+			// either end is the movements' business, because a stored row cannot be asked for half of
+			// itself. Which whole grains BEFORE the lower boundary it takes is the question above: none
+			// for a turnover, all but the boundary's own grain for a balance.
 			ibQueryExprPtr stored = ibBinOp(ibQueryBinOp::And, fromTotal,
 				ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_floor)));
-			if (spec.m_headSplit.GetType() == TYPE_DATE)
+			if (headGrain)
+				stored = ibBinOp(ibQueryBinOp::And, stored, ibNot(inHeadGrain));
+			else if (headSplit)
 				stored = ibBinOp(ibQueryBinOp::And, stored,
 					ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_headSplit)));
 
@@ -1125,16 +1170,20 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			ibQueryExprPtr moved = ibIsNull(ibCol(spec.m_markColumn), /*negated*/ true);
 
 			ibQueryExprPtr ends = ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_floor));
-			if (spec.m_headSplit.GetType() == TYPE_DATE)
+			if (headGrain)
+				ends = ibBinOp(ibQueryBinOp::Or, ends, inHeadGrain);
+			else if (headSplit)
 				ends = ibBinOp(ibQueryBinOp::Or, ends,
 					ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_headSplit)));
 			moved = ibBinOp(ibQueryBinOp::And, moved, ends);
 
-			// The boundaries themselves: an instant, or an instant AND the document at it.
+			// The boundaries themselves: an instant, or an instant AND the document at it. The lower
+			// one bounds the arm only when nothing looks before it — otherwise the rows before it are
+			// what the balances are made of, and WhenPredicate sorts each to its side.
 			if (spec.m_to.GetType() == TYPE_DATE)
 				moved = ibBinOp(ibQueryBinOp::And, moved,
 					BoundedByMoment(period, spec.m_to, spec.m_boundaryTail, /*atMost*/ true, spec.m_toExcluding));
-			if (spec.m_from.GetType() == TYPE_DATE)
+			if (spec.m_from.GetType() == TYPE_DATE && !readsHistory)
 				moved = ibBinOp(ibQueryBinOp::And, moved,
 					BoundedByMoment(period, spec.m_from, spec.m_boundaryHead, /*atMost*/ false, spec.m_fromExcluding));
 

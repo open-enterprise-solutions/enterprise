@@ -6,6 +6,10 @@
 #include "accountingRegister.h"
 
 #include <algorithm>   // std::find — the posting block is a handful of pointers
+#include <limits>      // std::numeric_limits — a saved field side's id must fit a metaID
+#include <set>         // the fields laid out with the posting block, asked once per attribute
+#include "backend/metaCollection/dimension/metaDimensionObject.h"   // IsBalanceDimension — does this field split
+#include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource  — the same question of a figure
 #include "backend/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
 #include "chartOfCharacteristicTypes.h"   // the CONTOUR — a slot's value type is the chart's own composition
@@ -160,6 +164,35 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 			m_accountCr->LoadNode(*child);
 	}
 
+	// THE SIDES OF THE FIELDS KEPT PER SIDE — keyed in the file by the side and the FIELD'S id
+	// (`Dr1391`, `Cr1391`), not by their names: a side is named after its field, and a field renamed
+	// between two saves would otherwise leave its sides unfindable and re-created under new ids.
+	if (const ibDataNode* saved = node.FindChild(wxT("FieldSides"))) {
+		for (const std::pair<wxString, ibDataValue>& entry : saved->Properties()) {
+			const bool credit = entry.first.StartsWith(wxT("Cr"));
+			long long field = 0;
+			// A metaID is an `int`: a number past it is not an id this configuration could have written.
+			if ((!credit && !entry.first.StartsWith(wxT("Dr"))) || !entry.first.Mid(2).ToLongLong(&field)
+			    || field <= 0 || field > std::numeric_limits<ibMetaID>::max())
+				continue;
+
+			auto found = std::find_if(m_fieldSides.begin(), m_fieldSides.end(),
+				[field](const ibFieldSides& sides) { return sides.m_field == static_cast<ibMetaID>(field); });
+			if (found == m_fieldSides.end()) {
+				ibFieldSides sides;
+				sides.m_field = static_cast<ibMetaID>(field);
+				m_fieldSides.push_back(sides);
+				found = m_fieldSides.end() - 1;
+			}
+
+			ibValueMetaObjectAttributePredefined* side = CreateEmptyType(entry.first, wxEmptyString,
+				wxEmptyString, false, ibItemMode::ibItemMode_Item);
+			if (const std::shared_ptr<ibDataNode>& child = entry.second.AsChild())
+				side->LoadNode(*child);
+			(credit ? found->m_cr : found->m_dr) = side;
+		}
+	}
+
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
 	m_propertyChartOfAccounts->SetNodeValue(node.GetProperty(m_propertyChartOfAccounts->GetName()));
@@ -192,6 +225,8 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		m_totalsDr->LoadNode(*totals);
 	if (const ibDataNode* totals = node.FindChild(wxT("CreditTotals")))
 		m_totalsCr->LoadNode(*totals);
+	// (A file written while the account grain existed still carries `DebitAccountTotals` /
+	// `CreditAccountTotals`; nothing reads them now, and the next save leaves them out.)
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
@@ -234,6 +269,22 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 		node.SetProperty(m_accountCr->GetName(), ibDataValue::Child(child));
 	}
 
+	// The sides of the fields kept per side, under the side and the field's id — see ReadData.
+	if (!m_fieldSides.empty()) {
+		ibDataNode& sidesNode = node.Child(wxT("FieldSides"));
+		for (const ibFieldSides& sides : m_fieldSides) {
+			for (const bool credit : { false, true }) {
+				const ibValueMetaObjectAttributePredefined* side = credit ? sides.m_cr : sides.m_dr;
+				if (side == nullptr)
+					continue;
+				auto child = std::make_shared<ibDataNode>();
+				side->SaveNode(*child);
+				sidesNode.SetProperty(wxString::Format(wxT("%s%d"), credit ? wxT("Cr") : wxT("Dr"), sides.m_field),
+					ibDataValue::Child(child));
+			}
+		}
+	}
+
 	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
 	node.SetProperty(m_propertyChartOfAccounts->GetName(), m_propertyChartOfAccounts->GetNodeValue());
@@ -265,7 +316,7 @@ bool ibValueMetaObjectAccountingRegister::OnCreateMetaObject(ibMetaData* metaDat
 	// nothing to walk. The walk stands here anyway because it is the SAME list every other pass takes:
 	// a pass that is right only while a vector happens to be empty is a pass nobody will remember to
 	// add later. A slot created afterwards asks for its own id in SyncAccountDimensionSlots.
-	if (!ForEachOwnAttribute([metaData, flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([metaData, flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnCreateMetaObject(metaData, flags); }))
 		return false;
 	return (*m_propertyAttributeRecordType)->OnCreateMetaObject(metaData, flags) &&
@@ -285,7 +336,7 @@ bool ibValueMetaObjectAccountingRegister::OnLoadMetaObject(ibMetaData* metaData)
 	// Every attribute the file brought back — not the active count, and not the debit side alone: a
 	// slot outside the count is still a live metaobject, and the credit side is not a special case
 	// that each pass gets to forget. ONE walk (accountingRegister.h) so it cannot be forgotten twice.
-	if (!ForEachOwnAttribute([metaData](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([metaData](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnLoadMetaObject(metaData); }))
 		return false;
 	if (!m_totalsDr->OnLoadMetaObject(metaData)) return false;
@@ -326,7 +377,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 
 	if (!(*m_propertyAttributeRecordType)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeAccount)->OnSaveMetaObject(flags)) return false;
-	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnSaveMetaObject(flags); }))
 		return false;
 	if (!m_totalsDr->OnSaveMetaObject(flags)) return false;
@@ -340,7 +391,7 @@ bool ibValueMetaObjectAccountingRegister::OnDeleteMetaObject()
 {
 	if (!(*m_propertyAttributeRecordType)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeAccount)->OnDeleteMetaObject()) return false;
-	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnDeleteMetaObject(); }))
 		return false;
 	if (!m_totalsDr->OnDeleteMetaObject()) return false;
@@ -369,6 +420,10 @@ const ibValueMetaObjectChartOfAccounts* ibValueMetaObjectAccountingRegister::Get
 
 bool ibValueMetaObjectAccountingRegister::OnReloadMetaObject()
 {
+	// A designer edit of a dimension or a resource ends here (its property change reloads the owner): the
+	// tick, the name and the type its sides follow may all have changed.
+	SyncFieldSides();
+
 	// ⭐⭐ WHICH TABLES THIS REGISTER OFFERS IS DECIDED BY A PROPERTY, AND THE PROPERTY CAN CHANGE.
 	//
 	// The registration on run asks whether the register keeps correspondence — but it asks ONCE. Turn
@@ -400,13 +455,101 @@ bool ibValueMetaObjectAccountingRegister::OnBeforeRunMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeRecordType)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeAccount)->OnBeforeRunMetaObject(flags)) return false;
-	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnBeforeRunMetaObject(flags); }))
 		return false;
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeRunMetaObject(flags)) return false;
 	registerSelection();
 	return ibValueMetaObjectRegisterData::OnBeforeRunMetaObject(flags);
+}
+
+// The two questions asked of the field are its OWN: whether it is a dimension or a resource is its class,
+// and whether it balances is its property. Asked through the class id and then converted — never a cast
+// to find out what something is.
+bool ibValueMetaObjectAccountingRegister::IsKeptPerSide(const ibValueMetaObjectAttributeBase* field) const
+{
+	if (field == nullptr || !IsCorrespondence())
+		return false;
+	if (field->GetClassType() == g_metaDimensionCLSID) {
+		const ibValueMetaObjectDimension* dimension = field->ConvertToType<ibValueMetaObjectDimension>();
+		return dimension != nullptr && !dimension->IsBalanceDimension();
+	}
+	if (field->GetClassType() == g_metaResourceCLSID) {
+		const ibValueMetaObjectResource* resource = field->ConvertToType<ibValueMetaObjectResource>();
+		return resource != nullptr && !resource->IsBalanceResource();
+	}
+	return false;
+}
+
+// ⭐⭐ THE SIDES FOLLOW THEIR FIELD — see the declaration. Four things, in the order a slot sync does them:
+//
+//   create   a field kept per side with no sides yet gets both, ids from the create event;
+//   follow   every pair is named `<Field>Dr` / `<Field>Cr`, captioned and typed after its field — a
+//            predefined attribute serialises no type, so every sync restates it;
+//   mark     a pair not in use (the tick back on, correspondence off) is disabled, never deleted: its
+//            columns hold figures, and a pair re-created later would come back under fresh ids;
+//   delete   the pair of a field that is gone goes the ordinary way (close + delete events, the differ
+//            drops its columns) — `leaving` is the field being deleted right now, not yet marked.
+void ibValueMetaObjectAccountingRegister::SyncFieldSides(const ibValueMetaObjectAttributeBase* leaving, bool createMissing)
+{
+	std::vector<const ibValueMetaObjectAttributeBase*> fields;
+	for (const auto dimension : GetDimensionArrayObject())
+		if (dimension != nullptr && dimension != leaving) fields.push_back(dimension);
+	for (const auto resource : GetResourceArrayObject())
+		if (resource != nullptr && resource != leaving) fields.push_back(resource);
+
+	const auto sidesOf = [this](ibMetaID field) {
+		return std::find_if(m_fieldSides.begin(), m_fieldSides.end(),
+			[field](const ibFieldSides& sides) { return sides.m_field == field; });
+	};
+
+	for (const ibValueMetaObjectAttributeBase* field : fields) {
+		const bool perSide = IsKeptPerSide(field);
+		auto found = sidesOf(field->GetMetaID());
+		if (found == m_fieldSides.end()) {
+			if (!perSide || !createMissing)
+				continue;   // a side is made when it is first needed, and only by the copy that saves itself
+			ibFieldSides sides;
+			sides.m_field = field->GetMetaID();
+			m_fieldSides.push_back(sides);
+			found = m_fieldSides.end() - 1;
+		}
+
+		for (const bool credit : { false, true }) {
+			ibValueMetaObjectAttributePredefined*& side = credit ? found->m_cr : found->m_dr;
+			const wxString name = field->GetName() + (credit ? ibRegSide::Credit : ibRegSide::Debit);
+			if (side == nullptr) {
+				if (!createMissing)
+					continue;
+				side = CreateEmptyType(name, wxEmptyString, wxEmptyString, false, ibItemMode::ibItemMode_Item);
+				if (m_metaData != nullptr)
+					side->OnCreateMetaObject(m_metaData, 0);
+			}
+			if (side->GetName() != name)
+				side->SetName(name);
+			side->SetOwnerSynonym(ibRegColumnCaptionOf(field->GetSynonym(), ibRegSideCaption(credit)));
+			side->SetOwnerIcon(field->GetColumnIcon());   // drawn as the dimension or the figure it is a side of
+			side->GetTypeDesc().SetDefaultMetaType(field->GetTypeDesc());
+			if (perSide) side->ClearFlag(metaDisableFlag);
+			else         side->SetFlag(metaDisableFlag);
+		}
+	}
+
+	// The pairs whose field is gone.
+	for (auto it = m_fieldSides.begin(); it != m_fieldSides.end();) {
+		const bool alive = std::any_of(fields.begin(), fields.end(),
+			[&it](const ibValueMetaObjectAttributeBase* field) { return field->GetMetaID() == it->m_field; });
+		if (alive) {
+			++it;
+			continue;
+		}
+		if (m_metaData != nullptr) {
+			if (it->m_dr != nullptr) m_metaData->RemoveMetaObject(it->m_dr, this);
+			if (it->m_cr != nullptr) m_metaData->RemoveMetaObject(it->m_cr, this);
+		}
+		it = m_fieldSides.erase(it);
+	}
 }
 
 // BRING THE SLOT SET IN LINE WITH THE CHART OF ACCOUNTS.
@@ -584,6 +727,9 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	};
 
 	markSide(m_accountCr, correspondence);
+	// …and the record type the other way round: a one-sided line says its side by it, a posting names both
+	// accounts and has no side to say (see the note above GetGenericAttributeArrayObject).
+	markSide(GetRegisterRecordType(), !correspondence);
 	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlotsCr) markSide(slot, correspondence);
 	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr) markSide(slot, correspondence);
 
@@ -668,18 +814,20 @@ void ibValueMetaObjectAccountingRegister::ApplyAccountDimensionSlotTypes()
 		// the debit vectors, so in a correspondence register the credit slots were created, saved,
 		// reloaded and given columns — and never typed. A composite column that admits nothing accepts
 		// nothing: the credit breakdown was a set of columns no value could enter.
-		ForEachOwnAttribute([&kindTypeDesc, &valueTypeDesc](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole role) {
+		ForEachOwnAttribute([&kindTypeDesc, &valueTypeDesc](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole role) {
 			switch (role) {
-			case ibOwnRole::DimensionKind:
+			case ibOwnAttributeRole::DimensionKind:
 				if (kindTypeDesc.GetClsidCount() > 0)
 					attribute->GetTypeDesc().SetDefaultMetaType(kindTypeDesc);
 				break;
-			case ibOwnRole::DimensionValue:
+			case ibOwnAttributeRole::DimensionValue:
 				if (valueTypeDesc.GetClsidCount() > 0)
 					attribute->GetTypeDesc().SetDefaultMetaType(valueTypeDesc);
 				break;
-			case ibOwnRole::AccountCr:
+			case ibOwnAttributeRole::AccountCr:
 				break;   // typed with the debit account above — one chart, one declaration for both sides
+			case ibOwnAttributeRole::FieldSide:
+				break;   // typed after its field, by SyncFieldSides
 			}
 			return true;
 		});
@@ -690,7 +838,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeRecordType)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeAccount)->OnAfterRunMetaObject(flags)) return false;
-	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([flags](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnAfterRunMetaObject(flags); }))
 		return false;
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
@@ -708,6 +856,14 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	// ACCOUNTS says how many slots exist, the chart of CHARACTERISTIC TYPES bound to it says what a
 	// slot may hold. Neither is derivable from the other.
 	SyncAccountDimensionSlots();
+
+	// …and the sides of the fields kept per side: named and typed after their fields — and CREATED only by
+	// the copy that saves itself. Both copies of a configuration are loaded by the same code; a register
+	// saved before its sides existed would get them in the copy that mirrors the database too, the diff
+	// of the two would be empty and their columns never created (measured 2026-09-16: the apply failed on
+	// the totals trigger, "Column unknown NEW.FLD1434_TYPE"). The same rule, for the same reason, as the
+	// sections of a chart of calculation types (StampIfNeverSaved).
+	SyncFieldSides(/*leaving*/ nullptr, /*createMissing*/ (flags & loadConfigFlag) == 0 && appData->DesignerMode());
 
 	// Set Account field type from Chart of Accounts binding
 	const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();
@@ -769,7 +925,7 @@ bool ibValueMetaObjectAccountingRegister::OnBeforeCloseMetaObject()
 
 	if (!(*m_propertyAttributeRecordType)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeAccount)->OnBeforeCloseMetaObject()) return false;
-	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnBeforeCloseMetaObject(); }))
 		return false;
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
@@ -787,7 +943,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterCloseMetaObject()
 {
 	if (!(*m_propertyAttributeRecordType)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeAccount)->OnAfterCloseMetaObject()) return false;
-	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnRole) {
+	if (!ForEachOwnAttribute([](ibValueMetaObjectAttributePredefined* attribute, ibOwnAttributeRole) {
 			return attribute->OnAfterCloseMetaObject(); }))
 		return false;
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject()) return false;
@@ -847,47 +1003,76 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 	// see GetGenericAttributeArrayObject), which is a different question, so it is not
 	// touched. This is the READING order, and the posting block is laid down where the
 	// debit account stands in that list; everything else keeps its place.
-	std::vector<const ibValueMetaObjectAttributeBase*> posting;
+	// ⭐⭐ AND A SPLIT FIELD IS PART OF THAT BLOCK. Non-balanced, it holds a value per side — the
+	// currency received is not the currency paid, the quantity that left is not the quantity that
+	// arrived — so each of its two COLUMNS belongs where its side is, after that side's account and
+	// breakdown, exactly as a bookkeeper reads an entry and exactly as the reference lays a journal
+	// out: the debit account, the debit breakdown, then the debit currency / debit quantity in one cell. Left out, the two
+	// came at the end in declaration order and the pair ended up on opposite sides of `Amount`, neither
+	// saying whose it was (Max, 2026-09-16: "these columns are not readable"). A BALANCED field is not part
+	// of it — it is one value for the whole entry and stands with the figures.
+	//
+	// …AND THE TWO STACK LIKE THE BREAKDOWN DOES: a side's split fields are one thing to read, so they
+	// share a group and the form draws them as one cell rather than a header per column.
+	struct ibPostingColumn { const ibBackendQueryColumn* m_column; const ibValueMetaObjectAttributeBase* m_field; wxString m_group; };
+	std::vector<ibPostingColumn> posting;
+	std::set<const ibValueMetaObjectAttributeBase*> inBlock;
 
-	posting.push_back(GetRegisterAccount());
-	for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
-		posting.push_back(GetAccountDimensionKindSlot(/*creditSide*/false, idx));
-		posting.push_back(GetAccountDimensionSlot(/*creditSide*/false, idx));
-	}
-
-	posting.push_back(GetRegisterAccountCr());
-	for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
-		posting.push_back(GetAccountDimensionKindSlot(/*creditSide*/true, idx));
-		posting.push_back(GetAccountDimensionSlot(/*creditSide*/true, idx));
-	}
-
-	// A kind and its value alternate above because the GROUPS sort them out: each lands in
-	// the group of its own family, and the form draws the families as stacks. The list here
-	// only decides which family comes first.
-	const auto append = [&](const ibValueMetaObjectAttributeBase* attribute) {
-		if (attribute == nullptr)
+	const auto place = [&](const ibValueMetaObjectAttributeBase* field, const ibBackendQueryColumn* column,
+		const wxString& group) {
+		if (field == nullptr || column == nullptr)
 			return;
-		// The GROUP goes with the column: the register knows which of its columns are one
-		// thing (the dimension slots of a side), the form decides how that is shown.
-		explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute),
-			GetSourceGroupOf(attribute));
+		posting.push_back({ column, field, group });
+		inBlock.insert(field);
 	};
+
+	const auto appendSide = [&](bool creditSide) {
+		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, idx);
+			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
+			if (kindSlot != nullptr) place(kindSlot, kindSlot->GetQueryColumn(), GetSourceGroupOf(kindSlot));
+			if (slot     != nullptr) place(slot,     slot->GetQueryColumn(),     GetSourceGroupOf(slot));
+		}
+		const wxString group = creditSide ? wxT("RegisterFieldCrGroup") : wxT("RegisterFieldDrGroup");
+		const auto placeSide = [&](const ibValueMetaObjectAttributeBase* field) {
+			const ibValueMetaObjectAttributeBase* side = GetFieldSide(creditSide, field);
+			place(side, side != nullptr ? side->GetQueryColumn() : nullptr, group);
+		};
+		for (const auto dimension : GetDimensionArrayObject())
+			placeSide(dimension);
+		for (const auto resource : GetResourceArrayObject())
+			placeSide(resource);
+	};
+
+	const ibValueMetaObjectAttributeBase* account = GetRegisterAccount();
+	place(account, account != nullptr ? account->GetQueryColumn() : nullptr, GetSourceGroupOf(account));
+	appendSide(/*creditSide*/ false);
+
+	// The credit block exists only where a line names both accounts. One-sided, the row IS a side and
+	// there is nothing to lay beside it — a split field has no second column at all, and laying the
+	// block anyway would put every one of them in the list twice.
+	if (IsCorrespondence()) {
+		const ibValueMetaObjectAttributeBase* accountCr = GetRegisterAccountCr();
+		place(accountCr, accountCr != nullptr ? accountCr->GetQueryColumn() : nullptr, GetSourceGroupOf(accountCr));
+		appendSide(/*creditSide*/ true);
+	}
 
 	for (const ibValueMetaObjectAttributeBase* attribute : GetGenericAttributeArrayObject()) {
 
 		if (attribute == nullptr)
 			continue;
 
-		if (std::find(posting.begin(), posting.end(), attribute) != posting.end()) {
+		if (inBlock.find(attribute) != inBlock.end()) {
 			// Part of the posting: laid out with the block, at the debit account's place.
-			if (attribute == GetRegisterAccount()) {
-				for (const ibValueMetaObjectAttributeBase* member : posting)
-					append(member);
-			}
+			if (attribute == account)
+				for (const ibPostingColumn& member : posting)
+					explorer.AppendColumn(member.m_column, /*enabled*/true,
+						/*visible*/ !IsAccountDimensionKindColumn(member.m_field), member.m_group);
 			continue;
 		}
 
-		append(attribute);
+		// Everything else in its own place.
+		explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/true, /*visible*/ true, GetSourceGroupOf(attribute));
 	}
 }
 

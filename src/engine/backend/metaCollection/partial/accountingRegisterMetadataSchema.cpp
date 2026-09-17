@@ -140,6 +140,11 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 	// ONE SIDE'S TABLE. Called once for a one-sided register (which keeps both figures in it) and
 	// twice for a correspondence one, where each side is keyed by its own account and its own
 	// breakdown.
+	//
+	// 🛑 THERE WAS A SECOND GRAIN — the same table per account alone, beside this one per account and its
+	// analytics — and no reading ever stood on it: every one reads the breakdown grain, and a total per
+	// account is that grain summed. It cost two tables and two sets of triggers on every posting, and was
+	// removed (Max, 2026-09-16: "if the tables are really superfluous, remove them").
 	const auto declareSide = [&](bool creditSide) {
 		const ibValueMetaObjectRegisterTotals* totals = GetTotalsObject(creditSide);
 		// The credit side is keyed by the CREDIT account, always — the setting says whether rows are
@@ -195,11 +200,17 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			keyCols.push_back(slot->GetQueryColumn());
 		}
 
+		// ⭐⭐ A NON-BALANCE DIMENSION KEYS EACH SIDE BY ITS OWN HALF. Balanced, it holds one value for the
+		// whole entry and both totals tables key by that one column — the organisation a line belongs to
+		// is the same on either side of it. Non-balanced, the two sides hold different values (the
+		// currency received is not the currency paid), so the credit totals must be keyed by the credit
+		// half; keyed by the debit one they would file a credit turnover under the other side's value.
 		for (const auto dimension : GetDimensionArrayObject()) {
-			if (dimension == nullptr)
+			const ibBackendQueryColumn* field = GetRegisterDimension(creditSide, dimension);
+			if (field == nullptr)
 				continue;
-			t.Add(dimension->GetQueryColumn());
-			keyCols.push_back(dimension->GetQueryColumn());
+			t.Add(field);
+			keyCols.push_back(field);
 		}
 
 		// SPLIT TOTALS: the shard column joins the KEY, which is what makes several physical rows legal
@@ -228,9 +239,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// has to be ADDABLE to a table that already exists.
 		ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
 
-		// THE CREDIT SIDE IS DECLARED WHOLE, ALWAYS — table, columns, triggers and all. What decides
-		// whether anything lands in it is the delta's guard further down, and that guard reads the
-		// ROW rather than the setting. See it for why nothing here is conditional any more.
+		// A SIDE IS DECLARED WHOLE — table, columns, triggers and all — or not at all: the credit side
+		// exists in correspondence mode only (see the declaration at the end). Which movements land in a
+		// side that exists is the delta's guard further down, and that guard reads the ROW.
 		ibSchemaMaterialize& m = t.Derived(GetQueryable());
 		m.Split(sharded ? kTotalsShardCount : 1u);   // the COLUMN decides, not the setting — see ibRegSplitIntoKey
 
@@ -268,11 +279,10 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// could no longer be computed, a baseline that knew an object the target had stopped
 		// declaring, a trigger built against columns that were not there.
 		//
-		// None of it is needed, because the ROW already answers the question. A one-sided register
-		// never fills AccountCr, so `{row}.fld<AccountCr>_RTRef <> 0` is false for every movement it
-		// will ever write, and the credit side accumulates nothing — by the data, not by a setting.
-		// Turn correspondence on and the same guard starts letting rows through. The declaration stops
-		// moving entirely: both sides always exist, always with the same shape and the same triggers.
+		// The ROW answers which movement a side takes: a one-sided register never fills AccountCr, so
+		// `{row}.fld<AccountCr>_RTRef <> 0` is false for every movement it will ever write. WHETHER the
+		// credit side is declared is the mode's since 2026-09-16 — see the declaration at the end: a
+		// one-sided register no longer lists the credit account, so no trigger may be built against it.
 		{
 			wxString typeRefField;
 			for (const wxString& field : ibRegFieldsOf(account))
@@ -286,15 +296,20 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		}
 
 		m.Key(account->GetQueryColumn());
+		// The maintenance keys by what the table is keyed by — the breakdown with it.
 		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, idx);
 			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
 			if (kindSlot != nullptr) m.Key(kindSlot->GetQueryColumn());
 			if (slot     != nullptr) m.Key(slot->GetQueryColumn());
 		}
-		for (const auto dimension : GetDimensionArrayObject())
-			if (dimension != nullptr)
-				m.Key(dimension->GetQueryColumn());
+		// …and the maintenance keys the same way the table is keyed — the credit side by the credit
+		// half of every non-balance dimension. The two must never disagree: the key the trigger writes
+		// by IS the key the table stores by.
+		for (const auto dimension : GetDimensionArrayObject()) {
+			if (const ibBackendQueryColumn* field = GetRegisterDimension(creditSide, dimension))
+				m.Key(field);
+		}
 
 		// --- the stored columns + what a movement contributes to each ------------------------------
 		struct Figure { wxString m_field, m_name; bool m_credit; };
@@ -304,6 +319,20 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			if (res == nullptr)
 				continue;
 
+			// ⭐⭐ EVERY FIGURE IS KEPT HERE, and the breakdown's kind of accounting does not change that.
+			// It is worth saying why, because the opposite looks right: a resource names a breakdown's
+			// kind, so surely only those figures belong in a table keyed by the breakdown?
+			//
+			// Not while there is ONE breakdown grain. A row here carries every slot at once, so a
+			// figure stored in it is broken down by all of them, and a figure kept OUT of it is simply
+			// missing — the readings that project a breakdown take their numbers from this surface and
+			// would report nothing where the account plainly has a figure. What the kind decides is which
+			// breakdown a reading OFFERS it under, and that is a question for the reading, not the storage.
+			//
+			// ⏭ It becomes a storage question the day the totals are kept per SET OF ANALYTICS (a table per
+			// breakdown, the reference's shape): then a figure belongs in the sets whose kinds keep it,
+			// and the account's own kinds table — a tick per row — is what says which. The maintenance
+			// can carry that: its guard is free SQL over the movement row.
 			const wxString resField = ibRegValueField(res);
 
 			// Accumulating columns carry an IDENTITY (not scaffold), so the differ can add and drop
@@ -327,11 +356,20 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				return c;
 			};
 
+			// ⭐⭐ WHAT THE MOVEMENT IS READ FROM IS THE SIDE'S OWN FIELD. A balanced figure is one column
+			// and both sides accumulate it; a SPLIT one is two — the quantity that left the credit
+			// account and the quantity that reached the debit one — so each side's delta reads its own
+			// half. The STORED column keeps the resource's name and id either way: the table is the
+			// side's already (that is what a side's totals table is), and the figure in it is the same
+			// figure, whichever field of the movement fed it.
+			const ibBackendQueryColumn* movField = GetRegisterResource(creditSide, res);
+			const wxString movValueField = ibRegValueField(movField);
+
 			if (correspondence) {
 				// The row IS a posting: what it contributes to THIS table is the whole amount, and which
 				// side that is was decided by which account keyed the table.
 				const ibBackendQueryColumn* c = declareColumn(creditSide);
-				m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
+				m.Accumulate(c, wxT("{row}.") + movValueField, ibQueryColumnExpr::Col(movField));
 				continue;
 			}
 
@@ -358,18 +396,26 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			const ibBackendQueryColumn* cDr = declareColumn(/*credit*/ false);
 			const ibBackendQueryColumn* cCr = declareColumn(/*credit*/ true);
 
+			// One-sided, the SIDE is the record type rather than the table, so each branch reads the
+			// half that branch is about — the debit one from the debit field, the credit one from the
+			// credit field. Balanced, both halves are the same column and this reads as it always did.
+			const ibBackendQueryColumn* movDr = GetRegisterResource(/*creditSide*/ false, res);
+			const ibBackendQueryColumn* movCr = GetRegisterResource(/*creditSide*/ true,  res);
+			const wxString movDrField = ibRegValueField(movDr);
+			const wxString movCrField = ibRegValueField(movCr);
+
 			m.Accumulate(cDr,
-				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
+				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN {row}.") + movDrField + wxT(" ELSE 0 END"),
 				ibQueryColumnExpr::Case(
 					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
-					    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
+					    ibQueryColumnExpr::Col(movDr) } },
 					ibQueryColumnExpr::Const(ibValue(0.0))));
 			m.Accumulate(cCr,
-				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
+				wxT("CASE WHEN {row}.") + recField + wxT(" = ") + debitTagText + wxT(" THEN 0 ELSE {row}.") + movCrField + wxT(" END"),
 				ibQueryColumnExpr::Case(
 					{ { ibQueryPredicate::Leaf(ibQueryCondition{ recordType->GetQueryColumn(), ibQueryFilterOp::Equal, debit }),
 					    ibQueryColumnExpr::Const(ibValue(0.0)) } },
-					ibQueryColumnExpr::Col(res->GetQueryColumn())));
+					ibQueryColumnExpr::Col(movCr)));
 		}
 
 		// --- the totals table AS A SOURCE -----------------------------------------------------------
@@ -412,11 +458,13 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		}
 	};
 
-	// BOTH SIDES, ALWAYS — the credit one stands empty when correspondence is off (see the early
-	// return inside). Conditioning the DECLARATION on the setting is what let the two snapshots
-	// disagree about a predefined object neither of them can lose.
+	// THE CREDIT SIDE ONLY WHERE A LINE HAS ONE. It is keyed by the credit account and its breakdown,
+	// and those are listed only in correspondence mode (FillArrayObjectByPredefinedAttribute) — a credit
+	// table declared over a one-sided register would build its trigger against columns the movements
+	// no longer have. No reading of a one-sided register reads it (SidesOf).
 	declareSide(/*creditSide*/ false);
-	declareSide(/*creditSide*/ true);
+	if (correspondence)
+		declareSide(/*creditSide*/ true);
 }
 
 // ============================================================================
@@ -445,11 +493,14 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 		ibRegSignAttribute(builtFrom, GetAccountDimensionKindSlot(creditSide, idx));
 		ibRegSignAttribute(builtFrom, GetAccountDimensionSlot(creditSide, idx));
 	}
-	for (const auto dimension : GetDimensionArrayObject()) ibRegSignAttribute(builtFrom, dimension);
+	// The SIDE's field, since that is what this surface publishes: a dimension going balanced changes
+	// the column it carries, and a signature blind to that would keep the old one for the session.
+	for (const auto dimension : GetDimensionArrayObject())
+		ibRegSignColumn(builtFrom, GetRegisterDimension(creditSide, dimension));
 	for (const auto resource  : GetResourceArrayObject())  ibRegSignAttribute(builtFrom, resource);
 
 	return m_surfaces.Obtain(viewName, builtFrom, viewName, GetMetaData(),
-		[&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic)
+		[&](std::vector<ibTempColumn>& columns)
 	{
 
 	// ⭐ TWO NAMES, AND THEY ARE NOT THE SAME NAME. The generated table stores `fld1124_D`; a query
@@ -475,9 +526,13 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 			columns.push_back(ibRegAttributeColumn(slot));
 	}
 
+	// ⭐ PUBLISHED AS THE SIDE KEEPS IT — the credit surface carries the credit half of a non-balance
+	// dimension and nothing else, because that is the column its rows are keyed by. Published under the
+	// dimension itself it named a column the relation does not have, exactly as the account would if it
+	// were published as `Account` on the credit side instead of `AccountCr`.
 	for (const auto dimension : GetDimensionArrayObject())
-		if (dimension != nullptr)
-			columns.push_back(ibRegAttributeColumn(dimension));
+		if (const ibValueMetaObjectAttributeBase* field = GetFieldOnSide(creditSide, dimension))
+			columns.push_back(ibRegAttributeColumn(field));
 
 	// The movement arm's own identity — published exactly as an attribute is, because on the source
 	// table that is what it is. Null on every stored row, which is also how a reader tells the two arms
@@ -511,10 +566,12 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 
 		columns.push_back(ibTempColumn(
 			figureName, ibAcctTurnoverField(ibRegValueField(resource), credit),
-			resource->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
+			// Numbered over the resource, by side (ibRegDerivedColumnId).
+			resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), credit ? 2 : 1),
 			// …and the caption, from the same pair the name is built from.
-			ibRegFigureColumnCaption(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
-			ibBackendQueryColumn::Kind::Computed));
+			ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
+			// …and the picture of what it is a figure OF — its resource.
+			ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
 	};
 
 	for (const auto resource : GetResourceArrayObject()) {

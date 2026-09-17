@@ -408,7 +408,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 
 	// One name is one surface here, so the view's name IS the cache key.
 	return m_surfaces.Obtain(viewName, shapeNow, viewName, GetMetaData(),
-		[&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic)
+		[&](std::vector<ibTempColumn>& columns)
 	{
 
 	if (withPeriod) {
@@ -429,10 +429,11 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// because it builds their two names itself. The rule it encodes travelled with the helper and
 		// not with the knowledge, so this half kept the old shape until a reading that spells fields
 		// through the column layout came past it (a turnover folded by the recorder, 2026-09-02).
+		// Numbered over the period (ibRegDerivedColumnId): the stored period first, each coarser unit after it.
 		columns.push_back(ibTempColumn(periodName, periodField,
-		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
+		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
 		                               GetRegisterPeriod()->GetSynonym(),
-		                               ibBackendQueryColumn::Kind::Computed));
+		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnIcon()));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -448,8 +449,10 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 			if (u.first > GetTotalsPeriodUnit())
 				columns.push_back(ibTempColumn(periodName + u.second,
 				                               periodField + wxT("_") + u.second,
-				                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
-				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed));
+				                               GetRegisterPeriod()->GetTypeDesc(),
+				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
+				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed,
+				                               GetRegisterPeriod()->GetColumnIcon()));
 	}
 
 	// Dimensions keep their METAID as the column id, so a composed read reaches them by
@@ -481,15 +484,18 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// `Quantity_Turnover_N`.
 	// …and the stored name is the VIEW's, from the one function its CREATE VIEW spells it with
 	// (ibAccumFigureField) — the field the view keeps, not the word a query writes.
+	// …and numbered over its resource (ibRegDerivedColumnId, from 1), `figureNo` counting that resource's figures.
+	unsigned int figureNo = 0;
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
-		                               res->GetTypeDesc(), ibRegDerivedColumnId(synthetic++),
-		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix)),
-		                               ibBackendQueryColumn::Kind::Computed));
+		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
+		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
+		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {
+		figureNo = 0;
 		switch (shape) {
 			case ibViewShape::Balance:
 				if (withSign) add(res, ibRegFigure::Balance);

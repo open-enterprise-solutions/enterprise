@@ -367,8 +367,8 @@ void ibValueDynamicList::AddSort(const wxString& path, bool ascending)
 // that used to exist.
 static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBackendQueryColumn* column)
 {
-	if (queryable == nullptr || column == nullptr)
-		return false;
+	if (queryable == nullptr || column == nullptr || !column->IsAllowed())
+		return false;   // switched off — vended by the source, answered by no find (see the composer's SELECT)
 	for (const ibBackendQueryColumn* col : queryable->GetColumns())
 		if (col == column)
 			return true;
@@ -390,10 +390,12 @@ ibValueDynamicList* ibCreateList(const ibBackendQueryable* queryable, const ibBa
 ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
-	if (folderCol != nullptr) {
+	// ⚠ A FOLDER COLUMN THE SOURCE DOES NOT HAVE IS NO FOLDER COLUMN. An arrangement without folders (a chart of
+	// accounts nests items in items) switches IsFolder off, and the find by name does not answer a switched-off
+	// field. One question for the display column and the sort.
+	if (ibSourceHasColumn(queryable, folderCol)) {
 		list->SetFolderColumn(folderCol);                          // folder rows render as drillable containers (even empty)
-		if (ibSourceHasColumn(queryable, folderCol))
-			list->AddSort(folderCol->GetName(), /*ascending*/false);   // folders first (IsFolder true sorts before false)
+		list->AddSort(folderCol->GetName(), /*ascending*/false);   // folders first (IsFolder true sorts before false)
 	}
 	if (ibSourceHasColumn(queryable, presentationCol))
 		list->AddSort(presentationCol->GetName());

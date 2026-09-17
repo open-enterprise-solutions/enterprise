@@ -1825,11 +1825,8 @@ ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& sp
 static ibQueryExprPtr TypedScalarEmpty(const ibBackendQueryColumn* leaf)
 {
 	const ibTypeDescription& td = leaf->GetTypeDesc();
-	if (td.GetClsidCount() != 1) return nullptr;   // composite -> deferred
-	if (td.ContainType(ibValueTypes::TYPE_NUMBER) || td.ContainType(ibValueTypes::TYPE_DATE)
-		|| td.ContainType(ibValueTypes::TYPE_BOOLEAN) || td.ContainType(ibValueTypes::TYPE_STRING))
-		return ibConst(ibValueTypeDescription::AdjustValue(td));
-	return nullptr;   // reference / enum leaf -> deferred
+	return ibIsPlainScalarType(td) ? ibConst(ibValueTypeDescription::AdjustValue(td))
+	                               : nullptr;   // composite / reference / enum leaf -> deferred
 }
 
 // Builds (and dedups) the reference dot-walk LEFT-join chain on a FROM tree: a path's prefix joined once
@@ -2156,6 +2153,30 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
 			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
+			// ⭐ A WALK THAT HAS A NAME OF ITS OWN IS PROJECTED UNDER IT — the way the flat read projects the same
+			// walk (a scalar leaf AS the alias, an object leaf as its spread under the alias prefix), and read back
+			// by that name. Under the leaf's own field names, `AccountDr.Code` and `AccountCr.Code` were both
+			// `fld1092_S`: the second read the first, and the groups were formed by the debit code twice
+			// (measured 2026-09-16 — `63 / 63 222 000` where the lines say `63 / 31`).
+			const wxString keyAlias = (!path.empty() && spec.m_groupAliases != nullptr && gi < spec.m_groupAliases->size())
+				? (*spec.m_groupAliases)[gi] : wxString();
+			if (!keyAlias.IsEmpty()) {
+				const wxString sqlAlias = ibSqlAliasOf(keyAlias);
+				const wxString base = gcol->GetPhysicalName();
+				// A SCALAR leaf is one field under the alias — the flat read's test (TypedScalarEmpty), so the
+				// lowering's by-alias read and this projection cannot disagree about what a scalar is.
+				const bool scalar = TypedScalarEmpty(gcol) != nullptr;
+				for (const wxString& field : ColumnFieldNames(gcol)) {
+					const ibQueryExprPtr gexpr = qualCol(qual, field);
+					q.GroupBy(gexpr);
+					if (!scalar)
+						projection.push_back(ibQueryProjItem{ gexpr, sqlAlias + field.Mid(base.length()) });
+				}
+				if (scalar)
+					projection.push_back(ibQueryProjItem{ qualCol(qual, FirstSqlFieldOfColumn(gcol)), sqlAlias });
+				projectedAliases.push_back(sqlAlias);
+				continue;
+			}
 			// The group key GROUPs + projects by its FULL spread (ColumnFieldNames): a reference / variant key
 			// carries its TYPE + _RTRef + _RRRef fields so the read side reconstructs the value via GetValue; a
 			// plain scalar's spread IS its one field, so this is uniform. The reference-typing stays HERE in the

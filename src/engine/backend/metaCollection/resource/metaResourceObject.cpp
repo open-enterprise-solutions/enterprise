@@ -1,7 +1,25 @@
 #include "metaResourceObject.h"
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"
+#include "backend/metaCollection/partial/accountingRegister.h"   // the one owner that names a chart
 
+// THE OWNER IS ASKED WHAT IT IS — see the note beside the declaration; a dimension answers it the same
+// way, because the question is the same one.
+const ibValueMetaObjectChartOfAccounts* ibValueMetaObjectResource::GetChartOfAccounts() const
+{
+	const ibValueMetaObjectAccountingRegister* reg = ibValueMetaObjectAccountingRegister::OwnerOf(m_parent);
+	return reg != nullptr ? reg->GetChartOfAccounts() : nullptr;
+}
+
+
+// A figure kept per side takes its sides with it when it goes — the same rule and the same reason as a
+// dimension's (metaDimensionObject.cpp).
+bool ibValueMetaObjectResource::OnDeleteMetaObject()
+{
+	if (ibValueMetaObjectAccountingRegister* reg = ibValueMetaObjectAccountingRegister::OwnerOf(m_parent))
+		reg->SyncFieldSides(this);
+	return ibValueMetaObjectAttribute::OnDeleteMetaObject();
+}
 
 ibSelectorDataType ibValueMetaObjectResource::GetFilterDataType() const
 {
@@ -9,19 +27,6 @@ ibSelectorDataType ibValueMetaObjectResource::GetFilterDataType() const
 	if (metaObject->GetClassType() == g_metaInformationRegisterCLSID)
 		return metaObject->GetFilterDataType();
 	return ibSelectorDataType::ibSelectorDataType_resource;
-}
-
-// ⭐ BALANCE IS THE OWNER'S QUESTION. Only an accounting register has two sides for a figure to
-// balance across; for an accumulation or an information register the word means nothing, and a
-// checkbox that means nothing is worse than an absent one — somebody will tick it and expect an
-// effect. The same rule SelectMode and ItemMode already follow one class up.
-void ibValueMetaObjectResource::OnPropertyRefresh()
-{
-	ibValueMetaObjectAttribute::OnPropertyRefresh();
-
-	const ibValueMetaObject* owner = m_parent;
-	HideProperty(m_propertyBalance,
-		owner == nullptr || owner->GetClassType() != g_metaAccountingRegisterCLSID);
 }
 
 // ⚠ AN ABSENT PROPERTY IS NOT A `false`. Every configuration written before this flag existed has no
@@ -37,6 +42,11 @@ bool ibValueMetaObjectResource::ReadData(const ibDataNode& node)
 		return false;
 	if (const ibDataValue* saved = node.FindProperty(m_propertyBalance->GetName()))
 		m_propertyBalance->SetNodeValue(*saved);
+	// The kinds need no such care — empty IS their default, so an older file simply has none.
+	if (const ibDataValue* saved = node.FindProperty(m_propertyAccountingKind->GetName()))
+		m_propertyAccountingKind->SetNodeValue(*saved);
+	if (const ibDataValue* saved = node.FindProperty(m_propertyAccountDimensionAccountingKind->GetName()))
+		m_propertyAccountDimensionAccountingKind->SetNodeValue(*saved);
 	return true;
 }
 
@@ -45,6 +55,8 @@ bool ibValueMetaObjectResource::WriteData(ibDataNode& node) const
 	if (!ibValueMetaObjectAttribute::WriteData(node))
 		return false;
 	node.SetProperty(m_propertyBalance->GetName(), m_propertyBalance->GetNodeValue());
+	node.SetProperty(m_propertyAccountingKind->GetName(), m_propertyAccountingKind->GetNodeValue());
+	node.SetProperty(m_propertyAccountDimensionAccountingKind->GetName(), m_propertyAccountDimensionAccountingKind->GetNodeValue());
 	return true;
 }
 

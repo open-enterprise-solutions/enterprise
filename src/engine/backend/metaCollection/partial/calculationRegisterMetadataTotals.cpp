@@ -363,17 +363,19 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface()
 		ibRegSignAttribute(shape, resource);
 
 	return m_surfaces.Obtain(ibCalcFactName, shape, GetPhysicalTableName() + wxT("_") + ibCalcFactName, GetMetaData(),
-		[&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic)
+		[&](std::vector<ibTempColumn>& columns)
 	{
 		for (const ibValueMetaObjectAttributeBase* attribute : record)
 			columns.push_back(ibRegAttributeColumn(attribute));
 		for (const ibValueMetaObjectResource* resource : resources)
 			columns.push_back(ibRegAttributeColumn(resource));
+		// The two positions are positions OF the action period's start — numbered over it (ibRegDerivedColumnId).
 		const ibTypeDescription& day = GetActionPeriodStart()->GetTypeDesc();
-		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionStart, ibCalcPositionFirst, day, ibRegDerivedColumnId(synthetic++),
-			_("Position start"), ibBackendQueryColumn::Kind::Computed));
-		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionEnd, ibCalcPositionLast, day, ibRegDerivedColumnId(synthetic++),
-			_("Position end"), ibBackendQueryColumn::Kind::Computed));
+		const ibMetaID dayId = GetActionPeriodStart()->GetMetaID();
+		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionStart, ibCalcPositionFirst, day, ibRegDerivedColumnId(dayId, 1),
+			_("Position start"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnIcon()));
+		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionEnd, ibCalcPositionLast, day, ibRegDerivedColumnId(dayId, 2),
+			_("Position end"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnIcon()));
 	});
 }
 

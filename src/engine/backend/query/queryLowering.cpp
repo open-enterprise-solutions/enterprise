@@ -132,6 +132,20 @@ struct ibNoCaseLess
 	bool operator()(const wxString& a, const wxString& b) const { return a.CmpNoCase(b) < 0; }
 };
 
+// ⭐ THE NAME A GROUPED WALK IS PROJECTED AND READ BACK UNDER — spelled from the walk itself, so the GROUP BY
+// that adds the key and the projection that reads it arrive at one name without handing it to each other.
+// Two walks ending in one field (`AccountDr.Code`, `AccountCr.Code`) are one COLUMN, and a grouped read
+// that asked the result by the column read the first twice; by the walk they are `gw_AccountDr_Code` and
+// `gw_AccountCr_Code` (measured 2026-09-16, the ledger's correspondence matrix grouped by codes).
+wxString GroupedWalkAlias(const std::vector<const ibBackendQueryColumn*>& path)
+{
+	wxString alias = wxT("gw");
+	for (const ibBackendQueryColumn* col : path)
+		if (col != nullptr)
+			alias += wxT("_") + col->GetName();
+	return alias;
+}
+
 // The output-column descriptor the runtime reads back — used unqualified throughout this namespace.
 using OutputColumn = ibQueryLowering::OutputColumn;
 
@@ -197,14 +211,74 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
                                         const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
                                         bool allowDotWalk, bool keepUnfold = false);   // defined below
 
+// ⭐ THE NAMES ONE SELECT READS OF ONE OF ITS SOURCES — ibQueryReadColumns, taken from the text.
+//
+// Every column path contributes its first segment, and its second when the first is the source's name:
+// `T.CorrAccount.Code` reads `CorrAccount`, a bare `CorrAccount` reads it too. A name that belongs to
+// another source only makes the list longer, and a longer list is the safe mistake — it can cut a row
+// finer than asked, never answer a column the reading did not fill. A nested SELECT is read for the
+// paths qualified by this source (the rest are its own). `*` in any form reads everything.
+void CollectReadNames(const ibQueryAstExprPtr& e, const wxString& sourceName, bool qualifiedOnly,
+                      ibQueryReadColumns& read);
+
+// Every expression of one SELECT's clauses that can name a column — one list, for the select itself and for a
+// select nested inside it, so the two readings cannot come to walk different clauses.
+void CollectReadNamesOfSelect(const ibQuerySelect& select, const wxString& sourceName, bool qualifiedOnly,
+                              ibQueryReadColumns& read)
+{
+	const auto walk = [&](const ibQueryAstExprPtr& e) { CollectReadNames(e, sourceName, qualifiedOnly, read); };
+	for (const ibQueryProjection& projection : select.m_projections) walk(projection.m_expr);
+	for (const ibQueryAstJoin& join : select.m_joins) walk(join.m_on);
+	walk(select.m_where);
+	for (const ibQueryAstExprPtr& key : select.m_groupBy) walk(key);
+	walk(select.m_having);
+	for (const ibQueryOrderItem& item : select.m_orderBy) walk(item.m_expr);
+	for (const ibQueryAstExprPtr& key : select.m_indexBy) walk(key);
+}
+
+void CollectReadNames(const ibQueryAstExprPtr& e, const wxString& sourceName, bool qualifiedOnly,
+                      ibQueryReadColumns& read)
+{
+	if (!e || read.m_all)
+		return;
+	if (e->m_subquery)
+		CollectReadNamesOfSelect(*e->m_subquery, sourceName, /*qualifiedOnly*/ true, read);
+	if (e->m_kind == ibQueryAstExprKind::Column && !e->m_path.empty()) {
+		const bool qualified = e->m_path.size() > 1 && e->m_path.front().IsSameAs(sourceName, false);
+		if (qualified)
+			read.m_names.push_back(e->m_path[1]);
+		else if (!qualifiedOnly)
+			read.m_names.push_back(e->m_path.front());
+	}
+	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) { CollectReadNames(child, sourceName, qualifiedOnly, read); });
+}
+
+ibQueryReadColumns ReadColumnsOf(const ibQuerySelect* ast, const wxString& sourceName)
+{
+	ibQueryReadColumns read;
+	if (ast == nullptr || ast->m_selectAll)
+		return read;   // nobody said, or `SELECT *` — everything is read
+	read.m_all = false;
+	for (const ibQueryProjection& projection : ast->m_projections)
+		if (projection.m_star) {
+			read.m_all = true;
+			return read;
+		}
+	CollectReadNamesOfSelect(*ast, sourceName, /*qualifiedOnly*/ false, read);
+	return read;
+}
+
 // Resolve the FROM / JOIN source namespace.name to a queryable through the source
 // factory appData owns (built-in metaobject families + plugin / external sources).
 //
 // `conditionsOut` collects the CONDITION arguments of a virtual table — the ones this function
 // must not evaluate (see below). Null when the caller has nowhere to put them: name checking, for
 // instance, only wants to know whether the source resolves at all.
+// `readBy` is the select that reads the source, for a table whose rows depend on what is read of it
+// (ReadColumnsOf); null reads everything.
 const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map<wxString, ibValue>& params,
-                                        std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr)
+                                        std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr,
+                                        const ibQuerySelect* readBy = nullptr)
 {
 	// A TEMP TABLE IS A BARE NAME. `SELECT … INTO Sales` then `FROM Sales` — no <Kind>. prefix,
 	// because a temp table has no metaclass to name: it is what the previous statement left.
@@ -345,6 +419,9 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	std::vector<ibQueryPredicatePtr> consumed(declared.size());
 	bool anyConsumed = false;
 
+	// What the query reads of the table — its text, and the conditions below that go into the WHERE around it.
+	ibQueryReadColumns read = ReadColumnsOf(readBy, ibQuerySourceName(src));
+
 	std::vector<ibValue>  argVals;
 	for (size_t i = 0; i < src.m_args.size(); ++i) {
 		const bool isCondition = i < declared.size() && declared[i].m_condition
@@ -360,6 +437,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			}
 			if (conditionsOut != nullptr)
 				conditionsOut->push_back(src.m_args[i]);
+			CollectReadNames(src.m_args[i], ibQuerySourceName(src), false, read);
 			argVals.push_back(ibValue());
 			continue;
 		}
@@ -407,11 +485,12 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	for (ibValue& v : argVals)
 		argPtrs.push_back(&v);
 
-	// The consumed conditions ride WITH the call, by slot. With none, this is the resolve it always
-	// was — the second entrance exists only for the sources that asked for it.
-	const ibBackendQueryable* q = anyConsumed
+	// The consumed conditions ride WITH the call, by slot, and so do the columns the query reads of the
+	// table. With neither, this is the resolve it always was — the second entrance exists only for the
+	// sources that asked for it.
+	const ibBackendQueryable* q = descriptor != nullptr && (anyConsumed || !read.m_all)
 		? descriptor->CreateQueryable(argPtrs.empty() ? nullptr : argPtrs.data(),
-		                              static_cast<long>(argPtrs.size()), consumed)
+		                              static_cast<long>(argPtrs.size()), consumed, read)
 		: factory->Resolve(ns, name,
 			argPtrs.empty() ? nullptr : argPtrs.data(), static_cast<long>(argPtrs.size()));
 	if (q == nullptr) {
@@ -637,6 +716,52 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 	return nullptr;
 }
 
+// ⭐⭐ A TABLE ONE WALK REACHES A SECOND WAY IS A SECOND READING OF IT — over a source computed in memory.
+//
+// `T.Account.Code, T.CorrAccount.Code` walk to ONE table through two references, and both end in its `Code`: one
+// column, one id. A row read in memory is keyed by column id, so the second walk's code landed in the first
+// one's cell and both answered the correspondent's (measured 2026-09-16, the ledger's turnovers — all 78 rows).
+// The server road never met it: SQL qualifies each join by its own alias.
+//
+// The cure is the one a table joined to itself already has (ibAliasQueryable): the second way in walks a TWIN
+// of the table, whose columns carry ids of their own and read the same data. Decided per PREFIX — the chain of
+// references walked so far — so the same path named again (in SELECT and in ORDER BY) is the same reading, and
+// only a different way to the same table is a new one. Armed by the lowering of a computed source alone; the
+// twins live as long as the door that reads them.
+struct ibDotWalkTwins {
+	ibDataQueryBuilder*                                    m_builder = nullptr;
+	std::map<const ibBackendQueryable*, wxString>          m_firstPrefix;   // table -> the way it was reached first
+	std::map<wxString, const ibBackendQueryable*>          m_twinOf;        // another way -> its twin
+};
+static thread_local ibDotWalkTwins* t_dotWalkTwins = nullptr;
+
+struct ibDotWalkTwinsScope {
+	explicit ibDotWalkTwinsScope(ibDotWalkTwins* now) : m_prev(t_dotWalkTwins) { t_dotWalkTwins = now; }
+	~ibDotWalkTwinsScope() { t_dotWalkTwins = m_prev; }
+	ibDotWalkTwins* m_prev;
+};
+
+const ibBackendQueryable* TwinForDotWalk(const ibBackendQueryable* target, const wxString& prefix)
+{
+	ibDotWalkTwins* const twins = t_dotWalkTwins;
+	if (twins == nullptr || twins->m_builder == nullptr || target == nullptr)
+		return target;
+	const auto first = twins->m_firstPrefix.find(target);
+	if (first == twins->m_firstPrefix.end()) {
+		twins->m_firstPrefix.emplace(target, prefix);
+		return target;
+	}
+	if (first->second == prefix)
+		return target;
+	const auto known = twins->m_twinOf.find(prefix);
+	if (known != twins->m_twinOf.end())
+		return known->second;
+	const ibBackendQueryable* twin = twins->m_builder->AdoptOwnedSource(std::make_shared<ibAliasQueryable>(
+		target, wxString::Format(wxT("_wr%u"), static_cast<unsigned>(twins->m_twinOf.size()))));
+	twins->m_twinOf.emplace(prefix, twin);
+	return twin;
+}
+
 // A reference dot-walk path (Producer.Name | b.Producer.Name) -> the chain of columns SelectPath
 // wants. An alias prefix selects the starting source; otherwise the walk starts on the source that
 // owns the first segment (primary first).
@@ -774,6 +899,8 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 
 	// The segment just walked through, when it held SEVERAL types — see the absent leaf below.
 	wxString composite;
+	// The references walked so far, by identity — which way a table was reached (TwinForDotWalk).
+	wxString prefix;
 
 	for (size_t k = i; k < path.size(); ++k) {
 		const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
@@ -840,7 +967,8 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 
 				composite = path[k];   // so a refusal one segment on names the FIELD, not a stand-in
 			}
-			cur = next;
+			prefix += wxString::Format(wxT("%p|"), (const void*)col);
+			cur = TwinForDotWalk(next, prefix);
 		}
 	}
 	return cols;
@@ -2471,7 +2599,8 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
                                       const std::map<wxString, ibValue>& params,
                                       ibSubqueryOwner& owner,
                                       std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr,
-                                      ibDataQueryBuilder* declareOn = nullptr)
+                                      ibDataQueryBuilder* declareOn = nullptr,
+                                      const ibQuerySelect* readBy = nullptr)
 {
 	// ⭐ A BARE NAME MAY BE A RESULT AN EARLIER STATEMENT NAMED — a query result link. Two roads lead
 	// from here and the choice is made ONCE, here: declare it to the server (`WITH`) when the engine
@@ -2495,7 +2624,7 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 		// from where the ordinary machinery pushes plain conditions INTO ComputeRows, so a balance
 		// filters before folding rather than after.
 		std::vector<ibQueryAstExprPtr> own;
-		const ibBackendQueryable* q = ResolveSource(src, params, &own);
+		const ibBackendQueryable* q = ResolveSource(src, params, &own, readBy);
 		if (conditionsOut != nullptr)
 			for (const ibQueryAstExprPtr& condition : own)
 				if (ibQueryAstExprPtr qualified = QualifyToSource(condition, ibQuerySourceName(src)))
@@ -2558,6 +2687,10 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	const ibDotWalkExpansion dotWalkExpansion{ &b, &dwJoined, &dwAliasSeq };
 	const ibDotWalkExpansionScope dotWalkScope(
 		(multiSource && !computedPrimary) ? &dotWalkExpansion : nullptr);
+	// …and over a computed source, a table reached two ways is read twice (TwinForDotWalk).
+	ibDotWalkTwins dotWalkTwins;
+	dotWalkTwins.m_builder = &b;
+	const ibDotWalkTwinsScope dotWalkTwinsScope(computedPrimary ? &dotWalkTwins : nullptr);
 
 	int aggExprSeq = 0;   // names the folds registered from inside an expression (_agg0, _agg1, …)
 
@@ -2697,7 +2830,22 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			}
 			else if (e.m_kind == ibQueryAstExprKind::Column) {
 				const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, e);
-				if (aggregate) {
+				if (aggregate && pathCols.size() > 1 && !multiSource && !computedPrimary) {
+					// A WALK over one physical source is grouped under a name of its own (GroupedWalkAlias) and
+					// read back by it — the flat read's own reading of a walk: a plain scalar by the name, an
+					// object reassembled from its spread under the name as a prefix.
+					const wxString keyAlias = GroupedWalkAlias(pathCols);
+					const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
+					oc.m_alias   = keyAlias;
+					oc.m_byAlias = true;
+					oc.m_type    = ltd;
+					const bool plainScalar = ibIsPlainScalarType(ltd);
+					if (!plainScalar) {
+						oc.m_objectPrefix = keyAlias;
+						oc.m_col          = pathCols.back();
+					}
+				}
+				else if (aggregate) {
 					// AGGREGATE mode: a projected column is a GROUP BY key (a non-aggregate output must be
 					// grouped). The provider GROUPS BY + projects it (plain or dot-walk leaf) and the result is
 					// read back by the leaf column — NOT via SelectPath (the read-path machinery).
@@ -2777,9 +2925,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 						// spread (the provider projects it under the alias prefix). A plain single-primitive scalar
 						// keeps the by-alias single-field read. Same type test as the provider's scalar/object split.
 						const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
-						const bool plainScalar = ltd.GetClsidCount() == 1
-							&& (ltd.ContainType(ibValueTypes::TYPE_NUMBER) || ltd.ContainType(ibValueTypes::TYPE_STRING)
-								|| ltd.ContainType(ibValueTypes::TYPE_DATE) || ltd.ContainType(ibValueTypes::TYPE_BOOLEAN));
+						const bool plainScalar = ibIsPlainScalarType(ltd);
 						if (!plainScalar) {
 							oc.m_objectPrefix = alias;
 							oc.m_col          = pathCols.back();
@@ -2851,9 +2997,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 						// A REFERENCE / enum / composite comes back as a whole reassembled value from
 						// its spread; a primitive as one field. Same split the ordinary projection makes.
 						const ibTypeDescription& itd = in->GetTypeDesc();
-						const bool plainScalar = itd.GetClsidCount() == 1
-							&& (itd.ContainType(ibValueTypes::TYPE_NUMBER) || itd.ContainType(ibValueTypes::TYPE_STRING)
-								|| itd.ContainType(ibValueTypes::TYPE_DATE) || itd.ContainType(ibValueTypes::TYPE_BOOLEAN));
+						const bool plainScalar = ibIsPlainScalarType(itd);
 						ours.m_inputs.push_back({ in, ibSqlAliasOf(prefix), !plainScalar });
 					}
 					outComputedOverRow->push_back(std::move(ours));
@@ -2987,6 +3131,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		// m_groupPaths); a JOIN expands SQL join leaves; a single physical source auto-joins the ref chain.
 		if (gcols.size() > 1 && multiSource)
 			b.GroupBy(ExpandDotWalkHere(sources, gcols, *g));   // JOIN -> expand the ref path, through the one door
+		else if (gcols.size() > 1 && !computedPrimary)
+			b.GroupBy(gcols, GroupedWalkAlias(gcols));           // a walk keeps a name of its own — see the helper
 		else
 			b.GroupBy(gcols);
 		groupKeys.push_back(gcols);
@@ -3018,6 +3164,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				continue;
 			if (pcols.size() > 1 && multiSource)
 				b.GroupBy(ExpandDotWalkHere(sources, pcols, *e));
+			else if (pcols.size() > 1 && !computedPrimary)
+				b.GroupBy(pcols, GroupedWalkAlias(pcols));
 			else
 				b.GroupBy(pcols);
 			groupKeys.push_back(pcols);   // a second projection walking the same leaf must not add it twice
@@ -3838,7 +3986,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 
 	// The door goes in as well: a source that turns out to be a NAMED RESULT is declared ON it
 	// (`WITH …`) instead of being read into RAM — see ResolveFrom.
-	const std::shared_ptr<const ibBackendQueryable> q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions, declareOn);
+	const std::shared_ptr<const ibBackendQueryable> q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions, declareOn, &ast);
 	// ⭐⭐ ONE NAME FOR A SOURCE, HERE TOO. `ibQuerySourceName` — the alias if written, the last
 	// segment of the name if not — is what the renderer writes and what the constructor matches on,
 	// so it is the name the AUTHOR sees. Binding by `m_alias` alone made `BalanceAndTurnovers.Period`
@@ -3865,7 +4013,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			continue;
 		}
 
-		const std::shared_ptr<const ibBackendQueryable> resolved = ResolveFrom(j.m_source, params, owner, sourceConditions, declareOn);
+		const std::shared_ptr<const ibBackendQueryable> resolved = ResolveFrom(j.m_source, params, owner, sourceConditions, declareOn, &ast);
 		const wxString alias = ibQuerySourceName(j.m_source);   // same one name — see the FROM above
 		// ⚠ ASKED OF THE WRITTEN ALIAS, not of the name it falls back to. This rule is about an author
 		// writing one `AS` twice; two unaliased reads of the same table are a different (and older)

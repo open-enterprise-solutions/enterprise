@@ -1073,6 +1073,7 @@ private:
 	wxString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
 	wxString RenderPlaceholder();              // spells the next placeholder, bumps the counter
 	wxString QuoteIdent(const wxString& name) const;
+	wxString AliasIdent(const wxString& alias) const;   // a relation alias, within the dialect's m_maxAliasLength
 	static wxString BinOpText(ibQueryBinOp op);
 	static wxString JoinTypeText(ibQueryJoinType type);
 

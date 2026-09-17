@@ -91,6 +91,13 @@ constexpr ibClassID g_metaEnumCLSID = metadata_to_clsid("MD_ENUM");
 constexpr ibClassID g_metaDimensionCLSID = metadata_to_clsid("MD_DMNT");
 constexpr ibClassID g_metaResourceCLSID = metadata_to_clsid("MD_RESS");
 
+// THE KINDS OF ACCOUNTING A CHART DECLARES — a boolean field of the ACCOUNT ("is this account kept in
+// currency"), and a tick-box column of the account's dimension-kinds table ("is it kept in currency by
+// THIS breakdown"). Two ids because a register names them apart: a resource belongs to a kind of
+// accounting AND is kept by a breakdown's kind, and the two lists must not mix.
+constexpr ibClassID g_metaAccountingKindCLSID = metadata_to_clsid("MD_ACKD");
+constexpr ibClassID g_metaAccountDimensionAccountingKindCLSID = metadata_to_clsid("MD_ADKD");
+
 //SPECIAL OBJECTS
 constexpr ibClassID g_metaPredefinedAttributeCLSID = metadata_to_clsid("MD_DATT");
 
@@ -809,7 +816,14 @@ protected:
 
 		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			// ⭐ WHAT THE WALKS DO NOT SEE, THE FINDS DO NOT FIND — `IsAllowed`, the same gate
+			// FillArrayObjectByFilter asks first. This asked `IsDeleted` alone, so an attribute its owner
+			// had switched OFF (a catalog's Owner with no owner declared, a turnovers register's
+			// RecordType, the credit account of a one-sided accounting register) was absent from every
+			// list and still answered by name and by id — a query could select it, a filter could name
+			// it. One gate for both, in all three overloads (Max, 2026-09-16: "also exclude the elements
+			// that are switched off").
+			if (!child->IsAllowed())
 				continue;
 
 			if (stringUtils::CompareString(name, child->GetName())) {
@@ -861,7 +875,7 @@ protected:
 
 		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			if (!child->IsAllowed())   // see the by-name overload
 				continue;
 
 			if (child->CompareId(id)) {
@@ -914,7 +928,7 @@ protected:
 
 		for (ibValueMetaObject* child : m_children) {
 
-			if (child->IsDeleted())
+			if (!child->IsAllowed())   // see the by-name overload
 				continue;
 
 			if (child->CompareGuid(id)) {

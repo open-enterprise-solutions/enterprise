@@ -790,6 +790,10 @@ public:
 
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
+	// …the same key under an OUTPUT NAME of its own, which a provider projects it under and a reader reads it
+	// back by. Two walks ending in ONE field (`AccountDr.Code`, `AccountCr.Code`) are one column to anybody
+	// who asks by the column — the name is what keeps them two.
+	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias);
 	// GROUP BY <expression> — the same expression vocabulary Where/OrderBy/Select/Aggregate already
 	// take (arithmetic / CASE / PeriodTrunc). Needs an explicit alias because, unlike a column key,
 	// there is no physical name to read the value back by: GetColumn(alias).

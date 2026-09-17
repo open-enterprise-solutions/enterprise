@@ -35,12 +35,17 @@ void ibQueryableFactory::Unregister(ibQueryableSourceDescriptor* descriptor)
 	if (descriptor == nullptr)
 		return;
 	auto it = m_descriptors.find(Key(descriptor->GetNamespace(), descriptor->GetName()));
-	if (it != m_descriptors.end() && it->second == descriptor)   // same pointer only
+	if (it != m_descriptors.end() && it->second == descriptor) {   // same pointer only
 		m_descriptors.erase(it);
+		descriptor->ReleaseCompanions();   // while what they point into is still alive — see the declaration
+	}
 }
 
 void ibQueryableFactory::Clear()
 {
+	for (auto& entry : m_descriptors)
+		if (entry.second != nullptr)
+			entry.second->ReleaseCompanions();   // the same reason as in Unregister
 	m_descriptors.clear();   // non-owning: just drops references
 }
 

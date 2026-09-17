@@ -45,6 +45,16 @@ class ibValueMetaObjectAccountDimensionKindsTable : public ibValueMetaObjectTabl
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
+	// ⭐⭐ THE CHART'S BREAKDOWN KINDS ARE COLUMNS OF THIS TABLE. A kind of that sort asks its question
+	// of a BREAKDOWN, not of the account — "is a quantity kept in this one" — and a breakdown is what a
+	// row here is, so its tick-box belongs in this row and nowhere else. The kind itself stands in the
+	// tree under the chart, where the author declares it; a column is named after the metaobject's own
+	// id, so the same object can be declared there and carried here without a mirror to keep in step.
+	//
+	// Defined in the .cpp: the chart's header includes THIS one, so the answer cannot be inline.
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const override;
+
 protected:
 
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {

@@ -230,6 +230,26 @@ namespace ibRegFigure {
 	inline constexpr const wxChar* Balance        = wxT("Balance");
 	inline constexpr const wxChar* OpeningBalance = wxT("OpeningBalance");
 	inline constexpr const wxChar* ClosingBalance = wxT("ClosingBalance");
+
+	// ⭐⭐ THE SAME BALANCE, NOT NETTED BETWEEN THE SIDES. An accounting balance is reported FOLDED: an
+	// active account carries what is left on the debit and nothing on the credit, and the two sides of
+	// an active-passive one are netted onto whichever side the difference stands. That is the figure a
+	// bookkeeper signs — and it is not the figure they check WITH, because the fold hides what each
+	// side actually holds. The gross pair is what was there before the netting: "debits of 25 000 and
+	// credits of 17 000", against a folded "8 000 on the debit".
+	//
+	// GROSS / NET are the accounting words for the pair (the reference calls them the expanded and
+	// the collapsed balance); the ordinary `Balance` above stays the folded one, because that is what every
+	// reading of it has always meant.
+	inline constexpr const wxChar* GrossBalance        = wxT("GrossBalance");
+	inline constexpr const wxChar* OpeningGrossBalance = wxT("OpeningGrossBalance");
+	inline constexpr const wxChar* ClosingGrossBalance = wxT("ClosingGrossBalance");
+
+	// ⭐ WHAT THE CORRESPONDENT MOVED, beside what the account moved. A figure the two sides of an entry
+	// do not agree on (a quantity, a currency amount — `Balance` cleared) is two numbers on one line: what
+	// reached the debit account and what left the credit one. A turnover row about one account reports its
+	// own under `Turnover` and the other side's under this word, the way the reference does.
+	inline constexpr const wxChar* CorrTurnover = wxT("CorrTurnover");
 }
 
 // The SIDE an accounting figure stands on. Not a third and fourth figure name — the same figures, said
@@ -261,21 +281,33 @@ inline wxString ibRegFigureCaption(const wxString& figure)
 	if (figure == ibRegFigure::Balance)        return _("Balance");
 	if (figure == ibRegFigure::OpeningBalance) return _("Opening balance");
 	if (figure == ibRegFigure::ClosingBalance) return _("Closing balance");
+	if (figure == ibRegFigure::GrossBalance)        return _("Gross balance");
+	if (figure == ibRegFigure::OpeningGrossBalance) return _("Opening gross balance");
+	if (figure == ibRegFigure::ClosingGrossBalance) return _("Closing gross balance");
+	if (figure == ibRegFigure::CorrTurnover)        return _("Corresponding turnover");
 	return figure;   // a figure nobody captioned reads as its own name rather than as nothing
+}
+
+// The side, said to a PERSON — the caption twin of ibRegSide, and the one place the two words are
+// spelled. A FIELD held per side is captioned with it too ("Currency Dr"), so it stands on its own
+// rather than inside the figure's caption below.
+inline wxString ibRegSideCaption(bool credit)
+{
+	return credit ? _("Cr") : _("Dr");
 }
 
 // The sided caption — the same pairing as ibRegSidedFigure, one tier up. Kept beside it so a side
 // that gains a spelling gains a caption in the same edit.
 inline wxString ibRegSidedCaption(const wxString& figure, bool credit)
 {
-	return ibRegFigureCaption(figure) + wxT(" ") + (credit ? _("Cr") : _("Dr"));
+	return ibRegFigureCaption(figure) + wxT(" ") + ibRegSideCaption(credit);
 }
 
-// A published figure's full caption: what it is OF, then what it is. `<resource synonym> <figure>` —
-// "Amount Closing balance", in the reader's language, whichever door produced the row.
-inline wxString ibRegFigureColumnCaption(const wxString& ofWhat, const wxString& figureCaption)
+// A published column's full caption: what it is OF, then what it is. `<resource synonym> <figure>` —
+// "Amount Closing balance", "Currency Dr" — in the reader's language, whichever door produced the row.
+inline wxString ibRegColumnCaptionOf(const wxString& ofWhat, const wxString& caption)
 {
-	return ofWhat.IsEmpty() ? figureCaption : ofWhat + wxT(" ") + figureCaption;
+	return ofWhat.IsEmpty() ? caption : ofWhat + wxT(" ") + caption;
 }
 
 // --- the GRAIN: where a union view is cut between its two arms ------------------------------------
@@ -320,6 +352,20 @@ inline std::vector<std::pair<wxString, ibQueryExprPtr>> ibRegRecorderTuple(
 	return tuple;
 }
 
+// ⭐⭐ THE TWO ARMS OF ONE VIEW, named once. A turnovers view carries the stored rows AND the movements
+// that came after them, so a reader must SAY which arm it wants: silence counts every movement of the
+// current grain twice — once rolled into the total, once as itself — and the result looks plausible.
+// A stored row has no recorder, so the recorder column IS the row's answer to "which arm am I".
+inline ibQueryPredicatePtr ibRegStoredArm(const ibBackendQueryColumn* recorderCol)
+{
+	return recorderCol != nullptr ? ibQueryPredicate::Null(recorderCol, /*negated*/ false) : nullptr;
+}
+
+inline ibQueryPredicatePtr ibRegMovementArm(const ibBackendQueryColumn* recorderCol)
+{
+	return recorderCol != nullptr ? ibQueryPredicate::Null(recorderCol, /*negated*/ true) : nullptr;
+}
+
 // Fill a read spec's cut. `TSpec` is ibMaterializeReadSpec — taken as a template parameter so this
 // header needs no L2-2 include; every caller has one already.
 template <typename TReg, typename TSpec>
@@ -340,19 +386,28 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	const ibTotalsPeriod grain = reg->GetTotalsPeriodUnit();
 
 	// ⭐ A BOUNDARY REACHES BELOW THE GRAIN when it falls inside one, or when it names a document.
-	// Anything else — a date on a grain edge, no date at all — is answered by the stored rows whole,
-	// and the movement arm is left excluded. The trigger keeps the CURRENT grain's row up to date, so
-	// "no boundary" is not stale: it is complete at grain resolution.
-	const auto reachesInside = [&](const ibRegBound& b, wxDateTime& moment) {
+	// No date at all is answered by the stored rows whole, and the movement arm is left excluded. The
+	// trigger keeps the CURRENT grain's row up to date, so "no boundary" is not stale: it is complete at
+	// grain resolution.
+	//
+	// 🛑 AND A DATE ON A GRAIN EDGE STILL TOUCHES THE GRAIN THAT STARTS THERE. A stored row is keyed by its
+	// grain's first instant, so an upper boundary that takes midnight in takes the whole day under that
+	// key: the balance "at 26.09 00:00" counted a posting of 26.09 10:00 (measured 2026-09-17 on the
+	// rehearsal ledger, 107 where 100 stood — 09:59:59 read 100). An INCLUDED upper edge and an EXCLUDED
+	// lower edge are therefore partial grains too; an excluded upper edge and an included lower one take
+	// that grain wholly out or wholly in, and stay with the stored rows.
+	const auto reachesInside = [&](const ibRegBound& b, bool upperEnd, wxDateTime& moment) {
 		if (b.m_date.GetType() != TYPE_DATE)
 			return false;
 		moment = b.m_date.GetDateTime();
-		return b.HasRecorder() || ibTruncateToPeriod(moment, grain) != moment;
+		if (b.HasRecorder() || ibTruncateToPeriod(moment, grain) != moment)
+			return true;
+		return upperEnd ? !b.m_excluding : b.m_excluding;
 	};
 
 	wxDateTime upperMoment, lowerMoment;
-	const bool cutUpper = reachesInside(upper, upperMoment);
-	const bool cutLower = reachesInside(lower, lowerMoment);
+	const bool cutUpper = reachesInside(upper, /*upperEnd*/ true, upperMoment);
+	const bool cutLower = reachesInside(lower, /*upperEnd*/ false, lowerMoment);
 	if (!cutUpper && !cutLower)
 		return;
 
@@ -369,9 +424,137 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	// boundary falls INTO holds movements before it as well, so it cannot be taken as a row.
 	if (cutLower) {
 		read.m_headSplit = ibValue(ibNextPeriodStart(lowerMoment, grain));
+		read.m_headGrain = ibValue(ibTruncateToPeriod(lowerMoment, grain));
 		if (lower.HasRecorder())
 			read.m_boundaryHead = ibRegRecorderTuple(reg, slots, lower.m_recorder);
 	}
+}
+
+// ⭐⭐ THE CALENDAR OF AN INTERVAL — every period a periodised reading reports, whether or not anything moved.
+//
+// A register's stored surface has only the periods something moved in, and no window invents the others; a
+// month that only carried a balance is still a row (Max, 2026-09-16: "if a month has no turnover but has
+// balances, you must show them with zero turnovers"). So a periodised balance reading stands on this: the
+// period the lower boundary falls into through the one the upper boundary falls into, stepped by the same two
+// functions the grain cut and the RAM roads use, so "a month" is one thing everywhere.
+//
+// Empty when the interval has no two ends, or when it has more than `maxPeriods` periods — a calendar the SERVER
+// is handed goes into the SQL as a row per period (ibRegCalendarRelation), and a daily one over ten years is the
+// live path's. The live path fills its empty periods from the same calendar with no cap (0).
+inline constexpr size_t ibRegMaxServerCalendar = 400;
+inline std::vector<wxDateTime> ibRegCalendarOf(const ibValue& from, const ibValue& to, ibTotalsPeriod unit,
+                                               size_t maxPeriods = ibRegMaxServerCalendar)
+{
+	std::vector<wxDateTime> periods;
+	if (from.GetType() != TYPE_DATE || to.GetType() != TYPE_DATE)
+		return periods;
+	const wxDateTime last = to.GetDateTime();
+	for (wxDateTime period = ibTruncateToPeriod(from.GetDateTime(), unit); period.IsValid() && !period.IsLaterThan(last);) {
+		periods.push_back(period);
+		if (maxPeriods != 0 && periods.size() > maxPeriods)
+			return {};
+		const wxDateTime next = ibNextPeriodStart(period, unit);
+		if (!next.IsValid() || !next.IsLaterThan(period))
+			break;   // a unit that does not advance would loop forever
+		period = next;
+	}
+	return periods;
+}
+
+// The calendar as a RELATION — one row per period under `periodField`, laid one under the other; a one-row
+// select needs no table (the dialect supplies its own, RDB$DATABASE on Firebird). Joined to every key of a
+// reading, it is the grid a running balance walks.
+inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<wxDateTime>& periods, const wxString& periodField)
+{
+	ibQueryRelPtr calendar;
+	for (const wxDateTime& start : periods) {
+		const ibQueryRelPtr row = ibProject(nullptr, { { ibCast(ibConst(ibValue(start)), ibTypeDate()), periodField } });
+		calendar = calendar ? ibUnionAll(calendar, row) : row;
+	}
+	return calendar;
+}
+
+// Two fields that hold the same value, NULL included — a join over a grid of keys meets fields that are NULL
+// by construction (an untagged key read as its typed empty), and a plain `=` loses every such key.
+inline ibQueryExprPtr ibRegSameOrBothNull(const ibQueryExprPtr& a, const ibQueryExprPtr& b)
+{
+	return ibBinOp(ibQueryBinOp::Or, ibBinOp(ibQueryBinOp::Eq, a, b),
+		ibBinOp(ibQueryBinOp::And, ibIsNull(a), ibIsNull(b)));
+}
+
+// A figure's typed zero — what a side that stores nothing answers, and what a sum of nothing is. Typed, because
+// the arms of a UNION and the branches of a COALESCE must agree on what the column is.
+inline ibQueryExprPtr ibRegTypedZero()
+{
+	return ibCast(ibConst(ibValue(0.0)), ibTypeNumber(18, 6));
+}
+
+// One balance a periodised reading runs along the calendar: the period's net movement (a column of the
+// turnover read), the balance entering the interval (a column of the opening read), and the two names the
+// grid publishes the period's opening and closing under.
+struct ibRegRunningFigure {
+	wxString m_turnover;
+	wxString m_opening;
+	wxString m_openingOut;
+	wxString m_closingOut;
+};
+
+// ⭐⭐ THE GRID OF A PERIODISED BALANCE READING — every key, every period of the calendar, and the balances
+// run along them. Shared by every register that reports balances per period (the accounting one per side,
+// the accumulation one per resource); what a register does with the rows afterwards — fold by the account's
+// type, prune the all-zero ones — stays its own.
+//
+//   opening    the read of each key's balance entering the interval, grouped over EVERY row up to the end and
+//              not pruned, so it is also the set of every key that holds a balance or moves in the interval;
+//   turnovers  the read of each key's movement per calendar period, inside the interval;
+//   grid       opening × calendar, LEFT JOIN turnovers on the period and the key (NULL-safe, field by field).
+//
+// Published: every key, the period, each `passThrough` column of the turnover read (zero where the period did
+// not move), and for each running figure its opening and closing — closing = the entering balance plus the
+// period's movement summed along the key's periods so far (peers included), opening = closing − the period's.
+//
+// 🛑 The key set is the opening read and not a DISTINCT over a union of both reads: rendered on Firebird, that
+// DISTINCT merged into the union's first arm and the statement failed at BLR level (measured 2026-09-16).
+inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQueryRelPtr& turnRead,
+                                      const std::vector<wxDateTime>& periods, const wxString& periodField,
+                                      const std::vector<wxString>& keyNames, const std::vector<wxString>& passThrough,
+                                      const std::vector<ibRegRunningFigure>& running, const wxString& alias)
+{
+	if (openRead == nullptr || turnRead == nullptr || periods.empty())
+		return nullptr;
+	const wxString aO = alias + wxT("_po"), aT = alias + wxT("_pt"), aC = alias + wxT("_pc");
+	const auto orZero = [](const ibQueryExprPtr& e) {
+		return ibCast(ibFunc(wxT("COALESCE"), { e, ibRegTypedZero() }), ibTypeNumber(18, 6));
+	};
+
+	// "Every row with every row" — said over a column, because two bare parameters compared (`? = ?`) have no
+	// type for the engine to prepare (Firebird: -804 Data type unknown). A calendar row always has its period.
+	const ibQueryExprPtr always = ibBinOp(ibQueryBinOp::Eq, ibCol(aC, periodField), ibCol(aC, periodField));
+	ibQueryRelPtr grid = ibJoin(ibSubquery(openRead, aO), ibSubquery(ibRegCalendarRelation(periods, periodField), aC),
+		always, ibQueryJoinType::Inner);
+	ibQueryExprPtr onTurn = ibBinOp(ibQueryBinOp::Eq, ibCol(aC, periodField), ibCol(aT, periodField));
+	for (const wxString& name : keyNames)
+		onTurn = ibBinOp(ibQueryBinOp::And, onTurn, ibRegSameOrBothNull(ibCol(aO, name), ibCol(aT, name)));
+	grid = ibJoin(grid, ibSubquery(turnRead, aT), onTurn, ibQueryJoinType::Left);
+
+	std::vector<ibQueryExprPtr> partition;
+	std::vector<ibQueryProjItem> projection;
+	for (const wxString& name : keyNames) {
+		partition.push_back(ibCol(aO, name));
+		projection.push_back({ ibCol(aO, name), name });
+	}
+	projection.push_back({ ibCol(aC, periodField), periodField });
+	for (const wxString& name : passThrough)
+		projection.push_back({ orZero(ibCol(aT, name)), name });
+	for (const ibRegRunningFigure& figure : running) {
+		const ibQueryExprPtr turn = orZero(ibCol(aT, figure.m_turnover));
+		const ibQueryExprPtr closing = ibBinOp(ibQueryBinOp::Add, orZero(ibCol(aO, figure.m_opening)),
+			ibWindowed(ibFunc(wxT("SUM"), { turn }),
+				ibQueryWindow{ partition, { ibQuerySortKey{ ibCol(aC, periodField), ibQuerySortDir::Asc } }, ibQueryFrame::RangeThroughPeers }));
+		projection.push_back({ ibBinOp(ibQueryBinOp::Sub, closing, turn), figure.m_openingOut });
+		projection.push_back({ closing, figure.m_closingOut });
+	}
+	return ibProject(grid, std::move(projection));
 }
 
 // --- register-side convenience over the column-layout tier ---------------------------------------
@@ -402,6 +585,27 @@ inline wxString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 {
 	const std::vector<wxString> fields = ColumnFieldNames(a->GetQueryColumn());
 	return fields.size() > 1 ? fields[1] : wxString();   // [0] is the _TYPE tag; [1] is the first value field
+}
+
+// ⭐ THE SAME QUESTIONS ASKED OF A COLUMN, for a caller that holds a column rather than an attribute. The
+// bodies are the attribute's own, minus the one hop it makes first.
+// The same signature a surface is cached by, taken from a COLUMN — see ibRegSignAttribute below, whose
+// body this is with the one hop removed.
+inline void ibRegSignColumn(wxString& signature, const ibBackendQueryColumn* c)
+{
+	if (c == nullptr)
+		return;
+	signature += c->GetName() + wxT(":");
+	const ibTypeDescription& type = c->GetTypeDesc();
+	for (unsigned int i = 0; i < type.GetClsidCount(); ++i)
+		signature += wxString::Format(wxT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
+	signature += wxT(";");
+}
+
+inline wxString ibRegValueField(const ibBackendQueryColumn* c)
+{
+	const std::vector<wxString> fields = ColumnFieldNames(c);
+	return fields.size() > 1 ? fields[1] : wxString();
 }
 
 // "q.f1, q.f2, …" — the attribute's field list qualified by a table alias (the SELECT/GROUP BY form
@@ -878,8 +1082,8 @@ inline bool ibRegisterFoldOffersColumn(const TReg* reg,
 }
 
 
-// ⭐⭐ A DERIVED COLUMN IS NUMBERED AS A SYNTHETIC ONE — its ORDINAL on the surface, stamped with
-// SyntheticKind::Derived. Not a band any more.
+// ⭐⭐ A DERIVED COLUMN IS NUMBERED AS A SYNTHETIC ONE — stamped with SyntheticKind::Derived. Not a band
+// any more.
 //
 // 🛑 IT WAS THE LAST POSITIVE BAND, and it outlived the thing that replaced it. `0x50000000` was one
 // of five hand-carved ranges in the positive space; the sign scheme took over from all of them
@@ -893,14 +1097,23 @@ inline bool ibRegisterFoldOffersColumn(const TReg* reg,
 // exactly why it is worth closing NOW: the first reader of the invariant would have been the one to
 // find out, on a register column, in whatever they were building.
 //
-// ⚠ THE ORDINAL GOES IN, NOT A COMPOSED ID. `SyntheticId(kind, n)` composes; `id + 1` is not the
-// next column of a kind, it is another KIND (queryColumn.h). The counter handed to a builder is a
-// plain 0-based ordinal and each site composes its own — the same rule the CTE road broke one file
-// away and had corrected on 2026-09-09.
-inline ibMetaID ibRegDerivedColumnId(ibMetaID ordinal)
+// ⭐⭐ …AND NUMBERED OVER WHAT THE CONFIGURATION DECLARED, not over a running count. A derived column is
+// OF something with a real metaID: a column standing for an attribute (a collapsed account, a breakdown
+// slot, the correspondent's side of a dimension) is `no` 0 of that attribute; a column the attribute OWNS
+// (a figure of a resource, a coarser period of the period, a position of a date) is its `no` from 1. The
+// id then does not depend on what else a surface publishes before it, and two columns of one surface
+// cannot meet on one number (Max, 2026-09-16: "take the real metas and feed them into the generator").
+//
+// ⚠ ONE WRAP, AND THE BODY STAYS SMALL. The body is `owner × 32 + no`, stamped once: a metaID of 1400 comes
+// out near three million, and a further reading of the surface (an alias twin, one more digit) still fits
+// an `int` for metaIDs up to about 130 000 (queryColumn.h, CanComposeSyntheticId). Wrapping twice to keep the
+// two families apart multiplied by eight more for nothing — `no` 0 already does.
+inline constexpr unsigned int ibRegColumnsPerOwner = 32;
+inline ibMetaID ibRegDerivedColumnId(ibMetaID owner, unsigned int no = 0)
 {
-	return ibBackendQueryColumn::SyntheticId(
-		ibBackendQueryColumn::SyntheticKind::Derived, ordinal);
+	wxASSERT(no < ibRegColumnsPerOwner);
+	return ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived,
+		owner * static_cast<ibMetaID>(ibRegColumnsPerOwner) + static_cast<ibMetaID>(no));
 }
 
 // ⭐⭐ WHAT A SURFACE WAS BUILT FROM — names and types, in order.
@@ -936,7 +1149,7 @@ class ibRegSurfaceCache
 public:
 	const ibBackendQueryable* Obtain(const wxString& key, const wxString& builtFrom,
 	                                 const wxString& table, const ibMetaData* metaData,
-	                                 const std::function<void(std::vector<ibTempColumn>&, ibMetaID&)>& build) const
+	                                 const std::function<void(std::vector<ibTempColumn>&)>& build) const
 	{
 		const auto cached = m_sources.find(key);
 		if (cached != m_sources.end()) {
@@ -950,11 +1163,9 @@ public:
 		}
 
 		std::vector<ibTempColumn> columns;
-		// A PLAIN ORDINAL from zero — each builder composes its own id off it (ibRegDerivedColumnId).
-		// Seeding this with an already-composed number is what made `synthetic++` mean "the next
-		// KIND" instead of "the next column".
-		ibMetaID synthetic = 0;
-		build(columns, synthetic);
+		// Each builder numbers its columns over the metaIDs they are of (ibRegDerivedColumnId) — no counter
+		// is handed in, because none is needed.
+		build(columns);
 
 		auto surface = std::make_unique<ibDbTempTableQueryable>(table, std::move(columns), metaData);
 		const ibBackendQueryable* raw = surface.get();
@@ -1002,8 +1213,19 @@ private:
 //   · one field      -> a column that IS that field, said with the kind, which is what stops a
 //     reader looking for a `_TYPE` the table does not have.
 // Neither case leaves the name meaning something the reader has to work out.
-inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* attribute)
+// `published` — the name a reading gives the column when it is not the attribute's own (an accounting
+// register's `Account` in a reading about one account, where the movements call it `AccountDr`).
+//
+// `columnId` — for a column that only LOOKS like the attribute: its type and fields, but values the reading
+// composes (a turnover's corresponding account is the credit account on one pass and the debit one on the
+// other). Such a column is not the attribute, and says so with an id of its own (ibRegDerivedColumnId).
+inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* attribute,
+                                         const wxString& published = wxString(), const wxString& publishedSynonym = wxString(),
+                                         ibMetaID columnId = 0)
 {
+	const wxString name    = published.IsEmpty() ? attribute->GetName() : published;
+	const wxString synonym = publishedSynonym.IsEmpty() ? attribute->GetSynonym() : publishedSynonym;
+	const ibMetaID id      = columnId != 0 ? columnId : attribute->GetMetaID();
 	// [0] is the _TYPE tag; anything past [1] means the value itself needs more than one field.
 	const std::vector<wxString> fields = ColumnFieldNames(attribute->GetQueryColumn());
 	const bool spreads = fields.size() > 2;
@@ -1015,12 +1237,12 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	// balance broken down by counterparty folded all counterparties into one blank row (2026-09-15).
 	const ibTypeDescription& stored = attribute->GetTypeValueDesc();
 	return spreads
-		? ibTempColumn(attribute->GetName(), attribute->GetPhysicalName(),
-		               stored, attribute->GetMetaID(), attribute->GetSynonym(),
-		               ibBackendQueryColumn::Kind::Composite)
-		: ibTempColumn(attribute->GetName(), ibRegValueField(attribute),
-		               stored, attribute->GetMetaID(), attribute->GetSynonym(),
-		               ibBackendQueryColumn::Kind::Computed);
+		? ibTempColumn(name, attribute->GetPhysicalName(),
+		               stored, id, synonym,
+		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnIcon())
+		: ibTempColumn(name, ibRegValueField(attribute),
+		               stored, id, synonym,
+		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnIcon());
 }
 
 // ============================================================================

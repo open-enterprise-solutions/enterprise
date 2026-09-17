@@ -989,7 +989,7 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		const wxString col = (expr->m_name == wxT("*")) ? wxString(wxT("*")) : QuoteIdent(expr->m_name);
 		return expr->m_qualifier.empty()
 			? col
-			: QuoteIdent(expr->m_qualifier) + wxT(".") + col;
+			: AliasIdent(expr->m_qualifier) + wxT(".") + col;
 	}
 
 	case ibQueryExprKind::Const: {
@@ -1220,6 +1220,25 @@ wxString ibQueryRenderer::QuoteIdent(const wxString& name) const
 	return m_dialect.m_identQuoteOpen + name + m_dialect.m_identQuoteClose;
 }
 
+// A relation alias the engine can tell apart from every other one. Within the dialect's limit it is itself;
+// past it, its head plus a hash of the WHOLE name — deterministic, so the definition (`… AS a`) and every
+// reference (`a.col`) spell it the same, and two aliases that share the head still differ. See
+// ibDialectDictionary::m_maxAliasLength for the Firebird failure that asked for it.
+wxString ibQueryRenderer::AliasIdent(const wxString& alias) const
+{
+	return QuoteIdent(ibDialectDictionary::BoundedName(alias, m_dialect.m_maxAliasLength));
+}
+
+// A table named without an alias — a FROM, the target of an UPDATE or a DELETE — as `table` (QuoteIdent) and its
+// reference spelling `alias` (AliasIdent). It is referenced by its own name, and every reference is spelled through
+// AliasIdent, so past the dialect's bound the table is given that spelling as its alias: otherwise `t.col` names a
+// table the statement never had (a correlated EXISTS under a DELETE of the recalculation marks qualifies the marks
+// by their table).
+static wxString ibTableAsReferenced(const wxString& table, const wxString& alias)
+{
+	return alias == table ? table : table + wxT(" AS ") + alias;
+}
+
 wxString ibQueryRenderer::BinOpText(ibQueryBinOp op)
 {
 	switch (op) {
@@ -1262,12 +1281,12 @@ wxString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
 	switch (rel->m_kind) {
 	case ibQueryRelKind::Scan:
 		return rel->m_alias.empty()
-			? QuoteIdent(rel->m_table)
-			: QuoteIdent(rel->m_table) + wxT(" AS ") + QuoteIdent(rel->m_alias);
+			? ibTableAsReferenced(QuoteIdent(rel->m_table), AliasIdent(rel->m_table))
+			: QuoteIdent(rel->m_table) + wxT(" AS ") + AliasIdent(rel->m_alias);
 	case ibQueryRelKind::Subquery:
 		// ( SELECT ... ) AS alias — the inner relation renders its own SELECT, its
 		// bind params landing in the plan at the FROM position (before the WHERE).
-		return wxT("(") + RenderSelect(rel->m_input.get()) + wxT(") AS ") + QuoteIdent(rel->m_alias);
+		return wxT("(") + RenderSelect(rel->m_input.get()) + wxT(") AS ") + AliasIdent(rel->m_alias);
 	case ibQueryRelKind::Join: {
 		// Same operand-sequencing rule as BinOp: RenderSource / RenderExpr push
 		// bind params as a side effect, so left source → right source → ON
@@ -1600,7 +1619,7 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		break;
 	}
 	case ibDmlKind::Update: {
-		sql = wxT("UPDATE ") + QuoteIdent(dml.m_table) + wxT(" SET ");
+		sql = wxT("UPDATE ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table)) + wxT(" SET ");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
 			if (i) sql += wxT(", ");
 			sql += QuoteIdent(dml.m_assignments[i].m_column)
@@ -1611,7 +1630,7 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		break;
 	}
 	case ibDmlKind::Delete: {
-		sql = wxT("DELETE FROM ") + QuoteIdent(dml.m_table);
+		sql = wxT("DELETE FROM ") + ibTableAsReferenced(QuoteIdent(dml.m_table), AliasIdent(dml.m_table));
 		if (dml.m_where)
 			sql += wxT(" WHERE ") + RenderExpr(dml.m_where);
 		break;

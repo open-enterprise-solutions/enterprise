@@ -17,6 +17,7 @@
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
 
+#include <algorithm>  // std::max — the longest field suffix a bounded label leaves room for
 #include <map>
 #include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
 
@@ -70,7 +71,47 @@ wxString ibSqlAliasOf(const wxString& outputName)
 	if (outputName.IsEmpty())
 		return outputName;
 
-	return wxT("out_") + outputName;
+	// 🛑 …AND IT HAS TO COME BACK. A result is read by its labels, and the Firebird driver keeps 31 characters
+	// of a label (XSQLDA): `out_CurrencyAmountCorrTurnoverCr` is 32, came back cut, was found by no reader and
+	// read as an EMPTY sum — while `out_QuantityCorrTurnoverCr`, the same figure of a shorter resource, was
+	// right (measured 2026-09-16, the corresponding turnovers of the ledger). Bounded here, where writer and
+	// reader both ask, the label stays one spelling (ibDialectDictionary::BoundedName).
+	//
+	// ⚠ …WITH ROOM FOR A FIELD SUFFIX. An object-valued output is spread under this name as a PREFIX
+	// (`<label>_RTRef`, `<label>_RRRef` — dbTableProvider, the grouped walk), so the name is bounded short of
+	// the driver's limit by the longest suffix the role table spells, and every field of it fits too.
+	static const size_t kResultLabelLimit = 31;   // the Firebird driver's XSQLDA label
+	static const std::initializer_list<ibColumnRole> kFieldRoles = {
+		ibColumnRole::Discriminator, ibColumnRole::Boolean, ibColumnRole::Number,
+		ibColumnRole::Date, ibColumnRole::String, ibColumnRole::Enum,
+		ibColumnRole::ReferenceType, ibColumnRole::ReferenceId,
+		ibColumnRole::Schedule, ibColumnRole::TypeDescription };
+	static const size_t kLongestSuffix = [] {
+		size_t longest = 0;
+		for (const ibColumnRole role : kFieldRoles)
+			longest = std::max(longest, ibFieldSuffix(role).length());
+		return longest;
+	}();
+
+	// ⚠ A FIELD NAMED ON ITS OWN IS STILL ITS OUTPUT'S FIELD. A value is read back as the prefix's label plus
+	// the suffix (dbTableProvider, `Column(prefix, col)`), and a writer that spells each field as an output of
+	// its own — the breakdown by kind, `AccountDimension1_TYPE` — has to land on that same label. Bounded
+	// whole, `out_AccountDimension1_TYPE` became a hash no reader asked for, every breakdown value read empty
+	// and a balance by kind folded into one row (2026-09-17).
+	for (const ibColumnRole role : kFieldRoles) {
+		const wxString& suffix = ibFieldSuffix(role);
+		if (!suffix.IsEmpty() && outputName.length() > suffix.length() && outputName.EndsWith(suffix))
+			return ibSqlAliasOf(outputName.Left(outputName.length() - suffix.length())) + suffix;
+	}
+
+	return ibDialectDictionary::BoundedName(wxT("out_") + outputName, kResultLabelLimit - kLongestSuffix);
+}
+
+bool ibIsPlainScalarType(const ibTypeDescription& type)
+{
+	return type.GetClsidCount() == 1
+		&& (type.ContainType(ibValueTypes::TYPE_NUMBER) || type.ContainType(ibValueTypes::TYPE_STRING)
+		    || type.ContainType(ibValueTypes::TYPE_DATE) || type.ContainType(ibValueTypes::TYPE_BOOLEAN));
 }
 
 const wxString& ibOwnerRefField()
@@ -538,6 +579,15 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 	ibCellFields cell(result, fieldName);   // every field below is this cell's — see ibCellFields
 	if (col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed
 	    && col->GetTypeDesc().GetClsidCount() == 1) {
+		// ⭐ …AND A COMPUTED OUTPUT THAT CAME BACK NULL IS NULL — the rule the tagged read below states for
+		// a composite cell, and the answer the RAM road gives for the same expression (RamNullValue). Read
+		// through its declared type it came back as that type's empty, so an accounting figure the account
+		// keeps no accounting for — a CASE with no ELSE on the server — read as 0 on this road and as empty
+		// on the other (measured 2026-09-16: a quantity on a supplier account).
+		if (result.IsResultNull(cell.Field(ibColumnRole::Raw))) {
+			retValue = ibValue(ibValueTypes::TYPE_NULL);
+			return true;
+		}
 		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col->GetTypeDesc().GetByIdx(0)));
 		return ReadFieldOf(cell, ibColumnRole::Raw, tag, col, metaData, retValue, createData);
 	}
@@ -615,6 +665,12 @@ bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData*
 // SQL fragment builders — the field spellings the hand-written query / upsert SQL used to
 // assemble per-attribute, now derived once from the layout (same field SET + ORDER as the codec).
 // ==========================================================================
+
+bool ibSameFieldType(const ibColumnType& a, const ibColumnType& b)
+{
+	return a.m_kind == b.m_kind && a.m_length == b.m_length && a.m_precision == b.m_precision
+	    && a.m_scale == b.m_scale && a.m_datePrec == b.m_datePrec && a.m_fixed == b.m_fixed;
+}
 
 std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col)
 {

@@ -54,6 +54,7 @@
 #include "backend/settings/settingsComposer.h"                   // saved settings, restored INTO a composer
 #include "backend/userInfo.h"                                    // ibUserInfo - WHOSE setting
 #include "backend/system/value/valueDataComposition.h"           // ibSyncParametersWithQuery - what the TEXT asks for
+#include "backend/query/queryLexer.h"                            // a text that does not tokenize is refused as such
 #include "backend/mcp/mcpDebugBridge.h"                          // the figures are asked for over the wire
 #include "backend/debugger/debugClient.h"                        // …and there has to BE one to ask over
 
@@ -495,6 +496,21 @@ public:
 			// is constructed with. So there is nothing to assemble — the text goes in and the walk
 			// reads the query's own rows.
 			description.SetQuery(bareQuery);
+
+			// 🛑 A TEXT THAT DOES NOT TOKENIZE IS REFUSED FOR WHAT IT IS. The parameter scan below reads the
+			// tokens and, by its own design, answers "none" for text that does not tokenize (half-typed text
+			// in an editor has no parameters yet) — so a query with a string in single quotes came back as
+			// "this schema asks for no parameters, so 'Act' sets nothing", about a parameter the text plainly
+			// names, and the actual fault was never said (measured 2026-09-16; it was taken for a defect of
+			// parameters inside a CASE).
+			try {
+				ibQueryLexer lexer;
+				lexer.Tokenize(bareQuery);
+			}
+			catch (const ibBackendException& error) {
+				refusal = wxString::Format(ibMcpText("The query does not read as a query: %s"), error.GetErrorDescription());
+				return false;
+			}
 
 			// 🛑⭐⭐ …AND THE PARAMETERS THE TEXT ASKS FOR HAVE TO BE DECLARED, or `parameters` has
 			// nothing to bind to. A composition applies values BY NAME onto parameters the

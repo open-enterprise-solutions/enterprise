@@ -168,7 +168,16 @@ bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescript
 	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
 		const ibMetaID id = metaDesc.GetByIdx(idx);
 		if (metaData != nullptr) {
-			const ibValueMetaObject* named = metaData->FindAnyObjectByFilter(id);
+			// ⭐⭐ LOOKED FOR THROUGH THE WHOLE TREE, not among the top-level objects alone. Every
+			// binding this door had served named something that stands at the top — a register, a
+			// chart, a catalog — so a shallow search answered them all and nobody noticed it was
+			// shallow. An ACCOUNTING KIND lives inside its chart of accounts: not found, its id was
+			// dropped here, and the binding was written as an EMPTY list. Set in the designer, read
+			// back, saved, reopened — and gone, with no error anywhere (found with probes over MCP,
+			// 2026-09-16). The rule this filter states — "an id that names no object is not written" —
+			// is about existence, and existence does not depend on depth. The READING side asks the
+			// same way (ibVariantDataOwner), or a binding that was written is unreadable.
+			const ibValueMetaObject* named = metaData->FindAnyObjectByFilter(id, /*use_child_filter*/ true);
 			if (named == nullptr || named->IsDeleted())
 				continue;
 		}

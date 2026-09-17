@@ -31,7 +31,8 @@ bool ibValueRecordSetObject::SetValueByRow(const wxVariant& variant,
 	const ibValueMetaObjectRegisterData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
 	ibValueMetaObjectAttributeBase* metaObjectAttribute = metaObject->FindAnyAttributeObjectByFilter(col);
-	wxASSERT(metaObject);
+	if (metaObjectAttribute == nullptr)
+		return false;   // not a field of the line, or one its register has switched off
 	ibValue newValue = metaObjectAttribute->CreateValue();
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;

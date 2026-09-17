@@ -133,6 +133,8 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaDimensionCLSID)                  return _("Dimensions");
 	if (clsid == g_metaRecalculationCLSID)              return _("Recalculations");
 	if (clsid == g_metaResourceCLSID)                   return _("Resources");
+	if (clsid == g_metaAccountingKindCLSID)             return _("Accounting kinds");
+	if (clsid == g_metaAccountDimensionAccountingKindCLSID) return _("Account dimension accounting kinds");
 	if (clsid == g_metaPredefinedAttributeCLSID)        return _("Predefined attributes");
 
 	// Unknown CLSID — show its raw symbol so the UI never blanks.
@@ -192,6 +194,11 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaDimensionCLSID,                  310 },
 		{ g_metaResourceCLSID,                   320 },
 		{ g_metaEnumCLSID,                       330 },
+		// The chart's kinds of accounting stand right after its attributes — where a person looks for
+		// them, and in the order the accounting world reads: what the ACCOUNT is kept in, then what
+		// each of its breakdowns is.
+		{ g_metaAccountingKindCLSID,             332 },
+		{ g_metaAccountDimensionAccountingKindCLSID, 334 },
 		{ g_metaPredefinedAttributeCLSID,        340 },
 		{ g_metaTableCLSID,                      350 },
 		{ g_metaTableRefCLSID,                   351 },

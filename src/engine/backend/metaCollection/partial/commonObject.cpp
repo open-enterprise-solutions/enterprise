@@ -2030,8 +2030,12 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 		const ibValueMetaObjectRecordData* metaObjectValue = GetMetaObject();
 		wxASSERT(metaObjectValue);
 
+		// Not found is an answer, not an assertion: the object carries a value for every attribute its
+		// metatype declares, and one its owner has switched OFF is not found (FindObjectByFilter asks
+		// IsAllowed) — nothing is written into a field that is not in use.
 		const ibValueMetaObjectAttributeBase* attribute = metaObjectValue->FindAnyAttributeObjectByFilter(id);
-		wxASSERT(attribute);
+		if (attribute == nullptr)
+			return false;
 		it->second = attribute->AdjustValue(varMetaVal);
 		return true;
 	}
@@ -4426,8 +4430,11 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	wxASSERT(metaObject);
 
+	// A key the register has switched OFF (an independent register's Recorder) is not found, and a filter
+	// cannot be set on it.
 	const ibValueMetaObjectAttributeBase* attribute = metaObject->FindAnyAttributeObjectByFilter(m_metaId);
-	wxASSERT(attribute);
+	if (attribute == nullptr)
+		return false;
 
 	switch (lPropNum) {
 	case eValue:
@@ -4450,7 +4457,8 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 	wxASSERT(metaObject);
 
 	const ibValueMetaObjectAttributeBase* attribute = metaObject->FindAnyAttributeObjectByFilter(m_metaId);
-	wxASSERT(attribute);
+	if (attribute == nullptr)
+		return false;   // switched off — see SetPropVal
 
 	switch (lPropNum) {
 	case eValue:

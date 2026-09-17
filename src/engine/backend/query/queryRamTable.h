@@ -50,10 +50,15 @@ public:
 	long    AppendRow()                                       { m_rows.emplace_back().reserve(m_columns.size());
 	                                                             return static_cast<long>(m_rows.size()) - 1; }
 	void    SetCell(long row, ibMetaID id, const ibValue& v)  { if (row >= 0 && row < RowCount()) m_rows[static_cast<size_t>(row)][id] = v; }
-	// Set by column NAME — resolves to that column's id. For derived columns read by alias
-	// (register balance / turnover X_Balance / X_Turnover…). No-op if the name is unknown.
+	// A column's id by its NAME — 0 when the table declares no such column, which reads back as an empty
+	// cell and never as somebody else's. For derived columns read by alias (register balance / turnover
+	// X_Balance / X_Turnover…).
+	ibMetaID ColumnIdByName(const wxString& name) const {
+	            for (const ibQueryRamColumn& c : m_columns) if (c.m_name == name) return c.m_id;
+	            return 0; }
+	// Set by column NAME — no-op if the name is unknown.
 	void    SetByName(long row, const wxString& name, const ibValue& v) {
-	            for (const ibQueryRamColumn& c : m_columns) if (c.m_name == name) { SetCell(row, c.m_id, v); return; } }
+	            if (const ibMetaID id = ColumnIdByName(name)) SetCell(row, id, v); }
 	// (The cells are found with find_value — the value where it lies, and no iterator made to reach it.)
 	ibValue GetCell(long row, ibMetaID id) const              { if (row < 0 || row >= RowCount()) return ibValue();
 	                                                             const ibValue* v = m_rows[static_cast<size_t>(row)].find_value(id);

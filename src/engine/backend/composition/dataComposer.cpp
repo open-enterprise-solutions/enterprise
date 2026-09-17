@@ -617,7 +617,12 @@ void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* sourc
 		const std::vector<const ibBackendQueryColumn*> key = source->GetPrimaryKeyColumns();
 		if (key.size() == 1 && key.front() != nullptr) {
 			identity = key.front()->GetName();
-			hasTree  = source->GetHierarchyColumn() != nullptr;
+			// ⚠ A LIST WALKS A TREE ONLY WHERE THE ARRANGEMENT IS ONE (queryable.h, GetHierarchyType).
+			// Asked as "is there a parent column", a chart of accounts — Subordination: a recorded parent,
+			// a flat list — got a tree rung here that the list's own model does not browse, and served it as
+			// a grouping: every account a heading of itself, with itself inside.
+			const ibHierarchyType arrangement = source->GetHierarchyType();
+			hasTree  = arrangement == ibHierarchyType::eItems || arrangement == ibHierarchyType::eFoldersAndItems;
 		}
 	}
 
@@ -1010,8 +1015,12 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		if (src == nullptr)
 			ibBackendCoreException::Error(_("Composer: unknown source '%s.%s'"), s0.m_namespace, s0.m_name);
 
+		// ⚠ A SWITCHED-OFF FIELD IS NOT READ. The source still vends it (the record's own load asks for it),
+		// but the find by name does not answer it — so spelling it here refused the whole read: a chart of
+		// accounts has no IsFolder, and its list would not open. The same gate the query seed and the field
+		// catalogue ask.
 		for (const ibBackendQueryColumn* col : src->GetColumns()) {
-			if (col == nullptr || col->GetName().IsEmpty())
+			if (col == nullptr || col->GetName().IsEmpty() || !col->IsAllowed())
 				continue;
 			if (!proj.IsEmpty())
 				proj += wxT(", ");

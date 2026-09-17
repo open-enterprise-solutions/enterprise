@@ -75,7 +75,10 @@ const ibArg& ArgFolder()
 const ibArg& ArgParent()
 {
 	static const ibArg s_a(wxT("parent"), ibArg::Kind::Text,
-		ibMcpText("The name of a predefined FOLDER already declared here, to put this one inside it."));
+		ibMcpText("The predefined item already declared here to put this one under - a FOLDER where the object "
+		          "keeps folders and items apart, and any ITEM where it is a hierarchy of items (a chart of "
+		          "accounts: 631 and 632 under 63). The parent belongs to the DECLARATION, not to the data - "
+		          "set as data it is blanked by the next apply, because the declaration owns that cell."));
 	return s_a;
 }
 
@@ -277,9 +280,18 @@ public:
 				return false;
 			}
 
-			// A NON-FOLDER CANNOT HOLD ANYTHING. Allowing it would build a tree the
-			// designer could not show and the runtime could not walk.
-			if (!parent->IsPredefinedFolder()) {
+			// A NON-FOLDER CANNOT HOLD ANYTHING — WHERE THE ARRANGEMENT HAS FOLDERS. Asked of the
+			// owner, because it is the owner's arrangement that decides: a hierarchy of FOLDERS AND
+			// ITEMS keeps the two apart and only a folder may hold; a hierarchy of ITEMS has no
+			// folders at all and every node may hold children — `631` and `632` sit under `63`, which
+			// is an account exactly like they are (commonObject.h: "an item-subordinated hierarchy
+			// has no separate container kind").
+			//
+			// 🛑 Refused unconditionally, a chart of accounts could not declare its own structure: the
+			// parent could only be set as DATA, and the apply's seed then blanked it — the declaration
+			// owns that cell — so the tree came back empty on every apply and a trial balance in the
+			// hierarchy of `63` was impossible (Max, 2026-09-16, found by building exactly that).
+			if (owner->HasFolders() && !parent->IsPredefinedFolder()) {
 				refusal = wxString::Format(
 					ibMcpText("'%s' is not a folder, so nothing can sit under it."), parentName);
 				return false;

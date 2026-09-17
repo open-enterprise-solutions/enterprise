@@ -105,6 +105,29 @@ bool NeedsRegeneration(const ibSchemaTable* old, const ibSchemaTable& cur)
 	// without summing. Rebuild.
 	if (a.m_shards != b.m_shards)               return true;
 
+	// ⭐⭐ A KEY COLUMN THAT CHANGED SHAPE re-keys every stored row just as surely as a key that was
+	// added — the count is the same, but a dimension retyped from a string to a reference no longer
+	// spreads into the same physical fields (`…_S` becomes `…_RTRef` + `…_RRRef`), and even a plain
+	// widening changes the declared type of a field the table's PRIMARY KEY stands on.
+	//
+	// ⚠ AND NOTHING BELOW CAN FIX IT IN PLACE: the ordinary column diff would emit an ALTER, and no
+	// engine alters a column an index is built over — Firebird refuses the whole apply ("column
+	// FLD1391_S … is referenced in index …_PK", measured 2026-09-16 on a copy while a register's
+	// Currency dimension moved from String to a catalog reference). The right answer is the one this
+	// function already gives for every other re-keying: drop the derived table and regenerate it from
+	// the movements, where the values are kept in their own right.
+	for (size_t i = 0; i < a.m_keys.size(); ++i) {
+		if (a.m_keys[i] == nullptr || b.m_keys[i] == nullptr)
+			return true;   // a key nobody can describe is not a key anybody can prove unchanged
+		const std::vector<ibColumnSlot> was = DescribeColumnLayout(a.m_keys[i]);
+		const std::vector<ibColumnSlot> now = DescribeColumnLayout(b.m_keys[i]);
+		if (was.size() != now.size())
+			return true;
+		for (size_t f = 0; f < was.size(); ++f)
+			if (was[f].m_name != now[f].m_name || !ibSameFieldType(was[f].m_type, now[f].m_type))
+				return true;
+	}
+
 	// The set of ACCUMULATIONS changed — which happens when a register switches between turnover
 	// and balance kinds. This is NOT the harmless "a column was added" case: gaining an expense
 	// side changes what the receipt side MEANS (it stops holding every movement and starts holding

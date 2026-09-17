@@ -36,6 +36,15 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		// 🛑 THE BOUND IS ON THE PATH, NOT ON ONE ALIAS. A relation inside nested derived tables is named in the BLR by
+		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters
+		// the request is refused as "invalid request BLR … expected record selection expression clause", the offending
+		// byte a letter of an alias. Measured 2026-09-17 on the vendored 5.0.5: a balance re-keyed by turnovers-only
+		// subcontos nested seven derived tables under 31-character aliases (214 characters) and failed; the same
+		// statement with its outer alias 20 characters long ran, and 26 failed. (The note on the field read the
+		// 2026-09-16 failure as aliases sharing their first 31 characters; the 31 fixed it by shortening the path.)
+		// Twelve — three of the head and the hash — keeps ten levels near 130.
+		d.m_maxAliasLength = 12;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.

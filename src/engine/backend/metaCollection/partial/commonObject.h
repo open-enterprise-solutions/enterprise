@@ -230,6 +230,7 @@ public:
 		return array;
 	}
 
+
 	//table
 	std::vector<ibValueMetaObjectTableData*> GetGenericTableArrayObject() const {
 		std::vector<ibValueMetaObjectTableData*> array;
@@ -301,10 +302,18 @@ public:
 #pragma endregion
 #pragma region __filter_h__
 
-	//any attribute 
+	// ⭐⭐ ANY ATTRIBUTE — ASKED BY TYPE, NOT BY A LIST OF KINDS. An empty filter is the search's own
+	// "match on the template argument" (metaObject.h), and EVERY attribute there is derives from
+	// ibValueMetaObjectAttributeBase: a plain one, a predefined one, a common attribute's column, a
+	// chart's ACCOUNTING KIND. Named as three clsids instead, the filter was a list nobody is made to
+	// extend — the kinds were missing from it, the find answered `nullptr`, and the caller that adjusts
+	// a value to its type dereferenced that: `obj.Currency = true` took the whole application down
+	// (measured 2026-09-16). By type there is nothing to keep in step; an attribute is one because of
+	// what it IS.
+	//any attribute
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindAnyAttributeObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, {});
 	}
 
 	//attribute 
@@ -443,10 +452,13 @@ public:
 	// HOLDS one, because the two live under different ownerships (docs/ownership-authority.md). The
 	// L3 surface is unchanged — it still receives an ibBackendQueryColumn and still names no
 	// attribute on its contract.
+	// ⭐ THE OBJECT'S OWN FIND ANSWERS IT. This carried a clsid list of its own — a second answer to a
+	// question the metaobject already answers — and the two drifted the moment an arrangement grew a
+	// new kind of attribute: a chart of accounts declares ACCOUNTING KINDS, they went into the schema,
+	// into the account's form and into `SELECT *`, and a query naming one was refused with "unknown
+	// attribute 'Quantitative'" (measured over MCP on a copy, 2026-09-16).
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
-		const ibValueMetaObjectAttributeBase* attribute =
-			m_meta->template FindObjectByFilter<ibValueMetaObjectAttributeBase>(name,
-				{ g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
 		return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
 	}
 
@@ -1690,6 +1702,7 @@ public:
 		FillArrayObjectByDimension(array);
 		return array;
 	}
+
 
 #pragma endregion
 #pragma region __array_h__
@@ -2965,8 +2978,8 @@ public:
 	bool FindKeyValue(const ibMetaID& id) const { return m_keyValues.find(id) != m_keyValues.end(); }
 	template <typename value>
 	void SetKeyValue(const ibMetaID& id, value&& cValue) {
+		// Not found is a key its register has switched off — kept as given, no assertion (FindObjectByFilter).
 		const ibValueMetaObjectAttributeBase* attribute = m_metaObject->FindAnyAttributeObjectByFilter(id);
-		wxASSERT(attribute);
 		m_keyValues.insert_or_assign(
 			id, attribute != nullptr ? attribute->AdjustValue(cValue) : cValue
 		);

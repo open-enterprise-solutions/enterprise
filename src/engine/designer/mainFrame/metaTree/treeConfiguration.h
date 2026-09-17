@@ -783,6 +783,10 @@ private:
 	void AddInterfaceItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 
 	void AddCatalogItem(ibValueMetaObject* obj, const wxTreeItemId& item);
+	// A CHART OF ACCOUNTS renders as a reference object PLUS the two branches only it has — the kinds
+	// of accounting it declares, and the kinds its breakdowns are kept in. They stand right after the
+	// attributes, which is where they belong: what an ACCOUNT is, before what its table holds.
+	void AddChartOfAccountsItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 	void AddDocumentItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 	void AddEnumerationItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 	void AddDataProcessorItem(ibValueMetaObject* obj, const wxTreeItemId& item);

@@ -130,8 +130,6 @@ bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node) const
 
 	node.SetProperty(m_propertyAttributeAccountType->GetName(), m_propertyAttributeAccountType->GetNodeValue());
 	node.SetProperty(m_propertyAttributeOffBalance->GetName(), m_propertyAttributeOffBalance->GetNodeValue());
-	node.SetProperty(m_propertyAttributeQuantitative->GetName(), m_propertyAttributeQuantitative->GetNodeValue());
-	node.SetProperty(m_propertyAttributeCurrency->GetName(), m_propertyAttributeCurrency->GetNodeValue());
 	node.SetProperty(m_propertyMaxAccountDimensionCount->GetName(), m_propertyMaxAccountDimensionCount->GetNodeValue());
 
 	node.SetProperty(m_propertyAccountDimensionKindsTable->GetName(), m_propertyAccountDimensionKindsTable->GetNodeValue());
@@ -165,8 +163,6 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 
 	m_propertyAttributeAccountType->SetNodeValue(node.GetProperty(m_propertyAttributeAccountType->GetName()));
 	m_propertyAttributeOffBalance->SetNodeValue(node.GetProperty(m_propertyAttributeOffBalance->GetName()));
-	m_propertyAttributeQuantitative->SetNodeValue(node.GetProperty(m_propertyAttributeQuantitative->GetName()));
-	m_propertyAttributeCurrency->SetNodeValue(node.GetProperty(m_propertyAttributeCurrency->GetName()));
 	m_propertyMaxAccountDimensionCount->SetNodeValue(node.GetProperty(m_propertyMaxAccountDimensionCount->GetName()));
 
 	m_propertyAccountDimensionKindsTable->SetNodeValue(node.GetProperty(m_propertyAccountDimensionKindsTable->GetName()));
@@ -204,8 +200,6 @@ bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, 
 
 	if (!((*m_propertyAttributeAccountType)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeOffBalance)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributeQuantitative)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributeCurrency)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAccountDimensionKindsTable)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags)))
@@ -221,8 +215,6 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 {
 	if (!(*m_propertyAttributeAccountType)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnLoadMetaObject(metaData)) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnLoadMetaObject(metaData)) return false;
-	if (!(*m_propertyAttributeCurrency)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyObjectModule)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData)) return false;
@@ -273,8 +265,6 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 
 	if (!(*m_propertyAttributeAccountType)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnSaveMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnSaveMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeCurrency)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags)) return false;
@@ -285,8 +275,6 @@ bool ibValueMetaObjectChartOfAccounts::OnDeleteMetaObject()
 {
 	if (!(*m_propertyAttributeAccountType)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnDeleteMetaObject()) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnDeleteMetaObject()) return false;
-	if (!(*m_propertyAttributeCurrency)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject()) return false;
@@ -312,8 +300,6 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeAccountType)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnBeforeRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnBeforeRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeCurrency)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags)) return false;
@@ -432,8 +418,6 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeAccountType)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnAfterRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnAfterRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeCurrency)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
@@ -460,8 +444,6 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 {
 	if (!(*m_propertyAttributeAccountType)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnBeforeCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnBeforeCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeCurrency)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
@@ -480,8 +462,6 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterCloseMetaObject()
 {
 	if (!(*m_propertyAttributeAccountType)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnAfterCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeQuantitative)->OnAfterCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeCurrency)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyAccountDimensionKindsTable)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject()) return false;

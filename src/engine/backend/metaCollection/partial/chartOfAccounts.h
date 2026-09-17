@@ -5,6 +5,7 @@
 #include "reference/reference.h"
 #include "chartOfAccountsEnum.h"
 #include "chartOfAccountsDimensionKindsTable.h"
+#include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"
 #include "backend/propertyManager/property/propertyChartOfCharacteristicTypes.h"
 
 //********************************************************************************************
@@ -43,8 +44,6 @@ public:
 	// Own attributes accessors
 	ibValueMetaObjectAttributePredefined* GetAccountType() const { return m_propertyAttributeAccountType->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetOffBalance() const { return m_propertyAttributeOffBalance->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetQuantitative() const { return m_propertyAttributeQuantitative->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetCurrency() const { return m_propertyAttributeCurrency->GetMetaObject(); }
 	// HOW MANY account dimension slots a register on this chart builds — SCHEMA, and therefore a
 	// property of the chart, not an attribute of an account. A number sitting in a data row cannot
 	// decide how many columns a table has; changing this one is an ordinary restructuring.
@@ -88,6 +87,50 @@ public:
 		}
 		return false;
 	}
+
+	// --- the kinds of accounting this chart declares -------------------------------------------------
+	//
+	// ⭐⭐ TWO LISTS, NEVER ONE. An account is kept in a kind of accounting ("this account is a currency
+	// account"); a BREAKDOWN of that account is kept in one too ("the quantity is kept by item"). A
+	// register's resource names one of each, so the two can never be offered as a single list.
+	//
+	// Asked of the chart every time rather than stored: a kind declared, renamed or deleted in the tree
+	// is answered for here, and nothing downstream keeps a copy to fall out of step with it.
+
+	std::vector<ibValueMetaObjectAccountingKind*> GetAccountingKindArrayObject(
+		std::vector<ibValueMetaObjectAccountingKind*> array = std::vector<ibValueMetaObjectAccountingKind*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectAccountingKind>(array, { g_metaAccountingKindCLSID });
+		return array;
+	}
+
+	std::vector<ibValueMetaObjectAccountDimensionAccountingKind*> GetAccountDimensionAccountingKindArrayObject(
+		std::vector<ibValueMetaObjectAccountDimensionAccountingKind*> array = std::vector<ibValueMetaObjectAccountDimensionAccountingKind*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectAccountDimensionAccountingKind>(array, { g_metaAccountDimensionAccountingKindCLSID });
+		return array;
+	}
+
+	// The chart HOSTS both — which is what puts them in the tree under branches of their own, beside
+	// the attributes and the tabular sections.
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {
+		if (clsid == g_metaAccountingKindCLSID || clsid == g_metaAccountDimensionAccountingKindCLSID)
+			return clsid;
+		return ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveChild(clsid);
+	}
+
+	// An account's kind is a FIELD OF THE ACCOUNT, so it joins the walk every column is built from.
+	// (A breakdown's kind is not here: its column belongs to the dimension-kinds table, which asks for
+	// it itself — see ibValueMetaObjectAccountDimensionKindsTable.)
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		ibValueMetaObjectRecordDataHierarchyMutableRef::GetGenericAttributeArrayObject(array);
+		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAccountingKindCLSID });
+		return array;
+	}
+
+	// (Nothing to add for the FIND: it matches an attribute by TYPE, and a kind is one — see
+	//  ibValueMetaObjectRecordData::FindAnyAttributeObjectByFilter.)
+
+	// -------------------------------------------------------------------------------------------------
 
 	// Chart of Characteristic Types binding (determines the values an account dimension may hold)
 	ibPropertyChartOfCharacteristicTypes* GetChartOfCharacteristicTypes() const { return m_propertyChartOfCharacteristicTypes; }
@@ -171,8 +214,6 @@ protected:
 		ibValueMetaObjectRecordDataHierarchyMutableRef::FillArrayObjectByPredefinedAttribute(array);
 		array.push_back(m_propertyAttributeAccountType->GetMetaObject());
 		array.push_back(m_propertyAttributeOffBalance->GetMetaObject());
-		array.push_back(m_propertyAttributeQuantitative->GetMetaObject());
-		array.push_back(m_propertyAttributeCurrency->GetMetaObject());
 		// The unfolded kinds — ordinary attributes from here on, which is the whole point: the list
 		// shows them, a filter reads them and a query selects them, with nothing taught about sections.
 		for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns)
@@ -298,11 +339,12 @@ private:
 	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), _("An off-balance account is a separate circuit outside the double entry: a posting may name it on one side only, with no correspondent account, and its figures are not summed into the balance that debits and credits must agree on."), ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyContainer<>* m_propertyAttributeQuantitative = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Quantitative"), _("Quantitative"), _("Marks an account kept in quantity as well as in money. A flag for the configuration to read - posting code and reports decide what to do with it; the platform itself does not act on it."), ibItemMode::ibItemMode_Folder_Item));
-
-	ibPropertyContainer<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), _("Marks an account kept in a currency as well as in the accounting currency. A flag for the configuration to read - posting code and reports decide what to do with it; the platform itself does not act on it."), ibItemMode::ibItemMode_Folder_Item));
+	// (QUANTITATIVE AND CURRENCY WERE DECLARED HERE, as two boolean fields the engine handed every
+	//  chart. They are gone: they are exactly what an ACCOUNTING FLAG is, and hardcoding two of them
+	//  decided for the author what his accounting keeps track of — while nothing in the engine ever
+	//  read either one. A chart declares its own now, by name, and a register's dimension or resource
+	//  says which one its figure is kept under. Off-balance stays a field of the metatype: the balance
+	//  check reads it, so it is the engine's question and not the author's. Max, 2026-09-16.)
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Chart of Characteristic Types binding — the CONTOUR: which values an account dimension of this

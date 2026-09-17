@@ -197,6 +197,7 @@
     <ClInclude Include="pictureDescription.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h" />
     <ClInclude Include="metaCollection\attribute\metaAttributeObjectEnum.h" />
+    <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h" />
     <ClInclude Include="metaCollection\dimension\metaDimensionObject.h" />
     <ClInclude Include="metaCollection\enumeration\metaEnumObject.h" />
     <ClInclude Include="metaCollection\metaSectionObject.h" />
@@ -342,6 +343,7 @@
     <ClInclude Include="propertyManager\property\propertyList.h" />
     <ClInclude Include="propertyManager\property\propertyOwner.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h" />
+    <ClInclude Include="propertyManager\property\propertyAccountingKind.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h" />
     <ClInclude Include="propertyManager\property\propertyPicture.h" />
@@ -616,7 +618,10 @@
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject_res.cpp" />
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObject.cpp" />
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObjectProperty.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp" />
+    <ClCompile Include="metaCollection\dimension\metaDimensionObjectProperty.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp" />
     <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp" />
     <ClCompile Include="metaCollection\enumeration\metaEnumObject_res.cpp" />
@@ -834,6 +839,7 @@
     <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionModel.cpp" />
     <ClCompile Include="metaCollection\partial\tabularSection\tabularSectionQuery.cpp" />
     <ClCompile Include="metaCollection\resource\metaResourceObject.cpp" />
+    <ClCompile Include="metaCollection\resource\metaResourceObjectProperty.cpp" />
     <ClCompile Include="metaCollection\resource\metaResourceObject_res.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObject.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObjectProperty.cpp" />
@@ -878,6 +884,7 @@
     <ClCompile Include="propertyManager\property\propertyList.cpp" />
     <ClCompile Include="propertyManager\property\propertyOwner.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp" />
+    <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp" />
     <ClCompile Include="propertyManager\property\propertyPicture.cpp" />

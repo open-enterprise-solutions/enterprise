@@ -4,6 +4,7 @@
 #include "backend/propertyManager/property/propertyChartOfAccounts.h"
 #include "backend/propertyManager/property/propertyChartOfCharacteristicTypes.h"
 #include "backend/propertyManager/property/propertyChartOfCalculationTypes.h"
+#include "backend/propertyManager/property/propertyAccountingKind.h"
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -36,6 +37,11 @@ public:
 		// Left out, a calculation register showed no chart at all in the designer — its binding existed,
 		// saved and applied, and could only be set by a script.
 		ibPropertyRegistry::Register([](ibPropertyChartOfCalculationTypes* prop) -> wxPGProperty* { return ibCreateChartBindingProperty(prop); });
+		// ⭐ THE KIND OF ACCOUNTING a dimension or a resource belongs to — the same editor, because it is
+		// the same act: pick one object a chart declares. Unregistered, the inspector had nothing to draw
+		// the property with and simply left it out: a register's resource showed `Balance` alone, and the
+		// kinds could be set from a script and nowhere else (Max saw it in the designer, 2026-09-16).
+		ibPropertyRegistry::Register([](ibPropertyAccountingKind* prop) -> wxPGProperty* { return ibCreateChartBindingProperty(prop); });
 	}
 }g_chartBindingLoader;
 

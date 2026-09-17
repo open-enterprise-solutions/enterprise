@@ -1261,7 +1261,26 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 			// second. A shared hop is still joined once: its key is the same, because it brings the same.
 			const wxString joinKey = prefixKey + wxString::Format(wxT("%p"), (const void*)bring);
 			if (joined.find(joinKey) == joined.end()) {
-				const ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, bring });
+				// ⭐ A TABLE THIS WALK REACHES A SECOND WAY brings a TWIN'S column (queryLowering.cpp,
+				// TwinForDotWalk): its own id, the same data. The table is read by its own column and the
+				// cells are filed under the twin's id — so `Account.Code` and `CorrAccount.Code` are two
+				// cells of the row, not one cell written twice.
+				const ibBackendQueryColumn* readLeaf = bring;
+				if (!tgtQ->OwnsColumn(bring))
+					if (const ibBackendQueryColumn* own = tgtQ->ResolveColumnByName(bring->GetName()))
+						readLeaf = own;
+				ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, readLeaf });
+				if (readLeaf != bring) {
+					ibQueryRamTable filed;
+					filed.AddColumn(tgtKey->GetColumnId(), tgtKey->GetName(), tgtKey->GetTypeDesc());
+					filed.AddColumn(bring->GetColumnId(), bring->GetName(), bring->GetTypeDesc());
+					for (long row = 0; row < tgt.RowCount(); ++row) {
+						const long added = filed.AppendRow();
+						filed.SetCell(added, tgtKey->GetColumnId(), tgt.TakeCell(row, tgtKey->GetColumnId()));
+						filed.SetCell(added, bring->GetColumnId(), tgt.TakeCell(row, readLeaf->GetColumnId()));
+					}
+					tgt = std::move(filed);
+				}
 				std::vector<const ibBackendQueryColumn*> outCols = present;               // keep every present column (LEFT) ...
 				std::vector<bool> fromLeft(present.size(), true);
 				outCols.push_back(bring);  fromLeft.push_back(false);                     // ... plus the brought-in target column (RIGHT)
@@ -2684,14 +2703,19 @@ struct ibAggAcc
 		// The same distinction the join stitch already makes for an unmatched row (RamNullValue): a fold
 		// with nothing in it and a row that never matched are the same absence, and must read alike.
 		//
-		// ⚠ SUM IS DELIBERATELY LEFT AT ZERO. SQL would say NULL there too, but this engine answers a
-		// no-rows total with zero ON PURPOSE (MakeZeroAggregateResult, the door's own empty-result
-		// shape), and a report that adds up nothing prints 0 rather than a blank. Changing that is a
-		// decision about what a total MEANS, not a defect to be quietly corrected here.
+		// ⚠ SUM OF NO ROWS IS ZERO, ON PURPOSE. SQL would say NULL there too, but this engine answers a
+		// no-rows total with zero (MakeZeroAggregateResult, the door's own empty-result shape), and a
+		// report that adds up nothing prints 0 rather than a blank.
+		//
+		// ⭐ …BUT A SUM OF ROWS THAT ALL HAVE NO VALUE IS NULL — and that is the decision about what a total
+		// means, taken (Max, 2026-09-16): a figure that is not kept — a quantity on a supplier account,
+		// empty on every row of it — adds up to empty, while a kept figure that came to nothing adds up to
+		// zero. It is also what the server answers for the same SUM (a computed output that came back NULL
+		// is read as NULL, columnLayout.cpp), so the report no longer depends on which road its totals took.
 		using Fn = ibDataQueryBuilder::AggregateFn;
 		switch (a.m_fn) {
 		case Fn::Count: return ibValue(ibNumber((a.m_col == nullptr && !a.m_expr) ? m_rows : m_n));
-		case Fn::Sum: return ibValue(m_sum);
+		case Fn::Sum: return (m_rows > 0 && m_n == 0) ? RamNullValue() : ibValue(m_sum);
 		case Fn::Avg: return m_n > 0 ? ibValue(m_sum / ibNumber(m_n)) : RamNullValue();
 		case Fn::Min: case Fn::Max: return m_have ? m_best : RamNullValue();
 		default: return ibValue();

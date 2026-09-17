@@ -28,7 +28,10 @@
 const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 {
 	if (!m_ownerRef) {
-		const ibValueMetaObject* owner = m_meta != nullptr ? m_meta->GetParent() : nullptr;
+		// A DB-backed section belongs to a reference owner, and names its owner field as the owner names its own
+		// reference — one spelling, the owner's, so a reader asking by the owner's reference finds this column.
+		const ibValueMetaObjectRecordDataRef* owner = m_meta != nullptr ? m_meta->GetParentAsType<ibValueMetaObjectRecordDataRef>() : nullptr;
+		const ibValueMetaObjectAttributeBase* ownerReference = owner != nullptr ? owner->GetDataReference() : nullptr;
 
 		// ⚠ IT NEEDS AN IDENTITY, NOT JUST A NAME. Column ownership across joined sources is decided
 		// by the column's ID, precisely because two sources can expose fields of the SAME name — and
@@ -42,18 +45,25 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
 
 		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
-			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0, wxT("Ref"), identity)));
+			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0,
+			ownerReference != nullptr ? ownerReference->GetName() : wxString(), identity)));
 	}
 	return m_ownerRef.get();
 }
 
 const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const
 {
-	if (name.IsSameAs(wxT("Ref"), false))
-		return OwnerRefColumn();
-	// The attribute's QUERY FACE — it holds one rather than being one (docs/ownership-authority.md).
-	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
-	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
+	const ibBackendQueryColumn* const ownerRef = OwnerRefColumn();
+	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::CompareString(name, ownerRef->GetName()))
+		return ownerRef;
+	// The attribute's QUERY FACE — it holds one rather than being one (docs/ownership-authority.md) — found in the
+	// SAME list GetColumns vends. The table's children alone missed what its owner carries into it: the account's
+	// kinds table shows a tick-box per breakdown accounting kind of its chart, and `K.Quantitative` was refused as
+	// an unknown attribute while `SELECT *` returned it (2026-09-17).
+	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
+		if (attribute != nullptr && stringUtils::CompareString(name, attribute->GetName()))
+			return attribute->GetQueryColumn();
+	return nullptr;
 }
 
 std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const

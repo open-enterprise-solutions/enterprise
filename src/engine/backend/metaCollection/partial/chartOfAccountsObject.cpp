@@ -121,11 +121,20 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		// per account, like the kind is.
 		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance()->GetQueryColumn());
 
-		// Quantitative / Currency are deliberately NOT here, and they are not standard attributes of
-		// an account at all. They are two booleans spelling out ONE fact — how the account is KEPT —
-		// which is an accounting KIND: declared once on the chart and then ticked per account, the
-		// same shape the analytics kinds already have. Putting them on the form as two checkboxes
-		// would fix the bit-encoded form in the interface before that mechanism exists.
+		// ⭐⭐ …AND EVERY KIND OF ACCOUNTING THE CHART DECLARES, as a tick-box of its own. What stood here
+		// said that Quantitative and Currency were not attributes of an account and must not be drawn as
+		// two checkboxes "before that mechanism exists" — and it was right, twice over: those two were
+		// hardcoded, and how an account is KEPT is the author's vocabulary, not the engine's.
+		//
+		// The mechanism exists now. A kind is declared once on the chart and answered per account, which
+		// IS a boolean field of the account — so the form shows one box per kind, beside Off-balance,
+		// with nothing spelled out here: what they are called and how many there are is the chart's.
+		// (A BREAKDOWN's kind is not here — its answer is given per row of the analytics section, so it
+		//  is a column of that table and arrives with it.)
+		for (const ibValueMetaObjectAccountingKind* kind : metaRef->GetAccountingKindArrayObject())
+			if (kind != nullptr && !kind->IsDeleted())
+				m_sourceExplorer.AppendColumn(kind->GetQueryColumn());
+
 		// (The analytics-kinds section is NOT appended by hand here. It used to be, because it was the
 		//  only way to reach it: its clsid was missing from the tabular-section filter, so the general
 		//  loop below walked straight past it. Now that the filter knows it, adding it here as well

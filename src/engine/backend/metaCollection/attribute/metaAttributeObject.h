@@ -377,6 +377,13 @@ public:
 	// stays inert, so the object inspector still cannot edit what the metatype declares.
 	void SetOwnerSynonym(const wxString& strSynonym) { m_strSynonym = strSynonym; }
 
+	// …and the picture, for the same reason: a predefined attribute that STANDS FOR a field of its owner — a
+	// side of an accounting register's dimension or resource kept per side (`CurrencyDr`, `QuantityCr`) — is
+	// drawn as that field in a field list, a dimension as a dimension and a figure as a figure, not as one
+	// more plain attribute. Restated by the owner with the name and the caption; unset, the class's own.
+	void SetOwnerIcon(const wxIcon& icon) { m_ownerIcon = icon; }
+	wxIcon GetColumnIcon() const override { return m_ownerIcon.IsOk() ? m_ownerIcon : ibValueMetaObjectAttributeBase::GetColumnIcon(); }
+
 	friend class ibValue;
 
 protected:
@@ -395,6 +402,7 @@ private:
 	ibIndexingMode m_indexingMode = ibIndexingMode::ibIndexingMode_DontIndex;
 
 	wxString m_strSynonym;
+	wxIcon   m_ownerIcon;   // see SetOwnerIcon
 };
 
 #endif

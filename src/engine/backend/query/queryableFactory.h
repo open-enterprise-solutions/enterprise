@@ -117,6 +117,29 @@ struct ibQuerySourceParameter
 
 };
 
+// ⭐⭐ WHICH COLUMNS OF A CALLED TABLE THE QUERY READS — by the names it writes them with.
+//
+// A virtual table groups by the columns it publishes, and one of them may cut every row finer than the
+// question: the correspondent of an accounting turnover splits "the turnover of 62" into one row per
+// account it moved against. The reference groups only by what the query names, so the reading has to be
+// told what that is. `m_all` when nobody could say — `SELECT *`, a check that runs nothing, a script —
+// and then every column counts as read.
+struct ibQueryReadColumns
+{
+	bool                  m_all = true;
+	std::vector<wxString> m_names;
+
+	bool Reads(const wxString& name) const
+	{
+		if (m_all)
+			return true;
+		for (const wxString& read : m_names)
+			if (read.IsSameAs(name, false))
+				return true;
+		return false;
+	}
+};
+
 class BACKEND_API ibQueryableSourceDescriptor
 {
 public:
@@ -207,6 +230,16 @@ public:
 	virtual wxString GetNamespace() const = 0;
 	virtual wxString GetName() const = 0;
 
+	// ⭐ THE COMPANIONS GO WHEN THE REGISTRATION GOES — said by the factory's Unregister, the door every
+	// source passes when its configuration closes. A companion holds the VALUES of its call: dates, a
+	// period that names a document, the accounts of a condition — references into the configuration. Kept
+	// until the descriptor itself was destroyed, they outlived the metaobjects they point into: the tree is
+	// removed child by child, the chart of accounts before the register that reads it, and a reference
+	// forgotten from the registry asked its already-freed chart for its id. An access violation at every
+	// exit of a client that had run an account condition (dump 2026-09-16, ibReferenceRegistry::Forget
+	// under ~ibAcctSourceDescriptor). A source registered again builds its companions afresh.
+	void ReleaseCompanions() { m_companions.clear(); }
+
 	// CREATE the queryable from the call-scoped params (count + pointer-to-pointer of ibValue —
 	// the ibValue::Init idiom). NON-const: a parameterized source (a register's balance / slice)
 	// builds + configures its call-scoped companion HERE from the params and OWNS the result; a
@@ -224,10 +257,14 @@ public:
 	// condition names columns, and the companion this call is about does not exist yet — resolving
 	// against it would be resolving against the thing being built. The scope is the source's stable
 	// side (a register's movements table), where the account column lives in any case.
+	//
+	// `read` is what the query reads of the table (ibQueryReadColumns) — for a source whose rows depend on it.
 	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                                  const std::vector<ibQueryPredicatePtr>& conditions)
+	                                                  const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                  const ibQueryReadColumns& read)
 	{
 		(void)conditions;
+		(void)read;
 		return CreateQueryable(paParams, lSizeArray);
 	}
 

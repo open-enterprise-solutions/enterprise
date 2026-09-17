@@ -11,6 +11,7 @@
 #include "backend/backend_exception.h"     // an engine refusal arrives as an exception
 #include "backend/mcp/mcpTool.h"           // ibMcpActing — who is the source, before anything asks
 #include "backend/metadataConfiguration.h" // SaveDatabase / the four apply stages
+#include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart's own two branches — see AddChartOfAccountsItem
 #include "backend/restructureInfo.h"       // …and the ledger the decision reads
 #include "frontend/mainFrame/objinspect/objinspect.h"
 #include "frontend/docView/docView.h"
@@ -37,6 +38,8 @@
 #define	objectTemplatesName _("Templates")
 #define objectAttributesName _("Attributes")
 #define objectCommandsName _("Commands")
+#define objectAccountingKindsName _("Accounting kinds")
+#define objectAccountDimensionAccountingKindsName _("Account dimension accounting kinds")
 #define objectDimensionsName _("Dimensions")
 #define objectResourcesName _("Resources")
 
@@ -1433,6 +1436,29 @@ void ibConfigurationTree::AddCatalogItem(ibValueMetaObject* metaObject, const wx
 		metaObjectValue->GetTemplateArrayObject());
 }
 
+// A CHART OF ACCOUNTS — a reference object with two branches of its own. Written out rather than
+// delegated to AddCatalogItem: the kinds stand BETWEEN the attributes and the tabular sections, and
+// order is the whole point of a tree.
+void ibConfigurationTree::AddChartOfAccountsItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	ibValueMetaObjectChartOfAccounts* chart = metaObject->ConvertToType<ibValueMetaObjectChartOfAccounts>();
+	wxASSERT(chart);
+
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		chart->GetAttributeArrayObject());
+	AppendObjectGroup(hParentID, g_metaAccountingKindCLSID, objectAccountingKindsName,
+		chart->GetAccountingKindArrayObject());
+	AppendObjectGroup(hParentID, g_metaAccountDimensionAccountingKindCLSID, objectAccountDimensionAccountingKindsName,
+		chart->GetAccountDimensionAccountingKindArrayObject());
+	AppendTableGroup(hParentID, g_metaTableRefCLSID, objectTablesName,
+		chart->GetTableArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		chart->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, chart->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		chart->GetTemplateArrayObject());
+}
+
 // A DOCUMENT renders exactly as a catalog does — the same five groups in the same order. It keeps
 // an entry point of its own only because the dispatcher names KINDS, not shapes.
 void ibConfigurationTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
@@ -1634,7 +1660,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTr
 	else if (clsid == g_metaParameterizedJobCLSID)           AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaChartOfCalculationTypesCLSID)    AddCatalogItem(metaItem, item);
-	else if (clsid == g_metaChartOfAccountsCLSID)            AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaChartOfAccountsCLSID)            AddChartOfAccountsItem(metaItem, item);
 	else if (clsid == g_metaAccountingRegisterCLSID)         AddAccumulationRegisterItem(metaItem, item);
 	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);

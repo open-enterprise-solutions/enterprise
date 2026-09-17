@@ -336,7 +336,12 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		std::function<void(const ibDataViewTreeNode*)> gather = [&](const ibDataViewTreeNode* node) {
 			for (auto* child : node->GetChildNodes()) {
 				if (child == nullptr || !child->IsOpen()) continue;
-				openBefore.Add(child->GetItem());
+				// ⚠ A BREADCRUMB IS NOT A GROUP THE READER OPENED. The hierarchical view plants the folder it
+				// stands in as an OPEN node above its rows; remembered here, it came back open INSIDE the list
+				// once the reader stepped out of it — the folder shown unfolded where the view never unfolds.
+				// The drill chain is the chain's (m_topParentChain); only its contents are the reader's.
+				if (child->GetViewMode() != ibDataViewTreeNodeViewMode::ibDataViewHierarchy)
+					openBefore.Add(child->GetItem());
 				gather(child);
 			}
 		};

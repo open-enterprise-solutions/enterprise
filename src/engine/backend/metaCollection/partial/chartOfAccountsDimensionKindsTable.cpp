@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfAccountsDimensionKindsTable.h"
+#include "chartOfAccounts.h"   // the owner chart — its analytics flags are this table's columns
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // tabular value-ctor register macros (registerTabularSection / _String)
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
@@ -104,6 +105,25 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnAfterCloseMetaObject()
 	if (!(*m_propertyAccountDimensionKind)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertySummaryOnly)->OnAfterCloseMetaObject()) return false;
 	return ibValueMetaObjectTableDataRef::OnAfterCloseMetaObject();
+}
+
+// …AND THE CHART'S ANALYTICS FLAGS COME WITH THEM — see the note beside the declaration. Asked of the
+// OWNER, never kept here: a flag declared, renamed or deleted in the tree is answered for by the chart
+// on the next walk, so there is no copy of the list to fall out of step with it.
+std::vector<ibValueMetaObjectAttributeBase*> ibValueMetaObjectAccountDimensionKindsTable::GetGenericAttributeArrayObject(
+	std::vector<ibValueMetaObjectAttributeBase*>& array) const
+{
+	ibValueMetaObjectTableDataRef::GetGenericAttributeArrayObject(array);
+
+	// The owner IS a chart of accounts — this table is a member of one and of nothing else — so it is
+	// stated, not discovered: GetParentAsType raises on a parent that is anything other than that.
+	if (const ibValueMetaObjectChartOfAccounts* chart = GetParentAsType<ibValueMetaObjectChartOfAccounts>()) {
+		for (ibValueMetaObjectAccountDimensionAccountingKind* kind : chart->GetAccountDimensionAccountingKindArrayObject())
+			if (kind != nullptr)
+				array.push_back(kind);
+	}
+
+	return array;
 }
 
 //***********************************************************************

@@ -65,6 +65,12 @@ BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 // go through here, so writer and reader cannot drift apart.
 BACKEND_API wxString ibSqlAliasOf(const wxString& outputName);
 
+// ⭐ IS THIS A PLAIN SCALAR — one type, and that type a number, a string, a date or a boolean. Such a value is
+// ONE field of a result and is read by its name; anything else (a reference, an enum, a composite) comes back
+// as a spread reassembled under a prefix. Every reader and writer that makes that split asks here, so the
+// projection and the read of one output cannot disagree about which kind it is.
+BACKEND_API bool ibIsPlainScalarType(const ibTypeDescription& type);
+
 // ⭐⭐ THE OWNER REFERENCE OF A TABULAR SECTION'S LINE — sixteen bytes naming the row's OWNER.
 //
 // It was called the ROW KEY, and once that was true: every table carried a scaffold column
@@ -105,6 +111,14 @@ BACKEND_API ibBackendColumnRawDB   ibOwnerRefColumn();
 // clsid KIND (IsReference), not a metadata lookup. Order: TYPE, B, N, D, S, E, RTRef, RRRef
 // — the same fixed order the write / read codec binds in. A raw column = one slot as-is.
 BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col);
+
+// Do two physical fields render to the SAME SQL type? The whole canonical L2 type, qualifiers
+// included — so it answers exactly "would a DDL writer have to touch this field", and nothing wider.
+//
+// Two floors ask it about the same pair of slots and act oppositely, which is why it is one function
+// and not two: the column diff ALTERs the field when this is false, and a DERIVED table (whose key
+// is its PRIMARY KEY) must instead be REBUILT, because no engine alters a column an index stands on.
+BACKEND_API bool ibSameFieldType(const ibColumnType& a, const ibColumnType& b);
 
 // Whether a role CARRIES the column's value, as opposed to TAGGING what the value is (_TYPE, and a
 // reference's _RTRef). This is the one split ColumnValueFields filters by, named so a consumer can

@@ -325,9 +325,9 @@ TEST(RegisterSurface, TheSideRidesTheCaptionTheSameWayItRidesTheName) {
 }
 
 TEST(RegisterSurface, AColumnCaptionSaysWhatItIsOfThenWhatItIs) {
-    EXPECT_EQ(wxT("Amount Balance"), ibRegFigureColumnCaption(wxT("Amount"), wxT("Balance")));
+    EXPECT_EQ(wxT("Amount Balance"), ibRegColumnCaptionOf(wxT("Amount"), wxT("Balance")));
     // A resource with no synonym of its own must not produce a leading space.
-    EXPECT_EQ(wxT("Balance"), ibRegFigureColumnCaption(wxEmptyString, wxT("Balance")));
+    EXPECT_EQ(wxT("Balance"), ibRegColumnCaptionOf(wxEmptyString, wxT("Balance")));
 }
 
 // =============================================================================
@@ -337,8 +337,8 @@ TEST(RegisterSurface, AColumnCaptionSaysWhatItIsOfThenWhatItIs) {
 TEST(RegisterSurface, TheSameQuestionGetsTheSameSurface) {
     ibRegSurfaceCache cache;
     ibTypeDescription type;
-    const auto build = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+    const auto build = [&type](std::vector<ibTempColumn>& columns) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
     };
 
     const ibBackendQueryable* first  = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
@@ -350,12 +350,12 @@ TEST(RegisterSurface, TheSameQuestionGetsTheSameSurface) {
 TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
     ibRegSurfaceCache cache;
     ibTypeDescription type;
-    const auto one = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+    const auto one = [&type](std::vector<ibTempColumn>& columns) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
     };
-    const auto two = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
-        columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, synthetic++));
+    const auto two = [&type](std::vector<ibTempColumn>& columns) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
+        columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, ibRegDerivedColumnId(1002)));
     };
 
     const ibBackendQueryable* before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
@@ -377,35 +377,30 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
 }
 
 TEST(RegisterSurface, ADerivedColumnSaysByItsSignThatNobodyDeclaredIt) {
-    // ⭐⭐ THE SEED IS A PLAIN ORDINAL AND EACH SITE COMPOSES ITS OWN ID off it. `id + 1` is the next
-    // COLUMN only while the number is ordinary — added to an already composed one it means another
-    // KIND (queryColumn.h, SyntheticId).
-    //
     // 🛑 It used to be a positive BAND, 0x50000000: the last of five hand-carved ranges to outlive
     // the sign scheme that replaced them (§ 31.2 of the query-language arc). A surface therefore
     // published columns nobody declared under ids indistinguishable from an attribute's metaID —
     // against the invariant `GetColumnId`'s own note calls structural. Pinned here as the RULE
     // rather than as the constant, so the next renumbering has to keep the property and not the
     // number.
-    ibRegSurfaceCache cache;
-    ibTypeDescription type;
+    const ibMetaID standing = ibRegDerivedColumnId(1087);      // a column standing for attribute 1087
+    const ibMetaID owned    = ibRegDerivedColumnId(1087, 1);   // …and one attribute 1087 owns
+    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(standing));
+    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(owned));
+    EXPECT_NE(standing, owned);
+}
 
-    ibMetaID seed = -1;
-    ibMetaID first = 0, second = 0;
+TEST(RegisterSurface, DerivedColumnIdsNeverMeetAndLeaveRoomForAnotherReading) {
+    // ⭐ Numbered over a declared metaID and a place (0 = the attribute itself, 1.. = a column it owns):
+    // every (metaID, place) pair is its own number, whatever the metaIDs are…
+    std::set<ibMetaID> ids;
+    for (ibMetaID owner = 0; owner < 512; ++owner)
+        for (unsigned int no = 0; no < ibRegColumnsPerOwner; ++no)
+            EXPECT_TRUE(ids.insert(ibRegDerivedColumnId(owner, no)).second) << "owner " << owner << " no " << no;
 
-    cache.Obtain(wxT("k"), wxT("sig"), wxT("T"), nullptr,
-        [&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
-            seed   = synthetic;
-            first  = ibRegDerivedColumnId(synthetic++);
-            second = ibRegDerivedColumnId(synthetic++);
-            columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, first));
-            columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, second));
-        });
-
-    EXPECT_EQ(0, seed);                                             // an ordinal, not a composed base
-    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(first));        // negative: nobody declared it
-    EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(second));
-    EXPECT_NE(first, second);                                       // …and one per column
+    // …and a configuration's metaIDs leave room for a further reading of the surface (an alias twin wraps
+    // the id once more — queryColumn.h, CanComposeSyntheticId), up to about 130 000.
+    EXPECT_TRUE(ibBackendQueryColumn::CanComposeSyntheticId(ibRegDerivedColumnId(130000, ibRegColumnsPerOwner - 1)));
 }
 
 // =============================================================================
@@ -440,18 +435,20 @@ void FoldOracle(int accountType, double& debit, double& credit)
 }
 
 // What the projected CASE computes (FoldedPairOnServer), in the same order of tests the relation declares.
-void FoldAsProjected(int accountType, double& debit, double& credit)
+// `apFolds` — the row stands on one set of the account's analytics (FullAnalyticsOnServer).
+void FoldAsProjected(int accountType, double& debit, double& credit, bool apFolds = true)
 {
     const double dr = debit, cr = credit;
-    const bool debitStands = accountType == ibAccountType::eActivePassive && dr >= cr;
+    const bool apFolding   = accountType == ibAccountType::eActivePassive && apFolds;
+    const bool debitStands = apFolding && dr >= cr;
     debit  = accountType == ibAccountType::eActive  ? dr - cr
            : accountType == ibAccountType::ePassive ? 0.0
            : debitStands                            ? dr - cr
-           : accountType == ibAccountType::eActivePassive ? 0.0 : dr;
+           : apFolding                              ? 0.0 : dr;
     credit = accountType == ibAccountType::ePassive ? cr - dr
            : accountType == ibAccountType::eActive  ? 0.0
            : debitStands                            ? 0.0
-           : accountType == ibAccountType::eActivePassive ? cr - dr : cr;
+           : apFolding                              ? cr - dr : cr;
 }
 
 } // namespace
@@ -484,6 +481,21 @@ TEST(AcctBalanceServerRoad, ActivePassiveFoldsWithinOneSetOfAnalytics) {
     FoldAsProjected(ibAccountType::eActivePassive, dr, cr);
     EXPECT_DOUBLE_EQ(0.0,     dr);
     EXPECT_DOUBLE_EQ(33000.0, cr);
+}
+
+TEST(AcctBalanceServerRoad, ActivePassiveAcrossSeveralSetsKeepsBothSides) {
+    // A row broken down by fewer kinds than the account keeps a balance along stands on several sets at once —
+    // a receivable of one contract and a payable of another — and netting them would report neither.
+    double dr = 69820.0, cr = 55000.0;
+    FoldAsProjected(ibAccountType::eActivePassive, dr, cr, /*apFolds*/ false);
+    EXPECT_DOUBLE_EQ(69820.0, dr);
+    EXPECT_DOUBLE_EQ(55000.0, cr);
+
+    // …while an active or a passive account folds whatever the row stands on.
+    dr = 150.0; cr = 40.0;
+    FoldAsProjected(ibAccountType::eActive, dr, cr, /*apFolds*/ false);
+    EXPECT_DOUBLE_EQ(110.0, dr);
+    EXPECT_DOUBLE_EQ(0.0,   cr);
 }
 
 TEST(AcctBalanceServerRoad, TheOppositeSideReducesRatherThanAccumulates) {
@@ -557,8 +569,9 @@ TEST(AcctArgs, ACorrespondenceTurnoverPutsTheConditionBetweenTheSides) {
     EXPECT_EQ(4, a.m_kindsDr);
     EXPECT_EQ(5, a.m_condition);
     EXPECT_EQ(6, a.m_accountCr);
-    EXPECT_EQ(7, a.m_kindsCr);
-    EXPECT_EQ(8, a.m_count);
+    // The correspondent's analytics are columns of the row, not a list of kinds asked for.
+    EXPECT_EQ(-1, a.m_kindsCr);
+    EXPECT_EQ(7, a.m_count);
 }
 
 TEST(AcctArgs, TheMatrixNamesBothSidesFirstAndFiltersThePairAfterwards) {

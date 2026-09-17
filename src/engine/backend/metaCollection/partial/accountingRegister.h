@@ -11,6 +11,7 @@
 // accumulation register does, and a copy per register is how two registers come to disagree.
 #include "backend/metaCollection/partial/registerQueryLowering.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -42,11 +43,25 @@ namespace ibAcctFigure {
 	inline const wxString TurnoverDr       = ibRegSidedFigure(ibRegFigure::Turnover, false);
 	inline const wxString TurnoverCr       = ibRegSidedFigure(ibRegFigure::Turnover, true);
 	inline const wxString Turnover         = ibRegFigure::Turnover;   // DrCrTurnovers — one figure per PAIR of accounts
+	inline const wxString CorrTurnoverDr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, false);
+	inline const wxString CorrTurnoverCr   = ibRegSidedFigure(ibRegFigure::CorrTurnover, true);
 	inline const wxString OpeningBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningBalance, false);
 	inline const wxString OpeningBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningBalance, true);
 	inline const wxString ClosingBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingBalance, false);
 	inline const wxString ClosingBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingBalance, true);
+	// The same three pairs BEFORE the fold by account type — see ibRegFigure::GrossBalance.
+	inline const wxString GrossBalanceDr        = ibRegSidedFigure(ibRegFigure::GrossBalance, false);
+	inline const wxString GrossBalanceCr        = ibRegSidedFigure(ibRegFigure::GrossBalance, true);
+	inline const wxString OpeningGrossBalanceDr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, false);
+	inline const wxString OpeningGrossBalanceCr = ibRegSidedFigure(ibRegFigure::OpeningGrossBalance, true);
+	inline const wxString ClosingGrossBalanceDr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, false);
+	inline const wxString ClosingGrossBalanceCr = ibRegSidedFigure(ibRegFigure::ClosingGrossBalance, true);
 }
+
+// WHICH ACCOUNT DECIDES WHETHER A FIGURE HAS A PLACE — asked at write (a line's field) and at read (a row's
+// figure) alike. `Account` is the row's or the line's account, the debit one where there are two; `Credit`
+// the credit one; `Either` a value the two sides share; `Corr` the correspondent a turnover row is cut by.
+enum class ibAcctJudgedBy { Account, CreditAccount, EitherAccount, CorrAccount };
 
 // The five virtual tables. Named as a shape rather than as three flags, for the reason the neighbour
 // states: naming a column a surface does not have is how a reader gets a silent empty instead of an
@@ -157,9 +172,14 @@ struct ibAcctArgs
 		if (!conditionLast)
 			a.m_condition = slot++;
 
+		// ⚠ …AND A TURNOVER TAKES NO BREAKDOWN FOR ITS CORRESPONDENT. The correspondent's analytics are
+		// columns of the row (`CorrAccountDimension1`), read and filtered like any other; a list of kinds for
+		// them was a second way of asking what the columns already answer (Max, 2026-09-16: "this is
+		// superfluous"). The matrix keeps both, because there both sides are the row.
 		if (bothSides) {
 			a.m_accountCr = slot++;
-			a.m_kindsCr   = slot++;
+			if (shape == ibAcctShape::DrCrTurnovers)
+				a.m_kindsCr = slot++;
 		}
 
 		if (conditionLast)
@@ -200,12 +220,6 @@ struct ibAcctCallArgs
 	ibValue              m_condition;
 	ibRegFold            m_fold;
 
-	// ⭐ WHAT TO DO WITH A PERIOD NOTHING MOVED IN — asked only of the symbiosis, because only it
-	// reports a balance for a period no movement touched. `Movements` (the default) reports the
-	// periods that have movements; `MovementsAndPeriodBoundaries` reports every period of the
-	// interval, carrying the balance across the empty ones.
-	bool                 m_fillEmptyPeriods = false;
-
 	// A LISTING answers with lines, so it is the one reading that can be ordered and capped. Empty /
 	// zero mean "as they come" and "all of them" — the same answers the arguments' absence gives.
 	ibValue              m_order;
@@ -226,6 +240,7 @@ class ibAcctTurnoverQueryable;
 class ibAcctDrCrTurnoverQueryable;
 class ibAcctBalanceAndTurnoverQueryable;
 class ibAcctRecordsQueryable;
+class ibAcctConditionScope;
 
 // L4 virtual-table source descriptors. Owned by the register as fields, registered under
 // "<Register>.Balance" / ".Turnovers" / ".DrCrTurnovers" / ".BalanceAndTurnovers" /
@@ -246,11 +261,14 @@ public:
 	// ⭐⭐ THE SAME CALL, WITH THE ACCOUNT CONDITIONS THIS SOURCE CONSUMES ITSELF. They do not reach a
 	// WHERE: a reading asked for accounts «in hierarchy» reports the subordinates UNDER the account
 	// that was named, and a filter applied around it can only remove rows, never fold them.
+	// …and with what the query reads of the table: the turnovers are cut by the correspondent only when one
+	// of its columns is read.
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions) override;
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
 
-	// …resolved against the MOVEMENTS, which is where the account column lives whichever surface a
-	// given pass then reads — and which exists before the call's companion does.
+	// …resolved against the columns this table PUBLISHES — the conditions are written in the names the
+	// table is selected by (Max, 2026-09-16: "the conditions must be written in the names the table is selected by").
 	const ibBackendQueryable* GetConditionScope() const override;
 
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the query constructor's catalogue.
@@ -276,6 +294,13 @@ private:
 	// behind would attach itself to the NEXT one, which is the quiet kind of wrong.
 	ibQueryPredicatePtr                  m_pendingAccountDr;
 	ibQueryPredicatePtr                  m_pendingAccountCr;
+	ibQueryReadColumns                   m_pendingRead;
+
+	// The scope conditions are resolved against — made on the first ask and kept, because a lowered
+	// predicate holds its columns for as long as the companion it was handed to.
+	// (shared, not unique: the type is complete only in accountingRegisterMetadataTotals.cpp, and a shared
+	//  handle takes its deleter where it is made rather than wherever the descriptor is destroyed.)
+	mutable std::shared_ptr<ibAcctConditionScope> m_conditionScope;
 };
 
 class ibValueMetaObjectAccountingRegister : public ibValueMetaObjectRegisterData {
@@ -295,23 +320,10 @@ private:
 
 public:
 
-	// ⭐⭐ WHAT THE TABLE HAS IS NOT WHAT IS OFFERED, and RecordType is where the two part company.
-	//
-	// The column ALWAYS exists — see FillArrayObjectByPredefinedAttribute below for why: a column
-	// that follows the correspondence checkbox takes its data with it when the box is unticked.
-	// That decision is about STORAGE and it stands.
-	//
-	// 🛑 But it leaked into every reading. RecordType says WHICH SIDE a one-sided row is; a
-	// correspondence row names BOTH accounts, so the question does not arise — and the register's
-	// own comment already says such a row "leaves RecordType empty". An unanswered enumeration is
-	// not blank on screen, though: its default is a real member, so the list showed **Debit** on a
-	// row that has both a debit and a credit account, and a query or a form would hand the same
-	// word to anyone who asked. A meaningless field displayed as a made choice.
-	//
-	// So it is dropped from the OFFERED set — the one queries, forms and the runtime object read —
-	// while the schema keeps its column. The seam for this already existed and was simply not used:
-	// GetPredefinedAttributeArrayObject answers the schema, GetGenericAttributeArrayObject answers
-	// everyone else.
+	// (RecordType in correspondence mode, AccountCr and the credit breakdown in a one-sided register, the
+	//  sides of a field kept whole — none of them is LISTED in that mode (FillArrayObjectByPredefinedAttribute
+	//  below), and each is switched off besides (metaDisableFlag), the platform's two marks for an attribute
+	//  not in use. A correspondence row used to show **Debit** in a RecordType nobody writes.)
 	// ⚠ THE `using` IS NOT DECORATION. Declaring one overload here hides EVERY base overload of the
 	// name, and the no-argument form is what almost every caller uses — without this line the tree
 	// stops compiling at the first `GetGenericAttributeArrayObject()`. The base carries the same
@@ -323,14 +335,15 @@ public:
 	{
 		ibValueMetaObjectRegisterData::GetGenericAttributeArrayObject(array);
 
-		if (!IsCorrespondence())
-			return array;
-
-		ibValueMetaObjectAttributeBase* side = GetRegisterRecordType();
-
-		for (auto it = array.begin(); it != array.end(); ++it) {
-			if (*it == side) { array.erase(it); break; }
-		}
+		// ⭐ A FIELD KEPT PER SIDE IS OFFERED AS ITS TWO SIDES (listed with the predefined ones), not as
+		// itself. The author's field is not a predefined attribute — it is listed by the dimension or
+		// resource walk, and switching it off would take it out of the designer's own tree — so it is
+		// left out here; its column stays, because the schema reads the dimensions itself.
+		// …and only once its sides exist: a copy that mirrors a database written before them still reads
+		// the field itself.
+		array.erase(std::remove_if(array.begin(), array.end(), [this](const ibValueMetaObjectAttributeBase* attribute) {
+			return attribute != nullptr && IsKeptPerSide(attribute) && GetFieldSide(/*creditSide*/ false, attribute) != nullptr;
+		}), array.end());
 
 		return array;
 	}
@@ -382,11 +395,13 @@ public:
 			return wxEmptyString;
 
 		bool numbered = false;
-		ForEachOwnAttribute([&](const ibValueMetaObjectAttributePredefined* own, ibOwnRole role) {
-			// The credit ACCOUNT is one column, not a family — nothing to group it with.
-			if (own == attribute && role != ibOwnRole::AccountCr)
-				numbered = true;
-			return !numbered;   // found it — stop walking
+		ForEachOwnAttribute([&](const ibValueMetaObjectAttributePredefined* own, ibOwnAttributeRole role) {
+			// The credit ACCOUNT is one column, not a family — nothing to group it with; a field's SIDE is
+			// grouped with its side of the posting (FillSourceExplorer), not by a number it does not have.
+			if (own != attribute)
+				return true;
+			numbered = (role == ibOwnAttributeRole::DimensionKind || role == ibOwnAttributeRole::DimensionValue);
+			return false;   // found it — stop walking
 		});
 
 		if (!numbered)
@@ -492,7 +507,8 @@ public:
 	ibQueryRamTable ComputeTurnover(const ibRegBound& begin, const ibRegBound& end,
 	                                const ibQueryPredicatePtr& accountDr, const ibQueryPredicatePtr& accountCr,
 	                                const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-	                                const ibQueryPredicatePtr& filter, const ibRegFold& fold, const ibValue& condition = ibValue()) const;
+	                                const ibQueryPredicatePtr& filter, const ibRegFold& fold, const ibValue& condition = ibValue(),
+	                                bool byCorrespondent = false) const;
 	ibQueryRamTable ComputeDrCrTurnover(const ibRegBound& begin, const ibRegBound& end,
 	                                    const ibQueryPredicatePtr& accountDr, const ibQueryPredicatePtr& accountCr,
 	                                    const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
@@ -501,7 +517,13 @@ public:
 	                                          const ibQueryPredicatePtr& accountDr, const ibQueryPredicatePtr& accountCr,
 	                                          const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
 	                                          const ibQueryPredicatePtr& filter, const ibRegFold& fold,
-	                                          const ibValue& condition = ibValue(), bool fillEmptyPeriods = false) const;
+	                                          const ibValue& condition = ibValue()) const;
+	// A figure of a finished reading as the row's account keeps it: EMPTY where the account keeps no such
+	// accounting (a quantity off a quantitative account), ZERO where it does and nothing is there — and
+	// EMPTY on a row broken down by a subconto the account does not keep that figure BY. `kindsDr` /
+	// `kindsCr` are the call's breakdown, empty when the slots were read as they stand.
+	void ReportFiguresAsKept(ibQueryRamTable& table, ibAcctShape shape,
+	                         const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr) const;
 	ibQueryRamTable ComputeRecords(const ibRegBound& begin, const ibRegBound& end,
 	                               const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
 	                               const ibQueryPredicatePtr& filter, const ibValue& condition = ibValue(),
@@ -568,6 +590,19 @@ public:
 	//
 	// Spelled here, beside the dimension's own rule, so a side added or a prefix changed is one edit.
 	static wxString AccountColumnName(const wxString& sidePrefix) { return wxT("Account") + sidePrefix; }
+
+	// ⭐ THE CORRESPONDENT, as a turnover row about one account names it — the account it moved against,
+	// that account's breakdown, and the other side of a field kept per side. The reference's words.
+	// THE ACCOUNTING REGISTER A FIELD STANDS IN, or null — asked by the dimension and the resource, which are the
+	// same attributes under every register and mean something more (a chart, sides) only under this one.
+	static ibValueMetaObjectAccountingRegister* OwnerOf(ibValueMetaObject* parent) {
+		return parent != nullptr && parent->GetClassType() == g_metaAccountingRegisterCLSID
+			? parent->ConvertToType<ibValueMetaObjectAccountingRegister>() : nullptr;
+	}
+
+	static wxString CorrAccountColumnName() { return wxT("Corr") + AccountColumnName(wxEmptyString); }
+	static wxString CorrAccountDimensionColumnName(unsigned int no) { return wxT("Corr") + AccountDimensionColumnName(wxEmptyString, no); }
+	static wxString CorrFieldColumnName(const wxString& field) { return field + wxT("Corr"); }
 	static wxString AccountColumnSynonym(const wxString& sidePrefix) {
 		if (sidePrefix == wxT("Dr")) return _("Debit account");
 		if (sidePrefix == wxT("Cr")) return _("Credit account");
@@ -586,10 +621,11 @@ public:
 	// different declarations. Told only the attribute, it would have to read the ROLE back out of the
 	// NAME (`EndsWith("Kind")`) — the classification re-derived by spelling, in the one place that
 	// would never be told when the spelling changed.
-	enum class ibOwnRole {
+	enum class ibOwnAttributeRole {
 		DimensionKind,    // AccountDimension<i>Kind — a reference to a characteristic
 		DimensionValue,   // AccountDimension<i>     — the chart's composition, narrowed per kind at write
-		AccountCr         // the credit account — same type as the debit one, one declaration for both
+		AccountCr,        // the credit account — same type as the debit one, one declaration for both
+		FieldSide         // <Field>Dr / <Field>Cr — a side of a dimension or resource kept per side, typed as its field
 	};
 
 	// ⭐⭐ EVERY ATTRIBUTE THIS REGISTER OWNS, IN ONE WALK.
@@ -604,13 +640,97 @@ public:
 	// every walker learns about it at once, because there is nothing else to teach.
 	template <typename TVisitor>
 	bool ForEachOwnAttribute(TVisitor visit) const {
-		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKinds)   if (!visit(slot, ibOwnRole::DimensionKind))  return false;
-		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlots)   if (!visit(slot, ibOwnRole::DimensionValue)) return false;
-		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr) if (!visit(slot, ibOwnRole::DimensionKind))  return false;
-		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlotsCr) if (!visit(slot, ibOwnRole::DimensionValue)) return false;
-		if (m_accountCr != nullptr && !visit(m_accountCr, ibOwnRole::AccountCr)) return false;
+		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKinds)   if (!visit(slot, ibOwnAttributeRole::DimensionKind))  return false;
+		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlots)   if (!visit(slot, ibOwnAttributeRole::DimensionValue)) return false;
+		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr) if (!visit(slot, ibOwnAttributeRole::DimensionKind))  return false;
+		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlotsCr) if (!visit(slot, ibOwnAttributeRole::DimensionValue)) return false;
+		if (m_accountCr != nullptr && !visit(m_accountCr, ibOwnAttributeRole::AccountCr)) return false;
+		for (const ibFieldSides& sides : m_fieldSides) {
+			if (sides.m_dr != nullptr && !visit(sides.m_dr, ibOwnAttributeRole::FieldSide)) return false;
+			if (sides.m_cr != nullptr && !visit(sides.m_cr, ibOwnAttributeRole::FieldSide)) return false;
+		}
 		return true;
 	}
+
+	// ⭐⭐ A FIELD KEPT PER SIDE IS TWO ATTRIBUTES OF THE REGISTER'S OWN — the way its breakdown is.
+	//
+	// A dimension or a resource with `Balance` cleared holds a value of its own on each side of an
+	// entry: the currency received is not the currency paid, the quantity that left is not the quantity
+	// that arrived. Each side is a hidden predefined attribute, `<Field>Dr` and `<Field>Cr`, with an id of
+	// its own — created by SyncFieldSides, saved and loaded with the register, named, captioned and typed
+	// after the field on every sync, exactly as the account dimension slots are. So every walk that knows
+	// attributes knows the sides: the table, the source a query reads, the columns a record set carries,
+	// a line's members, a form's fields — nothing asks "how many columns is this field".
+	//
+	// (It was built for a day as two synthetic COLUMNS over the one field — no objects to keep in step,
+	//  but every one of those walks had to ask the register what a field is stored in, and a line with
+	//  two columns under one attribute was a special case in each of them. Max, 2026-09-16: "keep two
+	//  hidden attributes with their own ids, as we did for the account dimensions".)
+	struct ibFieldSides {
+		ibMetaID                              m_field = 0;   // the dimension or resource they are the sides of
+		ibValueMetaObjectAttributePredefined* m_dr = nullptr;
+		ibValueMetaObjectAttributePredefined* m_cr = nullptr;
+	};
+
+	// Is this field kept per side HERE — a correspondence register, and its `Balance` cleared. A one-sided
+	// line IS one side (the record type says which), so nothing is split there whatever the tick says.
+	bool IsKeptPerSide(const ibValueMetaObjectAttributeBase* field) const;
+
+	// The side attribute of a field kept per side; null for any other field.
+	ibValueMetaObjectAttributePredefined* GetFieldSide(bool creditSide, const ibValueMetaObjectAttributeBase* field) const {
+		if (!IsKeptPerSide(field))
+			return nullptr;
+		for (const ibFieldSides& sides : m_fieldSides)
+			if (sides.m_field == field->GetMetaID())
+				return creditSide ? sides.m_cr : sides.m_dr;
+		return nullptr;
+	}
+
+	// The attribute one side of a line holds this field in: its side attribute when the field is kept per
+	// side, the field itself otherwise.
+	const ibValueMetaObjectAttributeBase* GetFieldOnSide(bool creditSide, const ibValueMetaObjectAttributeBase* field) const {
+		if (field == nullptr)
+			return nullptr;
+		const ibValueMetaObjectAttributeBase* side = GetFieldSide(creditSide, field);
+		return side != nullptr ? side : field;
+	}
+
+	// Bring the sides in line with the fields: create them for a field kept per side, name, caption and
+	// type them after it, mark the ones not in use, and delete the sides of a field that is gone
+	// (`leaving`, when the field is on its way out). Called on the run, on the correspondence switch, and
+	// by a dimension or resource whose tick, name or type changes or which is deleted. `createMissing` is
+	// false for the copy that mirrors the database (see the call in OnAfterRunMetaObject).
+	void SyncFieldSides(const ibValueMetaObjectAttributeBase* leaving = nullptr, bool createMissing = true);
+
+	// ⭐⭐ THE COLUMN A SIDE HOLDS THIS FIELD IN — the question every reader of one side asks, and the
+	// only place the answer is worked out. Balanced, the field is one value for the whole entry and
+	// both sides read its own column; kept per side, each side reads its own attribute.
+	//
+	// It exists because the SAME sentence was being written in four places (the table's key, the
+	// maintenance key, the read surface, the reading itself) and one of them said it differently: the
+	// credit totals were KEYED by the credit half and PUBLISHED under the field, so a report asking the
+	// credit surface for `Currency` was handed a column the relation does not carry — Firebird -206,
+	// "Column unknown FLD1391_TYPE", and every report over this register stopped composing (2026-09-16).
+	//
+	// ⭐ NO CORRESPONDENCE, NO CREDIT SIDE. A one-sided line IS one side — which one is said by the
+	// record type — so the field stands as the author declared it and there is no side to reach for.
+	const ibBackendQueryColumn* GetRegisterDimension(bool creditSide, const ibValueMetaObjectDimension* dimension) const {
+		const ibValueMetaObjectAttributeBase* held = GetFieldOnSide(creditSide, dimension);
+		return held != nullptr ? held->GetQueryColumn() : nullptr;
+	}
+
+	const ibBackendQueryColumn* GetRegisterResource(bool creditSide, const ibValueMetaObjectResource* resource) const {
+		const ibValueMetaObjectAttributeBase* held = GetFieldOnSide(creditSide, resource);
+		return held != nullptr ? held->GetQueryColumn() : nullptr;
+	}
+
+	// ⭐ DOES THIS ACCOUNT KEEP THAT KIND OF ACCOUNTING? — the one question a WRITE asks to empty a figure
+	// the account does not keep, and a READING asks to report it EMPTY rather than as a zero: zero is a
+	// kept figure that came to nothing, empty is a figure the account has no place for (Max, 2026-09-16).
+	// `kind` is the chart's flag attribute the field names; `cache` remembers each account's answer.
+	// Body in accountingRegisterObject.cpp.
+	static bool IsAccountingKindKept(const ibValue& account, const ibMetaID& kind,
+		std::unordered_map<ibValue, bool, ibValueHash, ibValueEqual>& cache);
 
 	// Bring the slot set in line with the chart of accounts — grow to its number, DELETE the tail
 	// past it (the ordinary attribute lifecycle: delete events, deleted mark, columns dropped by
@@ -662,6 +782,8 @@ public:
 	//
 	// ⚠ Existing bases carry the old names — this is a one-time rename, not a migration the engine
 	// performs. Nothing reads the old spelling any more, so an old base must be re-created.
+	// (A second grain — the same tables per account alone — stood here from 2026-09-16 and was removed the
+	// same day: no reading stood on it, and a total per account is the breakdown grain summed.)
 	wxString GetTotalsTableNameDB(bool creditSide) const {
 		wxASSERT(m_metaId != 0);
 		const ibValueMetaObjectRegisterTotals* totals = GetTotalsObject(creditSide);
@@ -676,6 +798,8 @@ public:
 		return GetTotalsTableNameDB(creditSide) + wxT("_Turnovers");
 	}
 
+	// The two totals objects, one per side. Named, predefined children, which is what gives every table
+	// and every view a name that survives any toggling (see GetTotalsTableNameDB).
 	ibValueMetaObjectRegisterTotals* GetTotalsObject(bool creditSide) const {
 		return creditSide ? static_cast<ibValueMetaObjectRegisterTotals*>(m_totalsCr)
 		                  : static_cast<ibValueMetaObjectRegisterTotals*>(m_totalsDr);
@@ -785,28 +909,22 @@ protected:
 		array.push_back(m_propertyAttributeRecorder->GetMetaObject());
 		array.push_back(m_propertyAttributeLineNumber->GetMetaObject());
 		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
-		// WHAT A LINE IS MADE OF depends on whether it is one side or a whole posting.
+		// WHAT A LINE IS MADE OF depends on whether it is one side or a whole posting — and the list says
+		// so, the way every register's does (an information register lists Recorder only when subordinate,
+		// a catalog its Owner only when it has one, an accumulation register RecordType only for balances).
 		//
 		// One-sided: RecordType says which side this row is, and there is a single Account.
-		// Correspondence: the row names BOTH accounts and needs no side flag — which side a figure
-		// belongs to is said by which account it sits against.
+		// Correspondence: the row names BOTH accounts and needs no side flag — which side a figure belongs
+		// to is said by which account it sits against — and each side has its own breakdown.
 		//
-		// ⭐⭐ BUT THE COLUMN LIST DOES NOT FOLLOW THE SETTING — ALL THREE ARE ALWAYS DECLARED.
-		//
-		// Conditioning it made the movements table gain and lose columns as a checkbox was clicked,
-		// and a column that disappears takes its DATA with it: switch correspondence off and every
-		// credit account ever recorded is dropped, switch it back and the column returns EMPTY. Worse
-		// for the engine, the two snapshots then disagree about a predefined attribute that never
-		// actually left the configuration, which is how "column FLDnnnn_RTRef does not exist" reached
-		// the credit totals trigger three edits later.
-		//
-		// Both accounts and the record type therefore always exist. What the setting decides is what
-		// gets WRITTEN: a one-sided register fills RecordType and leaves AccountCr empty, a
-		// correspondence one fills both accounts and leaves RecordType empty. Two spare columns per
-		// register cost nothing; a column that comes and goes costs the data in it.
-		array.push_back(m_propertyAttributeRecordType->GetMetaObject());
+		// (It listed all of them always for a while, so that no column came and went with the checkbox.
+		//  The cost was a field in every list, query and form that meant nothing in the mode at hand. The
+		//  credit side of the totals follows the same setting — accountingRegisterMetadataSchema.cpp.)
+		const bool correspondence = IsCorrespondence();
+		if (!correspondence)
+			array.push_back(m_propertyAttributeRecordType->GetMetaObject());
 		array.push_back(m_propertyAttributeAccount->GetMetaObject());   // the DEBIT account in correspondence
-		if (m_accountCr != nullptr)
+		if (correspondence && m_accountCr != nullptr)
 			array.push_back(m_accountCr);
 		// Every living slot is part of the object — the sync deletes a pair the chart's number no
 		// longer covers, so the vectors themselves are the one answer to "which slots exist".
@@ -820,10 +938,19 @@ protected:
 			array.push_back(m_accountDimensionSlots[idx]);
 
 		// The credit side exists only in correspondence mode, and then it is the same shape again.
-		for (unsigned int idx = 0; idx < m_accountDimensionKindsCr.size(); idx++)
+		for (unsigned int idx = 0; correspondence && idx < m_accountDimensionKindsCr.size(); idx++)
 			array.push_back(m_accountDimensionKindsCr[idx]);
-		for (unsigned int idx = 0; idx < m_accountDimensionSlotsCr.size(); idx++)
+		for (unsigned int idx = 0; correspondence && idx < m_accountDimensionSlotsCr.size(); idx++)
 			array.push_back(m_accountDimensionSlotsCr[idx]);
+
+		// The sides of a field — while it is kept per side (a correspondence register, its Balance cleared).
+		for (const ibFieldSides& sides : m_fieldSides) {
+			if (!IsKeptPerSide(FindFieldOfSides(sides)))
+				continue;
+			if (sides.m_dr != nullptr) array.push_back(sides.m_dr);
+			if (sides.m_cr != nullptr) array.push_back(sides.m_cr);
+		}
+
 		return true;
 	}
 
@@ -932,6 +1059,17 @@ private:
 	// and therefore carries two independent analytical breakdowns.
 	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionKindsCr;
 	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionSlotsCr;
+
+	// THE SIDES OF EVERY FIELD THAT HAS BEEN KEPT PER SIDE — created by SyncFieldSides and KEPT when the
+	// tick goes back on or correspondence goes off: their columns hold figures, and sides re-created
+	// later would come back under fresh ids, with the old columns' contents out of reach. The same rule
+	// the credit slots follow. Deleted only with their field.
+	std::vector<ibFieldSides> m_fieldSides;
+
+	// The dimension or resource a pair of sides belongs to — null once it is gone.
+	const ibValueMetaObjectAttributeBase* FindFieldOfSides(const ibFieldSides& sides) const {
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(sides.m_field, { g_metaDimensionCLSID, g_metaResourceCLSID });
+	}
 
 	// Predefined attributes: the account dimension VALUE slots.
 	//
@@ -1105,11 +1243,6 @@ private:
 	ibQueryPredicatePtr m_accountDr;   // a CONDITION over the account, consumed by this reading
 	ibQueryPredicatePtr m_accountCr;
 	ibQueryPredicatePtr m_filter;
-
-	// The gate asks the DATA one question (is any kind marked turnovers-only), and a companion is
-	// CALL-SCOPED — so the answer is cached for exactly the life of this reading and no longer.
-	// -1 = not asked yet.
-	mutable int         m_serverRoad = -1;
 };
 
 // Turnovers — debit and credit turnover over an interval, optionally cut into periods.
@@ -1119,10 +1252,11 @@ public:
 	                        const ibRegBound& begin = ibRegBound(), const ibRegBound& end = ibRegBound(),
 	                        const ibQueryPredicatePtr& accountDr = nullptr, const ibQueryPredicatePtr& accountCr = nullptr,
 	                        const std::vector<ibValue>& kindsDr = {}, const std::vector<ibValue>& kindsCr = {},
-	                        const ibQueryPredicatePtr& filter = nullptr, const ibRegFold& fold = ibRegFold(), const ibValue& condition = ibValue())
+	                        const ibQueryPredicatePtr& filter = nullptr, const ibRegFold& fold = ibRegFold(), const ibValue& condition = ibValue(),
+	                        bool byCorrespondent = false)
 		: ibAcctTotalsQueryable(reg, ibAcctShape::Turnovers, kindsDr, kindsCr, condition),
 		  m_begin(begin), m_end(end), m_accountDr(accountDr), m_accountCr(accountCr),
-		  m_filter(filter), m_fold(fold) {}
+		  m_filter(filter), m_fold(fold), m_byCorrespondent(byCorrespondent) {}
 
 	virtual ibRegFold Fold() const override { return m_fold; }
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
@@ -1141,6 +1275,7 @@ private:
 	ibQueryPredicatePtr m_accountDr, m_accountCr;   // conditions, consumed here
 	ibQueryPredicatePtr m_filter;
 	ibRegFold           m_fold;   // the READ granularity — a query parameter, not a schema property
+	bool                m_byCorrespondent = false;   // a row per account AND the account it moved against
 };
 
 // DrCrTurnovers — the correspondence matrix: one row per (debit account, credit account) pair.
@@ -1177,10 +1312,10 @@ public:
 	                                  const ibQueryPredicatePtr& accountDr = nullptr, const ibQueryPredicatePtr& accountCr = nullptr,
 	                                  const std::vector<ibValue>& kindsDr = {}, const std::vector<ibValue>& kindsCr = {},
 	                                  const ibQueryPredicatePtr& filter = nullptr, const ibRegFold& fold = ibRegFold(),
-	                                  const ibValue& condition = ibValue(), bool fillEmptyPeriods = false)
+	                                  const ibValue& condition = ibValue())
 		: ibAcctTotalsQueryable(reg, ibAcctShape::BalanceAndTurnovers, kindsDr, kindsCr, condition),
 		  m_begin(begin), m_end(end), m_accountDr(accountDr), m_accountCr(accountCr),
-		  m_filter(filter), m_fold(fold), m_fillEmptyPeriods(fillEmptyPeriods) {}
+		  m_filter(filter), m_fold(fold) {}
 
 	virtual ibRegFold Fold() const override { return m_fold; }
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
@@ -1195,12 +1330,6 @@ private:
 	ibQueryPredicatePtr m_accountDr, m_accountCr;   // conditions, consumed here
 	ibQueryPredicatePtr m_filter;
 	ibRegFold           m_fold;
-	// ⭐ A PERIOD NOTHING MOVED IN IS STILL A PERIOD — when asked for. The balance carried across it
-	// is the whole reason this table exists, so "movements and period boundaries" reports the empty
-	// ones too, carrying the closing balance of the previous period into them.
-	bool                m_fillEmptyPeriods = false;
-
-	mutable int         m_serverRoad = -1;   // see ibAcctBalanceQueryable — call-scoped, -1 = not asked
 };
 
 // RecordsWithAccountDimensions — the movement LINES themselves, with the dimension slots widened
@@ -1419,6 +1548,16 @@ private:
 	// through the RECORDER carries one document's postings, which is exactly the scope the rule is
 	// stated over.
 	void CheckDoubleEntry() const;
+
+	// ⭐⭐ A FIGURE THE ACCOUNT DOES NOT KEEP IS NOT ZERO — IT IS ABSENT. A currency amount on a hryvnia
+	// account, a quantity on an account kept only in money: the field exists on the register because
+	// OTHER accounts need it, and on this one it means nothing. Emptied before the write, so what the
+	// base holds is what the accounting says and not what a posting happened to leave in the field
+	// (Max, 2026-09-16: *"null is the right answer there"*).
+	//
+	// ⚠ BEFORE THE DOUBLE-ENTRY CHECK, for the same reason: a figure that is not kept must not be
+	// weighed in the balance the sides are checked against.
+	void ApplyAccountingKinds();
 
 	// AccountKinds' memory: account -> its kinds, in order. Keyed by the account VALUE (a reference
 	// compares by guid there, ibValueHash).

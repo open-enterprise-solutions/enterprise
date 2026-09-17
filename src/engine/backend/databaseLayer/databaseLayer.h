@@ -286,6 +286,32 @@ struct ibDialectDictionary
 	wxString m_identQuoteOpen;
 	wxString m_identQuoteClose;
 
+	// The longest name a RELATION ALIAS may have (0 = no limit). A longer one is rendered as its head plus a
+	// hash of the whole name, the same at its definition and at every reference (ibQueryRenderer::AliasIdent).
+	//
+	// 🛑 Firebird: aliases that agree in their first 31 characters are not told apart in nested derived
+	// tables — `AccumulationRegister1144_BalanceAndTurnovers` over `…_g` over `…_pt` over `…_tr` failed at BLR
+	// level ("expected record selection expression clause"), and the same statement with the outer alias
+	// renamed `x` ran (measured 2026-09-16 on the vendored 5.0.5).
+	unsigned int m_maxAliasLength = 0;
+
+	// ⭐ A NAME WITHIN A LIMIT — itself when it fits, otherwise its head plus a hash of the WHOLE name. Deterministic,
+	// so whoever writes the name and whoever reads it back compute the same spelling, and two names that share
+	// the head still differ. The relation alias (ibQueryRenderer::AliasIdent) and the result label
+	// (ibSqlAliasOf) are both spelled through it. 0 = no limit.
+	static wxString BoundedName(const wxString& name, size_t limit)
+	{
+		static const size_t kHashChars = 8;
+		if (limit <= kHashChars + 1 || name.length() <= limit)
+			return name;
+		unsigned long hash = 2166136261UL;   // FNV-1a, 32-bit
+		for (const wxUniChar ch : name) {
+			hash ^= static_cast<unsigned long>(ch.GetValue());
+			hash = (hash * 16777619UL) & 0xFFFFFFFFUL;
+		}
+		return name.Left(limit - kHashChars - 1) + wxString::Format(wxT("_%08lx"), hash);
+	}
+
 	ibSqlFeatures m_features;
 
 	// --- type map (DDL): canonical column type -> dialect SQL type --------

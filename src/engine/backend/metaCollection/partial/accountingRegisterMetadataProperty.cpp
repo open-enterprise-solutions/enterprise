@@ -43,6 +43,10 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 		// (The dimension slots themselves come back from it already typed — the sync's own tail.)
 		if (m_accountCr != nullptr)
 			m_accountCr->GetTypeDesc().SetDefaultMetaType(typeDesc);
+
+		// And the sides of the fields kept per side: a line with two accounts splits every field whose
+		// `Balance` is cleared, a line with one splits none.
+		SyncFieldSides();
 	}
 
 	// Enable/disable Account field based on binding

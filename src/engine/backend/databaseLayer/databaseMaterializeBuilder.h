@@ -328,6 +328,13 @@ struct ibMaterializeReadSpec
 	// open-ended below (a balance), and the stored arm starts wherever the data does.
 	ibValue m_headSplit;
 
+	// Where the grain holding the lower boundary BEGINS — the other edge of that same partial grain.
+	// A reading whose figures look only INSIDE the interval (a turnover) takes nothing before the head
+	// split from the stored rows. A reading that also looks BEFORE it (an opening balance, a closing
+	// one) still needs every whole grain before this one from them — only the boundary's own grain is
+	// the movements' business. Invalid when the lower boundary is on a grain edge.
+	ibValue m_headGrain;
+
 	// The lower boundary's tail past the period, when it names a document. Same shape and order as
 	// m_boundaryTail, compared the other way round.
 	std::vector<std::pair<wxString, ibQueryExprPtr>> m_boundaryHead;

@@ -481,6 +481,28 @@ TEST(QueryDmlRenderer, Delete_Firebird)
 	EXPECT_EQ(Sql(out), "DELETE FROM Document42 WHERE (Ref = ?)");
 }
 
+// A table named without an alias is referenced by its name, and a reference is spelled within the dialect's bound
+// — so past it the table carries that spelling as its alias, in a FROM and as the target of a DELETE alike.
+// Firebird's bound is on the whole path of nested aliases (m_maxAliasLength), which a long table name exceeds.
+TEST(QueryDmlRenderer, LongTableIsAliasedAsItIsReferenced_Firebird)
+{
+	const wxString marks = wxT("CalculationRegister1234_Recalculation");
+	const wxString spelled = ibDialectDictionary::BoundedName(marks, FbDialect().m_maxAliasLength);
+	ASSERT_NE(spelled, marks);
+
+	ibDmlStatement del = ibDelete(marks, ibBinOp(ibQueryBinOp::Eq, ibCol(marks, wxT("Ref")), ibParam(0)));
+	EXPECT_EQ(Sql(ibQueryRenderer(FbDialect()).RenderDML(del)),
+		("DELETE FROM " + marks + " AS " + spelled + " WHERE (" + spelled + ".Ref = ?)").ToStdString());
+
+	ibQueryIR ir(ibFilter(ibScan(marks), ibBinOp(ibQueryBinOp::Eq, ibCol(marks, wxT("Ref")), ibParam(0))));
+	EXPECT_EQ(Sql(ibQueryRenderer(FbDialect()).Render(ir)),
+		("SELECT * FROM " + marks + " AS " + spelled + " WHERE (" + spelled + ".Ref = ?)").ToStdString());
+
+	// …and a dialect with no bound renders the name as it stands.
+	EXPECT_EQ(Sql(ibQueryRenderer(SqliteDialect()).RenderDML(del)),
+		("DELETE FROM " + marks + " WHERE (" + marks + ".Ref = ?)").ToStdString());
+}
+
 TEST(QueryDmlRenderer, DeleteAll_NoWhere)
 {
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).RenderDML(ibDelete(wxT("Tmp")));

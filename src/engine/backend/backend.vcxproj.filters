@@ -376,6 +376,9 @@
     <ClInclude Include="metaCollection\attribute\metaAttributeObject.h">
       <Filter>metaCollection\attribute</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\accountingKind\metaAccountingKindObject.h">
+      <Filter>metaCollection\accountingKind</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\dimension\metaDimensionObject.h">
       <Filter>metaCollection\dimension</Filter>
     </ClInclude>
@@ -814,6 +817,9 @@
     <ClInclude Include="restructureInfo.h" />
     <ClInclude Include="tabularModelView.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyAccountingKind.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h">
@@ -1399,7 +1405,16 @@
     <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp">
       <Filter>metaCollection\dimension</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObject.cpp">
+      <Filter>metaCollection\accountingKind</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\accountingKind\metaAccountingKindObjectProperty.cpp">
+      <Filter>metaCollection\accountingKind</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp">
+      <Filter>metaCollection\dimension</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\dimension\metaDimensionObjectProperty.cpp">
       <Filter>metaCollection\dimension</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\enumeration\metaEnumObject.cpp">
@@ -1780,6 +1795,9 @@
     <ClCompile Include="metaCollection\resource\metaResourceObject.cpp">
       <Filter>metaCollection\resource</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\resource\metaResourceObjectProperty.cpp">
+      <Filter>metaCollection\resource</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\table\metaTableObject_res.cpp">
       <Filter>metaCollection\table</Filter>
     </ClCompile>
@@ -2148,6 +2166,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="tabularModelView.cpp" />
+    <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -2331,6 +2352,9 @@
     </Filter>
     <Filter Include="metaCollection">
       <UniqueIdentifier>{9bb88d5f-8ec9-4280-a591-9d5ce4472e70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="metaCollection\accountingKind">
+      <UniqueIdentifier>{0d4b1c8a-2f41-4a63-9b7e-6c2f1d84a501}</UniqueIdentifier>
     </Filter>
     <Filter Include="metaCollection\dimension">
       <UniqueIdentifier>{33239027-ee04-4fe5-9c06-558dc0996576}</UniqueIdentifier>
