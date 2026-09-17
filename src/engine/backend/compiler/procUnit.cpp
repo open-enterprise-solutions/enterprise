@@ -577,6 +577,19 @@ if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
  && &cValue1!=&cValue2 && &cValue1!=&cValue3)\
  cValue1.m_pRef->DecrRef();\
 
+// The same for a comparison, which also hands on whether it stands in a filter (IS_THREE_VALUED_NULL).
+#define CHECK_READONLY_COMPARE(Operation)\
+if(cValue1.m_bReadOnly)\
+{\
+ ibValue cVal;\
+ Operation(cVal,cValue2,cValue3,threeValued);\
+ cValue1.SetValue(cVal);\
+ return;\
+}\
+if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
+ && &cValue1!=&cValue2 && &cValue1!=&cValue3)\
+ cValue1.m_pRef->DecrRef();\
+
 // Append a value's text onto `out`.
 //
 // A STRING NEEDS NOTHING PASSED IN, because it is already holding the buffer:
@@ -629,6 +642,23 @@ static inline ibString& MakeStringValue(ibValue& dest)
 	dest.m_typeClass = ibValueTypes::TYPE_STRING;
 	dest.m_pStr = new ibString();
 	return *dest.m_pStr;
+}
+
+// …and the number twin: `dest` made a number, its figure written through the reference.
+//
+// 🛑 THE TYPED NUMBER OPERATIONS WROTE THE FIGURE AND NEVER THE TYPE. A variable declared `Number y` starts
+// as an empty value — the declaration checks what arrives, it does not change it (OPER_SET_TYPE) — so
+// `Number y = 5; Result = y + 1;` put 5 and then 6 into values that still said "no type", and read back as
+// Undefined; a typed parameter did the same the moment it was computed with (measured 2026-09-17: `F(Number x)
+// { return x + 1; }` returned Undefined, `F(x)` returned 8). The string operations always made their result a
+// string (MakeStringValue); these now make theirs a number.
+static inline ibNumber& MakeNumberValue(ibValue& dest)
+{
+	if (dest.m_typeClass != ibValueTypes::TYPE_NUMBER) {
+		dest.Reset();
+		dest.m_typeClass = ibValueTypes::TYPE_NUMBER;
+	}
+	return dest.m_fData;
 }
 
 //Functions for quickly working with the ibValue type
@@ -806,68 +836,69 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 thread_local bool ts_threeValuedNullCompare = false;
 
 
-// SQL three-valued NULL: under the flag, a comparison with a NULL operand yields UNKNOWN
+// SQL three-valued NULL: in a filter, a comparison with a NULL operand yields UNKNOWN
 // instead of a Boolean. UNKNOWN is represented as TYPE_NULL (SQL: unknown ≡ null), so it both
 // reads as "null" to the Kleene NOT/AND/OR (IsNullOperand) and drops in the WHERE (IsHasValue is
 // false for TYPE_NULL). Returns true when it set the result to UNKNOWN (caller skips).
-inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& b)
+// `threeValued` is the instruction's answer — IS_THREE_VALUED_NULL (procUnitLambda.h).
+inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& b, const bool threeValued)
 {
-	if (!ts_threeValuedNullCompare) return false;
+	if (!threeValued) return false;
 	if (!IsNullOperand(a) && !IsNullOperand(b)) return false;
 	out.m_typeClass = ibValueTypes::TYPE_NULL;
 	return true;
 }
 
 //Implementation of comparison operators
-inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueGT);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueGT);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueGT(cValue3) > 0;   // three-way int -> boolean '>'
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
 }
 
-inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueGE);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueGE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueGE(cValue3);
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
 }
 
-inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueLS);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueLS);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueLS(cValue3) < 0;   // three-way int -> boolean '<'
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
 }
 
-inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueLE);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueLE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueLE(cValue3);
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
 }
 
-inline void CompareValueEQ(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueEQ(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueEQ);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueEQ);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueEQ(cValue3);
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
 }
 
-inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
+inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
-	CHECK_READONLY(CompareValueNE);
-	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
+	CHECK_READONLY_COMPARE(CompareValueNE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueNE(cValue3);
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = bResult;
@@ -1090,12 +1121,12 @@ start_label:
 			case OPER_LET: CopyValue(variable1, cvariable2); break;
 			case OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); break;
 			case OPER_NOT:
-				// Kleene NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag; else two-valued.
-				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
+				// Kleene NOT(UNKNOWN)=UNKNOWN in a LINQ filter (IS_THREE_VALUED_NULL); else two-valued.
+				if (IS_THREE_VALUED_NULL(curCode) && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else SetTypeBoolean(variable1, IsEmptyValue(cvariable2));
 				break;
 			case OPER_AND:
-				if (ts_threeValuedNullCompare) {            // FALSE dominates; else UNKNOWN if any; else TRUE
+				if (IS_THREE_VALUED_NULL(curCode)) {           // FALSE dominates; else UNKNOWN if any; else TRUE
 					const bool aF = !IsHasValue(cvariable2) && !IsNullOperand(cvariable2);
 					const bool bF = !IsHasValue(cvariable3) && !IsNullOperand(cvariable3);
 					if (aF || bF) SetTypeBoolean(variable1, false);
@@ -1106,7 +1137,7 @@ start_label:
 				else SetTypeBoolean(variable1, false);
 				break;
 			case OPER_OR:
-				if (ts_threeValuedNullCompare) {            // TRUE dominates; else UNKNOWN if any; else FALSE
+				if (IS_THREE_VALUED_NULL(curCode)) {           // TRUE dominates; else UNKNOWN if any; else FALSE
 					if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
 					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 					else SetTypeBoolean(variable1, false);
@@ -1114,12 +1145,12 @@ start_label:
 				else if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
 				else SetTypeBoolean(variable1, false);
 				break;
-			case OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3); break;
-			case OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3); break;
-			case OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3); break;
-			case OPER_LS: CompareValueLS(variable1, cvariable2, cvariable3); break;
-			case OPER_GE: CompareValueGE(variable1, cvariable2, cvariable3); break;
-			case OPER_LE: CompareValueLE(variable1, cvariable2, cvariable3); break;
+			case OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_LS: CompareValueLS(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_GE: CompareValueGE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_LE: CompareValueLE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
 			case OPER_IF:
 				if (IsEmptyValue(cvariable1))
 					lCodeLine = index2 - 1;
@@ -1166,8 +1197,14 @@ start_label:
 				}
 				if (needsCreate) {
 					auto newIterator = variable2.CreateIterator();
+					// Said with the value's own name and the road that works: an object MANAGER
+					// (`Documents.Orders`) is the one people reach for in `from o in …`, and it holds no
+					// rows — the rows of the database are walked through `Data.Documents.Orders`.
 					if (!newIterator)
-						ibBackendCoreException::Error(_("Undefined value iterator"));
+						ibBackendCoreException::Error(
+							_("A value of type '%s' cannot be walked - it has no rows to go through. The rows of the database "
+							  "are walked through Data (Data.Catalogs.Goods, Data.Documents.Orders), not through a manager."),
+							variable2.GetClassName());
 					CopyValue(variable3, ibValue(new ibValueIterator(std::move(newIterator))));
 				}
 				ibValueIterator* iterator = AsIterator(variable3);
@@ -2081,14 +2118,16 @@ start_label:
 			}
 				//Operators for working with typed data
 				//NUMBER
-			case OPER_ADD + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData + cvariable3.m_fData; break;
-			case OPER_SUB + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData - cvariable3.m_fData; break;
-			case OPER_DIV + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_fData = cvariable2.m_fData / cvariable3.m_fData; break;
-			case OPER_MOD + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_fData = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); break;
-			case OPER_MULT + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData * cvariable3.m_fData; break;
-			case OPER_LET + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData; break;
+			// The figure is computed first and then stored: the destination may be one of the operands, and
+			// making it a number (MakeNumberValue) resets a value that did not say so yet.
+			case OPER_ADD + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData + cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
+			case OPER_SUB + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData - cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
+			case OPER_DIV + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData / cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
+			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1) = r; break; }
+			case OPER_MULT + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData * cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
+			case OPER_LET + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
 			case OPER_NOT + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData.IsZero(); break;
-			case OPER_INVERT + TYPE_DELTA1: variable1.m_fData = -cvariable2.m_fData; break;
+			case OPER_INVERT + TYPE_DELTA1: { const ibNumber r = -cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
 			case OPER_EQ + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData == cvariable3.m_fData); break;
 			case OPER_NE + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData != cvariable3.m_fData); break;
 			case OPER_GT + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData > cvariable3.m_fData); break;
@@ -2222,7 +2261,7 @@ start_label:
 				// untyped slot took the value and stayed EMPTY, and the row read as no
 				// result at all. Both branches here now say what they produced, exactly as
 				// the untyped tier does through SetTypeBoolean.
-				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
+				if (IS_THREE_VALUED_NULL(curCode) && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else SetTypeBoolean(variable1, !cvariable2.m_bData);
 				break;
 			case OPER_INVERT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;

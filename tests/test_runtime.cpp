@@ -555,6 +555,54 @@ TEST(RuntimeTest, LinqWhere_NullThreeValuedLogic) {
 	EXPECT_EQ(ret.GetInteger(), 1);   // only "South"; Undefined <> "North" is UNKNOWN -> dropped
 }
 
+// The same rule for the FILTER COMPILED INTO THE LOOP — the query block, and the chain since it became a
+// loop (2026-09-08). Its comparisons ran two-valued, and the order puts NULL below every value: `where
+// x < 500` kept the NULL, while the server dropped it (a goods folder with no price, 26 rows against 25,
+// 2026-09-17). The filter's own instructions carry the mode (LINQ_THREE_VALUED_NULL).
+namespace {
+long CountThroughFilter(const wxString& body)
+{
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function Filtered() Public\n")
+		wxT("  var arr; var q;\n")
+		wxT("  arr = New Array;\n")
+		wxT("  arr.Add(Null); arr.Add(5); arr.Add(700);\n")
+		+ body +
+		wxT("EndFunction\n");
+	if (!TryCompile(cc, src))
+		return -1;
+	ibProcUnit pu;
+	if (!TryExecute(pu, cc.m_cByteCode))
+		return -2;
+	ibValue ret;
+	pu.CallAsFunc(wxT("Filtered"), ret);
+	return (long)ret.GetInteger();
+}
+}
+
+TEST(RuntimeTest, LinqBlockWhere_NullIsNotLessThanAValue) {
+	EXPECT_EQ(CountThroughFilter(wxT("  q = from x in arr where x < 500 select x;\n  Return q.Count();\n")), 1);
+}
+
+TEST(RuntimeTest, LinqBlockWhere_NotOverNullStaysUnknown) {
+	EXPECT_EQ(CountThroughFilter(wxT("  q = from x in arr where Not (x >= 500) select x;\n  Return q.Count();\n")), 1);
+}
+
+TEST(RuntimeTest, LinqChainWhere_NullIsNotLessThanAValue) {
+	EXPECT_EQ(CountThroughFilter(wxT("  Return arr.Where(Function(x) Return x < 500 EndFunction).Count();\n")), 1);
+}
+
+TEST(RuntimeTest, NotStopsAtAnd) {
+	// (Not (1 = 2)) And False — false. Read the old way, Not ((1 = 2) And False), it was true.
+	EXPECT_EQ(CountThroughFilter(wxT("  If Not 1 = 2 And False Then Return 1; EndIf;\n  Return 0;\n")), 0);
+}
+
+TEST(RuntimeTest, OutsideAFilter_NullStaysBelowEveryValue) {
+	// The mark is the filter's, not the language's: a comparison anywhere else keeps the total order a sort needs.
+	EXPECT_EQ(CountThroughFilter(wxT("  If Null < 500 Then Return 1; EndIf;\n  Return 0;\n")), 1);
+}
+
 // ===========================================================================
 // LINQ group WITHOUT A NAME is the answer — the groups themselves — and a clause
 // after it has nothing to read. It was refused as "';' expected" on the clause's
@@ -1172,6 +1220,85 @@ TEST(DeclaredTypesRuntime, WritingTwiceIsOrdinary) {
 	ibValue val;
 	ASSERT_TRUE(pu.GetPropVal(wxT("x"), val));
 	EXPECT_EQ(7, val.GetInteger());
+}
+
+TEST(DeclaredTypesRuntime, ADeclaredNumberComputesToANumber) {
+	// The typed arithmetic wrote the figure and not the type: the sum of a declared Number read back as
+	// Undefined (2026-09-17). The result of every typed number operation is a number (MakeNumberValue).
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Number y; var z public; y = 5; z = y + 1;")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("z"), val));
+	EXPECT_EQ(ibValueTypes::TYPE_NUMBER, val.GetType());
+	EXPECT_EQ(6, val.GetInteger());
+}
+
+TEST(DeclaredTypesRuntime, ATypedParameterComputes) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function Inc(Number x) Public\n")
+		wxT("  Return x + 1;\n")
+		wxT("EndFunction\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret, arg(7);
+	pu.CallAsFunc(wxT("Inc"), ret, arg);
+	EXPECT_EQ(ibValueTypes::TYPE_NUMBER, ret.GetType());
+	EXPECT_EQ(8, ret.GetInteger());
+}
+
+TEST(DeclaredTypesRuntime, ValComesBeforeTheType) {
+	// `[Val] [Type] name` — neither `Val Number x` nor `Number Val x` compiled before 2026-09-17.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function Twice(Val Number x) Public\n")
+		wxT("  Return x * 2;\n")
+		wxT("EndFunction\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret, arg(7);
+	pu.CallAsFunc(wxT("Twice"), ret, arg);
+	EXPECT_EQ(14, ret.GetInteger());
+}
+
+TEST(DeclaredTypesRuntime, AValueClassTypeTakesItsOwnValue) {
+	// A declared type with no typed tier is checked where the value arrives, not at compile time: the
+	// compile-time check refused every assignment to it ("Bad value type").
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Array rows public; rows = New Array; rows.Add(1);")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("rows"), val));
+	EXPECT_EQ(wxT("Array"), val.GetClassName());
+}
+
+TEST(DeclaredTypesRuntime, AValueClassTypeRefusesAnotherValue) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Array rows; rows = 5;")));
+
+	ibProcUnit pu;
+	EXPECT_FALSE(TryExecute(pu, cc.m_cByteCode));
+}
+
+TEST(RuntimeTest, NewAsAStatementPassesItsArguments) {
+	// The argument loop pushed the moved-from constructor instruction instead of the argument's, so the
+	// constructor ran with no arguments: `New Structure("a", 1);` raised that its first argument was missing.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("New Structure(\"a\", 1);")));
+
+	ibProcUnit pu;
+	EXPECT_TRUE(TryExecute(pu, cc.m_cByteCode));
 }
 // ===========================================================================
 // A CLOSURE WRITING BACK INTO ITS CAPTURED SLOT

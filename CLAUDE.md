@@ -401,7 +401,7 @@ and a document's tables come from), `accumulationRegisterMetadataSchema.cpp`,
 
 ## Metadata Object Types
 
-The 11 business object types and their C++ classes:
+The 13 business object types and their C++ classes (the registered set is `METADATA_TYPE_REGISTER`):
 
 | Type | Class | Header |
 |---|---|---|
@@ -416,6 +416,8 @@ The 11 business object types and their C++ classes:
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
+| ChartOfCalculationTypes | `ibValueMetaObjectChartOfCalculationTypes` | `metaCollection/partial/chartOfCalculationTypes.h` |
+| CalculationRegister | `ibValueMetaObjectCalculationRegister` | `metaCollection/partial/calculationRegister.h` |
 
 A **`CommonAttribute`** is declared once under Common and then exists as a real attribute inside
 every object checked into its **composition** — its own metaID, its own column, its own place in
@@ -469,7 +471,7 @@ that tree to bytes (and reads it back).
 
 ### What is serialized
 
-All 11 business object types with: attributes (full type qualifiers), tabular
+All 13 business object types with: attributes (full type qualifiers), tabular
 sections, forms (control tree + module code), object/manager modules, predefined
 values, default form assignments, MetaDescription bindings (Owner, Generation,
 RegisterRecord, ChartOfCharacteristicTypes, ChartOfAccounts), QuickChoice,

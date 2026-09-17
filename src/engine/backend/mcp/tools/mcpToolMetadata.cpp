@@ -354,6 +354,52 @@ const ibArg& ArgDeleted()
 	return s_a;
 }
 
+// ⭐⭐ A RELATIONSHIP ASKED FOR AT CREATION GOES THROUGH THE VERB FOR RELATIONSHIPS — metadata_bind, called
+// as it is on the wire. A property whose value is a SET of metaobjects (`ListRegisterRecord`, `ListOwner`,
+// `ListGeneration`) has two ends: a document posting to a register IS the register taking that document as a
+// recorder, and the second end is made only when the property is told its value CHANGED. Placed the way a
+// plain value is placed, the set was edited inside the value the property already held — old and new one
+// object, no difference to tell — so a document created with `ListRegisterRecord` posted to no register, and
+// the register said "Doesn't have any recorder" later and elsewhere (measured 2026-09-04,
+// open-enterprise-solutions/enterprise#84). metadata_set refuses a set and names metadata_bind; a create
+// has nothing to refuse — the caller said what it wants — so it takes the same door.
+//
+// One name or a list of names; each is ADDED, as metadata_bind adds. Answers why not, or nothing.
+wxString BindAtCreation(ibValueMetaObject* created, const wxString& property, const ibDataValue& value)
+{
+	std::vector<wxString> targets;
+
+	if (value.Kind() == ibDataKind::String)
+		targets.push_back(value.AsString());
+	else if (value.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& one : value.AsArray()) {
+			if (one.Kind() != ibDataKind::String)
+				return wxString::Format(ibMcpText("'%s' takes the NAMES of what to bind - a list of strings."), property);
+			targets.push_back(one.AsString());
+		}
+	}
+	else {
+		return wxString::Format(ibMcpText("'%s' takes the NAME of what to bind, or a list of names."), property);
+	}
+
+	const ibMcpTool* bind = ibFindMcpTool(wxT("metadata_bind"));
+	if (bind == nullptr)
+		return wxString::Format(ibMcpText("'%s' is a relationship, and metadata_bind, which places one, is not in this build."), property);
+
+	for (const wxString& target : targets) {
+		ibDataNode params;
+		params.AddField(wxT("id"), ibDataValue::Int((s64)created->GetMetaID()));
+		params.AddField(wxT("property"), ibDataValue::String(property));
+		params.AddField(wxT("target"), ibDataValue::String(target));
+
+		ibDataNode answer;
+		wxString why;
+		if (!bind->Call(params, answer, why))
+			return why;
+	}
+	return wxEmptyString;
+}
+
 } // namespace
 
 //---------------------------------------------------------------------------
@@ -872,12 +918,11 @@ public:
 			"`DefaultFormList` (and so on) by NAME - they are ordinary lists, and metadata_get "
 			"shows the candidates. A form's MAIN ATTRIBUTE is not one of these: it is set with "
 			"form_attribute.\n"
-			"AND ONE PROPERTY IS KNOWN NOT TO TAKE THROUGH `properties`: a document's "
-			"`ListRegisterRecord` is accepted here and has no effect, with nothing said - so a "
-			"document created that way posts to no register at all, and the register reports "
-			"\"Doesn't have any recorder\" later, somewhere else. Bind it with metadata_bind, which "
-			"is the verb for a relationship anyway and tells the other end too. Other "
-			"relationships (`ListOwner`, `ListGeneration`) do take here.");
+			"A RELATIONSHIP whose value is a set of metaobjects - a document's `ListRegisterRecord`, "
+			"`ListOwner`, `ListGeneration` - takes the NAME of what to bind or a list of names "
+			"(`{\"ListRegisterRecord\": [\"Stock\", \"Settlements\"]}`), and each is placed through "
+			"metadata_bind, so the other end learns it too: the register takes the document as its "
+			"recorder.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -982,20 +1027,6 @@ public:
 		// what it may set from the object rather than from this file.
 		if (const ibDataNode* wanted = params.FindChild(ArgProperties().Name())) {
 
-			// 🛑 AND ONE PROPERTY GOES THROUGH THIS LOOP AND COMES OUT UNSET, SAYING NOTHING.
-			// A document's `ListRegisterRecord` passed here is neither applied nor refused: the
-			// object is created bound to no register, and what reports it is the REGISTER, later
-			// and elsewhere, with "Doesn't have any recorder". Measured 2026-09-04 against a live
-			// designer, with the register already holding two recorders, so an empty choice list
-			// is not the explanation.
-			//
-			// ⚠ AND IT IS NOT "RELATIONSHIPS DO NOT WORK HERE", which was the first and wrong
-			// reading. The choice road is live at this point and answers properly: `ListOwner`
-			// with a bad name is refused BY NAME with the list of candidates, and with a good one
-			// it is applied and reads back. Only this property behaves differently, and why is not
-			// yet established — hence a description that warns rather than a fix that guesses.
-			//
-			// Recorded rather than worked around: open-enterprise-solutions/enterprise#84.
 			std::vector<ibDataValue> refused;
 
 			for (const auto& field : wanted->Fields()) {
@@ -1006,9 +1037,15 @@ public:
 				// property it did not get would go on believing it was set.
 				wxString why;
 
+				ibPropertyChoiceList offered;
 				if (property == nullptr) {
 					why = wxString::Format(ibMcpText("'%s' has no property called '%s'."),
 						created->GetName(), field.first);
+				}
+				else if (property->GetValueList(offered) == ibPropertyChoiceMode::Mult) {
+					// A SET OF METAOBJECTS — a relationship with two ends; see BindAtCreation. The same
+					// test metadata_set refuses one by.
+					why = BindAtCreation(created, property->GetName(), field.second);
 				}
 				else {
 					// One entry, in the shape ibMcpSetProperty reads — the same one metadata_set

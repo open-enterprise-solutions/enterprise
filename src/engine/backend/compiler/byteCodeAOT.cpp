@@ -217,7 +217,14 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // with the binding reading it — the layout is the same and the blob loads, and it would go on counting
 // the days of the document's month where the source says the argument's. A cache that answers
 // differently from its source must not be loaded.
-constexpr uint16_t kAOTFormatVersion = 30;
+// 🛑 30 → 31 (2026-09-17): three compilations changed their answer. `New T(args);` written as a statement
+// kept its arguments' instructions (a v30 blob built the object with none); a variable declared with a value
+// class (`Array rows`) is gated on every assignment (OPER_SET_TYPE after the LET, which a v30 blob does not
+// have); and a LINQ filter's comparisons and NOT / AND / OR carry LINQ_THREE_VALUED_NULL in m_param4, so NULL
+// is not kept by `where` — a v30 blob's zero there keeps it; and `Not` no longer gates its own result cell
+// before computing it (a v30 blob does, and raises on the second row of a filter); and `Not` reads its operand
+// only up to the next And / Or (a v30 blob compiled `Not a And b` as `Not (a And b)`). The layout did not move.
+constexpr uint16_t kAOTFormatVersion = 31;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

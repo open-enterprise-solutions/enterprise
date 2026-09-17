@@ -587,6 +587,23 @@ struct ScopedThreeValuedNull {
 	~ScopedThreeValuedNull() { ts_threeValuedNullCompare = m_prev; }
 };
 
+// ⭐⭐ A FILTER COMPILED INTO THE LOOP CARRIES THE MODE ON ITS OWN INSTRUCTIONS. A query block, and since
+// 2026-09-08 a chain, is a loop of ordinary instructions (compileCodeLINQ.cpp): its `where` is no longer a
+// lambda call the flag above could be scoped around, so its comparisons were two-valued — and the ORDER puts
+// NULL below every value (value.cpp, CompareValueLS). `where g.Price < 500` kept a goods folder whose price is
+// NULL, while the same condition on the server dropped it (measured 2026-09-17: 26 rows against 25; `>` agreed
+// only because NULL is not above anything). The compiler marks the comparisons and the NOT / AND / OR of a
+// filter's own instructions (Where, SkipWhile, TakeWhile — the verbs the lambda road scoped the flag around)
+// with this value in m_param4.m_numIndex, m_numArray = DEF_VAR_SKIP since it names no cell; the interpreter
+// reads the mark beside the flag. A mark and not a scope: nothing is left switched on when a row's predicate
+// raises, and a function the predicate calls keeps the language's own comparison.
+constexpr long LINQ_THREE_VALUED_NULL = 1;
+
+// A MACRO, not an inline function: it is asked on every comparison the interpreter runs, and a Debug build does
+// not inline — as a function it was one more call per comparison, +7% on a loop of plain `<` (2026-09-17).
+#define IS_THREE_VALUED_NULL(code) \
+	((code).m_param4.m_numIndex == LINQ_THREE_VALUED_NULL || ts_threeValuedNullCompare)
+
 // A genuine SQL NULL operand — the `Null` literal / a NULL DB column (TYPE_NULL). NOT TYPE_EMPTY
 // (Undefined = a composite with no type chosen) and NOT IsEmptyValue (which also reports Boolean
 // false). This is what the three-valued (Kleene) comparison path keys on, matching the DB.

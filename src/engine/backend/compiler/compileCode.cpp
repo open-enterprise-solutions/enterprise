@@ -39,6 +39,8 @@ static constexpr std::array<int, 256> MakeOperPriority()
 	listPriority['*'] = 30;
 	listPriority['/'] = 30;
 	listPriority['%'] = 30;
+	// `!` / `Not` as a PREFIX takes its operand up to the next `And` / `Or` — see the KEY_NOT branch of
+	// GetExpression. This entry is `!` met AFTER an operand, which the language refuses.
 	listPriority['!'] = 50;
 
 	listPriority[KEY_OR] = 1;
@@ -882,8 +884,21 @@ bool ibCompileCode::IsTypeVar(const wxString& strType)
 	// Array. Deciding on the type name alone was safe while five reserved words
 	// qualified, and stops being safe the moment every registered class does.
 	const int first = m_numCurrentCompile + 1;
-	if (first + 1 >= static_cast<int>(m_listLexem.size()))
+	const int count = static_cast<int>(m_listLexem.size());
+	if (first + 1 >= count)
 		return false;
+
+	// ⭐ THE DOTTED FORM — `CatalogRef.Goods item`, three lexems and a name. The header above promised it and the
+	// code read one lexem only, so every metadata type was refused where a declaration stood ("Var is not found
+	// (CatalogRef)", measured 2026-09-17). `A.B name` is nothing else in the language — two expressions do not
+	// stand side by side — so the shape is a declaration, and GetTypeVar names a type the registry does not know.
+	if (first + 3 < count
+	 && m_listLexem[first].m_lexType == IDENTIFIER
+	 && m_listLexem[first + 1].m_lexType == DELIMITER && m_listLexem[first + 1].m_numData == '.'
+	 && m_listLexem[first + 2].m_lexType == IDENTIFIER
+	 && m_listLexem[first + 3].m_lexType == IDENTIFIER)
+		return true;
+
 	if (m_listLexem[first].m_lexType != IDENTIFIER
 	 || m_listLexem[first + 1].m_lexType != IDENTIFIER)
 		return false;
@@ -902,7 +917,7 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 	if (!strType.IsEmpty()) {
 		// Unknown to the registry — that, and only that, is a bad type name.
 		if (!ibValue::IsRegisterCtor(strType)) {
-			SetError(ERROR_TYPE_DEF);
+			SetError(ERROR_TYPE_DEF, strType);
 			return 0;
 		}
 		return ibValue::GetIDObjectFromString(strType);
@@ -912,11 +927,27 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 	// yes — so the next lexem IS the type name. Re-deciding here would be the same
 	// question asked twice, and the two answers could drift.
 	const ibLexem& lex = GETLexem();
-	if (lex.m_lexType != IDENTIFIER || !ibValue::IsRegisterCtor(lex.m_strData)) {
-		SetError(ERROR_TYPE_DEF);
+	if (lex.m_lexType != IDENTIFIER) {
+		SetError(ERROR_TYPE_DEF, lex.m_strData);
 		return 0;
 	}
-	return ibValue::GetIDObjectFromString(lex.m_strData);
+	wxString name = lex.m_strData;
+	wxString written = lex.m_valData.GetString();   // as the person spelled it — m_strData is folded to upper case
+	if (IsNextDelimeter('.')) {   // the dotted form — see IsTypeVar
+		GETDelimeter('.');
+		const wxString member = GETIdentifier(true);
+		name += wxT(".") + member;
+		written += wxT(".") + member;
+	}
+	// ⚠ A CONFIGURATION'S OWN TYPE (`CatalogRef.Goods`) IS NOT IN THIS REGISTRY. The configuration registers it
+	// with itself (ibMetaImage), and a compiler has no road to its module's configuration without a hook on
+	// ibCompileCode — a header under commonObject.h, so a question for Max (ROADMAP). Its FAMILY is here
+	// (`CatalogRef`, `AnyRef`), and the refusal names what a declaration takes.
+	if (!ibValue::IsRegisterCtor(name)) {
+		SetError(ERROR_TYPE_DEF, written.IsEmpty() ? name : written);
+		return 0;
+	}
+	return ibValue::GetIDObjectFromString(name);
 }
 
 /**
@@ -1610,14 +1641,18 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 
 	while (!IsNextDelimeter(')')) {
 
-		// check for typing
-		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
-
+		// `[Val] [Type] name` — the passing mode first, then the type, then the name: `Val CatalogRef.Goods item`.
+		// The type was asked for first, and a type's look-ahead wants two identifiers, so with `Val` in front it
+		// never saw one, and with `Val` between it read the type as the parameter's name — neither order compiled
+		// (measured 2026-09-17, both refused with "Symbol expected ')'").
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
 		if (IsNextKeyWord(KEY_VAL)) {
 			GETKeyWord(KEY_VAL);
 			cVariable.m_bByValue = true;
 		}
+
+		// check for typing
+		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
 
 		const wxString& strRealName = GETIdentifier(true);
 
@@ -2036,8 +2071,19 @@ void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 	}
 }
 
+// ⭐ ONLY FOUR TYPES HAVE A TIER OF INSTRUCTIONS — Number, String, Date, Boolean (`OPER_… + TYPE_DELTAn`). A declared
+// type of any other registered class (`Array rows`, `CatalogRef.Goods item`, since 2026-08-04) has no typed
+// instruction to choose and no class the compiler can know an expression by, so it is not compared here: it is
+// the runtime gate's (OPER_SET_TYPE, AllowValue) — at the declaration, at a parameter's entry, and after every
+// assignment to it. Compared here it refused every use: `Array rows; rows = New Array;` was "Bad value type".
+static inline bool HasTypedTier(const ibClassID& clsid)
+{
+	return clsid == g_valueNumberCLSID || clsid == g_valueStringCLSID
+		|| clsid == g_valueDateCLSID || clsid == g_valueBooleanCLSID;
+}
+
 // macro checking variable Var against an expected type (by CLASS ID)
-#define CheckTypeDef(var,typeClsid) if((typeClsid) != 0)\
+#define CheckTypeDef(var,typeClsid) if((typeClsid) != 0 && HasTypedTier(typeClsid))\
 	{\
 		if(var.m_clsid != (typeClsid)){\
 			if ((typeClsid) == g_valueBooleanCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
@@ -2055,13 +2101,12 @@ void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 // macro for adjusting the operation by variable type
 // if it is typed, then the typed operation will be performed
 #define CorrectTypeDef(sKey)\
-if(sKey.m_clsid != 0)\
+if(sKey.m_clsid != 0 && HasTypedTier(sKey.m_clsid))\
 {\
 	if (sKey.m_clsid == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
 	else if (sKey.m_clsid == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
 	else if (sKey.m_clsid == g_valueDateCLSID) code.m_numOper+=TYPE_DELTA3;\
     else if (sKey.m_clsid == g_valueBooleanCLSID)  code.m_numOper+=TYPE_DELTA4;\
-	else SetError(ERROR_BAD_TYPE_EXPRESSION);\
 }
 
 // macro for local context 
@@ -2404,6 +2449,10 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						AddLineInfo(code);
 
 						CheckTypeDef(expression, variable.m_clsid);
+						// A declared type with no typed tier is checked where the value arrives — see HasTypedTier.
+						ibParamUnit gated;
+						if (variable.m_clsid != 0 && !HasTypedTier(variable.m_clsid))
+							gated = variable;
 						variable.m_clsid = expression.m_clsid;
 
 						bool bShortLet = false; int n = 0;
@@ -2456,6 +2505,8 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 							code.m_param2 = expression;
 							m_cByteCode.m_listCode.emplace_back(std::move(code));
 						}
+						AddTypeSet(gated);   // nothing when the variable's type has a tier or none was declared
+
 					}
 				}
 			}
@@ -2612,7 +2663,10 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 		argCode.m_numOper = OPER_SET;
 		argCode.m_param1 = listParam[arg];
 
-		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		// The ARGUMENT's instruction — `code` was moved into the list above, so pushing it again put an empty
+		// instruction where each argument belonged: `New Structure("a", 1);` as a statement reached the
+		// constructor with no arguments at all (measured 2026-09-17). The expression form below was right.
+		m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 	}
 
 	return true;
@@ -3636,9 +3690,22 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		variable = context->CreateVariable();
 		variable.m_clsid = g_valueBooleanCLSID;
 
-		AddTypeSet(variable);
+		// ⚠ NO GATE ON THE OPERATOR'S OWN CELL. OPER_SET_TYPE used to MAKE the cell Boolean; it is a gate now (it
+		// checks the value standing there), and emitted before OPER_NOT it checked what the cell held from the
+		// previous pass. In a LINQ filter NOT over an unknown answers UNKNOWN (LINQ_THREE_VALUED_NULL), so the
+		// second row met the first row's NULL and raised "Type mismatch ... 'Boolean'" (2026-09-17). OPER_NOT
+		// types its result itself; the class id above is what the compiler reads the expression as.
 
-		ibParamUnit variable2 = GetExpression(context);// , gs_operPriority['!']);
+		// ⭐⭐ `Not` IS TIGHTER THAN `And` / `Or` AND LOOSER THAN A COMPARISON (Max, 2026-09-17): `Not x = 5` is
+		// `Not (x = 5)`, `Not a And b` is `(Not a) And b`. The operand is read at And's priority, so it takes
+		// comparisons, `In`, arithmetic, and stops at the first `And` / `Or`; what follows continues in the
+		// caller's loop with `Not a` as its left side. The query language reads NOT the same way
+		// (queryParser.cpp: OR < AND < NOT < comparison).
+		//
+		// 🛑 It used to take the WHOLE rest — `Not a And b` was `Not (a And b)` — with `gs_operPriority['!']`
+		// (50) written beside the call and commented out; uncommenting that would have made `Not x = 5` read
+		// `(Not x) = 5`. Pinned for a week by LambdaRecorderCES as a question, not an answer.
+		ibParamUnit variable2 = GetExpression(context, gs_operPriority[KEY_AND]);
 
 		ibByteUnit code;
 		code.m_numOper = OPER_NOT;

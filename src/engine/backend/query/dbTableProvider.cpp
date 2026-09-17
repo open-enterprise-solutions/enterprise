@@ -500,6 +500,23 @@ ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaDat
 	auto constAt = [&](size_t i) -> ibQueryExprPtr {
 		return (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());
 	};
+
+	// ⭐⭐ A PRIMITIVE IS COMPARED WITHIN ITS OWN KIND. A column of one primitive type is a tag and one value
+	// field (the layout DecomposeIn tells apart the same way), and walked lexicographically the TAG leads: a
+	// row whose tag is another kind's — an empty value, a folder's attribute kept for items only — came out
+	// "greater than 500" or "less than 500" by the order of the tags rather than by any figure. `WHERE Price
+	// > 500` returned a goods folder with no price (measured 2026-09-17: 16 rows against 15). A value of
+	// another kind is neither greater nor less — as a NULL is not, in SQL and in a filter on the RAM floor
+	// (LINQ_THREE_VALUED_NULL, procUnitLambda.h), so the three roads now answer alike.
+	// A key of several fields (a reference, a moment) keeps its lexicographic order — that IS what it means.
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const bool primitive = fields.size() == 2 && layout.size() == 2
+		&& layout[0].m_role == ibColumnRole::Discriminator
+		&& (layout[1].m_role == ibColumnRole::Boolean || layout[1].m_role == ibColumnRole::Number
+			|| layout[1].m_role == ibColumnRole::Date || layout[1].m_role == ibColumnRole::String);
+	if (primitive)
+		return AndFold(ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[0]), constAt(0)),
+			ibBinOp(op, ibColQ(mainQual, fields[1]), constAt(1)));
 	const ibQueryBinOp strictOp =
 		(op == ibQueryBinOp::Ge || op == ibQueryBinOp::Gt) ? ibQueryBinOp::Gt : ibQueryBinOp::Lt;
 

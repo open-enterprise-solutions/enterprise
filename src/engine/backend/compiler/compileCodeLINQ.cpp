@@ -37,6 +37,7 @@
 #include "codeDef.h"
 
 #include "backend/diagnostics/journal.h"   // what a chain folded, and where the loop was emitted
+#include "procUnitLambda.h"                // LINQ_THREE_VALUED_NULL — the mark a filter's instructions carry
 
 #include <algorithm>                       // std::any_of — the column namer asks a taken list
 
@@ -921,6 +922,27 @@ wxString UniqueColumnName(const std::vector<wxString>& taken, const wxString& pr
 	for (int n = 1; isTaken(name); ++n)
 		name = wxString::Format(wxT("%s%d"), proposed.IsEmpty() ? wxT("Field") : proposed, n);
 	return name;
+}
+
+// ⭐⭐ A FILTER MEANS WHAT THE SAME CONDITION MEANS ON THE SERVER — marked on the instructions that decide it.
+// A comparison with NULL is unknown and the row is not kept; the language's own `<` puts NULL below every
+// value instead, which is right for a sort and wrong for a filter. The mark and why it is a mark rather than
+// a scope: LINQ_THREE_VALUED_NULL (procUnitLambda.h). Only the comparisons and the NOT / AND / OR in
+// [from, to) — the stretch this filter's condition was just compiled into — carry it.
+void MarkThreeValuedNull(ibByteCode& byteCode, const int from, const int to)
+{
+	for (int ip = from; ip < to && ip < (int)byteCode.m_listCode.size(); ++ip) {
+		ibByteUnit& code = byteCode.m_listCode[(size_t)ip];
+		switch (code.m_numOper % TYPE_DELTA1) {
+		case OPER_EQ: case OPER_NE: case OPER_GT: case OPER_LS: case OPER_GE: case OPER_LE:
+		case OPER_NOT: case OPER_AND: case OPER_OR:
+			code.m_param4.m_numArray = DEF_VAR_SKIP;      // names no cell
+			code.m_param4.m_numIndex = LINQ_THREE_VALUED_NULL;
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 } // namespace
@@ -1866,6 +1888,9 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		const int predicateFrom = (int)m_cByteCode.m_listCode.size();
 		bool simpleBody = true;
 		const ibParamUnit value = EmitLambdaBody(loopCtx, &simpleBody);
+		if (verb == (long)ibValue::ibLinqMethod::Where || verb == (long)ibValue::ibLinqMethod::WhereIndexed
+			|| verb == (long)ibValue::ibLinqMethod::SkipWhile || verb == (long)ibValue::ibLinqMethod::TakeWhile)
+			MarkThreeValuedNull(m_cByteCode, predicateFrom, (int)m_cByteCode.m_listCode.size());
 
 		if (verb == (long)ibValue::ibLinqMethod::Where
 			|| verb == (long)ibValue::ibLinqMethod::WhereIndexed) {
@@ -2645,7 +2670,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// WHERE clause
 			if (IsNextKeyWord(KEY_WHERE)) {
 				GETKeyWord(KEY_WHERE);
+				const int whereFrom = (int)m_cByteCode.m_listCode.size();
 				const ibParamUnit whereExpr = GetExpression(context);
+				MarkThreeValuedNull(m_cByteCode, whereFrom, (int)m_cByteCode.m_listCode.size());
 				ibByteUnit c; AddLineInfo(c);
 				c.m_numOper = OPER_IF;
 				c.m_param1 = whereExpr;

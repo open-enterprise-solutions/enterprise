@@ -104,30 +104,25 @@ TEST_F(LambdaRecorderCES, ArithmeticPrecedence)
 	EXPECT_EQ(e->m_lhs->m_lhs->m_arith, ibQueryArithOp::Mul);
 }
 
-// ⚠⚠ UNARY `!` / `Not` TAKES THE WHOLE REST OF THE EXPRESSION, and this test records that rather
-// than asserting it is right — because which of three readings is right is a decision about the
-// LANGUAGE and has not been made.
-//
-// The compiler declares a precedence for it and then does not use it. `gs_operPriority['!'] = 50`
-// is the highest entry in the table (`*` is 30, `And` 2, `Or` 1), but the parser calls
-// `GetExpression(context)` with no priority — the argument that would carry it is written out and
-// COMMENTED OUT on the same line (compileCode.cpp, the KEY_NOT / '!' branch). So the declared rule
-// and the applied rule disagree, and the applied one wins silently.
-//
-// The three readings differ on real code, which is why this is not a one-line fix:
-//   as parsed today   `!a And b` -> NOT (a AND b)   · `Not x = 5` -> NOT (x = 5)
-//   as the table says `!a And b` -> (NOT a) AND b   · `Not x = 5` -> (NOT x) = 5   ← breaks the
-//                                                     ordinary `If Not x = 5 Then`
-//   as a person expects (VBScript, the accounting languages): tighter than And/Or, looser than the
-//                     comparisons — `(NOT a) AND b` AND `NOT (x = 5)`, which is neither of the above.
-//
-// Uncommenting picks the second and changes the meaning of code already written. Pinned here so
-// that whichever is chosen arrives as a failure with the whole question attached to it.
-TEST_F(LambdaRecorderCES, UnaryNotCurrentlyTakesTheWholeExpression)
+// ⭐ UNARY `!` / `Not` IS TIGHTER THAN And / Or AND LOOSER THAN A COMPARISON — decided 2026-09-17, the
+// third of the three readings this test used to pin as an open question:
+//   until then        `!a And b` -> NOT (a AND b)   · `Not x = 5` -> NOT (x = 5)
+//   the table's 50    `!a And b` -> (NOT a) AND b   · `Not x = 5` -> (NOT x) = 5   ← would break
+//                                                     the ordinary `If Not x = 5 Then`
+//   decided           `!a And b` -> (NOT a) AND b   · `Not x = 5` -> NOT (x = 5)
+// — the way the query language already reads NOT (queryParser.cpp).
+TEST_F(LambdaRecorderCES, UnaryNotBindsTighterThanAnd)
 {
 	auto e = Record(wxT("{ return !x.Posted And x.Delta >= -5; }"));
 	ASSERT_TRUE(e != nullptr);
-	EXPECT_EQ(ibDescribeQueryAst(e).ToStdString(), "NOT (Posted AND (Delta >= -5))");
+	EXPECT_EQ(ibDescribeQueryAst(e).ToStdString(), "(NOT Posted AND (Delta >= -5))");
+}
+
+TEST_F(LambdaRecorderCES, UnaryNotTakesTheWholeComparison)
+{
+	auto e = Record(wxT("{ return !x.Delta = 5 Or x.Posted; }"));
+	ASSERT_TRUE(e != nullptr);
+	EXPECT_EQ(ibDescribeQueryAst(e).ToStdString(), "(NOT (Delta = 5) OR Posted)");
 }
 
 // ===========================================================================

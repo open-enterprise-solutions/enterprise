@@ -1653,9 +1653,11 @@ void ibMcpDescribePlatform(ibDataNode& into)
 		  "written in code: the line break stays in the text, and every continuing line opens with "
 		  "`|` after its indentation, which is dropped. So a query is ONE literal, not a sum of "
 		  "lines:\n"
-		  "  query.Text = \"SELECT Ref\n"
+		  "  var query = New Query(\"SELECT Ref\n"
 		  "  |FROM Catalog.Goods\n"
-		  "  |WHERE Code = &Code\";\n"
+		  "  |WHERE Code = &Code\");\n"
+		  "  query.SetParameter(\"Code\", code);\n"
+		  "A query takes its text in New Query(...) - it has no Text property. "
 		  "A quote inside a string is doubled (\"\"). A literal in apostrophes is a DATE, not a "
 		  "string: '20260915'."));
 

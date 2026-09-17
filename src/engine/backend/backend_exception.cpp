@@ -170,7 +170,7 @@ static wxString gs_listErrorString[] =
 
 	_("Constructor not found (%s)"),//ERROR_CALL_CONSTRUCTOR
 
-	_("Type error define"),//ERROR_TYPE_DEF
+	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ERROR_TYPE_DEF
 	_("Bad variable type"),//ERROR_BAD_TYPE
 	_("Bad value type"),//ERROR_BAD_TYPE_EXPRESSION
 	_("Variable must be a numeric type"),//ERROR_NUMBER_TYPE

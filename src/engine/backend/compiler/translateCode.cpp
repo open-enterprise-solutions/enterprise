@@ -43,7 +43,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"EndProcedure"},
 	{"Function"},
 	{"EndFunction"},
-	{"Public"},      // KEY_PUBLIC    — was "Export"; leading access modifier
+	{"Public"},      // KEY_PUBLIC    — was "Export"; a TRAILING access modifier: after a routine's signature, after a variable's name
 	{"Private"},     // KEY_PRIVATE
 	{"Protected"},   // KEY_PROTECTED
 	{"Cached"},      // KEY_CACHED    — memoisation; combines with the three above
