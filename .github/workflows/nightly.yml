@@ -1,0 +1,279 @@
+# OES Enterprise — nightly release
+#
+# Every night, if `develop` moved since the last nightly, build Release on the three platforms and
+# publish them as ONE pre-release under the tag `nightly`, replaced each time:
+#   Windows x64   oes-nightly-windows-x64.zip
+#   Linux x64     oes-nightly-linux-x64.tar.gz
+#   macOS arm64   oes-nightly-macos-arm64.dmg
+#
+# ⚠ A SCHEDULE RUNS FROM THE DEFAULT BRANCH. GitHub reads `on: schedule` only from the workflow file on
+# the repository's default branch (`master`), so this file has to be there for the night to start; what
+# it BUILDS is `develop`, named below. `workflow_dispatch` runs it by hand from any branch.
+#
+# ⚠ ONE REPOSITORY PUBLISHES. The tree is pushed to more than one remote; the release belongs to the
+# organisation's, and a fork running this would build three platforms every night for nobody.
+#
+# No build-directory cache, for the reason ci.yml gives at its top: a restored tree lies to Ninja.
+
+name: Nightly
+
+on:
+  schedule:
+    # 23:00 UTC — 02:00 in Kyiv in summer, 01:00 in winter.
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if develop has not moved since the last nightly'
+        type: boolean
+        default: false
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  BRANCH: develop
+  TAG: nightly
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Did anything land since the last nightly? The tag `nightly` points at the commit the current
+  # nightly was built from; when develop's head is that commit, there is nothing new to build.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Anything new on develop?
+    if: github.repository == 'open-enterprise-solutions/enterprise'
+    runs-on: ubuntu-22.04
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      sha: ${{ steps.check.outputs.sha }}
+      stamp: ${{ steps.check.outputs.stamp }}
+    steps:
+      - id: check
+        env:
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          set -euo pipefail
+          repo="https://github.com/${{ github.repository }}.git"
+          head=$(git ls-remote "$repo" "refs/heads/$BRANCH" | cut -f1)
+          # A lightweight tag lists once; an annotated one also as ^{} with the commit — take the commit.
+          built=$(git ls-remote --tags "$repo" | awk -v t="refs/tags/$TAG" '$2==t || $2==t"^{}" {c=$1} END {print c}')
+          echo "develop: $head   last nightly: ${built:-none}"
+          if [ -z "$head" ]; then echo "::error::no branch $BRANCH"; exit 1; fi
+          if [ "$head" != "$built" ] || [ "$FORCE" = "true" ]; then build=true; else build=false; fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
+          echo "stamp=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "### Nightly: build=$build (develop ${head:0:8}, last nightly ${built:0:8})" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Windows x64 — the shipping platform. The database clients land next to the binaries by the
+  # backend's own post-build step (the same files the Visual Studio project copies).
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows x64
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+          submodules: false
+          fetch-depth: 1
+
+      # docs/ is private and not needed; wxWidgets is — see ci.yml.
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset windows-x64-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+
+      # The programs and what they link — not wx's own extras (webview, media, gl, ribbon, richtext),
+      # which the default target also builds and nothing here loads.
+      - name: Build
+        run: cmake --build --preset windows-x64-release --target enterprise designer launcher codeRunner daemon simplePlugin
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./.github/nightly/package-windows.ps1 -Bin build/windows-x64-release/bin -Out oes-nightly-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: oes-nightly-windows-x64.zip
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # Linux x64
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux x64
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+          submodules: false
+          fetch-depth: 1
+
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config patchelf \
+            libgtk-3-dev uuid-dev
+
+      - name: Configure
+        run: cmake --preset linux-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+
+      - name: Build
+        run: cmake --build --preset linux-release --target enterprise designer launcher codeRunner daemon simplePlugin
+
+      # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE, as the Windows kit does: a file base is an embedded Firebird, and
+      # no Linux distribution ships version 5 (Ubuntu 22.04 and Debian 12 have 3, which cannot open these
+      # bases). The official build, PINNED — the same release whichever night it is. Its tree finds its own
+      # libraries through `$ORIGIN/../lib`, so it is laid out as it is, in `_fb/`, and the engine loads
+      # `_fb/lib/libfbclient.so.2` by path (firebirdInterface.cpp).
+      #
+      # The one library the kit does not carry is libtommath, which Ubuntu does not install by default; it is
+      # taken from the runner's own package and put beside the kit's libraries. The plugins the Windows kit
+      # leaves out (profiler, trace, UDR) are left out here too, and firebird.conf is the Windows kit's own —
+      # SuperClassic, so two programs can open one base.
+      - name: Firebird 5 kit
+        run: |
+          set -euo pipefail
+          curl -fsSL -o fb5.tar.gz "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/Firebird-5.0.4.1812-0-linux-x64.tar.gz"
+          tar xzf fb5.tar.gz
+          mkdir -p fb5root fbkit
+          tar xzf Firebird-5.0.4.1812-0-linux-x64/buildroot.tar.gz -C fb5root
+          fb=fb5root/opt/firebird
+          cp -a "$fb/lib" "$fb/plugins" "$fb/intl" "$fb/tzdata" "$fb/firebird.msg" "$fb/security5.fdb" "$fb/plugins.conf" fbkit/
+          rm -rf fbkit/plugins/udr fbkit/plugins/libDefault_Profiler.so fbkit/plugins/libfbtrace.so \
+                 fbkit/plugins/libudr_engine.so fbkit/plugins/udr_engine.conf
+          cp src/engine/backend/databaseLayer/firebird/engine/dll/firebird.conf fbkit/
+          apt-get download libtommath1
+          dpkg-deb -x libtommath1_*.deb tommath
+          cp -a tommath/usr/lib/x86_64-linux-gnu/libtommath.so.1* fbkit/lib/
+          ls -la fbkit fbkit/lib fbkit/plugins
+
+      - name: Package
+        run: bash .github/nightly/package-linux.sh build/linux-release/bin oes-nightly-linux-x64.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: oes-nightly-linux-x64.tar.gz
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # macOS arm64 — a disk image with the applications in it, unsigned (see the release note).
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS arm64
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+          submodules: false
+          fetch-depth: 1
+
+      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+
+      - name: Install build dependencies
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake --preset macos-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+
+      - name: Build
+        run: cmake --build --preset macos-release --target enterprise designer launcher codeRunner daemon simplePlugin
+
+      # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE — the official macOS build, PINNED. It ships as an installer
+      # package; `pkgutil --expand-full` unpacks it without installing anything, and the framework's
+      # Resources are a complete tree (lib/ with ICU and tommath, plugins/, intl/). Its libraries find each
+      # other as `@rpath/lib/…`, which the programs' rpath to `_fb` answers (package-macos.sh). Left out and
+      # configured as on Windows — see the Linux job.
+      - name: Firebird 5 kit
+        run: |
+          set -euo pipefail
+          curl -fsSL -o fb5.pkg "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/Firebird-5.0.4.1812-0-macos-arm64.pkg"
+          pkgutil --expand-full fb5.pkg fb5pkg
+          res=fb5pkg/Firebird.pkg/Payload/Versions/A/Resources
+          mkdir -p fbkit
+          for item in lib plugins intl tzdata firebird.msg security5.fdb plugins.conf; do
+            if [ -e "$res/$item" ]; then cp -a "$res/$item" fbkit/; fi
+          done
+          rm -rf fbkit/plugins/udr fbkit/plugins/libDefault_Profiler.dylib fbkit/plugins/libfbtrace.dylib \
+                 fbkit/plugins/libudr_engine.dylib fbkit/plugins/udr_engine.conf \
+                 fbkit/plugins/libfbSample* fbkit/plugins/fbSample*
+          cp src/engine/backend/databaseLayer/firebird/engine/dll/firebird.conf fbkit/
+          ls -la fbkit fbkit/lib fbkit/plugins
+
+      - name: Package
+        run: bash .github/nightly/package-macos.sh build/macos-release/bin oes-nightly-macos-arm64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: oes-nightly-macos-arm64.dmg
+          retention-days: 3
+
+  # ---------------------------------------------------------------------------
+  # One release, all three or none: published only when every platform built, so a nightly never
+  # offers Windows from tonight beside macOS from last week. The old one is replaced — tag and assets —
+  # and the tag moves to the commit that was built.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish the nightly release
+    needs: [changes, windows, linux, macos]
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Replace the nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.changes.outputs.sha }}
+          STAMP: ${{ needs.changes.outputs.stamp }}
+        run: |
+          set -euo pipefail
+          ls -la assets
+          cat > notes.md <<EOF
+          Automatic build of \`develop\` at ${SHA:0:8}, ${STAMP}. Not a release: whatever landed during the day, built as it is.
+
+          | Platform | File | How to run |
+          |---|---|---|
+          | Windows 10/11 x64 | \`oes-nightly-windows-x64.zip\` | Unpack, run \`designer.exe\` or \`enterprise.exe\` from the \`oes\` folder. Firebird and the PostgreSQL client are inside. |
+          | Linux x64 (Ubuntu 22.04 / Debian 12 or newer) | \`oes-nightly-linux-x64.tar.gz\` | \`tar xzf\`, run \`./designer\` or \`./enterprise\` in \`oes/\`. Firebird 5 is inside (\`_fb\`). Needs GTK 3 (\`libgtk-3-0\`); a PostgreSQL base needs \`libpq\`. |
+          | macOS 14+ on Apple Silicon | \`oes-nightly-macos-arm64.dmg\` | Drag the \`OES\` folder to Applications — the applications in it need each other, so move the folder, not one app. Firebird 5 is inside (\`_fb\`). The build is not signed: the first time, right-click the app → Open (or \`xattr -dr com.apple.quarantine /Applications/OES\`). |
+          EOF
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" assets/* \
+            --prerelease \
+            --target "$SHA" \
+            --title "Nightly ${STAMP} (${SHA:0:8})" \
+            --notes-file notes.md
