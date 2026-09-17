@@ -2010,3 +2010,82 @@ TEST(QueryComposerGate, GroupLevelPage_WithMeasures_StillPageable)
 // (No sibling test for the COMPUTED-select case: `SpecBuf` does not populate `m_selectExprs`, so the
 //  gate's clause for it cannot be reached from this harness without widening the harness itself. The
 //  router above refuses that shape on its own — a measure over a projection's name goes to the fold.)
+
+// ---- ORDER BY over the groups a computed source folds in memory ------------------------------------
+//
+// A computed source grouped in memory answered its groups in the order its rows came: `GROUP BY m ORDER BY m`
+// over a register's reading (ActualActionPeriod, ScheduleData) came back unsorted while the same query over a
+// table was sorted, and TOP n kept the first n groups MET rather than the first n in order (2026-09-17). The fold
+// orders its groups as the SQL road does — by a group key, or by a total's name — and caps them after.
+
+namespace {
+
+// (month, amount) rows in an order no sort gives: the months out of turn, several rows to a month.
+ibQueryRamTable MonthRows(ibMetaID month, ibMetaID amount)
+{
+	ibQueryRamTable t;
+	t.AddColumn(month, wxT("m"), kNoType);
+	t.AddColumn(amount, wxT("a"), kNoType);
+	const std::vector<std::pair<long, long>> rows = { { 3, 10 }, { 1, 5 }, { 2, 40 }, { 3, 1 }, { 1, 7 }, { 4, 2 } };
+	for (const std::pair<long, long>& row : rows) {
+		const long r = t.AppendRow();
+		t.SetCell(r, month, ibValue(ibNumber(row.first)));
+		t.SetCell(r, amount, ibValue(ibNumber(row.second)));
+	}
+	return t;
+}
+
+} // namespace
+
+TEST(QueryComputedAggregate, GroupsComeInTheOrderAskedFor)
+{
+	const ibMetaID M = 1, A = 2;
+	TestCol month(wxT("m"), M), amount(wxT("a"), A);
+	RecordingComputedQ src(wxT("s"), 160);
+	src.AddCol(&month);
+	src.AddCol(&amount);
+	src.SetRows([&] { return MonthRows(M, A); });
+
+	for (const bool ascending : { true, false }) {
+		ibDataQueryBuilder q(nullptr);
+		q.From(&src);
+		q.GroupBy(&month);
+		q.Sum(&amount, wxT("total"));
+		q.OrderBy(&month, ascending);
+		ibDataQueryResult res = q.SelectAggregate();
+
+		std::vector<long> months;
+		while (res.Next())
+			months.push_back(res.GetValue(&month).GetInteger());
+		EXPECT_EQ(ascending ? std::vector<long>({ 1, 2, 3, 4 }) : std::vector<long>({ 4, 3, 2, 1 }), months);
+	}
+}
+
+TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
+{
+	const ibMetaID M = 1, A = 2;
+	TestCol month(wxT("m"), M), amount(wxT("a"), A);
+	RecordingComputedQ src(wxT("s"), 161);
+	src.AddCol(&month);
+	src.AddCol(&amount);
+	src.SetRows([&] { return MonthRows(M, A); });   // totals: month 1 = 12, 2 = 40, 3 = 11, 4 = 2
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&src);
+	q.GroupBy(&month);
+	q.Sum(&amount, wxT("total"));
+	q.OrderByOutput(wxT("total"), /*ascending*/ false);
+	q.Top(2);
+	ibDataQueryResult res = q.SelectAggregate();
+
+	std::vector<long> months;
+	std::vector<ibNumber> totals;
+	while (res.Next()) {
+		months.push_back(res.GetValue(&month).GetInteger());
+		totals.push_back(res.GetColumn(wxT("total")).GetNumber());
+	}
+	EXPECT_EQ(std::vector<long>({ 2, 1 }), months) << "the two biggest months, biggest first — not the first two met";
+	ASSERT_EQ(2u, totals.size());
+	EXPECT_EQ(ibNumber(40), totals[0]);
+	EXPECT_EQ(ibNumber(12), totals[1]);
+}

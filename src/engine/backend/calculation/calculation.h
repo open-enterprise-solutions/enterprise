@@ -11,6 +11,7 @@
 //
 //   DISPLACEMENT  — which days a record is actually in force.
 //   LEADING       — which already-computed records a change makes stale.
+//   SCHEDULE      — what a schedule gives over a record's days (tests/test_calcSchedule.cpp).
 //
 // ⭐ A PERIOD OF A CALCULATION RECORD IS A RUN OF WHOLE DAYS, ITS END INCLUDED: a sick leave 12.06–16.06 is five
 // days (Max's example, 2026-09-10). The rules read a half-open [start, end) in ticks, so a stored pair is
@@ -19,6 +20,7 @@
 // starting on the 10th instead of the 11th.
 
 #include "backend/backend.h"         // BACKEND_API
+#include "backend/fnumber.h"         // ibNumber — a schedule's figures
 
 #include <cstddef>
 #include <cstdint>
@@ -109,5 +111,40 @@ BACKEND_API std::vector<size_t> ibFindLedRecords(const std::vector<ibRecalcFact>
                                                  const std::vector<ibRecalcFact>& candidates,
                                                  const std::vector<std::pair<int, int>>& leads,
                                                  bool baseByRegistration = false);
+
+// ====================================================================================================
+// SCHEDULE — what a schedule gives over a record's days.
+//
+// A schedule is a number per day per key: the hours and the work days of one employee's calendar. The schedule
+// data sums each of them over every period of every record — its action period, its pieces, its base period, its
+// registration period — and records by the thousand overlap the same days. So a key's schedule is held as a
+// RUNNING TOTAL, and a sum over any run of days is two lookups, however long the run.
+// ====================================================================================================
+
+// One key's schedule. Days are whole days as numbers; `resource` numbers the figures a day carries.
+class BACKEND_API ibScheduleSeries {
+public:
+	explicit ibScheduleSeries(size_t resources = 0) : m_before(1, std::vector<ibNumber>(resources)) {}
+
+	// Adds a figure of a day. Days come in ascending order — the reading asks the database for them so — and a day
+	// given again adds to what it already has (two rows of one date, a date carrying a time).
+	void Add(int64_t day, size_t resource, const ibNumber& value) {
+		if (m_days.empty() || m_days.back() != day) {
+			m_days.push_back(day);
+			m_before.push_back(m_before.back());
+		}
+		if (resource < m_before.back().size())
+			m_before.back()[resource] += value;
+	}
+
+	// Figure `resource` summed over the days [from, to], both included. Zero where no day of the schedule falls
+	// inside, and for a run that ends before it starts.
+	ibNumber Sum(int64_t from, int64_t to, size_t resource) const;
+
+private:
+	std::vector<int64_t>               m_days;     // the days that carry figures, ascending
+	std::vector<std::vector<ibNumber>> m_before;   // m_before[i][k] — figure k summed over the days before m_days[i];
+	                                               // one more at the end, the whole of it
+};
 
 #endif

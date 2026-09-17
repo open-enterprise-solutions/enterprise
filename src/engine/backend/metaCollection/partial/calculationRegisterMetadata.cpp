@@ -115,6 +115,7 @@ bool ibValueMetaObjectCalculationRegister::WriteData(ibDataNode& node) const
 	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
 	node.SetProperty(m_propertyChartOfCalculationTypes->GetName(), m_propertyChartOfCalculationTypes->GetNodeValue());
+	node.SetProperty(m_propertySchedule->GetName(), m_propertySchedule->GetNodeValue());
 	node.SetProperty(m_propertyPeriodicity->GetName(), m_propertyPeriodicity->GetNodeValue());
 	node.SetProperty(m_propertyUseActionPeriod->GetName(), m_propertyUseActionPeriod->GetNodeValue());
 
@@ -144,6 +145,7 @@ bool ibValueMetaObjectCalculationRegister::ReadData(const ibDataNode& node)
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
 	m_propertyChartOfCalculationTypes->SetNodeValue(node.GetProperty(m_propertyChartOfCalculationTypes->GetName()));
+	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));
 	m_propertyPeriodicity->SetNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));
 	m_propertyUseActionPeriod->SetNodeValue(node.GetProperty(m_propertyUseActionPeriod->GetName()));
 
@@ -250,6 +252,60 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 				GetName(), chart->GetName()));
 			return false;
 		}
+
+		// AN ACTION PERIOD WANTS ITS SCHEDULE, WHOLE. The days a record is in force are counted against a schedule
+		// (ScheduleData), and the switch that gives a register its action period is the one that opens its
+		// schedule (OnPropertyRefresh) — so with the switch on, every part of it is required: the register, its
+		// value, its date and a field for each of its links. Each part is held to what the property offers for it
+		// (ibPropertyCalcSchedule, the same lists the inspector's rows and metadata_set_schedule choose from), so a
+		// part whose object has since gone or changed its type is as missing as one never chosen. 🛑 Only the
+		// register, the value and the date were asked: a schedule with a link left empty saved (Max, 2026-09-17).
+		const ibCalcScheduleDescription& scheduleDesc = GetScheduleDesc();
+		if (!scheduleDesc.IsOk()) {
+			RestructureError(wxString::Format(
+				_("%s keeps action periods, so it needs a schedule - choose the schedule register, its value and its date, or turn 'Use action period' off"),
+				GetName()));
+			return false;
+		}
+		const auto offers = [](const ibPropertyChoiceList& list, ibMetaID id) {
+			for (unsigned int idx = 0; idx < list.GetCount(); idx++)
+				if (id != 0 && list.GetId(idx) == id)
+					return true;
+			return false;
+		};
+		wxArrayString missing;
+		ibPropertyChoiceList values, dates, links;
+		m_propertySchedule->GetScheduleValueList(scheduleDesc, values);
+		m_propertySchedule->GetScheduleDateList(scheduleDesc, dates);
+		m_propertySchedule->GetScheduleLinkList(scheduleDesc, links);
+		if (values.GetCount() == 0 && dates.GetCount() == 0 && links.GetCount() == 0)
+			missing.Add(_("the schedule register"));   // it has gone: nothing of it can be offered
+		else {
+			if (!offers(values, scheduleDesc.GetValue()))
+				missing.Add(_("the schedule value"));
+			// The links are the dimensions left once the date is taken — so they are asked only when it is.
+			if (!offers(dates, scheduleDesc.GetDate()))
+				missing.Add(_("the schedule date"));
+			else
+				for (unsigned int idx = 0; idx < links.GetCount(); idx++) {
+					ibPropertyChoiceList fields;
+					m_propertySchedule->GetScheduleFieldList(links.GetId(idx), fields);
+					if (fields.GetCount() == 0)   // nothing of this register can answer for it: say so, there is nothing to choose
+						missing.Add(wxString::Format(_("a schedule whose dimensions this register can link ('%s' has no dimension of its type here - add one)"),
+							links.GetName(idx)));
+					else if (!offers(fields, scheduleDesc.GetLinkedField(links.GetId(idx))))
+						missing.Add(wxString::Format(_("the schedule link for '%s'"), links.GetName(idx)));
+				}
+		}
+		if (!missing.IsEmpty()) {
+			wxString parts;
+			for (const wxString& part : missing)
+				parts << (parts.IsEmpty() ? wxT("") : wxT(", ")) << part;
+			RestructureError(wxString::Format(
+				_("%s keeps action periods, and its schedule is not complete - choose %s, or turn 'Use action period' off"),
+				GetName(), parts));
+			return false;
+		}
 	}
 
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
@@ -340,6 +396,9 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 	// The fact, where the records keep action periods; the recalculation, where the register keeps one.
 	if (IsUseActionPeriod())
 		m_metaData->RegisterSource(&m_factSource);
+	// The schedule data, where the records keep action periods and a schedule is bound.
+	if (IsUseActionPeriod() && GetScheduleDesc().IsOk())
+		m_metaData->RegisterSource(&m_scheduleDataSource);
 	if (HasRecalculation())
 		m_metaData->RegisterSource(&m_recalculationSource);
 

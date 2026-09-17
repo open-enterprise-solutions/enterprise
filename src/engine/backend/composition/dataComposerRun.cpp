@@ -27,6 +27,7 @@
 #include "backend/query/queryKeywords.h"      // ibQueryKeywordText
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
+#include "backend/backend_localization.h"     // a column title written in several languages, read in the reader's
 
 #include <deque>   // the walk's descents and closing buffers, one per depth
 
@@ -412,13 +413,21 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				break;
 			}
 			default:
+				// A PROJECTED FIELD IS A READING OF ITSELF — over a parsed query its path is its name —
+				// and asked like the other two, so a title somebody gave it is the one printed. It was
+				// titled by the name alone, and a title set on a selected field never reached the page.
+				info.m_titles[i] = TitleForPath(schema[i].m_name);
 				break;
 			}
-			// WHATEVER IS LEFT IS TITLED BY ITS OWN NAME — a projected field, or a column whose field
-			// could not be found (a user's own grouping replaces the ladder, and then there is no
-			// level to ask). Said here rather than left empty, so TitleOf never has to guess.
+			// WHATEVER IS LEFT IS TITLED BY ITS OWN NAME — a column whose field could not be found (a
+			// user's own grouping replaces the ladder, and then there is no level to ask). Said here
+			// rather than left empty, so TitleOf never has to guess.
 			if (info.m_titles[i].IsEmpty())
 				info.m_titles[i] = ibTitleFromName(schema[i].m_name);
+			// …AND A TITLE WRITTEN IN SEVERAL LANGUAGES IS READ IN THE READER'S, as a synonym is.
+			wxString translated;
+			if (ibBackendLocalization::GetTranslateGetRawLocText(info.m_titles[i], translated))
+				info.m_titles[i] = translated;
 			// ⭐⭐ …AND THE PATH FALLS BACK THE SAME WAY, which is the half that was missing. Over a
 			// PARSED QUERY a field's path IS its name — that is the identity the picker writes into a
 			// grouping line and the one `GetConstructorFields` hands a window — so a column whose
@@ -455,6 +464,40 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
 			info.m_shown[i] = shows;
 		}
+	}
+	// ⭐ …AND THEY STAND IN THE ORDER THEY WERE CHOSEN. The query publishes its measures before its details —
+	// that is how the query is laid out, not how the author laid the report out: a report selecting the
+	// calculation type, its dates, then its figures printed the figures first (2026-09-17), while the
+	// selection's own promise is that its order is the order of the columns. The headings' keys stay in
+	// front, where the walk prints them; every other column follows the selection; what nobody chose goes
+	// last. Every reader asks a column by its NAME, so the schema is put in order here, once, together with
+	// what was worked out for each column above.
+	{
+		const std::vector<wxString> chosen = ShownFor(output);
+		std::vector<size_t> order;
+		std::vector<bool> placed(schema.size(), false);
+		for (size_t i = 0; i < schema.size(); ++i)
+			if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension) { order.push_back(i); placed[i] = true; }
+		for (const wxString& name : chosen)
+			for (size_t i = 0; i < schema.size(); ++i)
+				if (!placed[i] && ibComposerColumnAnswersTo(schema[i], name)) { order.push_back(i); placed[i] = true; break; }
+		for (size_t i = 0; i < schema.size(); ++i)
+			if (!placed[i]) order.push_back(i);
+
+		std::vector<ibQueryLowering::OutputColumn> columns;
+		std::vector<wxString> titles, paths;
+		std::vector<bool> shown;
+		for (const size_t i : order) {
+			columns.push_back(schema[i]);
+			titles.push_back(info.m_titles[i]);
+			paths.push_back(info.m_paths[i]);
+			shown.push_back(info.m_shown[i]);
+		}
+		schema = columns;
+		info.m_schema = std::move(columns);
+		info.m_titles = std::move(titles);
+		info.m_paths = std::move(paths);
+		info.m_shown = std::move(shown);
 	}
 
 	info.m_detailsAxis = DetailAxisOf(output);

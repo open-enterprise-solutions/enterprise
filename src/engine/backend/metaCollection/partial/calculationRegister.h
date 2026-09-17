@@ -5,6 +5,7 @@
 #include "chartOfCalculationTypesEnum.h"                                          // ibCalcPeriodicity — the register's grain
 #include "backend/propertyManager/property/propertyEnum.h"                        // …as a property
 #include "backend/propertyManager/property/propertyChartOfCalculationTypes.h"   // the chart binding
+#include "backend/propertyManager/property/propertyCalcSchedule.h"              // the schedule binding
 #include "backend/query/queryable.h"
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR — a
 // calculation register filters its dimensions by the same rule the other registers do, so the rule
@@ -56,6 +57,31 @@ public:
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the fact surface (GetConditionScope) and applied by the
 	// reading itself: narrowing every table read where it can, and over the pieces exactly (ComputeRows).
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                          const ibQueryReadColumns& read) override;
+	const ibBackendQueryable* GetConditionScope() const override;
+	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+private:
+	ibValueMetaObjectCalculationRegister* m_meta;
+};
+
+// `<Register>.ScheduleData` — THE SCHEDULE, SUMMED FOR EACH RECORD: the record's own columns, as the register lays a
+// record out, and for every numeric resource of the schedule register (ibCalcScheduleDescription) four sums of it —
+// over the record's action period, over its actual action period (what displacement leaves, the fact's pieces), over
+// its base period, over its registration period. A record finds its schedule rows through the schedule's links, one
+// for every dimension of the schedule but its date (a register saves only a complete schedule, OnSaveMetaObject);
+// a dimension of the schedule left unlinked is summed over. The arguments are the fact's (ibCalcViewArg): as of which
+// registration period, for which days of action, then the condition — each narrowing the records read.
+class ibCalcScheduleDataSourceDescriptor : public ibQueryableSourceDescriptor {
+public:
+	explicit ibCalcScheduleDataSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// THE CONDITION IS CONSUMED — resolved against the schedule data's surface and applied to the records read.
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                          const ibQueryReadColumns& read) override;
@@ -149,6 +175,8 @@ public:
 	// calculation types displace each other over overlapping action periods. When off, the record
 	// carries only the registration period (when it was entered). See docs (calculation engine).
 	bool IsUseActionPeriod() const { return m_propertyUseActionPeriod->GetValueAsBoolean(); }
+	// The schedule the register is bound to — which information register, its value and its date.
+	const ibCalcScheduleDescription& GetScheduleDesc() const { return m_propertySchedule->GetValueAsScheduleDesc(); }
 	ibValueMetaObjectAttributePredefined* GetActionPeriodStart()   const { return m_propertyAttributeActionPeriodStart->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetActionPeriodEnd()     const { return m_propertyAttributeActionPeriodEnd->GetMetaObject(); }
 	// The period the action belongs to (the month a salary is FOR, whatever days of it the record covers).
@@ -195,6 +223,8 @@ public:
 	// The shape the fact publishes — built from the register's own attributes, touching no database,
 	// so a query is drawn against it on a base never opened (the accumulation register's GetViewQueryable).
 	const ibBackendQueryable* GetFactSurface() const;
+	// The shape ScheduleData publishes: the record's columns and the schedule's sums (ibCalcScheduleDataSourceDescriptor).
+	const ibBackendQueryable* GetScheduleDataSurface() const;
 
 	// ⭐ CALCULATION TYPE — the standard attribute every calculation record carries: which calculation
 	// type of the bound chart this record is. The chart's relations over it (Displacing, Base, Leading)
@@ -281,6 +311,7 @@ public:
 	* Property events
 	*/
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual void OnPropertyRefresh() override;
 
 protected:
 
@@ -395,6 +426,15 @@ private:
 	// example, 2026-09-10 — "12.06.2023 0:00:00 .. 16.06.2023 0:00:00", five calendar days). A calculation
 	// is in force over whole days; a second-precise value there only invites a time of day nothing reads.
 	ibPropertyBoolean* m_propertyUseActionPeriod = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("UseActionPeriod"), _("Use action period"), _("Records carry an action period: the days a record is in force (ActionPeriodStart to ActionPeriodEnd, both inclusive) and the month it is for (ActionPeriod). Needed for displacement: the register's ActualActionPeriod reads what the Displacing types leave of each record. Switching it adds or drops the three columns."), false);
+
+	// ⭐ THE SCHEDULE — right under the switch that governs it: a schedule is counted over a record's DAYS, and
+	// the days are the action period's, so without an action period there is nothing to count it over. Declared
+	// here because a category shows its properties in the order they are declared: each switch, then what it
+	// opens. The binding is the information register a record's days are counted against, its resource that is
+	// the value and its dimension that is the date, as one property (propertyCalcSchedule.h); shown only while
+	// the action period is on (OnPropertyRefresh), and kept, not cleared, while it is off.
+	ibPropertyCalcSchedule* m_propertySchedule =
+		ibPropertyObject::CreateProperty<ibPropertyCalcSchedule>(m_categoryData, wxT("Schedule"), _("Schedule"), _("The schedule the register's calculations read: an information register holding the schedule, the resource that is its value (hours or days) and the dimension that is its date. The schedule data a record reads is this value summed over its days. Available with the action period."));
 	ibPropertyContainer<>* m_propertyAttributeActionPeriod       = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriod"),       _("Action period"),       _("The period the record is FOR: a correction of June registered in July is for June. A record's position - dimensions, type, this period and its days - is what stornos, displacement and recalculation marks are matched by."), ibDateFractions::ibDateFractions_Date, false));
 	ibPropertyContainer<>* m_propertyAttributeActionPeriodStart  = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodStart"),  _("Action period start"),  _("The first day the record is in force (whole days, the day itself included). With the end it gives the days displacement cuts and the fact reads pieces of."), ibDateFractions::ibDateFractions_Date, true));
 	ibPropertyContainer<>* m_propertyAttributeActionPeriodEnd    = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateDate(wxT("ActionPeriodEnd"),    _("Action period end"),    _("The last day the record is in force, included: a sick leave 12.06-16.06 is five days. A record whose end is before its start has no days and cuts nothing."), ibDateFractions::ibDateFractions_Date, true));
@@ -410,6 +450,7 @@ private:
 
 	// The fact and the recalculation, as sources.
 	ibCalcFactSourceDescriptor m_factSource{ this };
+	ibCalcScheduleDataSourceDescriptor m_scheduleDataSource{ this };
 	ibRecalculationSourceDescriptor m_recalculationSource{ this };
 
 	// The shape the fact publishes, and what it was built from (GetFactSurface).
@@ -699,6 +740,27 @@ private:
 	ibValue m_moment;                   // the moment of registration read up to (ibCalcViewArg); empty — every period
 	ibValue m_actionFrom, m_actionTo;   // the days of action the records meet; empty — any
 	ibQueryPredicatePtr m_condition;    // written into the parentheses, on the surface's columns; null — none
+};
+
+// The companion of ScheduleData — its rows, computed: the records, their actual pieces, and the schedule's rows
+// summed over each record's four periods.
+class ibCalcScheduleDataQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectCalculationRegister> {
+public:
+	ibCalcScheduleDataQueryable(const ibValueMetaObjectCalculationRegister* reg, const ibValue& moment = ibValue(),
+		const ibValue& actionFrom = ibValue(), const ibValue& actionTo = ibValue(),
+		const ibQueryPredicatePtr& condition = nullptr)
+		: ibComputedRegisterQueryable(reg), m_moment(moment), m_actionFrom(actionFrom), m_actionTo(actionTo),
+		  m_condition(condition) {}
+
+	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetScheduleDataSurface(); }
+	// A record: its recorder and its line.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+
+private:
+	ibValue m_moment;                   // the moment of registration read up to (ibCalcViewArg); empty — every period
+	ibValue m_actionFrom, m_actionTo;   // the days of action the records meet; empty — any
+	ibQueryPredicatePtr m_condition;    // written into the parentheses, on the record's columns; null — none
 };
 
 //********************************************************************************************

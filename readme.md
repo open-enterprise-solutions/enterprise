@@ -31,7 +31,7 @@ doors the developer uses.
 
 - **Query language** — `SELECT` over the business objects and over the registers' virtual tables
   (`Balance`, `Turnovers`, `BalanceAndTurnovers`, `SliceLast` / `SliceFirst`, `DrCrTurnovers`,
-  `RecordsWithAccountDimensions`, `ActualActionPeriod`, `Recalculation`); nested queries, temporary
+  `RecordsWithAccountDimensions`, `ActualActionPeriod`, `ScheduleData`, `Recalculation`); nested queries, temporary
   tables and query packages, `TOTALS BY … HIERARCHY`, `CAST`, `VALUE`, parameters that keep their
   type. A query runs as SQL on the server wherever the engine can prove it may, and in memory
   otherwise — with the same answer.

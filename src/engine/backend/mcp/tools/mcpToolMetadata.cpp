@@ -28,6 +28,8 @@
 #include "backend/propertyManager/property/propertyList.h"   // a form is asked WHICH KIND — the owner fills the list
 #include "backend/propertyManager/propertyObject.h"   // GetProperty(idx) — what can be set
 #include "backend/propertyManager/property/variant/variantType.h"   // ibVariantDataAttribute — a value that hides a type description
+#include "backend/propertyManager/property/propertyCalcSchedule.h"          // a calculation register's schedule — and what each part of it may be
+#include "backend/propertyManager/property/variant/variantCalcSchedule.h"   // …and the value that carries it
 #include "backend/restructureInfo.h"                  // the ledger an object complains into
 #include "backend/typeDescription.h"                  // …and the description it hides
 
@@ -2035,6 +2037,194 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolMetadataSetType);
+
+//---------------------------------------------------------------------------
+// metadata_set_schedule
+//---------------------------------------------------------------------------
+
+// ⭐ A CALCULATION REGISTER'S SCHEDULE, SET IN WORDS — the verb for an ibCalcScheduleDescription, as metadata_set_type
+// is the verb for a type description: one value made of parts (the schedule register, its value resource, its date
+// dimension, the links), each named, each checked against what that register actually has, and placed as one.
+class ibMcpToolMetadataSetSchedule : public ibMcpTool {
+
+	static const ibArg& ArgScheduleRegister() {
+		static const ibArg a(wxT("register"), ibArg::Kind::Text,
+			ibMcpText("The information register holding the schedule, by name. An empty string takes the schedule off. "
+				"Omitted, nothing changes and the schedule is read back."));
+		return a;
+	}
+	static const ibArg& ArgScheduleValue() {
+		static const ibArg a(wxT("value"), ibArg::Kind::Text,
+			ibMcpText("The schedule register's resource that is the schedule's value (hours, days) - a resource holding a number."));
+		return a;
+	}
+	static const ibArg& ArgScheduleDate() {
+		static const ibArg a(wxT("date"), ibArg::Kind::Text,
+			ibMcpText("The schedule register's dimension that is the schedule's date - a dimension holding a date."));
+		return a;
+	}
+	static const ibArg& ArgScheduleLinks() {
+		static const ibArg a(wxT("links"), ibArg::Kind::Node,
+			ibMcpText("How a record finds its schedule rows: {\"<schedule dimension>\": \"<field of the calculation register>\"} - "
+				"a dimension of the calculation register whose type meets the schedule dimension's. Every dimension of the schedule but its date "
+				"is linked: a schedule with a link left out is refused when the configuration is saved."));
+		return a;
+	}
+
+	// ONE ENTRY OF A LIST THE PROPERTY ANSWERED, BY NAME — its id, or 0; `offered` gets every name the list has.
+	static ibMetaID Named(const ibPropertyChoiceList& list, const wxString& asked, wxString& offered)
+	{
+		ibMetaID found = 0;
+		for (unsigned int idx = 0; idx < list.GetCount(); idx++) {
+			offered << (offered.IsEmpty() ? wxT("") : wxT(", ")) << list.GetName(idx);
+			if (list.GetName(idx).IsSameAs(asked, false))
+				found = list.GetId(idx);
+		}
+		return found;
+	}
+
+	// The schedule as names, for the answer.
+	static void Say(const ibMetaData* metaData, const ibCalcScheduleDescription& scheduleDesc, ibDataNode& result)
+	{
+		const auto nameOf = [metaData](ibMetaID id) -> wxString {
+			const ibValueMetaObject* object = id != 0 ? metaData->FindAnyObjectByFilter(id, true) : nullptr;
+			return object != nullptr ? object->GetName() : wxString();
+		};
+		result.SetValue(wxT("register"), nameOf(scheduleDesc.GetRegister()));
+		result.SetValue(wxT("value"), nameOf(scheduleDesc.GetValue()));
+		result.SetValue(wxT("date"), nameOf(scheduleDesc.GetDate()));
+		auto links = std::make_shared<ibDataNode>();
+		for (const ibCalcScheduleLink& link : scheduleDesc.GetLinks())
+			links->SetValue(nameOf(link.m_dimension), nameOf(link.m_field));
+		result.AddField(wxT("links"), ibDataValue::Child(links));
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("metadata_set_schedule"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("binding '%s' to the schedule %s"), ibMcpNameOf(params), ArgScheduleRegister().Text(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Bind a calculation register to its SCHEDULE - an information register of working days or hours - "
+			"as one value: the register, its resource that is the value, its date dimension, and the links a record finds "
+			"its rows by. The register then publishes <Register>.ScheduleData: each record with every numeric resource of "
+			"the schedule summed over its action period, actual action period, base period and registration period. "
+			"Needs UseActionPeriod. Without `register` it reads the binding back.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgScheduleRegister(), ArgScheduleValue(), ArgScheduleDate(), ArgScheduleLinks() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibMetaData* metaData = OpenConfiguration(refusal);
+		if (metaData == nullptr)
+			return false;
+
+		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
+		if (object == nullptr)
+			return false;
+
+		// WHAT EACH PART MAY BE IS THE PROPERTY'S ANSWER (ibPropertyCalcSchedule) — the inspector asks the same one.
+		ibPropertyCalcSchedule* property = dynamic_cast<ibPropertyCalcSchedule*>(object->GetProperty(wxT("Schedule")));
+		if (property == nullptr) {
+			refusal = wxString::Format(ibMcpText("'%s' is not a calculation register - only a calculation register has a schedule."), object->GetName());
+			return false;
+		}
+
+		result.SetValue(wxT("object"), object->GetName());
+
+		if (!ArgScheduleRegister().Given(params)) {
+			Say(metaData, property->GetValueAsScheduleDesc(), result);
+			return true;
+		}
+
+		ibCalcScheduleDescription scheduleDesc;
+		const wxString registerName = ArgScheduleRegister().Text(params);
+
+		if (!registerName.IsEmpty()) {
+
+			wxString offered;
+			ibPropertyChoiceList registers;
+			property->GetValueList(registers);
+			const ibMetaID schedule = Named(registers, registerName, offered);
+			if (schedule == 0) {
+				refusal = offered.IsEmpty()
+					? ibMcpText("This configuration has no information register to hold a schedule.")
+					: wxString::Format(ibMcpText("'%s' is not an information register of this configuration. It has: %s."), registerName, offered);
+				return false;
+			}
+			scheduleDesc.SetSchedule(schedule, 0, 0);
+
+			// ONE PART OF THE SCHEDULE BY NAME, among those the property offers — or the refusal that lists them.
+			const auto pick = [&refusal, &registerName](const ibPropertyChoiceList& list, const wxString& asked, const wxString& what) {
+				wxString fits;
+				const ibMetaID picked = Named(list, asked, fits);
+				if (picked == 0)
+					refusal = fits.IsEmpty()
+						? wxString::Format(ibMcpText("'%s' has no %s."), registerName, what)
+						: wxString::Format(ibMcpText("The schedule's %s is one of: %s."), what, fits);
+				return picked;
+			};
+
+			ibPropertyChoiceList values, dates;
+			property->GetScheduleValueList(scheduleDesc, values);
+			property->GetScheduleDateList(scheduleDesc, dates);
+			const ibMetaID value = pick(values, ArgScheduleValue().Text(params), ibMcpText("resource holding a number"));
+			if (value == 0)
+				return false;
+			const ibMetaID date = pick(dates, ArgScheduleDate().Text(params), ibMcpText("dimension holding a date"));
+			if (date == 0)
+				return false;
+			scheduleDesc.SetSchedule(schedule, value, date);
+
+			if (const ibDataNode* links = params.FindChild(ArgScheduleLinks().Name())) {
+				ibPropertyChoiceList dimensions;
+				property->GetScheduleLinkList(scheduleDesc, dimensions);
+				for (const auto& link : links->Fields()) {
+
+					wxString linkable;
+					const ibMetaID dimension = Named(dimensions, link.first, linkable);
+					if (dimension == 0) {
+						refusal = wxString::Format(ibMcpText("'%s' is not a dimension of '%s' to link through (the date is not one). It has: %s."),
+							link.first, registerName, linkable);
+						return false;
+					}
+
+					wxString fits;
+					ibPropertyChoiceList fields;
+					property->GetScheduleFieldList(dimension, fields);
+					const ibMetaID field = Named(fields, link.second.Kind() == ibDataKind::String ? link.second.AsString() : wxString(), fits);
+					if (field == 0) {
+						refusal = fits.IsEmpty()
+							? wxString::Format(ibMcpText("'%s' has no dimension whose type meets '%s' - a dimension of the schedule links to a dimension."), object->GetName(), link.first)
+							: wxString::Format(ibMcpText("'%s' links to one of: %s."), link.first, fits);
+						return false;
+					}
+					scheduleDesc.SetLink(dimension, field);
+				}
+			}
+		}
+
+		if (!ibMcpApplyByHand(property, wxVariant(new ibVariantDataCalcSchedule(object, scheduleDesc)), refusal))
+			return false;
+
+		metaData->Modify(true);
+		Say(metaData, scheduleDesc, result);
+		ibMcpReportComplaints(result, object);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolMetadataSetSchedule);
 
 
 //---------------------------------------------------------------------------

@@ -1040,6 +1040,9 @@
     <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClCompile Include="session\workerPoolGUI.cpp">
       <Filter>session</Filter>
     </ClCompile>
@@ -1891,6 +1894,9 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="session\workerPoolGUI.h">

@@ -310,7 +310,7 @@ TEST(CompilerContract, UnaryAndNot) {
 		wxT("a = -5;\n")
 		wxT("b = 2 * -a;\n")
 		wxT("b = Not (a > b);\n"),
-		11620107006812665909ULL);
+		12019024692853249572ULL);   // 2026-09-17: Not binds looser than a comparison — the comparison to a temp, then Not over it
 }
 
 TEST(CompilerContract, ComparisonAndLogical) {

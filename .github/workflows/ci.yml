@@ -46,7 +46,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       # libgtk-3-dev: the CMake build defines __WXGTK__ and pkg-checks gtk+-3.0, so wx
       # will not configure without it. uuid-dev: under GTK, guid.cpp generates guids with
@@ -108,8 +109,11 @@ jobs:
       # backtrace here rather than guessing across a 40-minute round trip. Two cases:
       # the smallest compile test and the smallest runtime one — if the crash is shared
       # they show the same frames, and if it is not, that is worth knowing too.
+      # …and only where there is a test binary to run: a job that failed before building (a submodule fetch
+      # answered 503) has no build directory, and this step then failed too, on a missing working directory —
+      # a second error over the first that pointed nowhere near it (2026-09-17, the macOS job).
       - name: Backtrace on failure
-        if: failure()
+        if: failure() && hashFiles('build/linux-debug/bin/Debug/oes_tests') != ''
         working-directory: build/linux-debug
         run: |
           sudo apt-get install -y gdb
@@ -134,7 +138,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -216,7 +221,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       # libpq-dev on top of the usual set: the driver loads libpq at run time, so
       # the client library has to be present for the test to connect at all.
@@ -277,7 +283,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - name: Install build dependencies
         run: |
@@ -438,7 +445,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       # cmake ships on the runner image; ninja does not. No GTK, no uuid-dev —
       # wx uses Cocoa here and the guid path is CoreFoundation's CFUUID.
@@ -478,9 +486,9 @@ jobs:
       - name: Build the applications
         run: cmake --build --preset macos-debug -- -k 0
 
-      # lldb, not gdb — same intent as the Linux backtrace step.
+      # lldb, not gdb — same intent as the Linux backtrace step, and the same guard: no binary, no backtrace.
       - name: Backtrace on failure
-        if: failure()
+        if: failure() && hashFiles('build/macos-debug/bin/Debug/oes_tests') != ''
         working-directory: build/macos-debug
         run: |
           for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
@@ -528,7 +536,8 @@ jobs:
       # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - name: Install build dependencies
         run: |

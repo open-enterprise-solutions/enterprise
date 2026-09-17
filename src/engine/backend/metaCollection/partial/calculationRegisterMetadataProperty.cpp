@@ -22,3 +22,10 @@ void ibValueMetaObjectCalculationRegister::OnPropertyChanged(ibProperty* propert
 
 	ibValueMetaObjectRegisterData::OnPropertyChanged(property, oldValue, newValue);
 }
+
+// The schedule is shown while the action period is on — its days are what a schedule is counted over.
+void ibValueMetaObjectCalculationRegister::OnPropertyRefresh()
+{
+	ibValueMetaObjectRegisterData::OnPropertyRefresh();
+	HideProperty(m_propertySchedule, !IsUseActionPeriod());
+}

@@ -3133,8 +3133,6 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 	}
 
 	for (const std::vector<ibValue>& key : keyOrder) {
-		if (spec.m_topCount > 0 && TO.RowCount() >= spec.m_topCount)
-			break;   // SELECT TOP n + GROUP BY — cap the folded groups (first-seen order)
 		const std::vector<long>& idx = buckets[key];
 		if (spec.m_having != nullptr && !PassesHaving(*spec.m_having, TC, idx))
 			continue;   // HAVING drops this group (the register can't apply it; the RAM fold does)
@@ -3149,6 +3147,53 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		for (size_t ai = 0; ai < spec.m_aggregates->size(); ++ai)
 			TO.SetCell(r, ibSynthSlotId(ibSynthKind::Aggregate, ai),
 			           AggregateOne((*spec.m_aggregates)[ai], TC, idx));
+	}
+
+	// ⭐⭐ ORDER BY OVER THE GROUPS, then TOP — what the SQL road says in one statement (ibDbTableProvider::
+	// ExecuteAggregate): a sort names a group key by its column, or an output — a total, a computed key — by
+	// the name the projection gave it. 🛑 This fold answered in first-seen order and capped TOP before any
+	// order: `GROUP BY RegistrationPeriod ORDER BY RegistrationPeriod` over ActualActionPeriod or ScheduleData
+	// came back in whatever order the records were computed (measured 2026-09-17), while the same query over
+	// the register's table was sorted. A key that names neither is dropped as the SQL road drops it — said in
+	// the journal, the groups left in their order.
+	std::vector<std::pair<ibMetaID, bool>> by;
+	if (spec.m_sorts != nullptr)
+		for (const ibQuerySortItem& s : *spec.m_sorts) {
+			ibMetaID id = 0;
+			if (!s.m_outputAlias.IsEmpty()) {
+				for (size_t ai = 0; ai < spec.m_aggregates->size() && id == 0; ++ai)
+					if ((*spec.m_aggregates)[ai].m_alias.CmpNoCase(s.m_outputAlias) == 0)
+						id = ibSynthSlotId(ibSynthKind::Aggregate, ai);
+				for (size_t gi = 0; gi < groupCount && id == 0; ++gi)
+					if (groupExprAt(gi) != nullptr && (*spec.m_groupAliases)[gi].CmpNoCase(s.m_outputAlias) == 0)
+						id = ibSynthSlotId(ibSynthKind::GroupKey, gi);
+			}
+			else if (s.m_col != nullptr && !s.m_expr) {
+				for (size_t gi = 0; gi < groupCount && id == 0; ++gi)
+					if (groupExprAt(gi) == nullptr && (*spec.m_groupBy)[gi]->GetColumnId() == s.m_col->GetColumnId())
+						id = s.m_col->GetColumnId();
+			}
+			if (id == 0) {
+				ibJournalInfo(wxT("query.order"), wxT("sort by '%s' dropped: the groups folded in memory carry no such key"),
+					!s.m_outputAlias.IsEmpty() ? s.m_outputAlias : s.m_col != nullptr ? s.m_col->GetName() : wxString(wxT("<expression>")));
+				continue;
+			}
+			by.emplace_back(id, s.m_ascending);
+		}
+
+	const long keep = (spec.m_topCount > 0 && spec.m_topCount < TO.RowCount()) ? spec.m_topCount : TO.RowCount();
+	if (!by.empty() || keep < TO.RowCount()) {
+		std::vector<long> order(static_cast<size_t>(TO.RowCount()));
+		for (long i = 0; i < TO.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
+		if (!by.empty())
+			std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
+				for (const std::pair<ibMetaID, bool>& k : by) {
+					const int c = ibQueryComposer::RamSortCompareKey(TO.GetCell(a, k.first), TO.GetCell(b, k.first), k.second);
+					if (c != 0) return c < 0;
+				}
+				return false;
+			});
+		TO.ReorderRows(order, keep);   // SELECT TOP n + GROUP BY — the first n groups IN THAT ORDER
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
 }

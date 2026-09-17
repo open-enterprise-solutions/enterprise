@@ -85,7 +85,8 @@ jobs:
           fetch-depth: 1
 
       # docs/ is private and not needed; wxWidgets is — see ci.yml.
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -127,7 +128,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - name: Install build dependencies
         run: |
@@ -194,7 +196,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: git submodule update --init --recursive src/3rdparty/wxWidgets
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
 
       - name: Install build dependencies
         run: brew install ninja

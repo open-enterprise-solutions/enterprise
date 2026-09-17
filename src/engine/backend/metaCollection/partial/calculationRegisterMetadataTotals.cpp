@@ -21,6 +21,9 @@
 #include "backend/system/value/valueArray.h"                         // the base: GetBase's arguments
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"                         // the base: the table GetBase answers
+#include "backend/metaData.h"                                        // the schedule data: the schedule register, by its id
+#include "backend/diagnostics/journal.h"                             // the schedule data: what each read brought, and how long
+#include "backend/calculation/calculation.h"                         // the schedule data: a key's schedule as a running total
 
 #include <algorithm>
 #include <map>
@@ -335,23 +338,35 @@ ibQueryRelPtr ibCalcFactRelation(const ibCalcViewSpec& spec, const ibCalcNarrowi
 // The shape the fact publishes
 // ============================================================================
 
+namespace {
+
+// A record, as the register lays one out (Max, 2026-09-14): the registration, the recorder and the line first, the
+// position, the base period, Active, Storno, the dimensions. Every reading of the records publishes these first —
+// the fact, the schedule data.
+std::vector<const ibValueMetaObjectAttributeBase*> ibCalcRecordLayout(const ibValueMetaObjectCalculationRegister* reg)
+{
+	std::vector<const ibValueMetaObjectAttributeBase*> record = { reg->GetRegistrationPeriod(), reg->GetRegisterRecorder(),
+		reg->GetRegisterLineNumber(), reg->GetCalculationType(), reg->GetActionPeriod(), reg->GetActionPeriodStart(), reg->GetActionPeriodEnd() };
+	if (reg->IsUseBasePeriod()) {
+		record.push_back(reg->GetBasePeriodStart());
+		record.push_back(reg->GetBasePeriodEnd());
+	}
+	record.push_back(reg->GetRegisterActive());
+	record.push_back(reg->GetStorno());
+	for (const ibValueMetaObjectDimension* dimension : reg->GetDimensionArrayObject())
+		record.push_back(dimension);
+	return record;
+}
+
+} // namespace
+
 // ⭐ A RECORD'S OWN COLUMNS ARE THE REGISTER'S ATTRIBUTES, published as themselves (ibRegAttributeColumn): the same
-// names, types and ids as on the register, laid out as the register lays a record out (Max, 2026-09-14) — the
-// registration, the recorder and the line first, the position, the base period, Active, Storno, the dimensions,
+// names, types and ids as on the register, laid out as the register lays a record out (ibCalcRecordLayout), then
 // the resources — so the fact is interchangeable with the register as a source. What it adds is numbered as a
 // derived column.
 const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface() const
 {
-	std::vector<const ibValueMetaObjectAttributeBase*> record = { GetRegistrationPeriod(), GetRegisterRecorder(),
-		GetRegisterLineNumber(), GetCalculationType(), GetActionPeriod(), GetActionPeriodStart(), GetActionPeriodEnd() };
-	if (IsUseBasePeriod()) {
-		record.push_back(GetBasePeriodStart());
-		record.push_back(GetBasePeriodEnd());
-	}
-	record.push_back(GetRegisterActive());
-	record.push_back(GetStorno());
-	for (const ibValueMetaObjectDimension* dimension : GetDimensionArrayObject())
-		record.push_back(dimension);
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordLayout(this);
 	const std::vector<ibValueMetaObjectResource*> resources = GetResourceArrayObject();
 
 	// Keyed by what it was built from — asked before the attributes were read, a surface would otherwise stay
@@ -396,24 +411,19 @@ std::vector<const ibBackendQueryColumn*> ibCalcFactQueryable::GetPrimaryKeyColum
 	return out;
 }
 
-// ⭐⭐ THE ROWS, FROM THE DATABASE, NARROWED INSIDE. The reading's conditions on the subject's own fields — whichever
-// way they were written — become the narrowing of the tables the relation reads: a dimension narrows every one
-// of them by equality, the rest of the subject the subject alone (calculationRegister.h says why), a date by a
-// range as well. A payroll asking for one employee, for one type in one month, or for what is in force between
-// two days has the database walk those and no others; the provider applies every condition over the rows
-// afterwards.
-ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
-{
-	ibQueryRamTable out;
-	const ibBackendQueryable* surface = NavigationSource();
-	if (surface == nullptr)
-		return out;
-	const std::vector<const ibBackendQueryColumn*> columns = surface->GetColumns();
-	for (const ibBackendQueryColumn* column : columns)
-		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
-	if (!m_reg->IsUseActionPeriod())
-		return out;
+namespace {
 
+// ⭐⭐ WHAT A READING OF THE RECORDS NARROWS ITS TABLES BY — the fact and the schedule data alike, from the same four
+// arguments (ibCalcViewArg) and the WHERE around the reading (`extra`). The reading's conditions on the subject's own
+// fields — whichever way they were written — become the narrowing of the tables the relation reads: a dimension
+// narrows every one of them by equality, the rest of the subject the subject alone (calculationRegister.h says
+// why), a date by a range as well. A narrowing only ever keeps MORE than the condition: each reading applies the
+// whole condition itself afterwards. `pieces` says whether the reading's two action days are a piece's (the fact)
+// or the record's own (the schedule data).
+ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* reg, const ibCalcViewSpec& spec, bool pieces,
+	const std::vector<ibQueryCondition>& extra, const ibQueryPredicatePtr& condition,
+	const ibValue& moment, const ibValue& actionFrom, const ibValue& actionTo)
+{
 	// A condition reaches here on the SURFACE's column, which carries the attribute's own id. What it may narrow,
 	// and how:
 	//   Everywhere — a dimension: every table, by equality;
@@ -423,19 +433,20 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	//                narrows the record by what it implies, a piece lying inside its record — a piece beginning
 	//                by X is of a record beginning by X, a piece ending from X of a record ending from X, a piece
 	//                beginning from X of a record ending from X, a piece ending by X of a record beginning by X.
+	//                Where the two days are the record's own (`pieces` false), they are the subject's, as its month is.
 	enum class Reach { Everywhere, Subject, PieceStart, PieceEnd };
 	struct Narrows { const ibValueMetaObjectAttributeBase* m_attribute; Reach m_reach; bool m_dated; };
 	std::map<ibMetaID, Narrows> narrows;
-	for (const ibValueMetaObjectDimension* dimension : m_reg->GetDimensionArrayObject())
+	for (const ibValueMetaObjectDimension* dimension : reg->GetDimensionArrayObject())
 		narrows[dimension->GetMetaID()] = { dimension, Reach::Everywhere, false };
-	narrows[m_reg->GetCalculationType()->GetMetaID()] = { m_reg->GetCalculationType(), Reach::Subject, false };
-	narrows[m_reg->GetActionPeriod()->GetMetaID()] = { m_reg->GetActionPeriod(), Reach::Subject, true };
-	narrows[m_reg->GetActionPeriodStart()->GetMetaID()] = { m_reg->GetActionPeriodStart(), Reach::PieceStart, true };
-	narrows[m_reg->GetActionPeriodEnd()->GetMetaID()] = { m_reg->GetActionPeriodEnd(), Reach::PieceEnd, true };
+	narrows[reg->GetCalculationType()->GetMetaID()] = { reg->GetCalculationType(), Reach::Subject, false };
+	narrows[reg->GetActionPeriod()->GetMetaID()] = { reg->GetActionPeriod(), Reach::Subject, true };
+	narrows[reg->GetActionPeriodStart()->GetMetaID()] = { reg->GetActionPeriodStart(), pieces ? Reach::PieceStart : Reach::Subject, true };
+	narrows[reg->GetActionPeriodEnd()->GetMetaID()] = { reg->GetActionPeriodEnd(), pieces ? Reach::PieceEnd : Reach::Subject, true };
 	// …and what makes a row a record's: a payroll asks for its own records' days by the recorder.
-	narrows[m_reg->GetRegisterRecorder()->GetMetaID()] = { m_reg->GetRegisterRecorder(), Reach::Subject, false };
-	narrows[m_reg->GetRegisterLineNumber()->GetMetaID()] = { m_reg->GetRegisterLineNumber(), Reach::Subject, false };
-	narrows[m_reg->GetRegistrationPeriod()->GetMetaID()] = { m_reg->GetRegistrationPeriod(), Reach::Subject, true };
+	narrows[reg->GetRegisterRecorder()->GetMetaID()] = { reg->GetRegisterRecorder(), Reach::Subject, false };
+	narrows[reg->GetRegisterLineNumber()->GetMetaID()] = { reg->GetRegisterLineNumber(), Reach::Subject, false };
+	narrows[reg->GetRegistrationPeriod()->GetMetaID()] = { reg->GetRegistrationPeriod(), Reach::Subject, true };
 
 	struct Term { const ibBackendQueryColumn* m_col; ibValue m_value; ibQueryBinOp m_op; bool m_everywhere; };
 	std::vector<Term> terms;
@@ -449,19 +460,19 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 		default:                            return false;
 		}
 	};
-	const ibBackendQueryColumn* recordStart = m_reg->GetActionPeriodStart()->GetQueryColumn();
-	const ibBackendQueryColumn* recordEnd = m_reg->GetActionPeriodEnd()->GetQueryColumn();
+	const ibBackendQueryColumn* recordStart = reg->GetActionPeriodStart()->GetQueryColumn();
+	const ibBackendQueryColumn* recordEnd = reg->GetActionPeriodEnd()->GetQueryColumn();
 
 	// FOR WHICH DAYS OF ACTION (ibCalcViewArg): the subject's own action period meets them — it ends on
 	// BeginOfActionPeriod or later and begins on EndOfActionPeriod or earlier.
 	const auto dated = [](const ibValue& v) { return v.GetType() == TYPE_DATE && v.GetDateTime().IsValid(); };
-	if (dated(m_actionFrom))
-		terms.push_back({ recordEnd, m_actionFrom, ibQueryBinOp::Ge, false });
-	if (dated(m_actionTo))
-		terms.push_back({ recordStart, m_actionTo, ibQueryBinOp::Le, false });
+	if (dated(actionFrom))
+		terms.push_back({ recordEnd, actionFrom, ibQueryBinOp::Ge, false });
+	if (dated(actionTo))
+		terms.push_back({ recordStart, actionTo, ibQueryBinOp::Le, false });
 
 	// What narrows the tables: the conditions of the WHERE around the reading (`extra`), and the plain AND of the
-	// one written into its parentheses — the whole of which is then applied over the pieces, below.
+	// one written into its parentheses — the whole of which the reading applies itself afterwards.
 	std::vector<ibQueryCondition> narrowedBy = extra;
 	std::function<void(const ibQueryPredicatePtr&)> conjuncts = [&](const ibQueryPredicatePtr& node) {
 		if (!node)
@@ -472,7 +483,7 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 		else if (node->m_kind == ibQueryPredicateKind::Leaf)
 			narrowedBy.push_back(node->m_leaf);
 	};
-	conjuncts(m_condition);
+	conjuncts(condition);
 
 	for (const ibQueryCondition& c : narrowedBy) {
 		ibQueryBinOp op;
@@ -503,25 +514,46 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	}
 	// ⭐ THE PERIOD IS A BOUNDARY OF EVERY TABLE READ: what was registered before the next period — the subject and
 	// its displacers alike, the registration period under the register's field name.
-	const ibCalcViewSpec spec = ibCalcViewSpecOf(m_reg);
 	ibQueryExprPtr before;
-	if (dated(m_moment))
-		before = ibConst(ibValue(ibNextPeriodStart(m_moment.GetDateTime(), m_reg->GetPeriodicityUnit())));
+	if (dated(moment))
+		before = ibConst(ibValue(ibNextPeriodStart(moment.GetDateTime(), reg->GetPeriodicityUnit())));
 
+	if (terms.empty() && !before)
+		return nullptr;
+	const ibMetaData* metaData = reg->GetMetaData();
+	const wxString period = spec.m_period;
+	return [terms, before, period, metaData](const wxString& alias, bool subject) {
+		ibQueryExprPtr all;
+		if (before)
+			all = ibBinOp(ibQueryBinOp::Lt, ibCol(alias, period), before);
+		for (const Term& one : terms)
+			if (one.m_everywhere || subject)
+				if (const ibQueryExprPtr term = ibRegCompositeIR(one.m_col, metaData, one.m_value, one.m_op, alias))
+					all = all ? ibBinOp(ibQueryBinOp::And, all, term) : term;
+		return all;
+	};
+}
+
+} // namespace
+
+// ⭐⭐ THE ROWS, FROM THE DATABASE, NARROWED INSIDE (ibCalcNarrowingOf). A payroll asking for one employee, for one
+// type in one month, or for what is in force between two days has the database walk those and no others; the
+// provider applies every condition over the rows afterwards.
+ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
+{
+	ibQueryRamTable out;
+	const ibBackendQueryable* surface = NavigationSource();
+	if (surface == nullptr)
+		return out;
+	const std::vector<const ibBackendQueryColumn*> columns = surface->GetColumns();
+	for (const ibBackendQueryColumn* column : columns)
+		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
+	if (!m_reg->IsUseActionPeriod())
+		return out;
+
+	const ibCalcViewSpec spec = ibCalcViewSpecOf(m_reg);
 	const ibMetaData* metaData = m_reg->GetMetaData();
-	ibCalcNarrowing narrowing;
-	if (!terms.empty() || before)
-		narrowing = [&terms, &before, &spec, metaData](const wxString& alias, bool subject) {
-			ibQueryExprPtr all;
-			if (before)
-				all = ibBinOp(ibQueryBinOp::Lt, ibCol(alias, spec.m_period), before);
-			for (const Term& one : terms)
-				if (one.m_everywhere || subject)
-					if (const ibQueryExprPtr term = ibRegCompositeIR(one.m_col, metaData, one.m_value, one.m_op, alias))
-						all = all ? ibBinOp(ibQueryBinOp::And, all, term) : term;
-			return all;
-		};
-
+	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, spec, /*pieces*/ true, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
 	const ibQueryRelPtr relation = ibCalcFactRelation(spec, narrowing);
 	if (!relation)
 		return out;
@@ -1064,4 +1096,511 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 		}
 	}
 	return table;
+}
+
+// ============================================================================
+// The schedule data — ScheduleData
+// ============================================================================
+
+namespace {
+
+static const wxChar* const ibCalcScheduleDataName = wxT("ScheduleData");
+
+// The four periods a schedule is summed over, in the order the columns stand, each numbered for its column id.
+enum ibCalcSchedulePeriod {
+	ibCalcSchedulePeriod_Action = 1,
+	ibCalcSchedulePeriod_ActualAction,
+	ibCalcSchedulePeriod_Base,
+	ibCalcSchedulePeriod_Registration,
+};
+
+// `<resource><period>` — the period's part of a column's name.
+wxString ibCalcSchedulePeriodName(ibCalcSchedulePeriod period)
+{
+	switch (period) {
+	case ibCalcSchedulePeriod_Action:       return wxT("ActionPeriod");
+	case ibCalcSchedulePeriod_ActualAction: return wxT("ActualActionPeriod");
+	case ibCalcSchedulePeriod_Base:         return wxT("BasePeriod");
+	case ibCalcSchedulePeriod_Registration: return wxT("RegistrationPeriod");
+	}
+	return wxEmptyString;
+}
+
+// The same period, said to a person — the caption twin of the name (ibRegFigureCaption).
+wxString ibCalcSchedulePeriodCaption(ibCalcSchedulePeriod period)
+{
+	switch (period) {
+	case ibCalcSchedulePeriod_Action:       return _("Action period");
+	case ibCalcSchedulePeriod_ActualAction: return _("Actual action period");
+	case ibCalcSchedulePeriod_Base:         return _("Base period");
+	case ibCalcSchedulePeriod_Registration: return _("Registration period");
+	}
+	return wxEmptyString;
+}
+
+// The periods this register has: the base period only where its records carry one.
+std::vector<ibCalcSchedulePeriod> ibCalcSchedulePeriods(const ibValueMetaObjectCalculationRegister* reg)
+{
+	std::vector<ibCalcSchedulePeriod> periods = { ibCalcSchedulePeriod_Action, ibCalcSchedulePeriod_ActualAction };
+	if (reg->IsUseBasePeriod())
+		periods.push_back(ibCalcSchedulePeriod_Base);
+	periods.push_back(ibCalcSchedulePeriod_Registration);
+	return periods;
+}
+
+// A record's own columns: the record as the register lays it out (ibCalcRecordLayout), its resources, its attributes.
+std::vector<const ibValueMetaObjectAttributeBase*> ibCalcScheduleRecordAttributes(const ibValueMetaObjectCalculationRegister* reg)
+{
+	std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordLayout(reg);
+	for (const ibValueMetaObjectResource* resource : reg->GetResourceArrayObject())
+		record.push_back(resource);
+	for (const ibValueMetaObjectAttributeBase* attribute : reg->GetAttributeArrayObject())
+		record.push_back(attribute);
+	return record;
+}
+
+// The schedule register a register is bound to, or none.
+const ibValueMetaObjectRegisterData* ibCalcScheduleRegister(const ibValueMetaObjectCalculationRegister* reg)
+{
+	const ibCalcScheduleDescription& scheduleDesc = reg->GetScheduleDesc();
+	const ibMetaData* metaData = reg->GetMetaData();
+	if (!scheduleDesc.IsOk() || metaData == nullptr)
+		return nullptr;
+	const ibValueMetaObjectRegisterData* schedule = metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(scheduleDesc.GetRegister());
+	return schedule != nullptr && !schedule->IsDeleted() ? schedule : nullptr;
+}
+
+// What is summed: every resource of the schedule that holds a number.
+std::vector<const ibValueMetaObjectResource*> ibCalcScheduleResources(const ibValueMetaObjectRegisterData* schedule)
+{
+	std::vector<const ibValueMetaObjectResource*> resources;
+	if (schedule != nullptr)
+		for (const ibValueMetaObjectResource* resource : schedule->GetResourceArrayObject())
+			if (!resource->IsDeleted() && resource->GetTypeDesc().ContainType(g_valueNumberCLSID))
+				resources.push_back(resource);
+	return resources;
+}
+
+}
+
+// ⭐ THE SHAPE SCHEDULEDATA PUBLISHES — a record's own columns (ibRegAttributeColumn: the register's names, types
+// and ids) and, for every numeric resource of the schedule, a sum of it over each of the record's periods, named
+// `<Resource><Period>` and numbered as derived columns of that resource.
+const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataSurface() const
+{
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcScheduleRecordAttributes(this);
+	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcScheduleResources(ibCalcScheduleRegister(this));
+	const std::vector<ibCalcSchedulePeriod> periods = ibCalcSchedulePeriods(this);
+
+	wxString shape;
+	for (const ibValueMetaObjectAttributeBase* attribute : record)
+		ibRegSignAttribute(shape, attribute);
+	for (const ibValueMetaObjectResource* resource : resources)
+		ibRegSignAttribute(shape, resource);
+
+	return m_surfaces.Obtain(ibCalcScheduleDataName, shape, GetPhysicalTableName() + wxT("_") + ibCalcScheduleDataName, GetMetaData(),
+		[&](std::vector<ibTempColumn>& columns)
+	{
+		for (const ibValueMetaObjectAttributeBase* attribute : record)
+			columns.push_back(ibRegAttributeColumn(attribute));
+		for (const ibValueMetaObjectResource* resource : resources) {
+			for (const ibCalcSchedulePeriod period : periods) {
+				const wxString name = resource->GetName() + ibCalcSchedulePeriodName(period);
+				columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), period),
+					ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
+					ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
+			}
+		}
+	});
+}
+
+std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataQueryable::GetPrimaryKeyColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> out;
+	const ibBackendQueryable* surface = NavigationSource();
+	for (const wxString& name : { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName() })
+		if (const ibBackendQueryColumn* column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
+			out.push_back(column);
+	return out;
+}
+
+// ⭐⭐ THE ROWS: three reads and a walk. The records (active ones — an inactive record counts for nothing), their
+// actual pieces (the fact's relation, the same displacement ActualActionPeriod reads), and the schedule's rows over
+// the days any of the records spans. The schedule is laid out per link key, day by day and summed from its first
+// day, so each of a record's periods is two lookups. A dimension of the reading narrows every read where the
+// WHERE around it says so by equality; the provider applies every condition over the rows afterwards.
+ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
+{
+	ibQueryRamTable out;
+	const ibBackendQueryable* surface = NavigationSource();
+	if (surface == nullptr)
+		return out;
+	for (const ibBackendQueryColumn* column : surface->GetColumns())
+		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
+
+	const ibMetaData* metaData = m_reg->GetMetaData();
+	const ibCalcScheduleDescription& scheduleDesc = m_reg->GetScheduleDesc();
+	const ibValueMetaObjectRegisterData* schedule = ibCalcScheduleRegister(m_reg);
+	const ibValueMetaObjectAttributeBase* scheduleDate = schedule != nullptr
+		? metaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(scheduleDesc.GetDate(), true) : nullptr;
+	if (!m_reg->IsUseActionPeriod() || schedule == nullptr || scheduleDate == nullptr)
+		return out;
+
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcScheduleRecordAttributes(m_reg);
+	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcScheduleResources(schedule);
+	const std::vector<ibCalcSchedulePeriod> periods = ibCalcSchedulePeriods(m_reg);
+	const auto placeOf = [&record](const ibValueMetaObjectAttributeBase* attribute) -> size_t {
+		for (size_t i = 0; i < record.size(); ++i)
+			if (record[i] == attribute)
+				return i;
+		return record.size();
+	};
+	const size_t recorderAt = placeOf(m_reg->GetRegisterRecorder()), lineAt = placeOf(m_reg->GetRegisterLineNumber());
+
+	// ---- the narrowing, as the fact narrows (ibCalcNarrowingOf) — the two action days here the record's own
+	const ibCalcViewSpec spec = ibCalcViewSpecOf(m_reg);
+	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, spec, /*pieces*/ false, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
+
+	// ---- the records --------------------------------------------------------------------------------------------
+	ibJournalStopwatch readRecords, readPieces, readSchedule, lay;
+	readRecords.Resume();
+	std::vector<std::vector<ibValue>> records;   // each in the order of ibCalcScheduleRecordAttributes
+	{
+		const wxString r = wxT("r");
+		std::vector<ibQueryProjItem> proj;
+		std::set<wxString> projected;
+		for (const ibValueMetaObjectAttributeBase* attribute : record)
+			for (const wxString& field : ColumnFieldNames(attribute->GetQueryColumn()))
+				if (projected.insert(field).second)
+					proj.push_back(ibQueryProjItem{ ibCol(r, field), field });
+		ibQueryExprPtr where = Counts(spec, r);
+		if (narrowing)
+			if (const ibQueryExprPtr narrowed = narrowing(r, true))
+				where = ibBinOp(ibQueryBinOp::And, where, narrowed);
+		// ⭐ THE CONDITION OF THE PARENTHESES, WHOLE, OVER THE RECORDS — NOT and OR and a walk included. It is written
+		// on the record's columns; a sum of the schedule is not something a record can be selected by, and is refused.
+		if (m_condition)
+			if (const ibQueryExprPtr exact = ibDbTableProvider::BuildPredicateIR(m_reg->GetQueryable(),
+					ibRegConditionOn(m_reg->GetQueryable(), m_condition,
+						[this](const ibBackendQueryColumn* column) { return m_reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
+					r))
+				where = ibBinOp(ibQueryBinOp::And, where, exact);
+
+		ibDatabaseQueryBuilder q;
+		q.From(ibScan(spec.m_records, r));
+		q.Project(proj);
+		q.Where(where);
+		ibQueryResult rs = q.Execute();
+		while (rs.Next()) {
+			std::vector<ibValue> one;
+			for (const ibValueMetaObjectAttributeBase* attribute : record) {
+				ibValue value;
+				const ibBackendQueryColumn* column = attribute->GetQueryColumn();
+				column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
+				one.push_back(value);
+			}
+			records.push_back(std::move(one));
+		}
+	}
+	if (records.empty())
+		return out;
+
+	readRecords.Pause();
+
+	// ---- the actual pieces of each record, by its recorder and its line -------------------------------------------
+	readPieces.Resume();
+	std::map<std::pair<ibValue, ibValue>, std::vector<std::pair<long long, long long>>> pieces;
+	// Read through the FACT's columns, as ActualActionPeriod reads its own: the relation carries each field the way
+	// the fact publishes it, which is not the way the register's table stores it.
+	const ibBackendQueryable* factSurface = m_reg->GetFactSurface();
+	std::vector<const ibBackendQueryColumn*> read;
+	if (factSurface != nullptr)
+		for (const wxString& name : { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName(),
+				m_reg->GetActionPeriodStart()->GetName(), m_reg->GetActionPeriodEnd()->GetName() })
+			if (const ibBackendQueryColumn* column = factSurface->ResolveColumnByName(name))
+				read.push_back(column);
+	const ibQueryRelPtr fact = read.size() == 4 ? ibCalcFactRelation(spec, narrowing) : nullptr;
+	if (fact) {
+		std::vector<ibQueryProjItem> proj;
+		std::set<wxString> projected;
+		for (const ibBackendQueryColumn* column : read)
+			for (const wxString& field : ColumnFieldNames(column))
+				if (projected.insert(field).second)
+					proj.push_back(ibQueryProjItem{ ibCol(wxT("v"), field), field });
+
+		ibDatabaseQueryBuilder q;
+		q.From(ibSubquery(fact, wxT("v")));
+		q.Project(proj);
+		ibQueryResult rs = q.Execute();
+		while (rs.Next()) {
+			std::vector<ibValue> values;
+			for (const ibBackendQueryColumn* column : read) {
+				ibValue value;
+				column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
+				values.push_back(value);
+			}
+			if (!values[2].IsEmpty() && !values[3].IsEmpty())
+				pieces[{ values[0], values[1] }].emplace_back(
+					ibCalcCalendarDay(values[2].GetDateTime()), ibCalcCalendarDay(values[3].GetDateTime()));
+		}
+	}
+
+	readPieces.Pause();
+
+	// ---- each record's four periods, as days, and the span all of them cover ---------------------------------------
+	const size_t startAt = placeOf(m_reg->GetActionPeriodStart()), endAt = placeOf(m_reg->GetActionPeriodEnd());
+	const size_t registrationAt = placeOf(m_reg->GetRegistrationPeriod());
+	const size_t baseStartAt = m_reg->IsUseBasePeriod() ? placeOf(m_reg->GetBasePeriodStart()) : record.size();
+	const size_t baseEndAt = m_reg->IsUseBasePeriod() ? placeOf(m_reg->GetBasePeriodEnd()) : record.size();
+	const ibTotalsPeriod unit = m_reg->GetPeriodicityUnit();
+
+	struct Spans { std::pair<long long, long long> m_action{ 1, 0 }, m_base{ 1, 0 }, m_registration{ 1, 0 }; };
+	std::vector<Spans> spans(records.size());
+	wxDateTime first, last;
+	const auto widen = [&first, &last](const wxDateTime& from, const wxDateTime& to) {
+		if (!first.IsValid() || from.IsEarlierThan(first)) first = from;
+		if (!last.IsValid() || to.IsLaterThan(last)) last = to;
+	};
+	const auto dayBefore = [](const wxDateTime& next) { return ibCalcCalendarDay(next) - 1; };
+	for (size_t i = 0; i < records.size(); ++i) {
+		const std::vector<ibValue>& v = records[i];
+		if (!v[startAt].IsEmpty() && !v[endAt].IsEmpty()) {
+			spans[i].m_action = { ibCalcCalendarDay(v[startAt].GetDateTime()), ibCalcCalendarDay(v[endAt].GetDateTime()) };
+			widen(v[startAt].GetDateTime(), v[endAt].GetDateTime());
+		}
+		if (baseStartAt < record.size() && !v[baseStartAt].IsEmpty() && !v[baseEndAt].IsEmpty()) {
+			spans[i].m_base = { ibCalcCalendarDay(v[baseStartAt].GetDateTime()), ibCalcCalendarDay(v[baseEndAt].GetDateTime()) };
+			widen(v[baseStartAt].GetDateTime(), v[baseEndAt].GetDateTime());
+		}
+		if (!v[registrationAt].IsEmpty()) {
+			const wxDateTime from = ibTruncateToPeriod(v[registrationAt].GetDateTime(), unit);
+			const wxDateTime next = ibNextPeriodStart(from, unit);
+			spans[i].m_registration = { ibCalcCalendarDay(from), dayBefore(next) };
+			widen(from, next);
+		}
+	}
+
+	// ---- the schedule, per link key, over the span ---------------------------------------------------------------
+	readSchedule.Resume();
+	std::vector<std::pair<const ibValueMetaObjectAttributeBase*, size_t>> links;   // a schedule dimension, and the record's field that answers for it
+	for (const ibCalcScheduleLink& link : scheduleDesc.GetLinks()) {
+		const ibValueMetaObjectAttributeBase* dimension = metaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(link.m_dimension, true);
+		size_t field = record.size();
+		for (size_t i = 0; i < record.size(); ++i)
+			if (record[i]->GetMetaID() == link.m_field)
+				field = i;
+		if (dimension != nullptr && field < record.size())
+			links.emplace_back(dimension, field);
+	}
+
+	std::map<std::vector<ibValue>, ibScheduleSeries> series;   // by the values of the links
+	long scheduleRows = 0;
+	if (first.IsValid() && last.IsValid() && !resources.empty()) {
+		const wxString s = wxT("s");
+		// ⭐ SUMMED WHERE THE ROWS ARE. A record reads the schedule by its date and its links, and nothing
+		// else of a row matters — a dimension left unlinked would be summed over — so the database answers one
+		// row per date and link key, each resource already added up: `GROUP BY date, links` with SUM.
+		// ⭐ …AND IN THE ORDER A RUNNING TOTAL IS BUILT IN: by the links, then by the date. A key's rows then come
+		// one after another with their days ascending, so each row is asked only whether its key is the last one's
+		// — no map of days to fill and walk again (the read was 950 ms of the schedule data's 1.3 s, 2026-09-17).
+		std::vector<const ibValueMetaObjectAttributeBase*> keys;
+		for (const auto& link : links)
+			keys.push_back(link.first);
+		keys.push_back(scheduleDate);
+		ibDatabaseQueryBuilder q;
+		std::vector<ibQueryProjItem> proj;
+		std::set<wxString> projected;
+		for (const ibValueMetaObjectAttributeBase* attribute : keys)
+			for (const wxString& field : ColumnFieldNames(attribute->GetQueryColumn()))
+				if (projected.insert(field).second) {
+					proj.push_back(ibQueryProjItem{ ibCol(s, field), field });
+					q.GroupBy(ibCol(s, field));
+					ibQuerySortKey order;
+					order.m_expr = ibCol(s, field);
+					q.AddSortKey(std::move(order));
+				}
+		std::vector<wxString> sums;   // each resource's number, under its own field name
+		for (const ibValueMetaObjectResource* resource : resources) {
+			const wxString field = ibRegValueField(resource);
+			sums.push_back(field);
+			proj.push_back(ibQueryProjItem{ ibFunc(wxT("SUM"), { ibCol(s, field) }), field });
+		}
+
+		ibQueryExprPtr where = ibRegCompositeIR(scheduleDate->GetQueryColumn(), metaData, ibValue(first.GetDateOnly()), ibQueryBinOp::Ge, s);
+		const ibQueryExprPtr until = ibRegCompositeIR(scheduleDate->GetQueryColumn(), metaData,
+			ibValue(last.GetDateOnly() + wxDateSpan::Day()), ibQueryBinOp::Lt, s);
+		where = where && until ? ibBinOp(ibQueryBinOp::And, where, until) : (where ? where : until);
+		// …AND ONLY THE KEY THE RECORDS SHARE, where they share one: a reading for one employee reads that
+		// employee's schedule and not the whole staff's.
+		for (const auto& link : links) {
+			const ibValue& shared = records.front()[link.second];
+			const bool one = std::all_of(records.begin(), records.end(),
+				[&](const std::vector<ibValue>& rec) { return rec[link.second].CompareValueLS(shared) == 0; });
+			if (one)
+				if (const ibQueryExprPtr same = ibRegCompositeIR(link.first->GetQueryColumn(), metaData, shared, ibQueryBinOp::Eq, s))
+					where = where ? ibBinOp(ibQueryBinOp::And, where, same) : same;
+		}
+
+		q.From(ibScan(schedule->GetPhysicalTableName(), s));
+		q.Project(proj);
+		if (where)
+			q.Where(where);
+		ibQueryResult rs = q.Execute();
+		const ibBackendQueryColumn* dateColumn = scheduleDate->GetQueryColumn();
+		std::vector<ibValue> key(links.size()), previous;
+		ibScheduleSeries* current = nullptr;
+		while (rs.Next()) {
+			++scheduleRows;
+			ibValue date;
+			dateColumn->ReadValue(dateColumn->GetPhysicalName(), metaData, date, rs);
+			if (date.IsEmpty())
+				continue;
+			for (size_t l = 0; l < links.size(); ++l) {
+				const ibBackendQueryColumn* column = links[l].first->GetQueryColumn();
+				column->ReadValue(column->GetPhysicalName(), metaData, key[l], rs);
+			}
+			const bool sameKey = current != nullptr && std::equal(key.begin(), key.end(), previous.begin(),
+				[](const ibValue& a, const ibValue& b) { return a.CompareValueLS(b) == 0; });
+			if (!sameKey) {
+				current = &series.emplace(key, ibScheduleSeries(resources.size())).first->second;
+				previous = key;
+			}
+			const int64_t day = ibCalcCalendarDay(date.GetDateTime());
+			for (size_t k = 0; k < resources.size(); ++k)
+				current->Add(day, k, rs.GetResultNumber(sums[k]));
+		}
+	}
+
+	readSchedule.Pause();
+
+	// ---- one row a record ----------------------------------------------------------------------------------------
+	lay.Resume();
+	const ibScheduleSeries none;
+	for (size_t i = 0; i < records.size(); ++i) {
+		const std::vector<ibValue>& one = records[i];
+		const long row = out.AppendRow();
+		for (size_t a = 0; a < record.size(); ++a)
+			out.SetCell(row, record[a]->GetMetaID(), one[a]);
+
+		std::vector<ibValue> key;
+		for (const auto& link : links)
+			key.push_back(one[link.second]);
+		const auto found = series.find(key);
+		const ibScheduleSeries& keyed = found != series.end() ? found->second : none;
+
+		const auto recordPieces = pieces.find({ one[recorderAt], one[lineAt] });
+		for (size_t k = 0; k < resources.size(); ++k) {
+			for (const ibCalcSchedulePeriod period : periods) {
+				ibNumber sum;
+				switch (period) {
+				case ibCalcSchedulePeriod_Action:
+					sum = keyed.Sum(spans[i].m_action.first, spans[i].m_action.second, k);
+					break;
+				case ibCalcSchedulePeriod_ActualAction:
+					if (recordPieces != pieces.end())
+						for (const auto& piece : recordPieces->second)
+							sum += keyed.Sum(piece.first, piece.second, k);
+					break;
+				case ibCalcSchedulePeriod_Base:
+					sum = keyed.Sum(spans[i].m_base.first, spans[i].m_base.second, k);
+					break;
+				case ibCalcSchedulePeriod_Registration:
+					sum = keyed.Sum(spans[i].m_registration.first, spans[i].m_registration.second, k);
+					break;
+				}
+				out.SetCell(row, ibRegDerivedColumnId(resources[k]->GetMetaID(), period), ibValue(sum));
+			}
+		}
+	}
+	lay.Pause();
+	ibJournalInfo(wxT("query.road"), wxT("ScheduleData of %s: %zu record(s) read in %lld ms, their pieces in %lld ms, ")
+		wxT("%ld schedule row(s) in %lld ms, laid out in %lld ms"),
+		m_reg->GetName(), records.size(), readRecords.Ms(), readPieces.Ms(), scheduleRows, readSchedule.Ms(), lay.Ms());
+	return out;
+}
+
+wxString ibCalcScheduleDataSourceDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_meta->GetClassType());
+}
+
+wxString ibCalcScheduleDataSourceDescriptor::GetName() const
+{
+	return m_meta->GetName() + wxT(".") + ibCalcScheduleDataName;
+}
+
+const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+// What a condition is resolved against: the surface the reading publishes.
+const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::GetConditionScope() const
+{
+	return m_meta != nullptr ? m_meta->GetScheduleDataSurface() : nullptr;
+}
+
+// Where the records keep action periods and a schedule is bound — the days and what they are counted against. Built
+// and kept by the base, the condition part of the call (queryableFactory.h, MakeCompanion).
+const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
+	if (!m_meta->IsUseActionPeriod() || !m_meta->GetScheduleDesc().IsOk())
+		return nullptr;
+	return MakeCompanionFor<ibCalcScheduleDataQueryable>(conditions, paParams, lSizeArray, m_meta,
+		ibRegArg(paParams, lSizeArray, ibCalcViewArg::Period),
+		ibRegArg(paParams, lSizeArray, ibCalcViewArg::BeginOfActionPeriod), ibRegArg(paParams, lSizeArray, ibCalcViewArg::EndOfActionPeriod),
+		ibRegConsumedCondition(conditions, ibCalcViewArg::Condition));
+}
+
+// THE FACT'S FOUR ARGUMENTS (ibCalcFactSourceDescriptor::DescribeParameters): as of which registration period, for
+// which days of action, then the condition — `ScheduleData(&Month, &Start, &End, Employee = &Employee)`.
+void ibCalcScheduleDataSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
+{
+	const auto time = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
+		ibQuerySourceParameter parameter;
+		parameter.m_name = name;
+		parameter.m_description = description;
+		if (typedBy != nullptr)
+			parameter.m_type = typedBy->GetTypeDesc();
+		out.push_back(parameter);
+	};
+	time(wxT("Period"), m_meta != nullptr ? m_meta->GetRegistrationPeriod() : nullptr,
+		_("AS OF WHICH REGISTRATION PERIOD - a moment: the records registered up to the end of the period it falls in, "
+		  "in the register's periodicity, and the displacement as it stood then. Left out, every period is read."));
+	time(wxT("BeginOfActionPeriod"), m_meta != nullptr ? m_meta->GetActionPeriodStart() : nullptr,
+		_("FOR WHICH DAYS OF ACTION, from - the records in force on this day or later. Left out, from the first."));
+	time(wxT("EndOfActionPeriod"), m_meta != nullptr ? m_meta->GetActionPeriodEnd() : nullptr,
+		_("FOR WHICH DAYS OF ACTION, to - the records in force on this day or earlier. Left out, to the last."));
+	ibAppendRegisterConditionParameter(out);
+}
+
+// What the records can be selected by inside: their own fields.
+void ibCalcScheduleDataSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	const auto append = [&explorer](const ibValueMetaObjectAttributeBase* field) {
+		if (field != nullptr)
+			explorer.AppendColumn(field->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	};
+	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
+		append(dimension);
+	append(m_meta->GetCalculationType());
+	append(m_meta->GetActionPeriod());
+	append(m_meta->GetRegisterRecorder());
+	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetAttributeArrayObject())
+		append(attribute);
+}
+
+// A record's column IS the register's attribute (the note in ibFillExplorerFromRegisterView); a sum is its own.
+void ibCalcScheduleDataSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	const ibBackendQueryable* surface = m_meta->GetScheduleDataSurface();
+	if (surface == nullptr)
+		return;
+	for (const ibBackendQueryColumn* column : surface->GetColumns()) {
+		if (const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(column->GetColumnId()))
+			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+		else
+			explorer.AppendColumn(column);
+	}
 }

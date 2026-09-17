@@ -598,6 +598,7 @@
     <ClInclude Include="backend_type.h" />
     <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
+    <ClInclude Include="calcScheduleDescription.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
@@ -754,6 +755,9 @@
     <ClInclude Include="propertyManager\property\variant\variantOwner.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantPicture.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -826,6 +830,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyCalcSchedule.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
@@ -1929,6 +1936,7 @@
     </ClCompile>
     <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
+    <ClCompile Include="calcScheduleDescription.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
@@ -2078,6 +2086,9 @@
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantCalcSchedule.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
@@ -2176,6 +2187,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />

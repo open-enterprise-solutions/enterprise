@@ -1254,6 +1254,108 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolReportSelect);
 
 //---------------------------------------------------------------------------
+// report_title
+//---------------------------------------------------------------------------
+//
+// ⭐ WHAT A COLUMN IS CALLED ON THE PAGE. The title lives on the FIELD of the composition
+// (ibFieldDescription) — the field's name read out loud until somebody takes it over — and nothing but
+// the designer's table could take it over: a payroll report built through these verbs printed
+// "Month norm days" over a column its author meant as the month's norm in days (2026-09-17). Written
+// in several languages, it is read in the reader's, as a synonym is (ibDataDBComposer, OnOutputBegin).
+class ibMcpToolReportTitle : public ibMcpTool {
+
+	static const ibArg& ArgTitle() {
+		static const ibArg a(wxT("title"), ibArg::Kind::Text,
+			ibMcpText("What stands over the column. Several languages in the synonym form - "
+				"`en = 'Norm, days'; ru = '...'` - are read in the reader's. Empty gives back the title made from the name."));
+		return a;
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("report_title"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("titling a column of '%s'"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Give a field of the report the TITLE printed over its column. Until it is given, a column "
+			"is titled by its field's name read out loud - `MonthNormDays` prints as 'Month norm days'. The field "
+			"is named by `path` as report_fields lists it, a resource by the name it answers to.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgOnePath(), ArgTitle() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		if (composer == nullptr)
+			return false;
+
+		ibCompositionDescription composition = composer->GetCompositionDesc();
+
+		const wxString path = ArgOnePath().Text(params);
+		if (path.IsEmpty()) {
+			refusal = ibMcpText("Name the field to title - `path`, as report_fields lists it.");
+			return false;
+		}
+		wxString fault;
+		if (!std::any_of(composition.m_resources.begin(), composition.m_resources.end(),
+		                 [&path](const ibResourceDescription& r) { return r.AnswersTo().IsSameAs(path, false); })
+		    && !PathIsOffered(composition, path, fault)) {
+			refusal = fault;
+			return false;
+		}
+
+		// THE SELECT THE PATH SPEAKS OF — the only one a composition starts with, made when nothing was
+		// ever said about any of its fields.
+		if (composition.m_selects.empty())
+			composition.m_selects.emplace_back();
+		const ibSelectDescription* named = ibSelectOfPath(composition.m_selects, path);
+		ibSelectDescription* select = nullptr;
+		for (ibSelectDescription& one : composition.m_selects)
+			if (&one == named)
+				select = &one;
+		if (select == nullptr) {
+			refusal = wxString::Format(ibMcpText("'%s' does not say which select of the query it is - qualify it by the select's name."), path);
+			return false;
+		}
+
+		const wxString leaf = ibNameFromPath(path);
+		ibFieldDescription* field = nullptr;
+		for (ibFieldDescription& one : select->m_fields)
+			if (ibNameFromPath(one.NameInForce()).IsSameAs(leaf, false))
+				field = &one;
+		if (field == nullptr) {
+			select->m_fields.emplace_back();
+			field = &select->m_fields.back();
+			field->m_path = path;
+		}
+
+		const wxString title = ArgTitle().Text(params);
+		field->m_useTitle = !title.IsEmpty();
+		field->m_title = title;
+
+		composer->SetCompositionDesc(composition);
+		activeMetaData->Modify(true);
+
+		result.SetValue(wxT("path"), path);
+		result.SetValue(wxT("title"), field->TitleInForce());
+		ibMcpSayComposerComplaints(composition, result);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolReportTitle);
+
+//---------------------------------------------------------------------------
 // report_variant
 //---------------------------------------------------------------------------
 //

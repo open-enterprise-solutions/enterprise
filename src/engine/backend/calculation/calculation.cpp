@@ -175,3 +175,18 @@ std::vector<size_t> ibFindLedRecords(const std::vector<ibRecalcFact>& changed,
 	}
 	return led;
 }
+
+// ====================================================================================================
+// SCHEDULE
+// ====================================================================================================
+
+// The days inside [from, to] are a run of the ascending list: the first not before `from` to the first after `to`.
+// The run's sum is what the total had reached after it less what it had reached before it.
+ibNumber ibScheduleSeries::Sum(int64_t from, int64_t to, size_t resource) const
+{
+	if (m_days.empty() || to < from || resource >= m_before.front().size())
+		return ibNumber();
+	const size_t lo = std::lower_bound(m_days.begin(), m_days.end(), from) - m_days.begin();
+	const size_t hi = std::upper_bound(m_days.begin(), m_days.end(), to) - m_days.begin();
+	return m_before[hi][resource] - m_before[lo][resource];
+}

@@ -99,7 +99,12 @@ while IFS= read -r -d '' f; do
   is_macho "$f" || continue
   dir="$(dirname "$f")"
   rel="${f#$stage/}"
+  # A library's OWN install name is listed by `otool -L` as if it were a dependency (right under the header
+  # line). It is not one: a plugin one directory down is `@rpath/libsimplePlugin.dylib` to itself, and its
+  # rpath (`@loader_path/..`) rightly does not lead back to it — the first nightly refused the package for it.
+  self="$(otool -D "$f" | awk 'NR > 1 {print $1}')"
   while IFS= read -r dep; do
+    [ -n "$self" ] && [ "$dep" = "$self" ] && continue
     found=0
     case "$dep" in
       @loader_path/*)
