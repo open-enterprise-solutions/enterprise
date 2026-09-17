@@ -110,8 +110,8 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaEnumerationCLSID)                return _("Enumerations");
 	if (clsid == g_metaDataProcessorCLSID)              return _("Data processors");
 	if (clsid == g_metaReportCLSID)                     return _("Reports");
-	if (clsid == g_metaInformationRegisterCLSID)        return _("Information Registers");
-	if (clsid == g_metaAccumulationRegisterCLSID)       return _("Accumulation Registers");
+	if (clsid == g_metaInformationRegisterCLSID)        return _("Information registers");
+	if (clsid == g_metaAccumulationRegisterCLSID)       return _("Accumulation registers");
 	if (clsid == g_metaChartOfCharacteristicTypesCLSID) return _("Charts of characteristic types");
 	if (clsid == g_metaChartOfCalculationTypesCLSID)    return _("Charts of calculation types");
 	if (clsid == g_metaChartOfAccountsCLSID)            return _("Charts of accounts");

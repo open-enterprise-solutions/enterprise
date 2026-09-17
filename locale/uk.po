@@ -3070,18 +3070,6 @@ msgstr "Обробки"
 msgid "Reports"
 msgstr "Звіти"
 
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:30
-#: src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp:54
-#: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:12
-msgid "Information Registers"
-msgstr "Регістри відомостей"
-
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:31
-#: src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp:55
-#: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:13
-msgid "Accumulation Registers"
-msgstr "Регістри накопичення"
-
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:32
 #: src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp:91
 #: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:14
@@ -3394,10 +3382,16 @@ msgstr "Налагодження в поточному сеансі"
 msgid "Options"
 msgstr "Параметри"
 
+#: src/engine/backend/metaCollection/metaDiff.cpp:113
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1634
+#: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:15
 #: src/engine/enterprise/win/dlg/functionAll.cpp:86
 msgid "Information registers"
 msgstr "Регістри відомостей"
 
+#: src/engine/backend/metaCollection/metaDiff.cpp:114
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:1635
+#: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:16
 #: src/engine/enterprise/win/dlg/functionAll.cpp:91
 msgid "Accumulation registers"
 msgstr "Регістри накопичення"

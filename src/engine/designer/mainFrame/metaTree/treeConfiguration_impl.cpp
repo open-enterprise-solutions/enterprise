@@ -1631,8 +1631,8 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaChartOfCharacteristicTypesCLSID, wxTRANSLATE("Charts of characteristic types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaChartOfAccountsCLSID,            wxTRANSLATE("Charts of accounts"),      ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaChartOfCalculationTypesCLSID,    wxTRANSLATE("Charts of calculation types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information Registers"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation Registers"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information registers"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation registers"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaAccountingRegisterCLSID,         wxTRANSLATE("Accounting registers"),    ibMetaBand::Metadata, 0, ibMetaRow::Item },
 	{ g_metaCalculationRegisterCLSID,        wxTRANSLATE("Calculation registers"),   ibMetaBand::Metadata, 0, ibMetaRow::Item },
 };
