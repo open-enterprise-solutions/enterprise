@@ -117,8 +117,10 @@ BACKEND_API std::vector<size_t> ibFindLedRecords(const std::vector<ibRecalcFact>
 //
 // A schedule is a number per day per key: the hours and the work days of one employee's calendar. The schedule
 // data sums each of them over every period of every record — its action period, its pieces, its base period, its
-// registration period — and records by the thousand overlap the same days. So a key's schedule is held as a
-// RUNNING TOTAL, and a sum over any run of days is two lookups, however long the run.
+// registration period. The reading asks the DATABASE for those sums (a join of the records to the schedule, summed
+// by the record — calculationRegisterMetadataTotals.cpp); this states the rule they keep plainly, the way the
+// displacement rule above states what the fact's relation keeps: a key's schedule as a RUNNING TOTAL, a sum over
+// any run of days two lookups, a day given twice adding up.
 // ====================================================================================================
 
 // One key's schedule. Days are whole days as numbers; `resource` numbers the figures a day carries.

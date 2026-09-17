@@ -748,9 +748,9 @@ class ibCalcScheduleDataQueryable : public ibComputedRegisterQueryable<ibValueMe
 public:
 	ibCalcScheduleDataQueryable(const ibValueMetaObjectCalculationRegister* reg, const ibValue& moment = ibValue(),
 		const ibValue& actionFrom = ibValue(), const ibValue& actionTo = ibValue(),
-		const ibQueryPredicatePtr& condition = nullptr)
+		const ibQueryPredicatePtr& condition = nullptr, const ibQueryReadColumns& read = ibQueryReadColumns())
 		: ibComputedRegisterQueryable(reg), m_moment(moment), m_actionFrom(actionFrom), m_actionTo(actionTo),
-		  m_condition(condition) {}
+		  m_condition(condition), m_read(read) {}
 
 	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetScheduleDataSurface(); }
 	// A record: its recorder and its line.
@@ -761,6 +761,9 @@ private:
 	ibValue m_moment;                   // the moment of registration read up to (ibCalcViewArg); empty — every period
 	ibValue m_actionFrom, m_actionTo;   // the days of action the records meet; empty — any
 	ibQueryPredicatePtr m_condition;    // written into the parentheses, on the record's columns; null — none
+	// ⭐ WHAT THE QUERY READS OF THIS TABLE — a sum nobody named is not computed, and the schedule is not opened
+	// over that period's days at all (ibCalcScheduleAskedSums). Everything, when nobody could say.
+	ibQueryReadColumns  m_read;
 };
 
 //********************************************************************************************
