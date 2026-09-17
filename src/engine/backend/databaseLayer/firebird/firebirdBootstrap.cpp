@@ -35,10 +35,25 @@ wxString DetectFbRuntimeDir() {
 	// output may not have been laid out yet, in which case the
 	// default DLL search still finds fbclient.dll next to the exe
 	// (legacy layout). Tolerate that.
-	if (!wxDirExists(candidate))
-		return wxEmptyString;
+	if (wxDirExists(candidate))
+		return candidate;
 
-	return candidate;
+#ifdef __WXOSX__
+	// AN APPLICATION BUNDLE KEEPS ITS EXECUTABLE THREE LEVELS DOWN (X.app/Contents/MacOS), and _fb stands
+	// beside the bundle, with the libraries and the other applications — the same place lang/ and
+	// backend.conf are looked for (appData.cpp).
+	wxFileName bundled(exePath);
+	if (bundled.GetDirCount() >= 3 && bundled.GetDirs()[bundled.GetDirCount() - 2].IsSameAs(wxT("Contents"))) {
+		bundled.RemoveLastDir(); // MacOS
+		bundled.RemoveLastDir(); // Contents
+		bundled.RemoveLastDir(); // X.app
+		bundled.AppendDir(wxT("_fb"));
+		if (wxDirExists(bundled.GetPath()))
+			return bundled.GetPath();
+	}
+#endif
+
+	return wxEmptyString;
 }
 
 void DoInit() {

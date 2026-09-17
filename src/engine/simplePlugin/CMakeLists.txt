@@ -9,9 +9,20 @@ add_library(simplePlugin SHARED ${SIMPLEPLUGIN_SOURCES})
 set_target_properties(simplePlugin PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/plugins
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/plugins
 )
+
+# INTO `plugins/` BESIDE THE EXECUTABLES — where ibPluginManager looks (<exeDir>/plugins). The plain
+# LIBRARY_/RUNTIME_OUTPUT_DIRECTORY said bin/plugins, and lost: the root sets the PER-CONFIGURATION
+# directories (bin/<Config>), which a target inherits and which win over the plain ones, so the plugin
+# landed in bin/<Config> itself and was never loaded. Said per configuration, it is the executables'
+# own folder plus plugins/.
+foreach(OES_CONFIG IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${OES_CONFIG}" OES_CONFIG_UPPER)
+    set_target_properties(simplePlugin PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY_${OES_CONFIG_UPPER} "${CMAKE_BINARY_DIR}/bin/${OES_CONFIG}/plugins"
+        RUNTIME_OUTPUT_DIRECTORY_${OES_CONFIG_UPPER} "${CMAKE_BINARY_DIR}/bin/${OES_CONFIG}/plugins"
+    )
+endforeach()
 
 target_compile_definitions(simplePlugin PRIVATE NOPCH)
 

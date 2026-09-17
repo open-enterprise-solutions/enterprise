@@ -165,6 +165,80 @@ if(WIN32 AND OES_USE_ODBC)
 endif()
 
 # ---------------------------------------------------------------------------
+# The database clients next to the binaries on Windows — THE SAME FILES, NAMES AND FOLDERS the Visual
+# Studio project copies (backend.vcxproj, CopyFileToFolders). The in-tree kits carry both architectures
+# under one name with `_x64` / `_x86` in it; the running engine loads them by the plain name, so each is
+# copied for the build's own architecture and renamed on the way. Firebird goes into `_fb/` (the embedded
+# engine, its plugins and ICU, and firebird.exe for the leader mode), the PostgreSQL client beside the
+# executables. Without this a CMake-built Windows tree opened no Firebird base at all, which is the
+# default one — and it is the tree the nightly release is packed from.
+#
+# The three plugins the vcxproj leaves out stay out here too: default_profiler, fbtrace, udr_engine.
+# ---------------------------------------------------------------------------
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(OES_WIN_ARCH "x64")
+    else()
+        set(OES_WIN_ARCH "x86")
+    endif()
+    set(OES_BIN_DIR "$<TARGET_FILE_DIR:backend>")
+    set(OES_CLIENT_COPY)
+
+    if(OES_USE_FIREBIRD)
+        set(OES_FB_KIT "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/firebird/engine/dll")
+        list(APPEND OES_CLIENT_COPY
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OES_BIN_DIR}/_fb/intl" "${OES_BIN_DIR}/_fb/plugins")
+        # The same file for either architecture.
+        foreach(OES_FB_FILE firebird.conf firebird.msg security5.fdb icudt63l.dat intl/fbintl.conf)
+            list(APPEND OES_CLIENT_COPY
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OES_FB_KIT}/${OES_FB_FILE}" "${OES_BIN_DIR}/_fb/${OES_FB_FILE}")
+        endforeach()
+        # One per architecture: <dir>/<name>_<arch><ext> in the kit, <dir>/<name><ext> in _fb.
+        foreach(OES_FB_FILE fbclient.dll ib_util.dll icudt63.dll icuin63.dll icuuc63.dll firebird.exe
+                            intl/fbintl.dll plugins/engine13.dll plugins/srp.dll plugins/chacha.dll
+                            plugins/legacy_auth.dll plugins/legacy_usermanager.dll)
+            get_filename_component(OES_FB_SUBDIR "${OES_FB_FILE}" DIRECTORY)
+            get_filename_component(OES_FB_NAME   "${OES_FB_FILE}" NAME_WE)
+            get_filename_component(OES_FB_EXT    "${OES_FB_FILE}" LAST_EXT)
+            if(OES_FB_SUBDIR)
+                set(OES_FB_SUBDIR "${OES_FB_SUBDIR}/")
+            endif()
+            list(APPEND OES_CLIENT_COPY
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${OES_FB_KIT}/${OES_FB_SUBDIR}${OES_FB_NAME}_${OES_WIN_ARCH}${OES_FB_EXT}"
+                    "${OES_BIN_DIR}/_fb/${OES_FB_FILE}")
+        endforeach()
+    endif()
+
+    if(OES_USE_POSTGRESQL)
+        # ⚠ OpenSSL KEEPS ITS NAME ON x64. The x64 libpq imports `libssl-3-x64.dll` / `libcrypto-3-x64.dll` —
+        # that is OpenSSL's own x64 naming — and only the x86 one imports the plain names, so the vcxproj
+        # renames the pair for x86 alone. Renamed on x64, libpq.dll does not load.
+        if(OES_WIN_ARCH STREQUAL "x64")
+            set(OES_SSL_SUFFIX "-x64")
+        else()
+            set(OES_SSL_SUFFIX "")
+        endif()
+        set(OES_PG_KIT "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/postgres/engine/dll")
+        list(APPEND OES_CLIENT_COPY
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OES_PG_KIT}/libpq_${OES_WIN_ARCH}.dll"        "${OES_BIN_DIR}/libpq.dll"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OES_PG_KIT}/libssl-3-${OES_WIN_ARCH}.dll"    "${OES_BIN_DIR}/libssl-3${OES_SSL_SUFFIX}.dll"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OES_PG_KIT}/libcrypto-3-${OES_WIN_ARCH}.dll" "${OES_BIN_DIR}/libcrypto-3${OES_SSL_SUFFIX}.dll")
+    endif()
+
+    # backend.conf — the start-up settings (the interface language) the vcxproj copies beside the binaries too.
+    list(APPEND OES_CLIENT_COPY
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/backend.conf" "${OES_BIN_DIR}/backend.conf")
+
+    if(OES_CLIENT_COPY)
+        add_custom_command(TARGET backend POST_BUILD
+            ${OES_CLIENT_COPY}
+            COMMENT "Copying the Firebird and PostgreSQL clients and backend.conf next to the binaries (as backend.vcxproj does)"
+            VERBATIM)
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # TBB (optional)
 # ---------------------------------------------------------------------------
 if(OES_USE_TBB)
