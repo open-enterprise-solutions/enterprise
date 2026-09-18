@@ -5025,7 +5025,31 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// the physical name is already taken by the first projection of it, and two items of
 					// one name is the very refusal above. The publisher declares the same spelling for it,
 					// so the two sides keep agreeing.
-					const wxString base = repeated ? sc.second : col->GetPhysicalName();
+					// 🛑⭐⭐ AND THE SPELLING IS THE ONE THE DECLARATION PUBLISHES — asked here the same way
+					// it is asked there (DeclareNamedResultAsCte's `spelledByAlias`), because these two
+					// are the halves that must agree about a name.
+					//
+					// `fld<metaID>` was chosen as "unique per metatype", and that is true of ONE table.
+					// A declaration over a JOIN may read two tables of the SAME metatype — a sequence
+					// beside its own borders, a register beside its totals — and then both sides write
+					// `fld1563_D` into one select list: `-104 … column FLD1563_D was specified multiple
+					// times for derived table Q_SUB0`. Give the alias instead and the collision cannot
+					// happen: an author cannot name two outputs alike.
+					//
+					// ⚠ AND THE OUTER QUERY ALREADY ASKS BY THAT NAME. The publisher spells an
+					// alias-read output `out_<alias>`, so a sort or a grouping over it wrote
+					// `ORDER BY out_Warehouse_RRRef` against a select list carrying `fld1570_RRRef` —
+					// `-206 Column unknown OUT_WAREHOUSE_RRREF`, on any joined report with a grouping
+					// (measured 2026-09-18, the sequence's border beside its documents).
+					//
+					// The ROLE still names the field (`base + ibFieldSuffix`), never a cut of the
+					// column's own field name — that is what a computed column's borrowed fields need,
+					// and it is why this is a change of BASE and nothing else.
+					//
+					// Single-source declarations keep the physical spelling, which is what their reader
+					// asks for (the lowering leaves such an output on its COLUMN, not on an alias).
+					const bool spelledByAlias = repeated || col->IsRawColumn() || !leaves.empty();
+					const wxString base = spelledByAlias ? ibSqlAliasOf(sc.second) : col->GetPhysicalName();
 					const wxString qual = leaves.empty() ? wxString() : ColocatedQual(leaves, col);
 					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 						proj.push_back(ibQueryProjItem{ ibColQ(qual, slot.m_name),

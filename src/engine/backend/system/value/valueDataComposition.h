@@ -11,6 +11,8 @@
 #include "backend/query/queryLowering.h"              // ibQueryLowering::OutputColumn — what the query produces
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorField — what a window offers to pick from
 
+#include <atomic>   // the rented read says WHICH THREAD it is on — see m_fetchThread
+
 class ibBackendQueryable;
 class ibBackendQueryColumn;
 class ibQueryableSourceDescriptor;
@@ -470,6 +472,11 @@ private:
 	// The rented run, KEPT so a read cannot outlive the composition that started it — the destructor
 	// waits it out. One slot: there is one sheet to fill.
 	std::shared_ptr<class ibBackgroundRun> m_fetchRun;
+
+	// …AND WHICH THREAD IT IS ON, so a rebuild can tell "somebody is reading" from "I am the reader".
+	// A rebuild cancels the read and waits it out (RebuildSource); asked from inside the read itself,
+	// that would wait for this very thread. Set by the run, cleared however it leaves.
+	std::atomic<unsigned long> m_fetchThread{ 0 };
 
 	// (The sheet lives on the model base — ibValueSpreadsheetModel::m_spreadsheetDoc, a
 	//  wxObjectDataPtr: the backend document carries a refcount of its OWN, parallel to the value

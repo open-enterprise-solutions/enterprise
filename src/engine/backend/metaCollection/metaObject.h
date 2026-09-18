@@ -133,6 +133,9 @@ constexpr ibClassID g_metaChartOfCalculationTypesCLSID = metadata_to_clsid("MD_C
 constexpr ibClassID g_metaCalculationRegisterCLSID = metadata_to_clsid("MD_CREG");
 constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   // subordinate: Recalculation under a calc register
 
+// SEQUENCES — up to which point the documents of a key have been posted in order (sequence-arc.md)
+constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
+
 // EXTERNAL
 constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
 constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");

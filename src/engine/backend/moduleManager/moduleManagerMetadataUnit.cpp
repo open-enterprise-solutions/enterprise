@@ -37,6 +37,7 @@ enum
 	enAccountingRegisters,
 	enChartsOfCalculationTypes,
 	enCalculationRegisters,
+	enSequences,
 };
 
 void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
@@ -60,6 +61,7 @@ void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helpe
 	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
 	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
 	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
+	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
 }
 
 //****************************************************************************
@@ -158,6 +160,12 @@ bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, 
 	}
 	case enCalculationRegisters: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
+			valStruct->Insert(object->GetName(), object);
+		}
+		break;
+	}
+	case enSequences: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
 			valStruct->Insert(object->GetName(), object);
 		}
 		break;

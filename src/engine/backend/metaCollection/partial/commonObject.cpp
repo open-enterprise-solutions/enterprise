@@ -749,6 +749,15 @@ bool ibValueMetaObjectRecordDataRecorderRef::WriteData(ibDataNode& node) const
 	// would be a different number in every session, and a number is what a query field is named by.
 	node.SetProperty(m_propertyAttributePointInTime->GetName(), m_propertyAttributePointInTime->GetNodeValue());
 	node.SetProperty(m_propertyRegisterRecord->GetName(), m_propertyRegisterRecord->GetNodeValue());
+	// ⭐⭐ BOTH LISTS, OR THE SECOND ONE IS EDITED AND FORGOTTEN. The sequences a document registers in
+	// are a list of its own beside the registers it posts movements to, and a list that is not written
+	// here comes back EMPTY on the next load — with three consequences that each look like something
+	// else: `Sequences.<Name>` is not found in the posting handler ("Aggregate object field not
+	// found"), the differ compares an empty stored list with the edited one and reports the SAME
+	// pending change after every apply, and the DDL that change implies — the recorder's reference
+	// pair — is emitted again over a table that already has it, which Firebird refuses for good
+	// ("violation of PRIMARY or UNIQUE KEY … FLD…_RTREF"). Measured 2026-09-18, in that order.
+	node.SetProperty(m_propertySequenceRecord->GetName(), m_propertySequenceRecord->GetNodeValue());
 	node.SetProperty(m_propertyRegisterRecordsDeletion->GetName(), m_propertyRegisterRecordsDeletion->GetNodeValue());
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
@@ -759,6 +768,9 @@ bool ibValueMetaObjectRecordDataRecorderRef::ReadData(const ibDataNode& node)
 	m_propertyAttributeDate->SetNodeValue(node.GetProperty(m_propertyAttributeDate->GetName()));
 	m_propertyAttributePointInTime->SetNodeValue(node.GetProperty(m_propertyAttributePointInTime->GetName()));
 	m_propertyRegisterRecord->SetNodeValue(node.GetProperty(m_propertyRegisterRecord->GetName()));
+	// …and the sequences, read back beside them. Absent from a configuration saved before sequences
+	// existed, which reads as the empty list — a document that registers nowhere, which is right.
+	m_propertySequenceRecord->SetNodeValue(node.GetProperty(m_propertySequenceRecord->GetName()));
 	// Absent from a configuration saved before it existed: the default stays — the movements are cleared, as they were.
 	m_propertyRegisterRecordsDeletion->SetNodeValue(node.GetProperty(m_propertyRegisterRecordsDeletion->GetName()));
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
@@ -845,9 +857,23 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(int flags)
 	// attribute accepts whatever writes movements into it, so each register named in the record
 	// description takes this metatype's reference into that attribute's type — which is what makes
 	// `Recorder = <this document>` expressible at all. Undone symmetrically on close, below.
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
+	// …AND THE SEQUENCES IT REGISTERS IN LEARN THE SAME WAY. They are a list of their own, and their
+	// Recorder is the same attribute answering the same question — so both lists are walked here, or
+	// a sequence would be declared and still refuse to be saved: "no recorder", because nothing had
+	// told it who registers in it (2026-09-18).
+	const ibMetaDescription& movements = GetRecordDescription(ibRecorderWrites::Movements);
+	for (unsigned int idx = 0; idx < movements.GetTypeCount(); idx++) {
+		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(movements.GetByIdx(idx));
+		if (registerData != nullptr) {
+			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
+			wxASSERT(infoRecorder);
+			infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
+		}
+	}
+
+	const ibMetaDescription& sequences = GetRecordDescription(ibRecorderWrites::Sequences);
+	for (unsigned int idx = 0; idx < sequences.GetTypeCount(); idx++) {
+		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(sequences.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
 			wxASSERT(infoRecorder);
@@ -869,10 +895,21 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject()
 	if (!(*m_propertyAttributePointInTime)->OnBeforeCloseMetaObject())
 		return false;
 
-	// …and the registers stop accepting it — the mirror of the append above.
-	const ibMetaDescription& metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc();
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(metaDesc.GetByIdx(idx));
+	// …and the registers — and the sequences — stop accepting it: the mirror of the append above,
+	// over both lists.
+	const ibMetaDescription& movements = GetRecordDescription(ibRecorderWrites::Movements);
+	for (unsigned int idx = 0; idx < movements.GetTypeCount(); idx++) {
+		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(movements.GetByIdx(idx));
+		if (registerData != nullptr) {
+			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
+			wxASSERT(infoRecorder);
+			infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
+		}
+	}
+
+	const ibMetaDescription& sequences = GetRecordDescription(ibRecorderWrites::Sequences);
+	for (unsigned int idx = 0; idx < sequences.GetTypeCount(); idx++) {
+		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(sequences.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
 			wxASSERT(infoRecorder);
@@ -3007,7 +3044,8 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 {
-	const ibMetaDescription* metaDesc = m_recorder->GetRecordDescription();
+	// The list this holder is made of — the recorder answers by it.
+	const ibMetaDescription* metaDesc = m_recorder->GetRecordDescription(m_writes);
 	if (metaDesc == nullptr) return;   // recorder without static description — no cascade
 	const ibMetaData* metaData = m_recorder->GetMetaObject()->GetMetaData();
 	wxASSERT(metaData);
@@ -3120,8 +3158,8 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
 	}
 }
 
-ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_recorder(recorder)
+ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder, ibRecorderWrites of) :
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_recorder(recorder), m_writes(of)
 {
 	m_members.Bind(this, &ibRecorderRegister::FillMembers);
 	ibRecorderRegister::CreateRecordSet();
@@ -3199,6 +3237,8 @@ void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 {
 	wxASSERT(m_registerRecords == nullptr);
 	m_registerRecords = new ibRecorderRegister(this);
+	// …and the other list, where a kind has one: the sets of registrations a document writes.
+	m_sequenceRecords = new ibRecorderRegister(this, ibRecorderWrites::Sequences);
 }
 
 // RegisterRecords — EXPORTED context variable, bound BEFORE the base compiles so
@@ -3211,6 +3251,9 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
 	ibRecorderRegister* recordSet = m_registerRecords;
 	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	// …and the other list, bound beside it: the sets of registrations this document writes.
+	ibRecorderRegister* sequenceSet = m_sequenceRecords;
+	BindExportVariable(wxT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(copyGuid);
 }
 
@@ -3219,6 +3262,8 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjec
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
 	ibRecorderRegister* recordSet = m_registerRecords;
 	BindExportVariable(wxT("RegisterRecords"), recordSet);
+	ibRecorderRegister* sequenceSet = m_sequenceRecords;
+	BindExportVariable(wxT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(source, generate);
 }
 
@@ -3287,8 +3332,10 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		return false;
 	}
 
-	if (newObject)
+	if (newObject) {
 		m_registerRecords->CreateRecordSet();
+		m_sequenceRecords->CreateRecordSet();
+	}
 
 	// Posting / UndoPosting cascade — scripts then the matching
 	// register set Write/Delete. The cascade rides under this recorder's
@@ -3311,6 +3358,14 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 				GetSourceCaption());
 			return false;
 		}
+		// …and the registrations of the previous posting, by the same rule and in the same transaction.
+		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode)) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to clear the registrations of the previous posting"),
+				GetSourceCaption());
+			return false;
+		}
 		ibValue cancel = false;
 		ExecAsProc(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
@@ -3330,6 +3385,15 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 				GetSourceCaption());
 			return false;
 		}
+		// …and the registrations the handler filled — written here, where each set moves its own
+		// sequence's border (ibValueRecordSetObjectSequence::WriteRecordSet).
+		if (!m_sequenceRecords->WriteRecordSet()) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to write the sequence registrations"),
+				GetSourceCaption());
+			return false;
+		}
 	}
 	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
 		ibValue cancel = false;
@@ -3345,6 +3409,13 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
+				GetSourceCaption());
+			return false;
+		}
+		if (!m_sequenceRecords->DeleteRecordSet(writeMode)) {
+			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to clear the sequence registrations"),
 				GetSourceCaption());
 			return false;
 		}
@@ -3381,6 +3452,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	CommitWriteScope(scope, valueForm, newObject);
 	m_registerRecords->RefreshRecordSet();
+	m_sequenceRecords->RefreshRecordSet();
 	return true;
 }
 
@@ -3431,6 +3503,14 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 			GetSourceCaption());
 		return false;
 	}
+	// A deleted document takes its registrations with it, as it takes its movements — and each set
+	// sends its sequence's border back before its rows go.
+	if (!m_sequenceRecords->DeleteRecordSet()) {
+		scope.SafeRollBackTransaction();
+		ibBackendCoreException::Error(_("%s: failed to clear the sequence registrations"),
+			GetSourceCaption());
+		return false;
+	}
 
 	{
 		ibValue cancel = false;
@@ -3451,6 +3531,7 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 
 	CommitDeleteScope(scope, valueForm);
 	m_registerRecords->RefreshRecordSet();
+	m_sequenceRecords->RefreshRecordSet();
 	return true;
 }
 

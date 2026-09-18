@@ -19,9 +19,18 @@ bool ibValueMetaObjectDocument::OnPropertyChanging(ibProperty* property, const w
 
 void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	if (m_propertyRegisterRecord == property) {
-		const ibMetaDescription& old_metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc(oldValue);
-		const ibMetaDescription& new_metaDesc = m_propertyRegisterRecord->GetValueAsMetaDesc(newValue);
+	// ⭐ EITHER LIST SAYS THE SAME THING TO WHAT IT NAMES: "this document writes here". The registers
+	// it posts movements to and the sequences it registers in are two lists (they are two acts), and
+	// what happens when one of them changes is one act — each named table's Recorder learns or
+	// forgets this document's reference. Written once for both, or a sequence declared on a running
+	// configuration would refuse to save: "no recorder" (2026-09-18).
+	ibPropertyRecord* named = nullptr;
+	if (m_propertyRegisterRecord == property) named = m_propertyRegisterRecord;
+	if (m_propertySequenceRecord == property) named = m_propertySequenceRecord;
+
+	if (named != nullptr) {
+		const ibMetaDescription& old_metaDesc = named->GetValueAsMetaDesc(oldValue);
+		const ibMetaDescription& new_metaDesc = named->GetValueAsMetaDesc(newValue);
 		for (unsigned int idx = 0; idx < old_metaDesc.GetTypeCount(); idx++) {
 			if (new_metaDesc.ContainMetaType(old_metaDesc.GetByIdx(idx))) continue;
 			const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(old_metaDesc.GetByIdx(idx));

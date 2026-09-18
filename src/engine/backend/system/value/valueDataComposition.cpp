@@ -169,6 +169,24 @@ void ibValueDataComposition::EnsureSourceBuilt()
 
 void ibValueDataComposition::RebuildSource()
 {
+	// 🛑⭐⭐ NOTHING MAY BE READING WHILE THIS REPLACES WHAT IS READ.
+	//
+	// A rebuild empties and refills `m_querySchema`, and a COMPOSE walks it — on the rented background
+	// thread (SubmitFetchAsync). The two met on a live base: the report was open and composing while
+	// the window applied the source, and the read walked a vector that had just been freed. It came
+	// back as a crash inside GetSourceExplorer with the debug fill under the pointer (`0xdddddddd`,
+	// dump of 2026-09-18), which names neither the rebuild nor the read.
+	//
+	// The rule is the one this class already keeps for its own slot — ONE SHEET, ONE READ: a second
+	// intention cancels the first and WAITS it out. A rebuild is such an intention: what the reader is
+	// building is no longer what anybody asked for.
+	//
+	// ⚠ …UNLESS WE ARE THAT READ. A compose asks for the source to be built (Compose ->
+	// EnsureSourceBuilt -> here) on the very thread the run owns, and cancelling there would wait for
+	// this thread to finish — which is this thread. Asked by the id recorded when the run started.
+	if (m_fetchThread != wxThread::GetCurrentId())
+		CancelFetch();
+
 	// WHAT THIS BUILD IS FOR — recorded before anything else, so an EnsureSourceBuilt after it knows
 	// there is nothing left to do. (A seed below may replace an empty text; it re-stamps it there.)
 	m_sourceBuiltFor = GetQueryText();
@@ -871,8 +889,20 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 	if (ibJobManager* const jobs = ibApplicationData::GetJobManager()) {
 		try {
 			// The handle is KEPT: CancelFetch waits on it, so a read cannot outlive this composition.
+			//
+			// ⭐ …AND THE RUN SAYS WHICH THREAD IT IS ON, because a rebuild asked FROM INSIDE it must
+			// not wait for it (RebuildSource, the note there). Recorded on the run's own thread and
+			// cleared however it leaves — a refusal leaves by a throw.
 			m_fetchRun = jobs->StartBackground(
-				[work](ibSession*) -> ibValue { work(); return ibValue(); },
+				[work, this](ibSession*) -> ibValue {
+					struct ibOnThisThread {
+						std::atomic<unsigned long>& m_slot;
+						explicit ibOnThisThread(std::atomic<unsigned long>& slot) : m_slot(slot) { m_slot = wxThread::GetCurrentId(); }
+						~ibOnThisThread() { m_slot = 0; }
+					} onThisThread{ m_fetchThread };
+					work();
+					return ibValue();
+				},
 				_("composing the report"),
 				ibJobTenancy::Tenant);
 			return;

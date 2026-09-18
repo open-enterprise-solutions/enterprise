@@ -2,6 +2,10 @@
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
+#include "backend/metaCollection/metaGroups.h"              // what a group is called, and where it stands
+
+#include <algorithm>
+#include <vector>
 
 #define ICON_SIZE 16
 
@@ -88,8 +92,9 @@ wxTreeItemId ibInterfaceEditor::GroupFor(const ibClassID& clsid)
 	if (found != m_groups.end())
 		return found->second;
 
-	// FROM THE TYPE REGISTRY — the icon and the caption a metatype registered for itself.
-	// There is no table of names here to fall out of step with the designer tree's.
+	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption)
+	// — the same one the configuration tree shows. The registered NAME stood here, which is how this
+	// editor came to read "CalculationRegister" where the tree reads "Calculation registers".
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
 	if (typeCtor == nullptr)
 		return m_treeMETADATA;
@@ -98,8 +103,9 @@ wxTreeItemId ibInterfaceEditor::GroupFor(const ibClassID& clsid)
 	wxASSERT(imageList);
 	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 
-	const wxTreeItemId group = m_interfaceCtrl->AppendItem(
-		m_treeMETADATA, typeCtor->GetClassName(), imageIndex, imageIndex, nullptr);
+	const wxString caption = ibMetaGroupCaption(clsid);
+	const wxTreeItemId group = m_interfaceCtrl->AppendItem(m_treeMETADATA,
+		caption.IsEmpty() ? typeCtor->GetClassName() : caption, imageIndex, imageIndex, nullptr);
 
 	m_groups.emplace(clsid, group);
 	return group;
@@ -122,14 +128,25 @@ void ibInterfaceEditor::FillData()
 	// simply absent from the section editor until somebody noticed. Now a new kind answers
 	// IsInterfaceAllowed() for itself and shows up; one that should not be there says no
 	// and never appears.
+	// …AND IN THE ORDER THE CONFIGURATION IS READ IN: a group is made when its first object arrives,
+	// so the branches used to stand in whatever order the metadata happened to be walked. Sorted by
+	// the group's declared place (ibMetaGroupOrder), this editor reads like the tree; a stable sort
+	// leaves each group's own objects as the metadata gives them.
+	std::vector<ibValueMetaObject*> allowed;
 	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
 		if (object == nullptr || object->IsDeleted())
 			continue;
 		if (!object->IsInterfaceAllowed())
 			continue;
-
-		AppendItem(GroupFor(object->GetClassType()), object);
+		allowed.push_back(object);
 	}
+	std::stable_sort(allowed.begin(), allowed.end(),
+		[](const ibValueMetaObject* a, const ibValueMetaObject* b) {
+			return ibMetaGroupOrder(a->GetClassType()) < ibMetaGroupOrder(b->GetClassType());
+		});
+
+	for (ibValueMetaObject* object : allowed)
+		AppendItem(GroupFor(object->GetClassType()), object);
 
 	m_interfaceCtrl->ExpandAll();
 	m_interfaceCtrl->Enable(m_metaInterface->IsEnabled());

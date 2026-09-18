@@ -163,13 +163,27 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
                 new wxImageList(icon_size, icon_size)
             );
 
+            // ⭐⭐ WHAT IS OFFERED IS THE PROPERTY'S OWN ANSWER, and this dialog no longer keeps a
+            // second copy of it. The kinds used to be spelled out here, one FillByClsid per kind —
+            // so a property with a different list (the sequences a document registers in) would have
+            // been shown the registers. The choices arrive with the property; their kinds are asked
+            // of the objects themselves, so a group appears for whatever is in the list.
             const ibMetaData* metaData = metaGenericData->GetMetaData();
             wxASSERT(metaData);
             if (metaData != nullptr) {
-                FillByClsid(metaData, g_metaInformationRegisterCLSID, tc, data);
-                FillByClsid(metaData, g_metaAccumulationRegisterCLSID, tc, data);
-                FillByClsid(metaData, g_metaAccountingRegisterCLSID, tc, data);
-                FillByClsid(metaData, g_metaCalculationRegisterCLSID, tc, data);
+                const wxPGChoices& offeredChoices = dlgProp->GetChoices();
+                std::vector<ibClassID> kinds;
+                for (unsigned int idx = 0; idx < offeredChoices.GetCount(); idx++) {
+                    const ibValueMetaObject* offered =
+                        metaData->FindAnyObjectByFilter<ibValueMetaObject>(ibMetaID(offeredChoices.GetValue(idx)));
+                    if (offered == nullptr)
+                        continue;
+                    const ibClassID clsid = offered->GetClassType();
+                    if (std::find(kinds.begin(), kinds.end(), clsid) == kinds.end())
+                        kinds.push_back(clsid);
+                }
+                for (const ibClassID clsid : kinds)
+                    FillByClsid(metaData, clsid, tc, data);
             }
             tc->ExpandAll(); int res = dlg->ShowModal();
             ibVariantDataRecord* clone = data->Clone();

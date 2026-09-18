@@ -1,5 +1,6 @@
 #include "metaDiff.h"
 
+#include "backend/metaCollection/metaGroups.h"   // what a group is called and where it stands
 #include "backend/propertyManager/property/propertyForm.h"
 #include "backend/propertyManager/property/propertyModule.h"
 #include "backend/propertyManager/property/propertyPicture.h"
@@ -75,67 +76,23 @@ bool IsStructuralProperty(const ibProperty* prop) {
 // inline constexpr (metaDiff.h) — constexpr + ODR-safe across DLLs.
 
 // --- Group labels -----------------------------------------------------
+//
+// ⭐ BOTH ANSWERS COME FROM THE ONE DECLARATION — what a metatype's group is called and where it
+// stands (backend/metaCollection/metaGroups.h). They were two tables right here, copied from the
+// configuration tree, and copies drift: this tree listed calculation registers BEFORE information
+// registers while the tree it was copied from listed them last, and the charts came in two
+// different orders (2026-09-17). What stays here is what only a comparison has — the two synthetic
+// rows it inserts itself.
 
 // static
 wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 {
-	// Mirror the labels from treeConfiguration_impl.cpp so the diff
-	// tree reads identically to the metadata tree. The names are
-	// gettext-translated, so the user sees them in their UI language.
 	if (clsid == g_diffCommonUmbrellaClsid)             return _("Common");
 	if (clsid == g_diffPropertiesGroupClsid)            return _("Properties");
 
-	if (clsid == g_metaCommonModuleCLSID)               return _("Common modules");
-	if (clsid == g_metaCommonFormCLSID)                 return _("Common forms");
-	if (clsid == g_metaCommonTemplateCLSID)             return _("Common templates");
-	if (clsid == g_metaScheduledJobCLSID)               return _("Predefined jobs");
-	if (clsid == g_metaSessionParameterCLSID)           return _("Session parameters");
-	if (clsid == g_metaCommonAttributeCLSID)            return _("Common attributes");
-	// The copy inside an object compares under the same caption — what a reader wants to see
-	// there is "this object carries a common attribute", not a second kind of thing.
-	if (clsid == g_metaCommonAttributeColumnCLSID)         return _("Common attributes");
-	if (clsid == g_metaParameterizedJobCLSID)           return _("Scheduled jobs");
-	// Commands — the configuration-wide ones and the ones an object owns. Both were missing here,
-	// so the compare tree showed them under a raw clsid number, ranked after everything else.
-	if (clsid == g_metaCommonCommandCLSID)              return _("Common commands");
-	if (clsid == g_metaCommandCLSID)                    return _("Commands");
-	if (clsid == g_metaSectionCLSID)                  return _("Sections");
-	if (clsid == g_metaRoleCLSID)                       return _("Roles");
-	if (clsid == g_metaPictureCLSID)                    return _("Pictures");
-	if (clsid == g_metaLanguageCLSID)                   return _("Languages");
-
-	if (clsid == g_metaConstantCLSID)                   return _("Constants");
-	if (clsid == g_metaCatalogCLSID)                    return _("Catalogs");
-	if (clsid == g_metaDocumentCLSID)                   return _("Documents");
-	if (clsid == g_metaEnumerationCLSID)                return _("Enumerations");
-	if (clsid == g_metaDataProcessorCLSID)              return _("Data processors");
-	if (clsid == g_metaReportCLSID)                     return _("Reports");
-	if (clsid == g_metaInformationRegisterCLSID)        return _("Information registers");
-	if (clsid == g_metaAccumulationRegisterCLSID)       return _("Accumulation registers");
-	if (clsid == g_metaChartOfCharacteristicTypesCLSID) return _("Charts of characteristic types");
-	if (clsid == g_metaChartOfCalculationTypesCLSID)    return _("Charts of calculation types");
-	if (clsid == g_metaChartOfAccountsCLSID)            return _("Charts of accounts");
-	if (clsid == g_metaAccountingRegisterCLSID)         return _("Accounting registers");
-	if (clsid == g_metaCalculationRegisterCLSID)        return _("Calculation registers");
-
-	if (clsid == g_metaAttributeCLSID)                  return _("Attributes");
-	if (clsid == g_metaFormCLSID)                       return _("Forms");
-	if (clsid == g_metaTemplateCLSID)                   return _("Templates");
-	// A composer is a report's own group, right after its templates — the same defect the comment
-	// above records for commands: a metatype the walk does not know shows as a raw clsid number.
-	if (clsid == g_metaComposerCLSID)                   return _("Composers");
-	if (clsid == g_metaModuleCLSID)                     return _("Modules");
-	if (clsid == g_metaManagerCLSID)                    return _("Manager modules");
-	if (clsid == g_metaTableCLSID)                      return _("Tables");
-	if (clsid == g_metaTableRefCLSID)                   return _("Tables");
-	if (clsid == g_metaAccountDimensionKindsTableCLSID)         return _("Account dimension kinds tables");
-	if (clsid == g_metaEnumCLSID)                       return _("Enum values");
-	if (clsid == g_metaDimensionCLSID)                  return _("Dimensions");
-	if (clsid == g_metaRecalculationCLSID)              return _("Recalculations");
-	if (clsid == g_metaResourceCLSID)                   return _("Resources");
-	if (clsid == g_metaAccountingKindCLSID)             return _("Accounting kinds");
-	if (clsid == g_metaAccountDimensionAccountingKindCLSID) return _("Account dimension accounting kinds");
-	if (clsid == g_metaPredefinedAttributeCLSID)        return _("Predefined attributes");
+	const wxString caption = ibMetaGroupCaption(clsid);
+	if (!caption.IsEmpty())
+		return caption;
 
 	// Unknown CLSID — show its raw symbol so the UI never blanks.
 	return wxString::Format(wxT("[%llu]"),
@@ -145,78 +102,11 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 // static
 int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 {
-	// Match the order FillData uses in treeConfiguration_impl.cpp so
-	// the compare tree reads identically to the configuration tree.
-	// Inner-object groups (Attributes, Forms, ...) follow the
-	// AppendGroupItem sequence in each ibMetaTreeBase subclass.
-	struct Rank { ibClassID clsid; int rank; };
-	static const Rank ranks[] = {
-		// Common-level groups (under root config)
-		{ g_metaCommonModuleCLSID,                10 },
-		{ g_metaCommonFormCLSID,                  20 },
-		{ g_metaCommonCommandCLSID,               25 },   // where the navigator puts it: after forms
-		{ g_metaCommonTemplateCLSID,              30 },
-		// Scheduled jobs sit in the COMMON band, where the tree puts them: the branch (35), and
-		// its predefined sub-branch immediately after, so the compare tree reads like the
-		// configuration tree.
-		{ g_metaParameterizedJobCLSID,            35 },
-		{ g_metaScheduledJobCLSID,                36 },
-		{ g_metaSessionParameterCLSID,            37 },
-		{ g_metaCommonAttributeCLSID,             38 },
-		{ g_metaPictureCLSID,                     40 },
-		{ g_metaSectionCLSID,                   50 },
-		{ g_metaRoleCLSID,                        60 },
-		{ g_metaLanguageCLSID,                    70 },
-
-		// Custom-level groups (under root config)
-		{ g_metaConstantCLSID,                   100 },
-		{ g_metaCatalogCLSID,                    110 },
-		{ g_metaDocumentCLSID,                   120 },
-		{ g_metaEnumerationCLSID,                130 },
-		{ g_metaDataProcessorCLSID,              140 },
-		{ g_metaReportCLSID,                     150 },
-		// ⭐ THE CHARTS COME BEFORE THE REGISTERS, and the registers come LAST.
-		//
-		// A register is read in terms of what the objects above it declare — an accumulation register
-		// by its dimensions, an accounting register by the chart of accounts that types its account
-		// and its analytics. Listing the registers first put the dependants above the things they
-		// depend on, so reading the tree top to bottom met a register before anything it is about.
-		{ g_metaChartOfCharacteristicTypesCLSID, 160 },
-		{ g_metaChartOfCalculationTypesCLSID,    165 },
-		{ g_metaChartOfAccountsCLSID,            170 },
-		{ g_metaCalculationRegisterCLSID,        175 },
-		{ g_metaInformationRegisterCLSID,        180 },
-		{ g_metaAccumulationRegisterCLSID,       190 },
-		{ g_metaAccountingRegisterCLSID,         200 },
-
-		// Inner-object groups (under Catalog / Document / ...)
-		{ g_metaAttributeCLSID,                  300 },
-		{ g_metaDimensionCLSID,                  310 },
-		{ g_metaResourceCLSID,                   320 },
-		{ g_metaEnumCLSID,                       330 },
-		// The chart's kinds of accounting stand right after its attributes — where a person looks for
-		// them, and in the order the accounting world reads: what the ACCOUNT is kept in, then what
-		// each of its breakdowns is.
-		{ g_metaAccountingKindCLSID,             332 },
-		{ g_metaAccountDimensionAccountingKindCLSID, 334 },
-		{ g_metaPredefinedAttributeCLSID,        340 },
-		{ g_metaTableCLSID,                      350 },
-		{ g_metaTableRefCLSID,                   351 },
-		{ g_metaAccountDimensionKindsTableCLSID,         360 },
-		{ g_metaRecalculationCLSID,              365 },   // Recalculation subordinate tables (under a calc register)
-		{ g_metaFormCLSID,                       370 },
-		{ g_metaCommandCLSID,                    375 },   // an object's own commands sit between forms and templates
-		{ g_metaTemplateCLSID,                   380 },
-		{ g_metaComposerCLSID,                   385 },   // a report's composers, where both trees put them: after templates
-		{ g_metaModuleCLSID,                     390 },
-		{ g_metaManagerCLSID,                    400 },
-	};
-
-	for (const Rank& r : ranks) {
-		if (r.clsid == clsid)
-			return r.rank;
-	}
-	return 1000;  // unknown CLSIDs after all known ones
+	// The two rows the comparison adds itself stand ahead of every declared kind: the umbrella above
+	// what it gathers, and an object's properties before its children.
+	if (clsid == g_diffCommonUmbrellaClsid)             return -2;
+	if (clsid == g_diffPropertiesGroupClsid)            return -1;
+	return ibMetaGroupOrder(clsid);
 }
 
 // --- Walk -------------------------------------------------------------
@@ -377,12 +267,12 @@ void ibMetaDiffWalker::WalkPair(
 	// node in treeConfiguration_impl.cpp. Inner pairs (Catalog,
 	// Document, ...) keep a flat group structure.
 	if (depth == 0) {
-		// Common-tier ranks are 10..70 (see GroupOrderRank); custom-tier
-		// starts at 100. Partition on that boundary.
+		// WHICH BAND A GROUP BELONGS TO IS THE GROUP'S OWN ANSWER (ibMetaGroupBandOf) — it used to be
+		// read out of the rank's number, "10..70 means common", a fact hidden in an arithmetic range
+		// that any renumbering would have broken silently.
 		std::vector<ibClassID> commonClsids, otherClsids;
 		for (ibClassID c : clsids) {
-			const int rank = GroupOrderRank(c);
-			if (rank > 0 && rank < 100)
+			if (ibMetaGroupBandOf(c) == ibMetaGroupBand::Common)
 				commonClsids.push_back(c);
 			else
 				otherClsids.push_back(c);

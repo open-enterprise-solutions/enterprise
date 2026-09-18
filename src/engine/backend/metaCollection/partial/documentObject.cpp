@@ -120,12 +120,14 @@ void ibValueRecordDataObjectDocument::FillDefaultDateForNew()
 		SetValueByMetaID(*dataRef->GetDocumentDate(), ibValueSystemFunction::CurrentDate());
 }
 
-const ibMetaDescription* ibValueRecordDataObjectDocument::GetRecordDescription() const
+// What this document writes into, by list — the registers it posts movements to or the sequences it
+// registers in. The metatype holds both; this only forwards the question.
+const ibMetaDescription* ibValueRecordDataObjectDocument::GetRecordDescription(ibRecorderWrites of) const
 {
 	ibValueMetaObjectDocument* dataRef = nullptr;
 	if (!m_metaObject->ConvertToValue(dataRef))
 		return nullptr;
-	return &dataRef->GetRecordDescription();
+	return &dataRef->GetRecordDescription(of);
 }
 
 //***********************************************************************************************

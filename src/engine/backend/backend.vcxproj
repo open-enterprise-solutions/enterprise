@@ -211,6 +211,7 @@
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
     <ClInclude Include="metaCollection\metaDiff.h" />
+    <ClInclude Include="metaCollection\metaGroups.h" />
     <ClInclude Include="metaCollection\metaIntrospect.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
@@ -225,6 +226,8 @@
     <ClInclude Include="metaCollection\partial\accountingRegisterManager.h" />
     <ClInclude Include="calculation\calculation.h" />
     <ClInclude Include="metaCollection\partial\calculationRegister.h" />
+    <ClInclude Include="metaCollection\partial\sequence.h" />
+    <ClInclude Include="metaCollection\partial\sequenceManager.h" />
     <ClInclude Include="metaCollection\partial\calculationRegisterManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h" />
@@ -657,6 +660,7 @@
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject_res.cpp" />
     <ClCompile Include="metaCollection\metaDiff.cpp" />
+    <ClCompile Include="metaCollection\metaGroups.cpp" />
     <ClCompile Include="metaCollection\metaIntrospect.cpp" />
     <ClCompile Include="metaCollection\metaObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectSerialize.cpp" />
@@ -699,6 +703,13 @@
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceBorderRules.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceManager.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadataBorders.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceObject.cpp" />
+    <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp" />

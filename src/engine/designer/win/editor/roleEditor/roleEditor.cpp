@@ -2,21 +2,16 @@
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
+#include "backend/metaCollection/metaGroups.h"              // what a group is called, and where it stands
 
-#define commonName _("Common")
-#define commonFormsName _("Common forms")
-#define interfacesName _("Sections")
-#define constantsName _("Constants")
+#include <algorithm>
+#include <vector>
 
-#define catalogsName _("Catalogs")
-#define documentsName _("Documents")
-#define dataProcessorName _("Data processors")
-#define reportsName _("Reports")
-#define informationRegisterName _("Information registers")
-#define accumulationRegisterName _("Accumulation registers")
-#define chartsOfCharacteristicTypesName _("Charts of characteristic types")
-#define chartsOfAccountsName _("Charts of accounts")
-#define accountingRegistersName _("Accounting registers")
+// (A block of thirteen group names stood here — "Catalogs", "Information registers" and the rest —
+// left behind when this editor stopped listing metatypes and started asking them. Nothing read them,
+// and the list they suggested was out of date: it ended at accounting registers, which is how a
+// reader came to think calculation registers were missing from the editor. A group's caption is now
+// the group's own answer, ibMetaGroupCaption.)
 
 #define ICON_SIZE 16
 
@@ -159,7 +154,9 @@ wxTreeItemId ibRoleEditor::GroupFor(const ibClassID& clsid)
 	if (found != m_groups.end())
 		return found->second;
 
-	// FROM THE TYPE REGISTRY — the icon and the caption the metatype registered for itself.
+	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption)
+	// — the same one the configuration tree shows. This editor used to put the metatype's REGISTERED
+	// NAME here, so a branch read "CalculationRegister" where the tree read "Calculation registers".
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
 	if (typeCtor == nullptr)
 		return m_treeMETADATA;
@@ -168,8 +165,9 @@ wxTreeItemId ibRoleEditor::GroupFor(const ibClassID& clsid)
 	wxASSERT(imageList);
 	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 
-	const wxTreeItemId group = m_roleCtrl->AppendItem(
-		m_treeMETADATA, typeCtor->GetClassName(), imageIndex, imageIndex, nullptr);
+	const wxString caption = ibMetaGroupCaption(clsid);
+	const wxTreeItemId group = m_roleCtrl->AppendItem(m_treeMETADATA,
+		caption.IsEmpty() ? typeCtor->GetClassName() : caption, imageIndex, imageIndex, nullptr);
 
 	m_groups.emplace(clsid, group);
 	return group;
@@ -193,12 +191,25 @@ void ibRoleEditor::FillData()
 	// pre-created branch of its own. A metatype that declares rights now shows up here on
 	// its own — previously it was invisible to the role editor until somebody added a
 	// block, which is a silent way to leave part of a configuration unprotected.
+	// …AND IN THE ORDER THE CONFIGURATION IS READ IN. A group is made when its first object arrives,
+	// so the branches used to stand in whatever order the metadata happened to be walked — catalogs
+	// after registers, registers among the charts. Sorted by the group's declared place
+	// (ibMetaGroupOrder), the editor reads like the tree; a stable sort keeps each group's own
+	// objects in the order the metadata gives them.
+	std::vector<ibValueMetaObject*> rightful;
 	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
 		if (object == nullptr || object->IsDeleted())
 			continue;
 		if (object->GetRoleCount() == 0)
 			continue;
+		rightful.push_back(object);
+	}
+	std::stable_sort(rightful.begin(), rightful.end(),
+		[](const ibValueMetaObject* a, const ibValueMetaObject* b) {
+			return ibMetaGroupOrder(a->GetClassType()) < ibMetaGroupOrder(b->GetClassType());
+		});
 
+	for (ibValueMetaObject* object : rightful) {
 		const wxTreeItemId item = AppendItem(GroupFor(object->GetClassType()), object);
 
 		// A section nests: sub-sections are rights-bearing in their own right, and they

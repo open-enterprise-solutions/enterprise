@@ -122,6 +122,11 @@ void ibDialogFunctionAll::BuildTree()
 		const int imageIndex = imageList->Add(calculationRegister->GetIcon());
 		m_treeCtrlElements->AppendItem(calculationRegisters, calculationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(calculationRegister));
 	}
+	wxTreeItemId sequences = AppendGroupItem(root, g_metaSequenceCLSID, _("Sequences"));
+	for (auto sequence : activeMetaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
+		const int imageIndex = imageList->Add(sequence->GetIcon());
+		m_treeCtrlElements->AppendItem(sequences, sequence->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(sequence));
+	}
 
 	// SCHEDULED JOBS come LAST, and deliberately so. They are reachable — somebody has to be able
 	// to open the list, look at a schedule, run one by hand — but they are administration, not the

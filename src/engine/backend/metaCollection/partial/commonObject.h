@@ -1116,10 +1116,29 @@ private:
 //     document" is asked. It is not stored: it is CONSTRUCTED from the date and the reference
 //     (m_momentColumn), and the codec reads a point in time out of the three fields those two have.
 // ==========================================================================
+// ⭐⭐ WHICH OF THE TWO A RECORDER WRITES — a TYPE, because it is a question with two answers and not
+// a switch with an off position. A document declares two lists and writes two kinds of row, and
+// everything that happens to them is one act: a set is created with the document's reference, filled
+// by the posting handler, written when the posting ends and cleared with it. So the machinery is ONE
+// and the only thing that varies is WHICH — which every caller now says out loud
+// (`ibRecorderWrites::Sequences`) instead of a bare `true` that only a comment explained
+// (Max, 2026-09-18: "не сделал энум красиво в регистраторе").
+enum class ibRecorderWrites {
+	Movements,   // the registers it posts MOVEMENTS to — what the document DID
+	Sequences,   // the sequences it REGISTERS IN — that the document STANDS in an order
+};
+
 class BACKEND_API ibValueMetaObjectRecordDataRecorderRef : public ibValueMetaObjectRecordDataMutableRef {
 public:
 
-	ibMetaDescription& GetRecordDescription() const { return m_propertyRegisterRecord->GetValueAsMetaDesc(); }
+	// WHAT THIS DOCUMENT WRITES INTO, by list: the registers it posts movements to, or the sequences
+	// it registers in. One door with the question as its argument — the two used to be two getters,
+	// and a walk over both read as two `&` in front of two spellings of the same idea.
+	ibMetaDescription& GetRecordDescription(ibRecorderWrites of) const {
+		return of == ibRecorderWrites::Sequences
+			? m_propertySequenceRecord->GetValueAsMetaDesc()
+			: m_propertyRegisterRecord->GetValueAsMetaDesc();
+	}
 	// What becomes of the movements when the document is posted again or its posting undone (WriteObject). A deleted
 	// document takes them with it whatever this says.
 	ibDocumentRecordsDeletion GetRegisterRecordsDeletion() const { return m_propertyRegisterRecordsDeletion->GetValueAsEnum(); }
@@ -1203,6 +1222,9 @@ protected:
 protected:
 
 	ibPropertyRecord* m_propertyRegisterRecord = ibPropertyObject::CreateProperty<ibPropertyRecord>(m_categoryData, wxT("ListRegisterRecord"), _("List register record"), _("The registers this document writes its movements to. For each one the document gets a record set (RegisterRecords.<Register>) addressed by its reference, filled by the posting handler and written when posting ends; a register not listed here cannot take this document as its recorder."));
+	// ⭐ AND THE SEQUENCES IT REGISTERS IN — a list of its own beside the registers, because they are
+	// two acts: a movement is what the document did, a registration is that it stands in an order.
+	ibPropertySequenceRecord* m_propertySequenceRecord = ibPropertyObject::CreateProperty<ibPropertySequenceRecord>(m_categoryData, wxT("ListSequenceRecord"), _("List sequence record"), _("The sequences this document registers in. For each one the document gets a set of registrations (Sequences.<Sequence>) addressed by its reference, filled by the posting handler and written when posting ends; the sequence's border then moves by those rows. A sequence not listed here cannot take this document as its recorder."));
 	// ⭐ THE MOVEMENTS ARE CLEARED, NOT COMPARED (Max, 2026-09-14): posting again clears what the document wrote and its
 	// handler writes it anew — nothing tracks what changed. Whether the platform clears them is this property's to say;
 	// a configuration that has not set it posts as it always has.
@@ -1902,7 +1924,7 @@ protected:
 		return false;
 	}
 
-	//get dimension keys 
+	//get dimension keys
 	virtual bool FillArrayObjectByDimension(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID });
@@ -2639,7 +2661,8 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 		void ClearRecordSet();
 		void RefreshRecordSet();
 
-		ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder = nullptr);
+		ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder = nullptr,
+		                   ibRecorderWrites of = ibRecorderWrites::Movements);
 		virtual ~ibRecorderRegister();
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
@@ -2652,6 +2675,9 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 
 	private:
 		ibValueRecordDataObjectRecorderRef* m_recorder;
+		// WHICH OF THE RECORDER'S LISTS this holder is made of. One holder class, two instances —
+		// see ibRecorderWrites above for why that is a type.
+		ibRecorderWrites m_writes = ibRecorderWrites::Movements;
 		std::map<ibMetaID, ibValuePtr<ibValueRecordSetObject>> m_records;
 	};
 
@@ -2684,8 +2710,12 @@ public:
 
 	// Public helpers for register access from form scripts / Document
 	// subclass override paths.
-	void ClearRecordSet()  { wxASSERT(m_registerRecords); m_registerRecords->ClearRecordSet(); }
-	void UpdateRecordSet() { wxASSERT(m_registerRecords); m_registerRecords->ClearRecordSet(); m_registerRecords->CreateRecordSet(); }
+	// ⭐ BOTH HOLDERS, one act: this is what makes `RegisterRecords.<Name>` — and `Sequences.<Name>`
+	// beside it — resolve in the module after the document's lists are edited. Driving only the
+	// first left the second answering "not found" in the designer's syntax check until the whole
+	// configuration was reloaded.
+	void ClearRecordSet()  { wxASSERT(m_registerRecords && m_sequenceRecords); m_registerRecords->ClearRecordSet(); m_sequenceRecords->ClearRecordSet(); }
+	void UpdateRecordSet() { ClearRecordSet(); m_registerRecords->CreateRecordSet(); m_sequenceRecords->CreateRecordSet(); }
 
 	// Write/Delete scaffold. The 2-arg WriteObject is the canonical
 	// entry; the no-arg trampoline picks (Write/UndoPosting | Posting
@@ -2717,17 +2747,19 @@ public:
 	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode /*wm*/)   {}
 	virtual void FillDefaultDateForNew()                                   {}
 
-	// Description of registers the recorder writes movements into.
-	// Returns null for recorder types with no fixed movement description
-	// (rare; the cascade just no-ops in that case). Document forwards
-	// to its metaobject's GetRecordDescription so ibRecorderRegister::
-	// CreateRecordSet stays Document-agnostic.
-	virtual const ibMetaDescription* GetRecordDescription() const = 0;
+	// WHAT THIS RECORDER WRITES INTO, by list (ibRecorderWrites): the registers it posts movements to,
+	// or the sequences it registers in. Returns null for a kind that declares nothing of that list —
+	// the cascade then simply no-ops for it, which is how a recorder with no sequences behaves.
+	// Document forwards to its metaobject, so ibRecorderRegister::CreateRecordSet stays
+	// Document-agnostic and one implementation serves both lists.
+	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const = 0;
 
 protected:
 	// Register holder owned by the recorder. Created in ctor, lives
 	// for the lifetime of the recorder value.
 	ibValuePtr<ibRecorderRegister> m_registerRecords;
+	// …and the same holder over the other list: the sets of registrations.
+	ibValuePtr<ibRecorderRegister> m_sequenceRecords;
 };
 
 #pragma endregion

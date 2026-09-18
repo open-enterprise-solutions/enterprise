@@ -63,6 +63,18 @@ ibPropertyChoiceMode ibPropertyRecord::GetValueList(ibPropertyChoiceList& list)
 		});
 }
 
+// The sequences a document registers in — the same shape, its own kinds. The rule below is the
+// registers' one, and it holds for the same reason: a sequence is registered in by a document
+// recording itself as the recorder, so one that has no recorder could never take the registration.
+ibPropertyChoiceMode ibPropertySequenceRecord::GetValueList(ibPropertyChoiceList& list)
+{
+	return CreateValueList(list, ibPropertyChoiceMode::Mult, { g_metaSequenceCLSID },
+		[](const ibPropertyObject* object) {
+			const ibValueMetaObjectRegisterData* reg = dynamic_cast<const ibValueMetaObjectRegisterData*>(object);
+			return reg != nullptr && reg->HasRecorder();
+		});
+}
+
 //base property for "record"
 bool ibPropertyRecord::SetDataValue(const ibValue& varPropVal)
 {

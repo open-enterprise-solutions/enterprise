@@ -208,7 +208,7 @@ class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRe
 	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode wm) const override;
 	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode wm) override;
 	virtual void FillDefaultDateForNew() override;
-	virtual const ibMetaDescription* GetRecordDescription() const override;
+	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const override;
 
 	//****************************************************************************
 	//*                              Support methods                             *

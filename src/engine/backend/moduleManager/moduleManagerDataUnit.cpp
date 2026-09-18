@@ -45,6 +45,7 @@ enum
 	enDataAccountingRegisters,
 	enDataChartsOfCalculationTypes,
 	enDataCalculationRegisters,
+	enDataSequences,
 };
 
 // One kind namespace: Name -> Queryable for every metaobject of the kind that
@@ -96,6 +97,7 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
 	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
 	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
+	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
 }
 
 bool ibValueModuleManager::ibValueDataUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -160,6 +162,9 @@ bool ibValueModuleManager::ibValueDataUnit::GetPropVal(const long lPropNum, ibVa
 		return true;
 	case enDataCalculationRegisters:
 		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCalculationRegisterCLSID, wxT("CalculationRegisters"));
+		return true;
+	case enDataSequences:
+		pvarPropVal = BuildKindNamespace(m_metaData, g_metaSequenceCLSID, wxT("Sequences"));
 		return true;
 	}
 	return false;

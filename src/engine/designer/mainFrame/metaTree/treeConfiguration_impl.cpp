@@ -20,14 +20,16 @@
 #include "backend/session/session.h"        // ibSession::CurrentFrame — the chrome a Changed stage repaints
 #include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands (hub — nested commands)
 #include "backend/metaCollection/metaComposerObject.h"  // the report's composers, as tree items
+#include "backend/metaCollection/metaGroups.h"          // what a group is called, and where it stands
 
 #include <wx/intl.h>  // wxGetTranslation — the layout table holds SOURCE strings, translated on use
 
-#include <iterator>   // std::rbegin / std::rend over the layout table
+#include <algorithm>  // std::stable_sort — the rows are drawn in the declared order
+#include <vector>
 
 // The COMMON folder is not a metatype's group — it is the band itself, so its label stays here.
-// Every GROUP label moved into the layout table further down (s_groups), where it sits beside the
-// metatype it names instead of in a block of defines that nothing tied to anything.
+// Every GROUP label is the group's own answer now (ibMetaGroupCaption, backend/metaCollection/
+// metaGroups.h), where this tree, the comparison tree and the two editors all read it.
 #define commonName _("Common")
 
 // The labels of the groups INSIDE an object — attributes, tabular sections, forms, commands,
@@ -1537,6 +1539,25 @@ void ibConfigurationTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObj
 	AddInformationRegisterItem(metaObject, hParentID);   // same shape — an accounting register too
 }
 
+// A SEQUENCE UNFOLDS AS A REGISTER DOES, less one group: a registration is a key, a moment and what
+// describes that row — dimensions and attributes — and it measures nothing, so there are no resources
+// (sequence.h, ResolveChild). The forms are its list of registrations.
+void ibConfigurationTree::AddSequenceItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
+	wxASSERT(metaObjectValue);
+
+	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
+		metaObjectValue->GetDimensionArrayObject());
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		metaObjectValue->GetAttributeArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
+}
+
 // A CALCULATION REGISTER — the same shape. Its recalculation is a property of its own ("Use recalculation"),
 // with no object of its own to draw (Max, 2026-09-14).
 void ibConfigurationTree::AddCalculationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
@@ -1570,72 +1591,70 @@ void ibConfigurationTree::AddCalculationRegisterItem(ibValueMetaObject* metaObje
 
 namespace {
 
-enum class ibMetaBand { Common, Metadata };   // the two bands of the navigator
-
 // HOW A MEMBER OF THE GROUP IS PUT IN. Three shapes and no more: an ordinary row, a row that is
 // itself a group (a section holds sections), and a command (which nests its sub-commands).
 enum class ibMetaRow { Item, Group, Command };
 
+// ⭐ WHAT THIS TREE KNOWS ABOUT A GROUP, AND NOTHING MORE. The caption, the band and the place are
+// the group's own answer (backend/metaCollection/metaGroups.h) — asked by this tree, the comparison
+// tree, the role editor and the section editor alike. What is left here is what only THIS tree
+// decides: how a member of the group is rendered, and which group it nests under.
 struct ibMetaTreeGroupDef {
 	ibClassID   m_clsid;
-	// The SOURCE string, marked for extraction and left untranslated here: this table is static
-	// data, built before a locale is loaded (same rule as backend/fileKind.cpp).
-	const char* m_label;
-	ibMetaBand  m_band;
-	ibClassID   m_owner;   // 0 = straight in the band; otherwise the group it nests under
+	ibClassID   m_owner;   // 0 = straight in its band; otherwise the group it nests under
 	ibMetaRow   m_row;
 };
 
 const ibMetaTreeGroupDef s_groups[] = {
-	// ——— Common: what belongs to the configuration as a whole and to no business object ———
-	{ g_metaCommonModuleCLSID,    wxTRANSLATE("Common modules"),   ibMetaBand::Common, 0, ibMetaRow::Item    },
-	{ g_metaCommonFormCLSID,      wxTRANSLATE("Common forms"),     ibMetaBand::Common, 0, ibMetaRow::Item    },
-	{ g_metaCommonCommandCLSID,   wxTRANSLATE("Common commands"),  ibMetaBand::Common, 0, ibMetaRow::Command },
-	{ g_metaCommonTemplateCLSID,  wxTRANSLATE("Common templates"), ibMetaBand::Common, 0, ibMetaRow::Item    },
+	{ g_metaCommonModuleCLSID,     0, ibMetaRow::Item    },
+	{ g_metaCommonFormCLSID,       0, ibMetaRow::Item    },
+	{ g_metaCommonCommandCLSID,    0, ibMetaRow::Command },
+	{ g_metaCommonTemplateCLSID,   0, ibMetaRow::Item    },
 
-	// SCHEDULED JOBS stay under COMMON — unattended work belongs to the configuration as a whole.
-	// One branch, two kinds inside it: the branch itself holds the PARAMETERIZED jobs (it is their
-	// metatype's group node, so File → New reaches them the usual way), and the PREDEFINED ones
-	// live in a sub-branch declared FIRST, which is what puts them above — a configuration declares
-	// a handful of those and they never multiply with the data, while the parameterized list grows.
-	{ g_metaParameterizedJobCLSID, wxTRANSLATE("Scheduled jobs"),  ibMetaBand::Common, 0, ibMetaRow::Item },
-	{ g_metaScheduledJobCLSID,     wxTRANSLATE("Predefined jobs"), ibMetaBand::Common,
-	  g_metaParameterizedJobCLSID, ibMetaRow::Item },
+	// SCHEDULED JOBS: one branch, two kinds inside it. The branch itself holds the PARAMETERIZED jobs
+	// (it is their metatype's group node, so File → New reaches them the usual way), and the
+	// PREDEFINED ones live in a SUB-BRANCH of it — which is what this row says and the declaration
+	// cannot: where a group NESTS is this tree's own shape.
+	{ g_metaParameterizedJobCLSID, 0, ibMetaRow::Item },
+	{ g_metaScheduledJobCLSID,     g_metaParameterizedJobCLSID, ibMetaRow::Item },
 
-	// SESSION PARAMETERS sit beside the jobs for the same reason: each is an ATTRIBUTE whose owner
-	// is the session — declared here, set once by the session module, read everywhere.
-	{ g_metaSessionParameterCLSID, wxTRANSLATE("Session parameters"), ibMetaBand::Common, 0, ibMetaRow::Item },
-	// COMMON ATTRIBUTES — declared here, carried by many objects. What the declaration puts INTO
-	// each object is a child of THAT object and appears there, in its own attribute list.
-	{ g_metaCommonAttributeCLSID,  wxTRANSLATE("Common attributes"),  ibMetaBand::Common, 0, ibMetaRow::Item },
-	{ g_metaPictureCLSID,          wxTRANSLATE("Pictures"),           ibMetaBand::Common, 0, ibMetaRow::Item },
-	// Sections come AFTER the common items — a top-level navigation grouping, not a common asset.
-	{ g_metaSectionCLSID,          wxTRANSLATE("Sections"),           ibMetaBand::Common, 0, ibMetaRow::Group },
-	{ g_metaRoleCLSID,             wxTRANSLATE("Roles"),              ibMetaBand::Common, 0, ibMetaRow::Item },
-	{ g_metaLanguageCLSID,         wxTRANSLATE("Languages"),          ibMetaBand::Common, 0, ibMetaRow::Item },
+	{ g_metaSessionParameterCLSID, 0, ibMetaRow::Item },
+	{ g_metaCommonAttributeCLSID,  0, ibMetaRow::Item },
+	{ g_metaPictureCLSID,          0, ibMetaRow::Item },
+	// A section holds sections, so its rows are groups themselves.
+	{ g_metaSectionCLSID,          0, ibMetaRow::Group },
+	{ g_metaRoleCLSID,             0, ibMetaRow::Item },
+	{ g_metaLanguageCLSID,         0, ibMetaRow::Item },
 
-	// ——— Metadata: the business objects a configuration is made of ———
-	{ g_metaConstantCLSID,                   wxTRANSLATE("Constants"),        ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaCatalogCLSID,                    wxTRANSLATE("Catalogs"),         ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaDocumentCLSID,                   wxTRANSLATE("Documents"),        ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaEnumerationCLSID,                wxTRANSLATE("Enumerations"),     ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaDataProcessorCLSID,              wxTRANSLATE("Data processors"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaReportCLSID,                     wxTRANSLATE("Reports"),          ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	// ⭐ THE CHARTS FIRST, THE REGISTERS LAST — the reading order of the tree.
-	//
-	// A register is expressed in terms of what stands above it: an accumulation register by its
-	// dimensions, an accounting register by the chart of accounts that types its account and every
-	// analytics slot. With the registers listed before the charts, the tree presented the dependants
-	// before the things they depend on. (The compare tree carries the same order as ranks —
-	// metaDiff.cpp; the two lists are separate copies of one decision, § metadata-tree.md.)
-	{ g_metaChartOfCharacteristicTypesCLSID, wxTRANSLATE("Charts of characteristic types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaChartOfAccountsCLSID,            wxTRANSLATE("Charts of accounts"),      ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaChartOfCalculationTypesCLSID,    wxTRANSLATE("Charts of calculation types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information registers"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation registers"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaAccountingRegisterCLSID,         wxTRANSLATE("Accounting registers"),    ibMetaBand::Metadata, 0, ibMetaRow::Item },
-	{ g_metaCalculationRegisterCLSID,        wxTRANSLATE("Calculation registers"),   ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaConstantCLSID,                   0, ibMetaRow::Item },
+	{ g_metaCatalogCLSID,                    0, ibMetaRow::Item },
+	{ g_metaDocumentCLSID,                   0, ibMetaRow::Item },
+	{ g_metaEnumerationCLSID,                0, ibMetaRow::Item },
+	{ g_metaDataProcessorCLSID,              0, ibMetaRow::Item },
+	{ g_metaReportCLSID,                     0, ibMetaRow::Item },
+	{ g_metaChartOfCharacteristicTypesCLSID, 0, ibMetaRow::Item },
+	{ g_metaChartOfAccountsCLSID,            0, ibMetaRow::Item },
+	{ g_metaChartOfCalculationTypesCLSID,    0, ibMetaRow::Item },
+	{ g_metaInformationRegisterCLSID,        0, ibMetaRow::Item },
+	{ g_metaAccumulationRegisterCLSID,       0, ibMetaRow::Item },
+	{ g_metaAccountingRegisterCLSID,         0, ibMetaRow::Item },
+	{ g_metaCalculationRegisterCLSID,        0, ibMetaRow::Item },
+	{ g_metaSequenceCLSID,                   0, ibMetaRow::Item },
 };
+
+// The rows this tree draws, in the order the declaration gives — so the tree cannot drift from the
+// comparison tree or from the editors, and a kind added to the declaration appears here by itself.
+std::vector<const ibMetaTreeGroupDef*> OrderedGroups()
+{
+	std::vector<const ibMetaTreeGroupDef*> rows;
+	for (const ibMetaTreeGroupDef& def : s_groups)
+		rows.push_back(&def);
+	std::stable_sort(rows.begin(), rows.end(),
+		[](const ibMetaTreeGroupDef* a, const ibMetaTreeGroupDef* b) {
+			return ibMetaGroupOrder(a->m_clsid) < ibMetaGroupOrder(b->m_clsid);
+		});
+	return rows;
+}
 
 } // namespace
 
@@ -1663,6 +1682,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTr
 	else if (clsid == g_metaChartOfAccountsCLSID)            AddChartOfAccountsItem(metaItem, item);
 	else if (clsid == g_metaAccountingRegisterCLSID)         AddAccumulationRegisterItem(metaItem, item);
 	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
+	else if (clsid == g_metaSequenceCLSID)                   AddSequenceItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
 
 	// A COMMAND HOLDS COMMANDS. The fill path always knew this (it goes through AppendCommandNode);
@@ -1731,13 +1751,12 @@ void ibConfigurationTree::InitTree()
 	m_treeCOMMON = m_metaTreeCtrl->AppendItem(m_treeRoot, commonName, imageCommonIndex, imageCommonIndex);
 
 	m_groups.clear();
-	for (const ibMetaTreeGroupDef& def : s_groups) {
-		const wxTreeItemId parent = def.m_owner != 0
-			? Group(def.m_owner)                                                   // nested (predefined jobs)
-			: (def.m_band == ibMetaBand::Common ? m_treeCOMMON : m_treeRoot);
-		wxASSERT(parent.IsOk());   // a nested row placed before its owner — see the table's ⚠
-		m_groups[def.m_clsid] = AppendGroupItem(parent, def.m_clsid,
-			wxGetTranslation(wxString::FromUTF8(def.m_label)));
+	for (const ibMetaTreeGroupDef* def : OrderedGroups()) {
+		const wxTreeItemId parent = def->m_owner != 0
+			? Group(def->m_owner)                                                  // nested (predefined jobs)
+			: (ibMetaGroupBandOf(def->m_clsid) == ibMetaGroupBand::Common ? m_treeCOMMON : m_treeRoot);
+		wxASSERT(parent.IsOk());   // a nested row declared before its owner — see metaGroups.h
+		m_groups[def->m_clsid] = AppendGroupItem(parent, def->m_clsid, ibMetaGroupCaption(def->m_clsid));
 	}
 
 
@@ -1796,25 +1815,25 @@ void ibConfigurationTree::FillData()
 	// back in the way its row says. This was twenty copies of the loop below, one per group, each
 	// with its own spelling of the same three tests — and the copies had already diverged (the
 	// search test was written out in some and left commented out in others).
-	for (const ibMetaTreeGroupDef& def : s_groups) {
+	for (const ibMetaTreeGroupDef* def : OrderedGroups()) {
 
-		const wxTreeItemId group = Group(def.m_clsid);
+		const wxTreeItemId group = Group(def->m_clsid);
 		if (!group.IsOk())
 			continue;
 
-		for (auto metaObject : m_metaData->GetAnyArrayObject(def.m_clsid)) {
+		for (auto metaObject : m_metaData->GetAnyArrayObject(def->m_clsid)) {
 
 			if (metaObject->IsDeleted())
 				continue;
 
 			wxTreeItemId node;
-			switch (def.m_row) {
+			switch (def->m_row) {
 			case ibMetaRow::Command:
 				node = AppendCommandNode(group, metaObject);   // hub — nests sub-commands, skips deleted
 				break;
 			case ibMetaRow::Group:
 				// A section holds sections, so its row is a group node in its own right.
-				node = AppendGroupItem(group, def.m_clsid, metaObject);
+				node = AppendGroupItem(group, def->m_clsid, metaObject);
 				ExpandMetaItem(metaObject, node);
 				break;
 			default:
@@ -1840,11 +1859,12 @@ void ibConfigurationTree::FillData()
 	// BOTTOM-UP, because a nested group counts as a child of its owner: sweeping top-down left the
 	// jobs branch standing on the strength of a sub-branch that the same pass was about to remove.
 	if (!m_strSearch.IsEmpty()) {
-		for (auto def = std::rbegin(s_groups); def != std::rend(s_groups); ++def) {
-			const wxTreeItemId group = Group(def->m_clsid);
+		const std::vector<const ibMetaTreeGroupDef*> rows = OrderedGroups();
+		for (auto def = rows.rbegin(); def != rows.rend(); ++def) {
+			const wxTreeItemId group = Group((*def)->m_clsid);
 			if (group.IsOk() && !m_metaTreeCtrl->HasChildren(group)) {
 				m_metaTreeCtrl->Delete(group);
-				m_groups.erase(def->m_clsid);   // the entry goes with the node — no dangling id
+				m_groups.erase((*def)->m_clsid);   // the entry goes with the node — no dangling id
 			}
 		}
 	}

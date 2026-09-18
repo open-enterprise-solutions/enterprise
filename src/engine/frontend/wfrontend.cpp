@@ -1536,6 +1536,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 		{ g_metaAccountingRegisterCLSID,          "Accounting registers" },
 		{ g_metaChartOfCalculationTypesCLSID,     "Charts of calculation types" },
 		{ g_metaCalculationRegisterCLSID,         "Calculation registers" },
+		{ g_metaSequenceCLSID,                    "Sequences" },
 	};
 	for (const auto& s : specs) {
 		nlohmann::json g;

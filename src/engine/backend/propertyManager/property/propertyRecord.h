@@ -30,6 +30,9 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// Which KINDS this property offers is said once, in GetValueList, through the shared
+	// CreateValueList — a sibling below says its own and inherits everything else.
+
 protected:
 
 	// 🛑 A RELATIONSHIP IS THE SAME FACT IN FIVE WRAPPERS, AND THIS ONE KEEPS ITS OWN. Every family
@@ -49,6 +52,23 @@ protected:
 
 public:
 
+};
+
+// ⭐⭐ THE SEQUENCES A DOCUMENT REGISTERS IN — a list of its own, BESIDE the registers it posts
+// movements to and not among them (Max, 2026-09-18: "последовательности живут у себя… есть
+// последовательность, а есть движение"). Two doors, because they are two acts: a movement is what the
+// document DID, a registration is that the document STANDS in an order — and a solution turns them on
+// and off separately.
+//
+// Everything else about the two is the same, so this is the record property with ONE answer changed:
+// which kinds it offers. That answer lives in GetValueList and nowhere else.
+class BACKEND_API ibPropertySequenceRecord : public ibPropertyRecord {
+public:
+	using ibPropertyRecord::ibPropertyRecord;
+
+	// Only sequences, and only those a document can be the recorder of — the same rule the registers'
+	// list keeps, asked of the candidate rather than assumed.
+	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 };
 
 #endif

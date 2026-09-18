@@ -4236,20 +4236,38 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// resolve by name and then read half of itself — the silent kind of wrong this road has already
 	// paid for once.
 	for (const OutputColumn* oc : synthetic) {
+		// 🛑⭐⭐ AND WHAT CANNOT BE PUBLISHED SENDS THIS ROAD BACK — it is not skipped.
+		//
+		// Every line below is a case where the declaration cannot carry this output, and each one
+		// used to `continue`: the field vanished from the published set while the SELECTED FIELDS the
+		// reader was built from still named it, and the outer query then said *"unknown attribute
+		// 'PointInTime' on source 'AuthorQuery'"* — about a column the author had selected and the
+		// composition had offered them (measured 2026-09-18, a report over a sequence's border).
+		//
+		// A refusal is not a failure here: the rows road resolves the same query and reads the moment
+		// out of the columns it is made of, which it does correctly (the same query answers over the
+		// plain road). What is lost is only WHERE the folding happens — in RAM rather than on the
+		// server — and that is the trade this whole road is written to make when it cannot write SQL
+		// for something.
+		//
 		// ⚠ UNDER ITS OWN NAME ONLY. The column IS the published one, so what a reader may call it is
 		// what the column calls itself; an output that renamed it (`PointInTime AS Moment`) would be
-		// published under a name it does not answer to, which is worse than not publishing it.
+		// published under a name it does not answer to.
 		if (oc->m_col == nullptr || !oc->m_name.IsSameAs(oc->m_col->GetName(), false))
-			continue;
+			CteDecline(wxT("it renames '%s', a column read out of others — a declaration publishes such a column under its own name or not at all"),
+				oc->m_name);
 		const std::vector<wxString> parts = ColumnFieldNames(oc->m_col);
 		if (parts.empty())
-			continue;
+			CteDecline(wxT("'%s' is read out of other columns and names none of them"), oc->m_name);
+		// …AND ITS PARTS MUST BE IN THE STATEMENT, each under the name the read looks for. In a JOIN
+		// every output is written under its ALIAS (two sources may carry one physical field), so the
+		// parts are there under other names and this column cannot be read from outside.
 		const bool allWritten = std::all_of(parts.begin(), parts.end(), [&](const wxString& p) {
 			return std::any_of(writtenFields.begin(), writtenFields.end(),
 				[&](const wxString& w) { return w.IsSameAs(p, false); });
 		});
 		if (!allWritten)
-			continue;
+			CteDecline(wxT("'%s' is read out of columns this declaration writes under other names"), oc->m_name);
 		if (std::any_of(fields.begin(), fields.end(), [&](const ibCteQueryable::Field& f) {
 				return f.m_name.IsSameAs(oc->m_name, false); }))
 			continue;
@@ -4447,6 +4465,24 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			RequireAnotherReadingFits(*qi, alias, 0, 0);
 			qi = std::make_shared<const ibAliasQueryable>(qi, alias);
 		}
+		// 🛑⭐⭐ AND A TWIN IS A SOURCE THIS RUN OPENED — so the RUN owns it, not just the binding.
+		//
+		// The binding above holds it, and the binding dies with the lowering. What outlives the
+		// lowering is the output SCHEMA, which names these very columns: a description hands them to
+		// a composition, which walks them when the report is next arranged. So the twin's columns
+		// were read after their owner was gone — `m_col` came back as the debug fill (`0xdddddddd`)
+		// and the application died inside GetSourceExplorer (dumps of 2026-09-18).
+		//
+		// ⚠ WHY IT TOOK A SEQUENCE TO SHOW IT. A twin is minted only when two readings SHARE COLUMN
+		// NUMBERS — a second reading of one source, or two sources whose columns are the same
+		// metatype's. A sequence and its BORDERS are exactly that (the borders table publishes the
+		// sequence's own columns), so the first report joining them met it at once; a document joined
+		// to a catalog never does, which is why the same query shape over documents was fine.
+		//
+		// Kept in the RUN's owner, which is the list DetachSchemaFromRunSources asks to share what the
+		// schema names — one line, and the existing rule covers twins too.
+		if (qi != resolved)
+			owner.push_back(qi);
 		sources.push_back({ alias, qi.get(), qi });
 		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)

@@ -367,6 +367,9 @@
     <ClInclude Include="metaCollection\metaDiff.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaGroups.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -440,6 +443,12 @@
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\calculationRegister.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\sequence.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\sequenceManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\calculationRegisterManager.h">
@@ -1385,6 +1394,9 @@
     <ClCompile Include="metaCollection\metaDiff.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaGroups.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1599,6 +1611,27 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceBorderRules.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadataBorders.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp">
