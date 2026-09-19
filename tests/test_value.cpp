@@ -11,6 +11,7 @@
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
 
+#include <memory>
 #include <utility>   // std::move — the ValueMove cases
 
 // ===========================================================================
@@ -683,4 +684,77 @@ TEST(ValueHashContract, ArraysWithEqualContentsHashAlike) {
 
     b->Add(ibValue(99));                       // now longer -> not equal any more
     EXPECT_NE(va.CompareValueLS(vb), 0);
+}
+
+// ===========================================================================
+// ibValueRefPin — a freshly `new`ed value is held by its creator's raw pointer at reference count
+// ZERO, and the first temporary ibValue that names it frees it on the way out. A document object
+// runs user code inside its own InitializeObject, and `ThisObject.A = 0` in Filling is such a
+// temporary: the object died mid-initialisation and the next read of it crashed the application
+// (#154). The pin holds one reference for the scope and gives it back without the delete.
+// ===========================================================================
+
+// The premise, stated once: with nothing pinning it, a temporary reference to an unowned value
+// deletes the value when the temporary goes.
+TEST(ValueRefPin, UnpinnedTemporaryReference_DeletesAnUnownedValue) {
+    bool deleted = false;
+    ibValue* unowned = new ConstRefProbe(&deleted);
+    {
+        ibValue temporary(unowned);   // IncrRef 0 -> 1
+    }                                 // DecrRef 1 -> 0 -> delete
+    EXPECT_TRUE(deleted);
+}
+
+// The bug: the same temporary inside a pin leaves the value alive.
+TEST(ValueRefPin, TemporaryReferenceInsidePin_DoesNotDeleteTheValue) {
+    bool deleted = false;
+    ibValue* unowned = new ConstRefProbe(&deleted);
+    {
+        const ibValueRefPin pin(unowned);
+        {
+            ibValue temporary(unowned);
+        }
+        EXPECT_FALSE(deleted) << "the pin's reference outlives the temporary's";
+    }
+    EXPECT_FALSE(deleted) << "releasing the pin must not delete: the raw pointer's owner still has it";
+
+    delete unowned;                   // the owner's delete — count is back at zero, as before the pin
+    EXPECT_TRUE(deleted);
+}
+
+// After the pin the count is exactly what it was, so the owner's own wrap behaves as it always did:
+// the first reference it takes is the first, and dropping it frees the value.
+TEST(ValueRefPin, AfterRelease_CountIsBackToZero_SoTheOwnersWrapFreesIt) {
+    bool deleted = false;
+    ibValue* unowned = new ConstRefProbe(&deleted);
+    {
+        const ibValueRefPin pin(unowned);
+        ibValue temporary(unowned);
+    }
+    ASSERT_FALSE(deleted);
+    {
+        ibValue ownersWrap(unowned);  // 0 -> 1
+        EXPECT_FALSE(deleted);
+    }                                 // 1 -> 0 -> delete
+    EXPECT_TRUE(deleted);
+}
+
+// A reference the handler KEPT (ThisObject stored somewhere) stays: the pin returns only its own.
+TEST(ValueRefPin, ReferenceKeptInsidePin_SurvivesTheRelease) {
+    bool deleted = false;
+    ibValue* unowned = new ConstRefProbe(&deleted);
+    std::unique_ptr<ibValue> kept;
+    {
+        const ibValueRefPin pin(unowned);
+        kept.reset(new ibValue(unowned));   // a stored ThisObject
+    }
+    EXPECT_FALSE(deleted) << "the stored reference is what keeps it now";
+
+    kept.reset();                     // the last reference goes
+    EXPECT_TRUE(deleted);
+}
+
+TEST(ValueRefPin, NullValue_IsANoOp) {
+    const ibValueRefPin pin(nullptr);
+    SUCCEED();
 }

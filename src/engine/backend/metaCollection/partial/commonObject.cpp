@@ -2418,6 +2418,10 @@ ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
 
 bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 {
+	// Nothing owns this object yet (count 0, held by the caller's raw pointer) and the handlers below
+	// run user code that names it. See ibValueRefPin.
+	const ibValueRefPin selfPin(this);
+
 	if (!m_metaObject->AccessRight_Read()) {
 		ibBackendAccessException::Error(wxString::Format(_("reading '%s'"), m_metaObject->GetSynonym()));
 		return false;
@@ -2479,6 +2483,9 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 
 bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* source, bool generate)
 {
+	// Same as above: OnCopy / Filling reach for ThisObject while the object is still unowned.
+	const ibValueRefPin selfPin(this);
+
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	wxASSERT(moduleManager);
 

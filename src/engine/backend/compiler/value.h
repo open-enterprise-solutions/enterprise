@@ -949,6 +949,15 @@ public:
 		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
 
+	// ⭐ THE OTHER HALF OF A PIN (see ibValueRefPin below): give a reference back WITHOUT the
+	// delete-on-zero. DecrRef cannot do it — a value that is still owned by a raw pointer, and has
+	// not been wrapped in an ibValue yet, sits at ZERO, and the reference that brings it back to zero
+	// is exactly the one it must survive.
+	void DecrRefKeep() {
+		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
+		m_refCount.fetch_sub(1, std::memory_order_acq_rel);
+	}
+
 	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
 	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody
 	// spends the day on them again:
@@ -1780,6 +1789,37 @@ private:
 	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only
 	// touch the payload.
 	std::atomic<unsigned int> m_refCount;
+};
+
+// ⭐⭐ A NEW OBJECT IS NOT OWNED BY ANYTHING YET — SO ANYTHING THAT TOUCHES IT CAN DELETE IT.
+//
+// `new ibValueRecordDataObjectRef(...)` starts at reference count ZERO and its creator holds it by a
+// raw pointer, wrapping it into an ibValue only after the constructor-time work (InitializeObject)
+// returns. Inside that work the object runs user code, and user code that names it — `ThisObject.A`
+// loads the context variable into a temporary ibValue, which IncrRefs it, and its destructor DecrRefs
+// it back to zero — frees the object in the middle of its own initialisation. What follows (the
+// InvalidateNames at the end of InitializeObject, then the caller's wrap) is a read of freed memory.
+// A handler that wrote to an attribute WITHOUT naming ThisObject never touched the count, which is
+// why only some documents crashed (#154).
+//
+// The pin holds one reference for the scope and gives it back with DecrRefKeep, so the count is
+// exactly what it was before — zero, the raw pointer's owner — and no temporary in between can
+// bring it there first. If something inside kept a reference (stored ThisObject somewhere), that
+// reference is what remains, and it is right to remain.
+class ibValueRefPin {
+public:
+	explicit ibValueRefPin(ibValue* value) : m_value(value) {
+		if (m_value != nullptr) m_value->IncrRef();
+	}
+	~ibValueRefPin() {
+		if (m_value != nullptr) m_value->DecrRefKeep();
+	}
+
+	ibValueRefPin(const ibValueRefPin&) = delete;
+	ibValueRefPin& operator=(const ibValueRefPin&) = delete;
+
+private:
+	ibValue* m_value;
 };
 
 // ---------------------------------------------------------------------------
