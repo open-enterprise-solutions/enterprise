@@ -15,6 +15,7 @@
 
 #include "debugClientBridge.h"
 #include "backend/session/sessionHolder.h"   // ibSessionWatch — whose worker a reply goes to, watched
+#include "socketLock.h"   // ibSocketLock — two threads closing one socket
 
 class BACKEND_API ibDebuggerClient {
 
@@ -138,6 +139,10 @@ class BACKEND_API ibDebuggerClient {
 		}
 
 		bool IsConnected() const {
+			// The pointer and the socket behind it are read in ONE step: the connection's own thread
+			// destroys the socket on its way out, and a check that ran before that with a call that ran
+			// after it was a use of freed memory (see ibSocketLock).
+			const auto hold = m_socketLock.Hold();
 			if (m_socketClient == nullptr)
 				return false;
 			if (!m_socketClient->IsConnected())
@@ -193,8 +198,7 @@ class BACKEND_API ibDebuggerClient {
 			if (debugClient != nullptr)
 				debugClient->DeleteConnection(this);
 
-			if (m_socketClient != nullptr)
-				m_socketClient->Destroy();
+			m_socketLock.Destroy(m_socketClient);
 		}
 
 		// entry point for the thread - called by Run() and executes in the context
@@ -228,6 +232,10 @@ class BACKEND_API ibDebuggerClient {
 		unsigned short	m_port;
 
 		wxSocketClient* m_socketClient;
+
+		// Every Close / Destroy / assignment of m_socketClient goes through this: the designer's main
+		// thread ends a session while this connection's own thread closes the same socket.
+		mutable ibSocketLock m_socketLock;
 
 		wxString		m_confGuid;
 		wxString		m_md5Hash;
