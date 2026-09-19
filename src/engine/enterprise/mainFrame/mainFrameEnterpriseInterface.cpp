@@ -112,6 +112,10 @@ class ibSubSystemWindow : public wxWindow {
 
 		virtual wxWindow* GetMainWindowOfCompositeControl() override { return m_mainWindow; }
 
+		// The section is shown by its own painting (bold, lighter fill when open). A click gave the button
+		// the focus, and macOS drew its blue focus ring around the button on top of that.
+		bool AcceptsFocus() const override { return false; }
+
 	protected:
 
 		void OnLeftUp(wxMouseEvent& event) {
