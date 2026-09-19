@@ -108,12 +108,13 @@ class ibSubSystemWindow : public wxWindow {
 
 			SetCursor(wxCURSOR_HAND);
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
+			EnableVisibleFocus(false);   // AcceptsFocus() alone does not stop the native view drawing its ring
 		}
 
 		virtual wxWindow* GetMainWindowOfCompositeControl() override { return m_mainWindow; }
 
-		// The section is shown by its own painting (bold, lighter fill when open). A click gave the button
-		// the focus, and macOS drew its blue focus ring around the button on top of that.
+		// The section is shown by its own painting (bold, lighter fill when open); a focus ring on top of
+		// that is macOS drawing the blue ring around a button that was clicked.
 		bool AcceptsFocus() const override { return false; }
 
 	protected:
@@ -437,6 +438,7 @@ class ibSubSystemWindow : public wxWindow {
 
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
 			SetForegroundColour(wxDefaultStypeFGColour);
+			EnableVisibleFocus(false);
 
 			// The caption is four points larger than the system's normal text: it is what a person came to
 			// read, and it sits under a heading that is bold.
