@@ -46,6 +46,12 @@
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 
+#include "backend/clsid.h"                                   // reference_to_clsid — a reference column's type
+#include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
+#include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
+#include "backend/query/dbTableProvider.h"                   // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
+#include "backend/databaseLayer/databaseQueryBuilder.h"      // ibQueryRenderer — the SQL a set becomes
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 
 namespace {
@@ -508,4 +514,125 @@ TEST_F(ComputedServerFix, In_MetadataColumnEmptySetReturnsNoRows)
 	int rows = 0;
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 0) << "an empty OR-fold must not degrade to 'no predicate' (the whole table)";
+}
+
+// =============================================================================
+// A SET OF REFERENCES (DecomposeIn, through the door that writes every WHERE).
+//
+// A reference is three fields — its type tag, its table, its id — and a list of items of ONE catalog spells
+// the first two alike. Said pair by pair, a hundred items were a hundred `(tag = ? AND table = ? AND id = ?)`
+// branches weighed one at a time against every row, folded as a chain as deep as the list is long (which the
+// renderer walks recursively: some 155 references ran a checked build out of stack). No database is needed:
+// a catalog in a configuration in memory is enough to mint references of it.
+// =============================================================================
+namespace {
+
+class MetaPhysicalQ : public PhysicalQ {
+public:
+	MetaPhysicalQ(const wxString& table, ibMetaID id, const ibMetaData* metaData) : PhysicalQ(table, id), m_metaData(metaData) {}
+	const ibMetaData* GetMetaData() const override { return m_metaData; }
+private:
+	const ibMetaData* m_metaData;
+};
+
+struct ReferenceSetFix {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObject* items = nullptr;
+	ibValueMetaObject* units = nullptr;
+
+	ReferenceSetFix() {
+		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		if (root == nullptr) return;
+		items = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+		units = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+	}
+	bool Ready() const { return items != nullptr && units != nullptr; }
+
+	ibValue RefTo(const ibValueMetaObject* catalog) const {
+		return ibValue(ibValueReferenceDataObject::Create(&cfg, catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
+	}
+	// `column IN (values)` over a table of this configuration, as the SQL the door writes for it.
+	wxString SqlOfSet(const ibBackendQueryColumn* column, ibMetaID tableId, const std::vector<ibValue>& values) const {
+		MetaPhysicalQ table(wxT("T"), tableId, &cfg);
+		table.AddCol(column);
+		ibQueryCondition set;
+		set.m_col    = column;
+		set.m_op     = ibQueryFilterOp::In;
+		set.m_values = values;
+		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(&table, ibQueryPredicate::Leaf(set));
+		if (!predicate) return wxString();
+		ibDatabaseQueryBuilder q;
+		q.From(wxT("T")).Where(predicate);
+		return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(q.Build()).m_sql;
+	}
+	static int CountOf(const wxString& haystack, const wxString& needle) {
+		int n = 0;
+		for (size_t at = 0; (at = haystack.find(needle, at)) != wxString::npos; at += needle.length()) ++n;
+		return n;
+	}
+};
+
+} // namespace
+
+TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	const std::vector<wxString> fields = ColumnFieldNames(&item);
+	ASSERT_EQ(fields.size(), 3u) << "a single-target reference is expected to spread as _TYPE + _RTRef + _RRRef";
+
+	std::vector<ibValue> values;
+	for (int i = 0; i < 100; ++i)
+		values.push_back(f.RefTo(f.items));
+
+	const wxString sql = f.SqlOfSet(&item, 343, values);
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 1) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 0) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, fields[0] + wxT(" = ")), 1) << "the type tag, once";
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, fields[1] + wxT(" = ")), 1) << "the table, once";
+	EXPECT_TRUE(sql.Contains(fields[2] + wxT(" IN (")));
+}
+
+// References of TWO tables do not agree on the table, so nothing may be said once: pair by pair, as before —
+// and folded as a balanced tree, which a renderer can walk whatever the size of the set.
+TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID()));
+	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID()));
+	TypedCol subject(wxT("subject"), 341, both);
+
+	std::vector<ibValue> values;
+	for (int i = 0; i < 1000; ++i)
+		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
+
+	const wxString sql = f.SqlOfSet(&subject, 344, values);   // a chain a thousand deep is what this must survive
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << "two tables share no tag to say once";
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 999);
+}
+
+// 🛑 AN EMPTY REFERENCE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. "Not filled" is the zero-guid
+// sentinel OR SQL NULL in a row, and only the equality road says both (DecomposeEquality); inside the engine's
+// IN the empty value would match the sentinel alone, and the rows stored as NULL would silently stop being found.
+TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	const std::vector<ibValue> values{ f.RefTo(f.items), f.RefTo(f.items), ibValue(), f.RefTo(f.items) };
+
+	const wxString sql = f.SqlOfSet(&item, 345, values);
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 1) << sql;
 }

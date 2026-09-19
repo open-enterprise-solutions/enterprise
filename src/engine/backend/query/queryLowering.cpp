@@ -1851,11 +1851,43 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			}
 		}
 
-		ibQueryPredicatePtr acc;
-		for (const ibValue& v : values) {
-			ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(CondEq(cols, v));
-			acc = acc ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, acc, eq) : eq;
+		// 🛑 FOLDED AS A BALANCED TREE, NOT AS A CHAIN. `acc = Or(acc, eq)` builds a tree as DEEP as the
+		// list is long, and everything downstream walks a predicate recursively — the lowering, the
+		// renderer, the RAM evaluator, the destructor. A list of some 155 references ran a checked build
+		// out of stack: `WHERE Ref IN (&Items)` with an array of 300 took the client down with 0xc0000005
+		// and no dump (measured 2026-09-19, reproducible on an empty catalog). Halving keeps the depth at
+		// log2(N), so a list of a thousand is ten levels. OR is associative: the rows selected are the same.
+		// ⭐ A PLAIN LIST OVER ONE COLUMN TRAVELS AS ONE SET-VALUED LEAF — the `In` the door already has
+		// (WhereIn, the semi-join reduction), which both providers render: the database as the engine's
+		// own IN wherever the values allow it (DecomposeIn), RAM as membership. A hundred references
+		// spelled as a hundred `(tag = ? AND table = ? AND id = ?)` branches were weighed one branch at a
+		// time against every row (measured 2026-09-19: a balance of 100 items 0.4 s, of all 500 — 0.1 s).
+		// ⚠ Only where nothing else rides on the leaf: no walk through a reference, at least two values,
+		// none of them NULL (`IN (…, NULL)` is the classic trap, and m_values must never carry one).
+		if (cols.size() == 1 && values.size() > 1
+		    && std::none_of(values.begin(), values.end(), [](const ibValue& v) { return v.IsNull(); })) {
+			ibQueryCondition set;
+			set.m_col    = cols.back();
+			set.m_op     = ibQueryFilterOp::In;
+			set.m_values = values;
+			ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(set);
+			return e.m_negated ? ibQueryPredicate::Not(leaf) : leaf;
 		}
+
+		std::vector<ibQueryPredicatePtr> level;
+		level.reserve(values.size());
+		for (const ibValue& v : values)
+			level.push_back(ibQueryPredicate::Leaf(CondEq(cols, v)));
+		while (level.size() > 1) {
+			std::vector<ibQueryPredicatePtr> next;
+			next.reserve((level.size() + 1) / 2);
+			for (size_t i = 0; i < level.size(); i += 2)
+				next.push_back(i + 1 < level.size()
+					? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, level[i], level[i + 1])
+					: level[i]);
+			level.swap(next);
+		}
+		ibQueryPredicatePtr acc = level.empty() ? nullptr : level.front();
 		if (!acc) {
 			// Empty IN ( ) — matches NOTHING. Encode as a contradiction (col IS NULL AND col IS NOT NULL);
 			// NOT IN of an empty set then matches everything (the outer Not below).

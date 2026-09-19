@@ -36,6 +36,7 @@
 #include <functional>   // std::function — the recursive dot-walk predicate-tree lowering in BuildPageIR
 #include <memory>       // CastLeaf — the narrowed fields, made once
 #include <mutex>        // …and made under a lock: queries run on several threads
+#include <cstring>      // memcmp — two references agree on their table, byte for byte (DecomposeIn)
 
 // ==========================================================================
 // Name-substitution primitives (ibMetaIRBuilder) — query-native conditions /
@@ -449,11 +450,62 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 			|| layout[1].m_role == ibColumnRole::Date || layout[1].m_role == ibColumnRole::String);
 	const bool oneKind = std::all_of(values.begin(), values.end(),
 		[&values](const ibValue& v) { return v.GetType() == values.front().GetType(); });
+	// ⭐ REFERENCES OF ONE TABLE ARE THE SAME CASE ONE FIELD WIDER. A reference is its type tag, its table
+	// and its id; a list of items of one catalog spells the first two alike, so they are said once and
+	// the ids go into the engine's IN. (Anything the values do not agree on — two catalogs in one list, an
+	// empty reference among them — falls through to the pairwise road below, as before.)
+	// 🛑 AN EMPTY VALUE NEVER TAKES THIS ROAD. "Not filled" is spelled three ways in a row (DecomposeEquality:
+	// the zero-guid sentinel, SQL NULL, an untagged value) and only the pairwise road below says all of
+	// them; an EmptyRef in the engine's IN would match the sentinel alone and silently lose the rest.
+	const bool anyEmpty = std::any_of(values.begin(), values.end(), [](const ibValue& v) { return v.IsEmpty(); });
+	if (!primitive && !anyEmpty && !IsComputedColumn(col) && fields.size() >= 2 && values.size() > 1) {
+		std::vector<ibQueryExprPtr> leading, ids;
+		bool agree = true;
+		for (const ibValue& v : values) {
+			ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+			int position = 1;
+			BindWriteValue(capture, col, metaData, v, position);
+			const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+			if (consts.size() != fields.size()) { agree = false; break; }
+			if (leading.empty())
+				leading.assign(consts.begin(), consts.end() - 1);
+			for (size_t i = 0; agree && i + 1 < consts.size(); ++i) {
+				const ibQueryExprPtr& a = leading[i];
+				const ibQueryExprPtr& b = consts[i];
+				agree = a && b && a->m_kind == ibQueryExprKind::Const && b->m_kind == ibQueryExprKind::Const
+					&& a->m_blob.GetDataLen() == b->m_blob.GetDataLen()
+					&& (a->m_blob.GetDataLen() == 0
+						? (a->m_const.GetType() == b->m_const.GetType() && a->m_const.CompareValueEQ(b->m_const))
+						: memcmp(a->m_blob.GetData(), b->m_blob.GetData(), a->m_blob.GetDataLen()) == 0);
+			}
+			if (!agree || !consts.back()) { agree = false; break; }
+			ids.push_back(consts.back());
+		}
+		if (agree) {
+			ibQueryExprPtr pred;
+			for (size_t i = 0; i < leading.size(); ++i)
+				pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), leading[i]));
+			return AndFold(pred, ibIn(ibColQ(mainQual, fields.back()), std::move(ids)));
+		}
+	}
+
 	if (!primitive || !oneKind) {
-		ibQueryExprPtr pred;
+		// Halved rather than chained: `pred = OrFold(pred, …)` is a tree as deep as the set is large,
+		// and the renderer walks it recursively (see the IN lowering in queryLowering.cpp, where the
+		// same chain took a client down at some 155 references).
+		std::vector<ibQueryExprPtr> level;
+		level.reserve(values.size());
 		for (const ibValue& v : values)
-			pred = OrFold(pred, DecomposeEquality(col, metaData, v, mainQual));
-		return pred;
+			if (ibQueryExprPtr one = DecomposeEquality(col, metaData, v, mainQual))
+				level.push_back(one);
+		while (level.size() > 1) {
+			std::vector<ibQueryExprPtr> next;
+			next.reserve((level.size() + 1) / 2);
+			for (size_t i = 0; i < level.size(); i += 2)
+				next.push_back(i + 1 < level.size() ? OrFold(level[i], level[i + 1]) : level[i]);
+			level.swap(next);
+		}
+		return level.empty() ? nullptr : level.front();
 	}
 
 	ibQueryExprPtr tag;
