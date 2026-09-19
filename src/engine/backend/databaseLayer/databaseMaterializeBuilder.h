@@ -84,6 +84,38 @@ struct ibMaterializeView
 	bool     m_dropZeroRows = false;   // HAVING <any column> <> 0 — "no value means no row"
 	std::vector<ibMaterializeViewColumn> m_columns;
 
+	// ⭐⭐ THE ROWS AS THEY STAND — for a reader that folds them anyway.
+	//
+	// The ordinary view is dressed for whoever reads it directly: every coarser calendar unit is
+	// projected as a column of its own, and the shards of a split total are summed back into one row.
+	// Both are paid per ROW, on every read, whether or not the reader wanted either — and a balance
+	// wants neither: it sums everything up to a moment and groups by the key itself, so the units are
+	// never named and the shard fold is done a second time one level up. Measured 2026-09-19 (Firebird,
+	// 193 000 stored rows): one warehouse's balances through the dressed view 1.35 s, through the same
+	// union without the six unit columns 0.35 s — and the shard fold is a GROUP BY the engine will not
+	// push a condition beneath, so with it no index on the dimensions can be used at all.
+	//
+	// Set, the view is the period as stored, the key, the figures — nothing computed per row and
+	// nothing grouped. ⚠ Only for a reading that AGGREGATES: with split totals it yields one row per
+	// shard, which is a wrong answer to anyone who reads it as one row per key.
+	bool m_rawRows = false;
+
+	// AN EXTRA CONDITION ON THE MOVEMENT ARM ALONE (`{row}` = the source table), ANDed to the guard.
+	//
+	// For the one thing a reader cannot say from outside: a column the view does not publish. The
+	// movements' period index opens with the period's TYPE tag, the view publishes only its value, so
+	// a reader's `period >= <floor>` could never ride that index and every sub-day reading walked
+	// every movement there is (measured 2026-09-19: 0.2 s of a 0.26 s balance, against ~0 with the
+	// tag named). ⚠ It must not change what the arm MEANS — only a condition every row the readers
+	// can accept already satisfies belongs here.
+	wxString m_movementWhere;
+
+	// THE MOVEMENT ARM ALONE — no stored rows at all. The other half of a view declared WITHOUT
+	// m_withMovements: a reading that cuts between the two (ibMaterializeReadSpec::m_viewMoved) then
+	// asks each half of its own relation, and the engine never has to discover, row source by row
+	// source, that the half it was sent to holds nothing for this question.
+	bool m_movementsOnly = false;
+
 	// ⭐⭐ THE SECOND ARM — the rows the stored table does not carry YET.
 	//
 	// A maintained total is complete only up to the grain it is stored at: everything that happened
@@ -279,6 +311,9 @@ enum class ibMaterializeGrain
 struct ibMaterializeReadSpec
 {
 	wxString m_view;                       // the relation to read — a view, or the totals table
+	// WHERE THE MOVEMENT HALF OF A CUT IS READ, when the surface keeps it apart (ibMaterializeView::
+	// m_movementsOnly). Empty = both halves live in m_view, as they always did.
+	wxString m_viewMoved;
 	wxString m_periodColumn;               // empty = this surface carries no period
 
 	// The grain, and the unit it means when Calendar. A periodised read groups by the period

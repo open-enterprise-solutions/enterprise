@@ -138,6 +138,26 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// column and the match still runs over the key columns themselves.
 	ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
 
+	// ⭐⭐ AND AN INDEX A READING CAN RIDE — the dimensions FIRST, the period after them.
+	//
+	// The key above opens with the period, which is right for what it is for: the upsert names every
+	// column of it. A READING names the other end — "the balance of THIS warehouse, of THESE items, up
+	// to a moment" is equalities on the dimensions and a range on the period — and an index that opens
+	// with the period cannot serve it: every balance of one warehouse walked the totals of all of them,
+	// through the whole history, on every posting (measured 2026-09-19 on three months of a
+	// ten-warehouse base: 0.15 s for one warehouse's balances straight off this table, 0.06 s with this
+	// index — and with it the cost stops growing with the NUMBER of warehouses at all).
+	//
+	// As many leading columns as the engine's index will hold (ibDeclareLookupIndex), in the order the
+	// dimensions are declared — which is the order their author reads them in, most general first.
+	{
+		std::vector<const ibBackendQueryColumn*> readCols;
+		for (const auto dimension : GetDimensionArrayObject())
+			readCols.push_back(dimension->GetQueryColumn());
+		readCols.push_back(periodCol);
+		ibDeclareLookupIndex(t, totalsName + wxT("_DL"), readCols);
+	}
+
 	ibSchemaMaterialize& m = t.Derived(GetQueryable());
 	m.Split(sharded ? kTotalsShardCount : 1u);   // the COLUMN decides, not the setting -- see ibRegSplitIntoKey
 
@@ -296,8 +316,40 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 
 	// --- the read views, composed from L2-2 primitives ------------------------------------------
 	// TURNOVERS — per period: what came in, what went out, and the net.
-	{
-		ibMaterializeView& v = m.View(GetTurnoverViewName(), /*withPeriod*/ true);
+	//
+	// ⭐ DECLARED TWICE, ONCE DRESSED AND ONCE AS THE ROWS STAND. The first is the relation a query reads
+	// directly — every coarser calendar unit projected, the shards of a split total folded back. The
+	// second (`_Flow`, ibMaterializeView::m_rawRows) is the same two arms with none of that, for the
+	// reading that folds everything itself: a BALANCE. Through the dressed view every balance paid for
+	// six date truncations on every stored row and, with split totals, for a GROUP BY the engine cannot
+	// push a condition under — so "this warehouse" was decided after the whole register had been summed.
+	//
+	// …and the rows as they stand are kept as TWO relations, the stored half and the movement half: a
+	// reading that cuts between them asks each of its own (ibMaterializeReadSpec::m_viewMoved), instead
+	// of sending both questions to a union and leaving the engine to find out which half answers.
+	const bool hasMovementArm = HasMovementArm();
+	enum { Dressed, FlowStored, FlowMoved, SurfaceCount };
+	for (int surface = Dressed; surface < SurfaceCount; ++surface) {
+		if (surface == FlowMoved && !hasMovementArm)
+			continue;   // no movements to keep apart — the stored half is the whole of it
+		const bool rawRows = (surface != Dressed);
+		ibMaterializeView& v = m.View(surface == Dressed ? GetTurnoverViewName()
+			: surface == FlowStored ? GetFlowViewName() : GetFlowMovedViewName(), /*withPeriod*/ true);
+		v.m_rawRows = rawRows;
+		v.m_movementsOnly = (surface == FlowMoved);
+
+		// The balance reads this arm only ABOVE a floor — `period >= <start of the grain>` — and the
+		// movements' period index opens with the period's TYPE tag, which the view does not publish.
+		// Naming the tag here is what lets that floor ride the index instead of walking every movement.
+		// It removes nothing a balance could count: a period that is not a date passes no floor.
+		if (surface == FlowMoved) {
+			for (const ibColumnSlot& slot : DescribeColumnLayout(GetRegisterPeriod()->GetQueryColumn()))
+				if (slot.m_role == ibColumnRole::Discriminator) {
+					v.m_movementWhere = wxString::Format(wxT("{row}.%s = %i"), slot.m_name,
+						ibPersistedTypeTag(ibColumnRole::Date));
+					break;
+				}
+		}
 
 		// ⭐⭐ THE SECOND ARM: THIS VIEW ALSO CARRIES THE MOVEMENTS.
 		//
@@ -316,8 +368,10 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// The recorder and the line number ride along because they are what makes a row's own
 		// identity readable — and what a boundary INSIDE one instant compares against, when three
 		// documents share a date and have to be told apart.
-		if (HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
-			v.m_withMovements = true;
+		if (hasMovementArm) {
+			// The dressed view carries both halves; of the other two each is one half, and the stored one
+			// still PUBLISHES these columns (as typed nulls) so the two can be read through one column list.
+			v.m_withMovements = (surface == Dressed);
 			// Name AND type — the stored arm stands a CAST null in their place (see the accounting
 			// register's twin of this block, and ibMaterializeView::m_movementColumns).
 			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()->GetQueryColumn()))

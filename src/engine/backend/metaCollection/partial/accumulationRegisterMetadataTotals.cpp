@@ -875,7 +875,12 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 	const ibRegBound bound = ibReadRegisterBound(m_period);
 
 	ibMaterializeReadSpec r;
-	r.m_view          = m_reg->GetTurnoverViewName();
+	// The rows as they stand (`_Flow`): this read sums everything up to a moment and groups by the key,
+	// so the dressed view's calendar units are never named and its shard fold is repeated right here —
+	// while costing every read a pass over the whole table (accumulationRegisterMetadataSchema.cpp).
+	r.m_view          = m_reg->GetFlowViewName();
+	if (m_reg->HasMovementArm())
+		r.m_viewMoved = m_reg->GetFlowMovedViewName();
 	r.m_periodColumn  = ibRegValueField(m_reg->GetRegisterPeriod());
 	r.m_to            = bound.m_date;
 	r.m_keyColumns    = ReadKeys(m_reg);
@@ -911,7 +916,12 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	// so does the accounting register's own turnover reading. This is the third of three, saying it
 	// the same way.
 	ibMaterializeReadSpec r;
-	r.m_view         = m_reg->GetTurnoverViewName();
+	// The rows as they stand, the two halves apart (see ibBalanceQueryable above): this reading sums and
+	// groups by the key — and by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed
+	// view computes per row is ever named here.
+	r.m_view         = m_reg->GetFlowViewName();
+	if (m_reg->HasMovementArm())
+		r.m_viewMoved = m_reg->GetFlowMovedViewName();
 	// ⭐⭐ A REVERSAL LEAVES NOTHING TO REPORT. `+10` then `-10` on the same key folds every figure to
 	// zero, and a row of zeros is not a turnover — it is a movement that undid itself. The figure IS
 	// affected (that is what a reversal is for); what a reader must not get is a line claiming
@@ -983,7 +993,12 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	// conditions over the same scan — which is why an UNPERIODISED reading needs no join and no
 	// window, and why a register with an opening balance but no movements still reports.
 	ibMaterializeReadSpec r;
-	r.m_view         = m_reg->GetTurnoverViewName();
+	// The rows as they stand, the two halves apart (see ibBalanceQueryable above): this reading sums and
+	// groups by the key — and by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed
+	// view computes per row is ever named here.
+	r.m_view         = m_reg->GetFlowViewName();
+	if (m_reg->HasMovementArm())
+		r.m_viewMoved = m_reg->GetFlowMovedViewName();
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
 	r.m_from         = ibReadRegisterBound(m_begin).m_date;
 	r.m_to           = ibReadRegisterBound(m_end).m_date;

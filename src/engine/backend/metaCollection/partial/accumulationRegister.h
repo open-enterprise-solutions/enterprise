@@ -257,6 +257,14 @@ public:
 	// are what a queryable points at, so they are API the moment a configuration is applied.
 	wxString GetBalanceViewName() const            { return GetPhysicalTableName() + wxT("_Balance"); }
 	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
+	// The same two arms with nothing computed per row and nothing grouped (ibMaterializeView::m_rawRows) —
+	// what a BALANCE reads, since it folds everything up to a moment and names no calendar unit.
+	wxString GetFlowViewName() const               { return GetPhysicalTableName() + wxT("_Flow"); }
+	// …and its movement half, kept apart so a reading that cuts between the two asks each of its own.
+	wxString GetFlowMovedViewName() const          { return GetPhysicalTableName() + wxT("_FlowMoved"); }
+	// Whether there IS a movement half: asked once, by the schema that declares `_FlowMoved` and by every
+	// reading that names it — a reading that named a view the schema did not declare fails at the first query.
+	bool HasMovementArm() const { return HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr; }
 	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
 
 	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
