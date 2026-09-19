@@ -712,8 +712,12 @@ class ibSubSystemWindow : public wxWindow {
 					dynamic_cast<ibBackendCommandItem*>(activeMetaData->FindAnyObjectByFilter(event.GetId()));
 
 				if (cmdItem != nullptr &&
-					cmdItem->Execute(GetCommandType(section)))
-					event.Skip();
+					cmdItem->Execute(GetCommandType(section))) {
+					// A click inside wxPopupTransientWindow doesn't dismiss it on
+					// every platform. Close it explicitly once the command has
+					// successfully opened its form.
+					m_popupWindow->Dismiss();
+				}
 			}
 
 			ibPopupSubWindow* m_popupWindow;
