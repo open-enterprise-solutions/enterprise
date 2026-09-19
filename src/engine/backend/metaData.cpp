@@ -751,6 +751,46 @@ bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const wxString&
 	return true;
 }
 
+bool ibMetaData::MoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* sibling, bool before, bool* changed)
+{
+	if (changed != nullptr)
+		*changed = false;
+
+	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door
+		return false;
+
+	if (object == nullptr || sibling == nullptr || object == sibling)
+		return false;
+
+	ibValueMetaObject* const parent = object->GetParent();
+	if (parent == nullptr || parent != sibling->GetParent())
+		return false;
+
+	const unsigned int from    = parent->GetChildPosition(object);
+	const unsigned int beside  = parent->GetChildPosition(sibling);
+	if (from >= parent->GetChildCount() || beside >= parent->GetChildCount())
+		return false;
+
+	// ChangeChildPosition takes the index the object should END UP at: it takes the object out first
+	// and puts it back there. Taking it out moves every later sibling one place up, so a sibling that
+	// stood AFTER the object is one place earlier by the time the object is put back.
+	const unsigned int at = before
+		? (from < beside ? beside - 1 : beside)
+		: (from < beside ? beside     : beside + 1);
+
+	if (at == from)
+		return true;   // it already stands there — nothing moved, so nothing is said
+
+	if (!parent->ChangeChildPosition(object, at))
+		return false;
+
+	if (changed != nullptr)
+		*changed = true;
+
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Moved, object);
+	return true;
+}
+
 bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* parent)
 {
 	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door

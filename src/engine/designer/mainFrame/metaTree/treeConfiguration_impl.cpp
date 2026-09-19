@@ -344,6 +344,14 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 		FillData();
 		return;
 
+	// A CHILD CHANGED ITS PLACE — the same objects in another order, so no pointer the tree holds went
+	// stale and nothing has to close. The rows are read again from the metadata, which is where the
+	// order lives.
+	case ibMetaDataNotifier::ibMetaStage::Moved:
+		ClearTree();
+		FillData();
+		return;
+
 	// GOING, ALL OF IT. The editors opened over this metadata close — once, here, instead of once
 	// per object inside every OnAfterCloseMetaObject on the way out. The rows are not touched: the
 	// tree is either about to be given another metadata (which refills it) or about to die.

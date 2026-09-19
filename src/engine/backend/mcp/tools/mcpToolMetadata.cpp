@@ -192,6 +192,22 @@ const ibArg& ArgId()
 	return s_a;
 }
 
+const ibArg& ArgMoveBefore()
+{
+	static const ibArg s_a(wxT("before"), ibArg::Kind::Whole,
+		ibMcpText("The NodeId of the SIBLING to put the object in FRONT of - an object under the same "
+			  "parent. Give this or `after`, not both."));
+	return s_a;
+}
+
+const ibArg& ArgMoveAfter()
+{
+	static const ibArg s_a(wxT("after"), ibArg::Kind::Whole,
+		ibMcpText("The NodeId of the SIBLING to put the object BEHIND - an object under the same "
+			  "parent. Give this or `before`, not both."));
+	return s_a;
+}
+
 const ibArg& ArgParentId()
 {
 	// One spelling for the whole surface: every other multi-word argument here is camelCase
@@ -1586,6 +1602,116 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolMetadataDelete);
+
+//---------------------------------------------------------------------------
+// metadata_move — the order of an object among its siblings
+//---------------------------------------------------------------------------
+
+class ibMcpToolMetadataMove : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("metadata_move"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("moving '%s'"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Change the place of an object among its siblings - the order of the sections in "
+			"the navigation panel, of the forms under an object, of what the tree shows. Say where with "
+			"`before` or `after`: the NodeId of a sibling to put it in front of or behind (both must sit "
+			"under the same parent). To arrange a whole list, put each object after the one before it. "
+			"Answers with `order`, the siblings of the same kind as they now stand. The order is part of "
+			"what config_save keeps and config_apply hands to the running application.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgMoveBefore(), ArgMoveAfter() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibMetaData* metaData = OpenConfiguration(refusal);
+		if (metaData == nullptr)
+			return false;
+
+		const s32 asked = (s32)ArgId().Whole(params);
+		if (asked <= 0) {
+			refusal = ibMcpText("Pass the object's NodeId.");
+			return false;
+		}
+
+		const bool hasBefore = params.FindField(ArgMoveBefore().Name()) != nullptr;
+		const bool hasAfter  = params.FindField(ArgMoveAfter().Name()) != nullptr;
+		if (hasBefore == hasAfter) {
+			refusal = ibMcpText("Say where with exactly one of `before` and `after` - the NodeId of the "
+				"sibling to stand in front of or behind. Nothing was moved.");
+			return false;
+		}
+
+		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked);
+		if (object == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("Nothing in this configuration has id %i."), (int)asked);
+			return false;
+		}
+
+		const s32 besideId = hasBefore ? (s32)ArgMoveBefore().Whole(params) : (s32)ArgMoveAfter().Whole(params);
+		ibValueMetaObject* sibling = besideId > 0 ? ibFindMetaObjectById(metaData, (ibMetaID)besideId) : nullptr;
+		if (sibling == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("Nothing in this configuration has id %i to stand next to."), (int)besideId);
+			return false;
+		}
+
+		if (object == sibling) {
+			refusal = ibMcpText("An object cannot be placed next to itself. Nothing was moved.");
+			return false;
+		}
+
+		ibValueMetaObject* const parent = object->GetParent();
+		if (parent == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is the root of the configuration and has no siblings."), object->GetName());
+			return false;
+		}
+
+		if (sibling->GetParent() != parent) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' and '%s' are not siblings - they sit under different parents, and this "
+					  "verb only changes the order under one. Nothing was moved."),
+				object->GetName(), sibling->GetName());
+			return false;
+		}
+
+		bool changed = false;
+		if (!metaData->MoveMetaObject(object, sibling, hasBefore, &changed)) {
+			refusal = ibMcpText("The configuration refused the move - it is read-only. Nothing was moved.");
+			return false;
+		}
+
+		result.SetValue(wxT("name"), object->GetName());
+		result.AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+		result.AddField(wxT("moved"), ibDataValue::Bool(changed));
+
+		// WHAT THE ORDER IS NOW, of the objects of the same kind - the answer to "did that put it where
+		// I meant", without a second call to read the tree.
+		std::vector<ibDataValue> order;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			const ibValueMetaObject* child = parent->GetChild(idx);
+			if (child->GetClassType() == object->GetClassType() && !child->IsDeleted())
+				order.push_back(ibDataValue::String(child->GetName()));
+		}
+		result.AddField(wxT("order"), ibDataValue::Array(order));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolMetadataMove);
 
 //===========================================================================
 // The WRITING half — folded in from mcpToolEdit.cpp on 2026-09-01.

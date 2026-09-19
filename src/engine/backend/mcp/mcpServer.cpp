@@ -729,6 +729,7 @@ private:
 		case ibMetaStage::Created:  return _("created");
 		case ibMetaStage::Renamed:  return _("renamed");
 		case ibMetaStage::Removed:  return _("removed");
+		case ibMetaStage::Moved:    return _("moved");
 		case ibMetaStage::Loaded:   return _("loaded");
 		case ibMetaStage::Run:      return _("running");
 		case ibMetaStage::Saved:    return _("saved");
