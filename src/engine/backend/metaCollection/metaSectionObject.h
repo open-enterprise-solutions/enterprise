@@ -69,6 +69,17 @@ public:
 	bool GetInterfaceItemArrayObject(ibInterfaceCommandSection page,
 		std::vector<ibValueMetaObject*>& array) const;
 
+	// ⭐ EVERYTHING THE SECTION SHOWS, ONCE EACH — its Default, Create, Report and Service items in that
+	// order, an object listed the first time it appears.
+	//
+	// 🛑 THE FOUR AREAS ARE NOT FOUR DISJOINT LISTS. A catalog is "combined" — it is both a list and a
+	// create — and GetInterfaceItemArrayObject answers it for BOTH Default and Create (see there). A page
+	// that asks the four areas one after another into one array therefore holds every catalog TWICE: the
+	// section page of the running application drew each of them twice, under one heading, both leading to
+	// the same list. First appearance wins, so a combined object is the list entry and not a second
+	// "create" that opens the list again.
+	std::vector<ibValueMetaObject*> GetInterfaceItemsOfAllAreas() const;
+
 #pragma region __filter_h__
 
 	//interface
