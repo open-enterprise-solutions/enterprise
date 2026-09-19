@@ -39,6 +39,7 @@ public:
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual bool IsFamily() const override { return true; }
 
 	// EMPTY PASSES (class id 0), as everywhere: a declaration says what a value
 	// IS when there is one, not that there is one.

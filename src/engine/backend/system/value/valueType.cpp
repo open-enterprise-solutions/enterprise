@@ -59,6 +59,13 @@ wxString ibValueTypeDescription::GetString() const
 
 #include "backend/system/systemManager.h"
 
+// Does this class id name a family (a barrier that creates nothing and admits its members)?
+static bool IsFamilyType(const ibClassID& clsid)
+{
+	const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
+	return ctor != nullptr && ctor->IsFamily();
+}
+
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription,
 	const ibMetaData* metaData)
 {
@@ -66,6 +73,11 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		return wxEmptyValue;
 
 	if (typeDescription.GetClsidCount() == 1) {
+
+		// A FAMILY (`DocumentRef`, `AnyRef`) has no empty value of its own to hand back — asking the
+		// factory for one raises "cannot be created without arguments". Empty is the answer.
+		if (IsFamilyType(typeDescription.GetFirstClsid()))
+			return wxEmptyValue;
 
 		if (metaData != nullptr) {
 			return metaData->CreateObject(
@@ -118,6 +130,22 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	}
 
 	if (typeDescription.GetClsidCount() == 1) {
+
+		// ⭐ A DECLARATION THAT NAMES A FAMILY — `DocumentRef`, `AnyRef`, `CatalogRef` — is met by asking
+		// the family's GATE, the same question the interpreter asks a typed variable (OPER_SET_TYPE): may a
+		// value of this class pass? A member passes exactly as it is; empty passes; anything else has no
+		// "empty one of this type" to become, because a family creates nothing.
+		//
+		// 🛑 IT FELL THROUGH TO THE FACTORY instead: the value's class is the CONCRETE reference
+		// (`DocumentRef.Other`), which is not the family's id, so the comparison above missed, and the
+		// branch below asked the factory for a `DocumentRef` — which cannot be built without arguments.
+		// Every assignment of a reference to an attribute of a generic type raised that (#157). A
+		// concrete or composite declaration carries the member's own id, which is why only the generic
+		// ones failed.
+		if (const ibCtorAbstractType* family = ibValue::GetAvailableCtor(typeDescription.GetFirstClsid())) {
+			if (family->IsFamily())
+				return family->AllowValue(varValue.GetClassType()) ? varValue : wxEmptyValue;
+		}
 
 		if (metaData != nullptr ? metaData->IsRegisterCtor(typeDescription.GetFirstClsid()) : activeMetaData->IsRegisterCtor(typeDescription.GetFirstClsid())) {
 

@@ -45,6 +45,7 @@ public:
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	ibValue* CreateObject() const override { return nullptr; }
+	bool IsFamily() const override { return true; }
 
 	// EMPTY PASSES (class id 0). A declared parameter nobody passed, a reference
 	// not yet filled in — the declaration says what the value IS when there is
@@ -68,6 +69,7 @@ public:
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	ibValue* CreateObject() const override { return nullptr; }
+	bool IsFamily() const override { return true; }
 
 	bool AllowValue(const ibClassID&) const override { return true; }
 };
