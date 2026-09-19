@@ -288,9 +288,6 @@ int ibAppDesigner::OnExit()
 	ibValueOLE::ReleaseComObjects();
 #endif
 
-	if (wxSocketBase::IsInitialized())
-		wxSocketBase::Shutdown();
-
 	// Tear every session down through the session manager BEFORE
 	// wxApp::OnExit. registry->Stop() submits Remove@Urgent for each
 	// session in m_own and drains the queue — OnDisconnect listeners
@@ -304,6 +301,12 @@ int ibAppDesigner::OnExit()
 	bool success_exit = wxApp::OnExit();
 
 	appDataDestroy();
+
+	// The socket layer goes LAST, after everything that owns a socket — see the note in
+	// enterprise/mainApp.cpp (#155). The designer's debugger CLIENT closes its connections' sockets
+	// with appData, and on macOS Shutdown() nulls the run loop those sockets' sources are removed from.
+	if (wxSocketBase::IsInitialized())
+		wxSocketBase::Shutdown();
 
 	// Why the session was closed from outside, if it was — said once everything is let go: the session,
 	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.
