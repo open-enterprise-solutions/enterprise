@@ -204,8 +204,26 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& p
 			const wxString moduleName = procedureName.Left(dot);
 			const wxString methodName = procedureName.Mid(dot + 1);
 
+			// ⭐ A COMMON MODULE IS FOUND AMONG THE SESSION'S COMMON MODULES, not among the root's properties.
+			// `GetPropVal(name)` answers only for EXPORT variables of the root module (ibProcUnit::FindProp
+			// skips External / Context on purpose — jobRunByteCode.cpp spells out why), and a common module
+			// is bound into a session as exactly such an ambient name. So the one thing this door exists
+			// for — `RunBackground("StockManagement.RecalculateTotals", …)` — answered "common module not
+			// found" for every common module there is (measured 2026-09-19; no test called it by name).
+			// The root's own export of that name still wins, which keeps whatever relied on it.
 			ibValue moduleValue;
-			if (!unit->GetPropVal(moduleName, moduleValue) || moduleValue.IsEmpty())
+			if (!unit->GetPropVal(moduleName, moduleValue) || moduleValue.IsEmpty()) {
+				for (const auto& commonModule : mm->GetCommonModules())
+					// A COMMON module, not a manager module: both live in this list (the manager modules of every
+					// object, all called "ManagerModule"), and the first name match would otherwise win.
+					if (commonModule && commonModule->GetObjectModule() != nullptr
+					    && commonModule->GetObjectModule()->GetClassType() == g_metaCommonModuleCLSID
+					    && stringUtils::CompareString(moduleName, commonModule->GetModuleName())) {
+						moduleValue = commonModule;   // an ibValuePtr IS a value holding the unit
+						break;
+					}
+			}
+			if (moduleValue.IsEmpty())
 				ibBackendCoreException::Error(_("Background job: common module '%s' not found"), moduleName);
 
 			// Only PUBLIC methods are on a module value's surface at all — that is
