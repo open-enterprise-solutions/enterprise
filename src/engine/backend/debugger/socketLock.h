@@ -5,21 +5,23 @@
 
 #include <wx/socket.h>
 
-// ⭐⭐ A SOCKET THAT MORE THAN ONE THREAD MAY WANT TO CLOSE — and wxSocketBase::Close() is not safe to
-// call twice at once.
+// ⭐⭐ A SOCKET THAT MORE THAN ONE THREAD MAY WANT TO CLOSE — and wxSocketBase::Close() is not written
+// to be called twice at once.
 //
 // wxSocketImpl::Close() is `if (m_fd != INVALID_SOCKET) { DoClose(); m_fd = INVALID_SOCKET; }`: a check,
-// then the work, with nothing between them. Two threads that both pass the check both run DoClose(). On
-// Windows and Linux that is a second closesocket() on a dead descriptor — harmless. On macOS DoClose()
-// removes the socket's source from the run loop and RELEASES it, so the second thread hands
-// CFRunLoopRemoveSource a source that is already gone, and the process dies inside CoreFoundation
-// (`CFRunLoopRemoveSource -> CFSetContainsValue -> CFHash`), at an address that says nothing about who
-// was late.
+// then the work, with nothing between them. Two threads that both pass the check both run DoClose().
+// On Windows and Linux that is a second closesocket() on a dead descriptor. On macOS DoClose() removes
+// the socket's source from the run loop and RELEASES it, so the second thread would hand
+// CFRunLoopRemoveSource a source that is already gone — which is the shape of the designer's crash in
+// #155 (`CFRunLoopRemoveSource -> CFSetContainsValue -> CFHash`, on the connection's own thread).
 //
-// The debugger's client connection is exactly that shape: the designer's main thread ends a session
-// (DetachConnection, from the Debug menu or from `app_run restart`) while the connection's own thread,
-// which has just watched the far end go away, closes the same socket on its way out. Both are right to
-// close it. What was wrong was closing at the same moment.
+// ⚠ THAT IS AN INFERENCE FROM THE STACK, NOT A REPRODUCTION. Two threads calling Close() on one
+// loopback socket, 6000 rounds on macOS 15.6 / arm64, did not crash (tests/test_socketLock.cpp keeps the
+// control): the window is a few instructions wide. What is certain is that the debugger's client
+// connection DOES close one socket from two threads — the designer's main thread ends a session
+// (DetachConnection, from the Debug menu or `app_run restart`) while the connection's own thread,
+// having just watched the far end go away, closes it on its way out — and that closing twice at once
+// is not something wx promises to survive.
 //
 // The lock takes them in turn: the second Close finds the descriptor already invalid and does nothing.
 // Destroy takes the pointer OUT of its slot under the lock, so a Close that arrives after it finds the

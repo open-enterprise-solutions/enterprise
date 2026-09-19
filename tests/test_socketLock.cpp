@@ -1,11 +1,12 @@
 // =============================================================================
 // ibSocketLock — two threads closing one wxSocketBase (#155).
 //
-// wxSocketImpl::Close() is a check of the descriptor followed by the work, and nothing between them.
-// Two threads that both pass the check both close; on macOS the second removes an already-released
-// run-loop source and the process dies inside CoreFoundation. The debugger's client connection closes
-// its socket from two threads at once whenever a session is ended from the designer while the
-// connection's own thread notices the far end going away.
+// wxSocketImpl::Close() is a check of the descriptor followed by the work, and nothing between them,
+// so two threads can both close. The debugger's client connection closes its socket from two threads
+// whenever a session is ended from the designer while the connection's own thread notices the far end
+// going away. What these tests establish is that the lock serialises those closes and that Destroy
+// frees once; they do NOT establish that an unguarded double close crashes — see the control at the
+// bottom, which did not.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -193,12 +194,14 @@ TEST_F(SocketLockFix, Assign_ThenHold_SeesTheNewSocket)
 	pair.Release();
 }
 
-// The CONTROL: what the lock is for. Two threads calling wxSocketBase::Close() on one socket directly.
-// On macOS this takes the process down inside CoreFoundation (CFRunLoopRemoveSource), on other systems
-// it usually survives — so it is DISABLED and does not assert anything. Run it by hand to see the
-// hazard the tests above are guarding against:
+// The CONTROL: two threads calling wxSocketBase::Close() on one socket directly, no lock.
+//
+// It is DISABLED and asserts nothing, because it did NOT reproduce the crash: 3 runs x 2000 rounds on
+// macOS 15.6 / arm64 all passed. The window between wx's check of the descriptor and its DoClose is a
+// few instructions, and a loopback pair closed twice in a tight loop does not land in it. It is kept as
+// the way to look for the race, not as evidence of it:
 //   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*RawConcurrentClose*
-TEST_F(SocketLockFix, DISABLED_RawConcurrentClose_ControlThatCrashesOnMacOS)
+TEST_F(SocketLockFix, DISABLED_RawConcurrentClose_ControlThatDidNotReproduce)
 {
 	for (int round = 0; round < 2000; ++round) {
 		LoopbackPair pair;
