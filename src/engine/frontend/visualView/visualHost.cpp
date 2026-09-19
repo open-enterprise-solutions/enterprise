@@ -807,7 +807,6 @@ void ibVisualHost::ibContentWindow::RefreshControl(ibValueFrame* obj, wxWindow* 
 		break;
 
 	case COMPONENT_TYPE_SIZER:
-	case COMPONENT_TYPE_SIZERITEM:
 		if (obj->GetClassName() == wxT("Staticboxsizer")) {
 			wxStaticBoxSizer* s = static_cast<wxStaticBoxSizer*>(createdObject);
 			createdWindow = s->GetStaticBox();
@@ -816,6 +815,14 @@ void ibVisualHost::ibContentWindow::RefreshControl(ibValueFrame* obj, wxWindow* 
 		else {
 			createdSizer = static_cast<wxSizer*>(createdObject);
 		}
+		break;
+
+	case COMPONENT_TYPE_SIZERITEM:
+		// A SizerItem is a transparent metadata wrapper. Its Create() result is
+		// ibNoObject, not a wxSizer; OnUpdated() uses the wrapper mapping to
+		// rebind the real child's layout parameters in the parent's sizer.
+		// Treating the sentinel as wxSizer* made the notebook page adopt an
+		// invalid sizer and crashed in wxSizer::SetContainingWindow.
 		break;
 
 	default: break;
