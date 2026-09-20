@@ -147,6 +147,13 @@ TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_IsRaised
 	if (!frameReady) GTEST_SKIP();
 
 	ibControlTextEditor* editor = MakeSumField(parent, 72);
+
+	// The fault itself: at the width the form gave, the caption and buttons leave the text area (almost) nothing.
+	editor->SetSize(wxSize(72, 28));
+	editor->Layout();
+	EXPECT_LT(TextAreaWidth(editor), editor->FromDIP(ibControlTextEditor::kMinimumTextWidth) / 2)
+		<< "72 pixels are not enough for a caption, two buttons and a text area";
+
 	editor->KeepRoomForText();
 
 	const int needed = editor->GetMinimumUsableWidth();
