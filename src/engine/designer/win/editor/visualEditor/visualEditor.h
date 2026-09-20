@@ -2,6 +2,7 @@
 #define __VISUAL_EDITOR_H__
 
 #include "innerFrame.h"
+#include "designerSelection.h"
 #include "win/editor/codeEditor/codeEditorDesigner.h"
 
 #include "frontend/visualView/ctrl/form.h"
@@ -87,6 +88,13 @@ public:
 	void SetSelectedObject(ibValueFrame* object) { m_selObj = object; }
 	void SetSelectedPanel(wxWindow* actPanel) { m_actPanel = actPanel; }
 
+	// The owner of the wx tree says whether a control is still one of its own. Without it the selection
+	// is trusted (see designerSelection.h for why it must not be).
+	void SetSelectionLiveCheck(ibSelectionLiveCheck isLive) { m_isSelectionLive = std::move(isLive); }
+
+	// Forget the selection — the four pointers go together, none is meaningful without the others.
+	void ForgetSelection() { m_selSizer = nullptr; m_selItem = nullptr; m_selObj = nullptr; m_actPanel = nullptr; }
+
 	wxSizer* GetSelectedSizer() const { return m_selSizer; }
 	wxObject* GetSelectedItem() const { return m_selItem; }
 	ibValueFrame* GetSelectedObject() const { return m_selObj; }
@@ -103,6 +111,7 @@ private:
 	wxObject* m_selItem = nullptr;
 	ibValueFrame* m_selObj = nullptr;
 	wxWindow* m_actPanel = nullptr;
+	ibSelectionLiveCheck m_isSelectionLive;
 
 	wxDECLARE_EVENT_TABLE();
 };

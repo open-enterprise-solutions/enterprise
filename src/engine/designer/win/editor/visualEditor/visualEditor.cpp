@@ -96,6 +96,9 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
 	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
+	// The map of this host's controls is keyed by pointer and never dereferences it: the one safe way to
+	// ask whether a control the canvas still remembers is still there.
+	m_back->SetSelectionLiveCheck([this](const ibValueFrame* control) { return GetWxObject(control) != nullptr; });
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 
 	// The form canvas accepts any registered drag KIND: a source path → a bound control, a command → a bound
@@ -589,6 +592,15 @@ void ibDesignerWindow::DrawRectangle(wxDC& dc, const wxPoint& point, const wxSiz
 
 void ibDesignerWindow::HighlightSelection(wxDC& dc)
 {
+	// The selected control may be gone by now (the form was rebuilt, the control removed or an undo took
+	// it away) while these pointers still name it. Follow them only when the host still knows the control;
+	// otherwise the selection is dropped and nothing is drawn.
+	if (!ibSelectionIsLive(m_selObj, m_isSelectionLive)) {
+		if (m_selObj != nullptr)
+			ForgetSelection();
+		return;
+	}
+
 	wxSize size;
 	ibValueFrame* object = m_selObj;
 
