@@ -104,16 +104,23 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		// 🛑 A WHOLE NUMBER IS BOUND AS ONE. Everything went in as a double, and a double keeps 53 bits: a
-		// reference's table id is a kind-typed clsid - sixty bits of it - so on this driver a reference written
-		// through the codec read back naming a type nobody registered, and came out EMPTY (which is why no test
-		// here ever read a reference out of a table: 2026-09-20, a sequence's border lost its recorder). A number
-		// with a fraction, or one past 64 bits, still goes the way it always did.
+		// 🛑 A WHOLE NUMBER A DOUBLE CANNOT CARRY IS BOUND AS AN INTEGER. Everything went in as a double, and a
+		// double keeps 53 bits: a reference's table id is a kind-typed clsid - sixty bits of it - so on this
+		// driver a reference written through the codec read back naming a type nobody registered, and came out
+		// EMPTY (which is why no test here ever read a reference out of a table: 2026-09-20, a sequence's border
+		// lost its recorder).
+		//
+		// ONLY such a number. Everything a double does carry goes the way it always did, for two reasons: an
+		// INTEGER parameter would turn `Amount / &Count` into SQLite's integer division where it was a real one,
+		// and the exactness test below walks the bignum tier - not something to pay on every bind of a journal
+		// row. A kind byte of 0x80 and above (plugin kinds) is past int64 as well and still goes in as a double.
+		const double approximate = dblValue.ToDouble();
 		long long whole = 0;
-		const bool exact = dblValue.ToInt(whole) == 0 && ibNumber(whole) == dblValue;
+		const bool exact = (approximate >= 9007199254740992.0 || approximate <= -9007199254740992.0)   // 2^53
+			&& dblValue.ToInt(whole) == 0 && ibNumber(whole) == dblValue;
 		int nReturn = exact
 			? sqlite3_bind_int64(m_Statements[nIndex], nPosition, static_cast<sqlite3_int64>(whole))
-			: sqlite3_bind_double(m_Statements[nIndex], nPosition, dblValue.ToDouble());
+			: sqlite3_bind_double(m_Statements[nIndex], nPosition, approximate);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));

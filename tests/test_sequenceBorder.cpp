@@ -248,3 +248,24 @@ TEST_F(SequenceBorderFix, RepostingInOrderWalksTheBorderToTheEnd) {
 	Clear(r3); Post(r3, kDay3, wxT("kitchen"));
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
 }
+
+// The driver itself, asked directly. A whole number a double cannot carry - a kind-typed class id is sixty bits -
+// goes in as an integer and comes back whole. A whole number a double DOES carry goes in the way it always
+// did, as a real: bound as an INTEGER it would turn `10 / ?` into SQLite's integer division and answer 2.
+TEST(SqliteNumberBinding, OnlyANumberADoubleCannotCarryIsBoundAsAnInteger) {
+	auto db = std::make_shared<ibDatabaseLayerSQLite>();
+	ASSERT_TRUE(db->Open(wxT(":memory:")));
+
+	const long long sixtyBits = 1152921504606846977LL;   // 2^60 + 1: the +1 is what a double drops
+	ibPreparedStatement* statement = db->PrepareStatement(wxT("SELECT 10 / ?, ?"));
+	ASSERT_NE(statement, nullptr);
+	statement->SetParamNumber(1, ibNumber(4LL));
+	statement->SetParamNumber(2, ibNumber(sixtyBits));
+	ibDatabaseResultSet* rs = statement->RunQueryWithResults();
+	ASSERT_NE(rs, nullptr);
+	ASSERT_TRUE(rs->Next());
+	EXPECT_DOUBLE_EQ(rs->GetResultDouble(1), 2.5);
+	EXPECT_EQ(rs->GetResultLong(2), sixtyBits);
+	statement->CloseResultSet(rs);
+	db->CloseStatement(statement);
+}
