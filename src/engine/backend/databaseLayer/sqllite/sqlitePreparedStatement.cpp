@@ -104,7 +104,16 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		int nReturn = sqlite3_bind_double(m_Statements[nIndex], nPosition, dblValue.ToDouble());
+		// 🛑 A WHOLE NUMBER IS BOUND AS ONE. Everything went in as a double, and a double keeps 53 bits: a
+		// reference's table id is a kind-typed clsid - sixty bits of it - so on this driver a reference written
+		// through the codec read back naming a type nobody registered, and came out EMPTY (which is why no test
+		// here ever read a reference out of a table: 2026-09-20, a sequence's border lost its recorder). A number
+		// with a fraction, or one past 64 bits, still goes the way it always did.
+		long long whole = 0;
+		const bool exact = dblValue.ToInt(whole) == 0 && ibNumber(whole) == dblValue;
+		int nReturn = exact
+			? sqlite3_bind_int64(m_Statements[nIndex], nPosition, static_cast<sqlite3_int64>(whole))
+			: sqlite3_bind_double(m_Statements[nIndex], nPosition, dblValue.ToDouble());
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));

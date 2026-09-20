@@ -106,7 +106,11 @@ long long ibDatabaseResultSetSQLite::GetResultLong(int nField)
 	long long nValue = -1;
 	if (m_pSqliteStatement == nullptr)
 		m_pSqliteStatement = m_pStatement->GetLastStatement();
-	nValue = sqlite3_column_int(m_pSqliteStatement, nField - 1);
+	// 🛑 THE WHOLE 64 BITS. The function answers `long long` and read through sqlite3_column_int, which is 32:
+	// a reference's table id (a kind-typed clsid, sixty bits) came back as its low word - the bare metaID -
+	// named no registered type, and the reference read EMPTY. With the binder's double on the way in, this is
+	// why a reference never survived a round trip on this driver (2026-09-20).
+	nValue = sqlite3_column_int64(m_pSqliteStatement, nField - 1);
 
 	return nValue;
 }
