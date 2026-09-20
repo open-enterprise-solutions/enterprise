@@ -156,6 +156,24 @@
         "guide.basedOn"
       ],
       "reviewed": true
+    },
+    {
+      "id": "guide.textFiles",
+      "name_local": "Файлы — чтение и запись текста и байтов как есть (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "name_en": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "New TextReader(<path> [, <TextEncoding>])    New TextWriter(<path> [, <TextEncoding> [, <append>]])",
+      "description": "СОДЕРЖИМОЕ ФАЙЛА — ИЗ СКРИПТА. `File` отвечает, существует ли файл и каков его размер; эти типы читают и пишут то, что в нём лежит, — файл обмена другой системы, продажи из кассы, прайс-лист — на любой платформе и без COM-объекта посередине.\n\nТЕКСТ ПОСТРОЧНО — `TextReader`. `ReadLine()` отдаёт следующую строку БЕЗ перевода строки (и CRLF, и LF); `Read()` отдаёт всё оставшееся одним текстом; `Close()` отпускает файл. КОНЕЦ ФАЙЛА — ЭТО `Undefined`, А НЕ ПУСТАЯ СТРОКА: пустая строка — тоже строка, и цикл, написанный против `\"\"`, остановится на первой пустой строке файла — либо, написанный наоборот, не остановится никогда.\n\nЗАПИСЬ — `TextWriter`. `Write(text)` пишет текст как есть, `WriteLine(text)` добавляет ОДИН перевод строки — LF, одинаковый на всех платформах: файл, записанный здесь, так же читается там. Третий аргумент конструктора, `True`, ДОПИСЫВАЕТ в конец файла вместо замены. Незакрытый писатель всё равно оставит текст на диске, но закрывать нужно: до этого файл остаётся открытым.\n\nКОДИРОВКА задаётся перечислением `TextEncoding` — `UTF8` (если не указана), `UTF16`, `ANSI` и `OEM` (кодовые страницы той машины, на которой работает платформа, — спрашиваются у системы), `System`. Метка порядка байтов в начале файла UTF-8 или UTF-16 читается как метка и текстом не отдаётся; метка UTF-16 ещё и говорит, какой байт идёт первым. При записи UTF-16 получает метку, UTF-8 — нет. Байты, которые не складываются в текст в указанной кодировке, — это ОШИБКА, а не текст с дырами; так же и файл, который не удалось открыть, — в сообщении названо его имя.\n\nБАЙТЫ — `BinaryData`. `Read(path)` берёт содержимое файла целиком, `Write(path)` кладёт содержимое в файл, `Size()` — число байтов. Строка, переданная в КОНСТРУКТОР, по-прежнему означает base64, а не путь, — поэтому чтение файла сделано методом.\n\nФайл декодируется целиком при открытии: это для файлов обмена, а не для журналов на гигабайты.",
+      "syntax_block": "var <reader> = New TextReader(<path> [, TextEncoding.<X>]);\n<line> = <reader>.ReadLine();   // Undefined at the end\n<rest> = <reader>.Read();\n<reader>.Close();\n\nvar <writer> = New TextWriter(<path> [, TextEncoding.<X> [, <append>]]);\n<writer>.Write(<text>);  <writer>.WriteLine(<text>);\n<writer>.Close();\n\nvar <bytes> = New BinaryData();\n<bytes>.Read(<path>);  <bytes>.Write(<path>);  <bytes>.Size();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nvar line = reader.ReadLine();\nwhile (line <> Undefined) {          // Undefined, not \"\": an empty line is a line\n    if (line <> \"\") {\n        var cut = Find(line, \";\");\n        var code = Left(line, cut - 1);   // the first field\n    }\n    line = reader.ReadLine();\n}\nreader.Close();\n\nvar writer = New TextWriter(GetTempDir() + \"out.csv\", TextEncoding.UTF8);\nwriter.WriteLine(\"code;name;qty\");\nwriter.Close();\n\nvar bytes = New BinaryData();\nbytes.Read(\"C:\\in\\logo.png\");\nMessage(bytes.Size());\nbytes.Write(\"C:\\out\\logo.png\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
     }
   ]
 }

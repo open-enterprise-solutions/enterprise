@@ -1,0 +1,76 @@
+// ============================================================================
+// Text files and binary data from a script - 2026-09-20
+//
+// TextWriter / TextReader / BinaryData.Read / Write / Size, and the TextEncoding enumeration.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+//
+//   1. What is written is what is read back, line by line, Cyrillic included.
+//   2. The END of the file is Undefined - an EMPTY line is a line and must not end the loop.
+//   3. A file written as UTF-16 reads back as UTF-16 (its byte-order mark is not text).
+//   4. Appending adds to the end; Read() hands over the rest as one text.
+//   5. BinaryData takes a file's bytes whole and puts them back unchanged.
+// ============================================================================
+
+var path = GetTempFileName();
+
+// 1 + 2
+var writer = New TextWriter(path, TextEncoding.UTF8);
+writer.WriteLine("code;name;qty");
+writer.WriteLine("");
+writer.WriteLine("00001;Борщ український;12");
+writer.Write("last line without a break");
+writer.Close();
+
+var reader = New TextReader(path, TextEncoding.UTF8);
+var lines = New Array();
+var line = reader.ReadLine();
+while (line <> Undefined) {
+	lines.Add(line);
+	line = reader.ReadLine();
+}
+reader.Close();
+
+if (lines.Count() <> 4) { Raise("expected 4 lines, the empty one included, got " + lines.Count()); }
+if (lines.Get(0) <> "code;name;qty") { Raise("line 1: " + lines.Get(0)); }
+if (lines.Get(1) <> "") { Raise("line 2 is an EMPTY line, got: " + lines.Get(1)); }
+if (lines.Get(2) <> "00001;Борщ український;12") { Raise("line 3: " + lines.Get(2)); }
+if (lines.Get(3) <> "last line without a break") { Raise("line 4: " + lines.Get(3)); }
+Message("lines read back: " + lines.Count());
+
+// 3
+var wide = New TextWriter(path, TextEncoding.UTF16);
+wide.WriteLine("Привіт");
+wide.Close();
+var wideReader = New TextReader(path, TextEncoding.UTF16);
+var first = wideReader.ReadLine();
+wideReader.Close();
+if (first <> "Привіт") { Raise("UTF-16 round trip: " + first); }
+Message("UTF-16: " + first);
+
+// 4
+var again = New TextWriter(path, TextEncoding.UTF8);
+again.WriteLine("one");
+again.Close();
+var more = New TextWriter(path, TextEncoding.UTF8, True);
+more.WriteLine("two");
+more.Close();
+var whole = New TextReader(path);
+if (whole.ReadLine() <> "one") { Raise("append: first line"); }
+var rest = whole.Read();
+whole.Close();
+if (rest <> "two" + Chars.LF) { Raise("append: the rest is [" + rest + "]"); }
+Message("appended and read whole");
+
+// 5
+var bytes = New BinaryData();
+bytes.Read(path);
+if (bytes.Size() <> 8) { Raise("size of 'one\ntwo\n' is 8 bytes, got " + bytes.Size()); }
+var copy = GetTempFileName();
+bytes.Write(copy);
+var back = New BinaryData();
+back.Read(copy);
+if (back <> bytes) { Raise("the bytes written are not the bytes read"); }
+Message("binary size: " + bytes.Size());
+
+FileDelete(path);
+FileDelete(copy);

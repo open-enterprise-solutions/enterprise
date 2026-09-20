@@ -17,7 +17,19 @@
 // Built by analogy with ibValueGuid, deliberately: one file pair, one registration, the same
 // value-type surface. Base64 is the text form — chosen because it is what the JSON provider already
 // writes binaries as, so a value crossing to text and back keeps its bytes.
-class BACKEND_API ibValueBinaryData : public ibValue {
+//
+// ⭐ …AND THE BYTES CAN COME FROM A FILE AND GO TO ONE. `Read(path)` takes the file's content whole, `Write(path)`
+// puts the content there, `Size()` says how much there is. A constructor from a PATH is deliberately not
+// offered: a string handed to the constructor already means base64, and the same argument meaning two
+// things is a file that silently fails to decode.
+void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+class BACKEND_API ibValueBinaryData : public ibValueStaticMembers<&ibValueBinaryData_BindNames> {
+	enum Func {
+		enSize,
+		enRead,
+		enWrite,
+	};
 public:
 
 	operator wxMemoryBuffer() const {
@@ -34,6 +46,12 @@ public:
 
 	virtual bool Init();
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
+
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
+
+	// The same verbs for a caller in C++.
+	void ReadFile(const wxString& fileName);
+	void WriteFile(const wxString& fileName) const;
 
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
 	virtual wxString GetString() const;

@@ -156,6 +156,24 @@
         "guide.basedOn"
       ],
       "reviewed": true
+    },
+    {
+      "id": "guide.textFiles",
+      "name_local": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "name_en": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "New TextReader(<path> [, <TextEncoding>])    New TextWriter(<path> [, <TextEncoding> [, <append>]])",
+      "description": "THE CONTENT OF A FILE, FROM A SCRIPT. `File` answers whether a file exists and how large it is; these read and write what is in it - an exchange file of another system, sales out of a cash register, a price list - on every platform, with no COM object in between.\n\nTEXT, LINE BY LINE - `TextReader`. `ReadLine()` hands over the next line WITHOUT its line break (CRLF and LF alike); `Read()` hands over everything that is left as one text; `Close()` lets the file go. THE END OF THE FILE IS `Undefined`, NOT AN EMPTY STRING: an empty line is a line, and a loop written against `\"\"` stops at the first blank line of the file - or, written the other way round, never stops.\n\nWRITING - `TextWriter`. `Write(text)` writes the text as it is, `WriteLine(text)` adds ONE line break - LF, the same on every platform, so a file written here reads the same there. The third constructor argument, `True`, APPENDS to the file instead of replacing it. A writer nobody closed still leaves its text on disk, but close it: the file stays open until then.\n\nTHE ENCODING is said with the `TextEncoding` enumeration - `UTF8` (when left out), `UTF16`, `ANSI` and `OEM` (the code pages of the machine the platform runs on, asked of the system), `System`. A byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text; a UTF-16 mark also says which byte comes first. On writing, UTF-16 gets its mark and UTF-8 does not. Bytes that do not spell text in the encoding given are an ERROR, not a text with holes in it - so is a file that cannot be opened, and the message names the file.\n\nBYTES - `BinaryData`. `Read(path)` takes the file's content whole, `Write(path)` puts the content into a file, `Size()` is the number of bytes. A string handed to the CONSTRUCTOR still means base64, not a path - which is why reading a file is a method.\n\nThe whole file is decoded when it is opened: these are for exchange files, not for logs of gigabytes.",
+      "syntax_block": "var <reader> = New TextReader(<path> [, TextEncoding.<X>]);\n<line> = <reader>.ReadLine();   // Undefined at the end\n<rest> = <reader>.Read();\n<reader>.Close();\n\nvar <writer> = New TextWriter(<path> [, TextEncoding.<X> [, <append>]]);\n<writer>.Write(<text>);  <writer>.WriteLine(<text>);\n<writer>.Close();\n\nvar <bytes> = New BinaryData();\n<bytes>.Read(<path>);  <bytes>.Write(<path>);  <bytes>.Size();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nvar line = reader.ReadLine();\nwhile (line <> Undefined) {          // Undefined, not \"\": an empty line is a line\n    if (line <> \"\") {\n        var cut = Find(line, \";\");\n        var code = Left(line, cut - 1);   // the first field\n    }\n    line = reader.ReadLine();\n}\nreader.Close();\n\nvar writer = New TextWriter(GetTempDir() + \"out.csv\", TextEncoding.UTF8);\nwriter.WriteLine(\"code;name;qty\");\nwriter.Close();\n\nvar bytes = New BinaryData();\nbytes.Read(\"C:\\in\\logo.png\");\nMessage(bytes.Size());\nbytes.Write(\"C:\\out\\logo.png\");",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
     }
   ]
 }

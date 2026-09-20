@@ -142,8 +142,14 @@ std::vector<wxString> CorpusFiles()
 struct ibCorpusHost {
 	ibValueCorpusOutput m_valueSystem;
 
+	// The system ENUMERATIONS - RoundMode, Chars, TextEncoding - reach a script the same way: a host binds
+	// `EnumManager` as a transparent scope (moduleManager.cpp does it for every context type). Taken out of
+	// the registry rather than constructed, because that is the object a host would get.
+	ibValue m_valueEnums = ibValue::CreateObject(wxT("EnumManager"));
+
 	void Bind(ibCompileCode& compiler) {
 		compiler.AddContextVariable(wxT("System"), &m_valueSystem, true);
+		compiler.AddContextVariable(wxT("EnumManager"), m_valueEnums, true);
 	}
 
 	const std::vector<wxString>& GetMessages() const { return m_valueSystem.GetMessages(); }

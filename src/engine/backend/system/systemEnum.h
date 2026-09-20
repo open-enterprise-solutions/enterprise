@@ -30,6 +30,17 @@ enum ibRoundMode
 	ibRoundMode_Round15as20
 };
 
+// How the TEXT of a file is spelled in bytes - what a TextReader decodes by and a TextWriter encodes by.
+// ANSI and OEM are the two code pages Windows keeps per system; elsewhere both mean the locale's own.
+enum ibTextEncoding
+{
+	ibTextEncoding_UTF8 = 1,
+	ibTextEncoding_UTF16,
+	ibTextEncoding_ANSI,
+	ibTextEncoding_OEM,
+	ibTextEncoding_System
+};
+
 enum ibChars {
 	eCR = 13,
 	eFF = 12,
