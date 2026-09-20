@@ -56,10 +56,18 @@ ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams,
 		if (newObject == nullptr) return nullptr;
 
 		bool succes = true;
-		if (lSizeArray > 0)
-			succes = newObject->Init(paParams, lSizeArray);
-		else
-			succes = newObject->Init();
+		// An Init may refuse by RAISING, and until it returns the object is nobody's (valueFactory.cpp has the
+		// story): deleted when Init answered false, it leaked when Init raised.
+		try {
+			if (lSizeArray > 0)
+				succes = newObject->Init(paParams, lSizeArray);
+			else
+				succes = newObject->Init();
+		}
+		catch (...) {
+			wxDELETE(newObject);
+			throw;
+		}
 
 		if (!succes) {
 			wxDELETE(newObject);

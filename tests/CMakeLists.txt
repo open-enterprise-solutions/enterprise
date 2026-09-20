@@ -31,6 +31,7 @@ add_executable(oes_tests
     test_ctorRegistry.cpp
     test_exception.cpp
     test_value.cpp
+    test_valueFactoryInit.cpp
     test_string.cpp
     bench_string.cpp
     test_number.cpp
