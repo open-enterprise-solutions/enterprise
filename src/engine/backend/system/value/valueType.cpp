@@ -73,6 +73,16 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			);
 		}
 
+		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
+		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
+		// been handed left behind (columnLayout.cpp), so reading a cell whose tag the result does not carry was
+		// an access violation instead of the typed empty value it is documented to answer (2026-09-20). What
+		// the value registry can make by itself - a primitive - it makes; anything that needs a configuration
+		// and has none is the empty value.
+		if (activeMetaData == nullptr)
+			return ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())
+				? ibValue::CreateObject(typeDescription.GetFirstClsid()) : ibValue();
+
 		return activeMetaData->CreateObject(
 			typeDescription.GetFirstClsid()
 		);
