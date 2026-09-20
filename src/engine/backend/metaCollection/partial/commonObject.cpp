@@ -14,6 +14,8 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
+#include <functional>   // std::function — the owed number's guard (WriteObject)
+
 //***********************************************************************
 //*								 metaData                               *
 //***********************************************************************
@@ -2635,6 +2637,12 @@ bool ibValueRecordDataObjectRef::SetValueByMetaID(const ibMetaID& id, const ibVa
 
 bool ibValueRecordDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
+	// A number that is owed is paid to whoever asks for it first (see OweUniqueIdentifier).
+	if (m_identifierOwed) {
+		const auto code = m_metaObject->GetAttributeForCode();
+		if (code != nullptr && code->GetMetaID() == id)
+			const_cast<ibValueRecordDataObjectRef*>(this)->SettleUniqueIdentifier();
+	}
 	if (m_metaObject->IsDataReference(id)) {
 		pvarMetaVal = GetReference();
 		return true; 
@@ -3314,19 +3322,29 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ApplyPostedAttributeOnWrite(writeMode);
 	}
 
-	bool generateUniqueIdentifier = false;
+	// The number is OWED from here and taken just before the commit - or by the first handler that reads it
+	// (OweUniqueIdentifier, commonObject.h): the numerator's row is no longer held through the posting.
+	bool numberOwed = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
-		if (standartProcessing.GetBoolean())
-			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+		if (standartProcessing.GetBoolean() && !IsSetUniqueIdentifier()) {
+			OweUniqueIdentifier(prefix.GetString());
+			numberOwed = true;
+		}
 	}
+	// …and a write that leaves by an EXCEPTION owes nothing afterwards either: a debt left on the object would be
+	// paid by the next read of the number, outside any write, and that number would never come back.
+	struct ibOwedNumberGuard {
+		std::function<void()> m_forget; bool m_armed;
+		~ibOwedNumberGuard() { if (m_armed && m_forget) m_forget(); }
+	} owedGuard{ [this] { ForgetOwedIdentifier(); }, numberOwed };
 
 	if (newObject)
 		FillDefaultDateForNew();
 
 	if (!SaveData()) {
-		if (generateUniqueIdentifier) ResetUniqueIdentifier();
+		if (numberOwed) ForgetOwedIdentifier();
 		scope.SafeRollBackTransaction();
 		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
 		return false;
@@ -3352,7 +3370,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// are what its handler writes. (A set somebody filled before the write is left to replace its own; and whether
 		// they are cleared at all is the document's to say — ibRecorderRegister::DeleteRecordSet asks it.)
 		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the movements of the previous posting"),
 				GetSourceCaption());
@@ -3360,7 +3378,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		}
 		// …and the registrations of the previous posting, by the same rule and in the same transaction.
 		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the registrations of the previous posting"),
 				GetSourceCaption());
@@ -3370,7 +3388,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ExecAsProc(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
 		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: posting cancelled by the Posting handler"),
 				GetSourceCaption());
@@ -3379,7 +3397,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// The cascade names the failing register itself (and lets its own exception through);
 		// this only covers a silent false from the fan-out.
 		if (!m_registerRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to write the register movements"),
 				GetSourceCaption());
@@ -3388,7 +3406,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// …and the registrations the handler filled — written here, where each set moves its own
 		// sequence's border (ibValueRecordSetObjectSequence::WriteRecordSet).
 		if (!m_sequenceRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to write the sequence registrations"),
 				GetSourceCaption());
@@ -3399,21 +3417,21 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ibValue cancel = false;
 		ExecAsProc(wxT("UndoPosting"), cancel);
 		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: undo posting cancelled by the UndoPosting handler"),
 				GetSourceCaption());
 			return false;
 		}
 		if (!m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
 				GetSourceCaption());
 			return false;
 		}
 		if (!m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: failed to clear the sequence registrations"),
 				GetSourceCaption());
@@ -3425,7 +3443,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ibValue cancel = false;
 		ExecAsProc(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
+			if (numberOwed) ForgetOwedIdentifier();
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
 				GetSourceCaption());
@@ -3448,6 +3466,20 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
 			? wxT("posted") : wxT("unposted");
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
+	}
+
+	// …and here the number is paid, if no handler asked for it sooner. The row was saved without it, so it goes
+	// there by one narrow UPDATE; the numerator's row is held from this line to the commit below.
+	if (numberOwed) {
+		SettleUniqueIdentifier();
+		if (!SaveUniqueIdentifier()) {
+			ForgetOwedIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to save the number"), GetSourceCaption());
+			return false;
+		}
+		m_identifierTaken = false;   // kept: the write made it
+		owedGuard.m_armed = false;
 	}
 
 	CommitWriteScope(scope, valueForm, newObject);

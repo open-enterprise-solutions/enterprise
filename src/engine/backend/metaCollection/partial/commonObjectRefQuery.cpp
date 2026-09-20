@@ -310,6 +310,9 @@ bool ibValueRecordDataObjectRef::SaveData()
 		// (a characteristic's Type) is not part of a FOLDER, so demanding it there would make
 		// folders unsavable over a field their form never shows.
 		if (!ibItemModeFits(object->GetItemMode(), GetObjectMode())) continue;
+		// A number that is OWED is not a field left empty: it is taken before the commit, by the write that
+		// saves this row (OweUniqueIdentifier) - refusing the row for it would refuse every new document.
+		if (m_identifierOwed && object == m_metaObject->GetAttributeForCode()) continue;
 		const auto it = m_listObjectValue.find(object->GetMetaID());
 		if (it == m_listObjectValue.end() || it->second.IsEmpty()) {
 			wxString fillError =
@@ -467,6 +470,51 @@ bool ibValueRecordDataObjectRef::GenerateUniqueIdentifier(const wxString& strPre
 		return true;
 	}
 	return false;
+}
+
+void ibValueRecordDataObjectRef::OweUniqueIdentifier(const wxString& strPrefix)
+{
+	m_identifierOwed = true;
+	m_identifierTaken = false;
+	m_identifierPrefix = strPrefix;
+}
+
+bool ibValueRecordDataObjectRef::SettleUniqueIdentifier()
+{
+	if (!m_identifierOwed)
+		return false;
+	m_identifierOwed = false;   // first, so the generator's own reads do not come back here
+	m_identifierTaken = GenerateUniqueIdentifier(m_identifierPrefix);
+	return m_identifierTaken;
+}
+
+// The row went in without its number (SaveData ran while it was owed), so the number is put there by itself:
+// one UPDATE of one column by the row's own key - not the whole object and its table parts a second time.
+bool ibValueRecordDataObjectRef::SaveUniqueIdentifier()
+{
+	const auto object = m_metaObject->GetAttributeForCode();
+	if (object == nullptr)
+		return true;
+	const auto it = m_listObjectValue.find(object->GetMetaID());
+	if (it == m_listObjectValue.end())
+		return true;
+	// ⚠ NOT A SECOND QUESTION TO THE ACCESS POLICY. This statement finishes the write that inserted the row a
+	// moment ago, under the right that write was already asked for. Asked again as "may this role CHANGE the
+	// row", a role allowed to create documents and not to edit them could no longer create one.
+	return ibDataQueryBuilder()
+		.WithAccessPolicy(nullptr)
+		.From(m_metaObject->GetQueryable())
+		.WhereKey(m_objGuid)
+		.SetValue(object->GetQueryColumn(), it->second)
+		.Update();
+}
+
+void ibValueRecordDataObjectRef::ForgetOwedIdentifier()
+{
+	if (m_identifierTaken)
+		ResetUniqueIdentifier();
+	m_identifierOwed = false;
+	m_identifierTaken = false;
 }
 
 bool ibValueRecordDataObjectRef::ResetUniqueIdentifier()

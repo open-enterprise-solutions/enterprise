@@ -2514,6 +2514,26 @@ protected:
 	virtual bool GenerateUniqueIdentifier(const wxString& strPrefix);
 	virtual bool ResetUniqueIdentifier();
 
+	// ⭐⭐ A NUMBER IS TAKEN WHEN IT IS FIRST NEEDED, AND OTHERWISE AT THE VERY END OF THE WRITE.
+	//
+	// The numerator is one row per (kind, prefix), and `UPDATE … RETURNING` on it holds that row until the
+	// document's transaction ends - which is what keeps the numbering unbroken: a document that does not make
+	// it gives its number back. Taken at the START of the write, the row stayed locked through the whole
+	// posting - handler, balances, movements - so every NEW document of a kind stood in one queue across the
+	// whole base, whichever warehouse it was posted at (measured 2026-09-20: five processes posting at five
+	// warehouses wrote 200 documents in 18 s, one process wrote 40 in 3 s - no parallelism at all).
+	//
+	// So the write only OWES the number (OweUniqueIdentifier), and pays just before the commit
+	// (SettleUniqueIdentifier): the row is then held for the instant it takes to commit. A handler that READS
+	// the number - `ThisObject.Number` in a message, a number copied into a movement - is paid on the spot
+	// (GetValueByMetaID), so nothing a configuration could see has changed; it simply keeps the old queue for
+	// itself. The numbering stays unbroken either way: it is still one transaction.
+	void OweUniqueIdentifier(const wxString& strPrefix);
+	bool SettleUniqueIdentifier();          // takes the number if it is still owed; true when it was taken by this call
+	bool SaveUniqueIdentifier();            // the row was saved without it - one narrow UPDATE puts it there
+	void ForgetOwedIdentifier();            // the write failed: what was taken goes back, nothing is owed
+	bool IsIdentifierOwed() const { return m_identifierOwed; }
+
 protected:
 	virtual void PrepareEmptyObject();
 	virtual void PrepareEmptyObject(const ibValueRecordDataObjectRef* source);
@@ -2532,6 +2552,10 @@ protected:
 	friend class ibValueTabularSectionDataObjectRef;
 
 	bool m_objModified;
+	// The number this write owes (see OweUniqueIdentifier). Mutable: it is paid from a read.
+	mutable bool     m_identifierOwed = false;
+	mutable bool     m_identifierTaken = false;   // taken during THIS write - what a failure gives back
+	mutable wxString m_identifierPrefix;
 	const ibValueMetaObjectRecordDataMutableRef* m_metaObject;
 	ibReference* m_reference_impl;
 
