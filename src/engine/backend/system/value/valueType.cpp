@@ -129,7 +129,11 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 	if (typeDescription.GetClsidCount() == 1) {
 
-		if (metaData != nullptr ? metaData->IsRegisterCtor(typeDescription.GetFirstClsid()) : activeMetaData->IsRegisterCtor(typeDescription.GetFirstClsid())) {
+		// The same rule as the overload above: the metadata handed in, else the active one - and with neither
+		// (a headless tool before it opens a base, a test) what the value registry can make by itself.
+		const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
+		if (source != nullptr ? source->IsRegisterCtor(typeDescription.GetFirstClsid())
+			: ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())) {
 
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
@@ -151,14 +155,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				}
 			}
 
-			if (metaData != nullptr)
-				return metaData->CreateObject(
-					typeDescription.GetFirstClsid()
-				);
-
-			return activeMetaData->CreateObject(
-				typeDescription.GetFirstClsid()
-			);
+			return source != nullptr
+				? source->CreateObject(typeDescription.GetFirstClsid())
+				: ibValue::CreateObject(typeDescription.GetFirstClsid());
 		}
 	}
 	return wxEmptyValue;
