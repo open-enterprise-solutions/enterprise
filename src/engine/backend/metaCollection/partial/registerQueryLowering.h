@@ -389,6 +389,19 @@ template <typename TReg, typename TSpec>
 inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
                             const ibRegBound& upper, const ibRegBound& lower = ibRegBound())
 {
+	// 🛑 WHICH SIDE OF ITS EDGE A BOUNDARY STANDS ON IS SAID BEFORE ANYTHING RETURNS. It was said after the
+	// "no cut needed" return below, so a boundary that needs no cut - a date exactly on a grain edge - never
+	// said it, and the reader took it as INCLUDED: `period <= midnight` admits the stored row keyed by that
+	// midnight, which is the WHOLE DAY that starts there. "The balance before 10.01, excluding" answered
+	// 164 / 26 291.37 where the movements fold to 116 / 6 612 - the difference being every movement of 10.01,
+	// to the cent (measured 2026-09-20). The note further down says an excluded upper edge takes that grain
+	// wholly OUT; this is what makes it true.
+	//
+	// First in the function - above the two ways out for a view with one arm as well. Those cannot be taken
+	// today (every register has a recorder); the day one can, it must not bring the defect back.
+	read.m_toExcluding   = upper.m_excluding;
+	read.m_fromExcluding = lower.m_excluding;
+
 	if (reg == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
 		return;   // this view has one arm; there is nothing to cut
 
@@ -425,16 +438,6 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	wxDateTime upperMoment, lowerMoment;
 	const bool cutUpper = reachesInside(upper, /*upperEnd*/ true, upperMoment);
 	const bool cutLower = reachesInside(lower, /*upperEnd*/ false, lowerMoment);
-
-	// 🛑 WHICH SIDE OF ITS EDGE A BOUNDARY STANDS ON IS SAID BEFORE ANYTHING RETURNS. It was said after the
-	// early return below, so a boundary that needs no cut - a date exactly on a grain edge - never said it, and
-	// the reader took it as INCLUDED: `period <= midnight` admits the stored row keyed by that midnight, which
-	// is the WHOLE DAY that starts there. "The balance before 10.01, excluding" answered 164 / 26 291.37 where
-	// the movements fold to 116 / 6 612 - the difference being every movement of 10.01, to the cent
-	// (measured 2026-09-20). The note above already says an excluded upper edge takes that grain wholly OUT;
-	// this is what makes it true.
-	read.m_toExcluding   = upper.m_excluding;
-	read.m_fromExcluding = lower.m_excluding;
 
 	if (!cutUpper && !cutLower)
 		return;

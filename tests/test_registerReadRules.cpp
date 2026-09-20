@@ -340,6 +340,20 @@ TEST(RegisterArmCut, AnExcludedDateOnAGrainEdgeNeedsNoCutAndStillSaysItIsExclude
     EXPECT_TRUE(read.m_toExcluding) << "said before the early return, or the reader reads `<=` and takes the day";
 }
 
+// ...on EVERY way out of the function, the one for a view with a single arm included. No register takes
+// that way today (each has a recorder); the day one does, the defect must not come back with it.
+TEST(RegisterArmCut, WithNothingToCutTheSideIsStillSaid)
+{
+    ibRegBound upper;
+    upper.m_date = ibValue(kMidnight);
+    upper.m_excluding = true;
+    ibMaterializeReadSpec read;
+    ibRegFillArmCut(read, static_cast<const ibValueMetaObjectAccumulationRegister*>(nullptr), upper);
+
+    EXPECT_TRUE(read.m_markColumn.IsEmpty()) << "one arm: nothing to cut, no mark";
+    EXPECT_TRUE(read.m_toExcluding);
+}
+
 // An INCLUDED midnight takes the instant and not the day: that is a partial grain, so it is cut there.
 TEST(RegisterArmCut, AnIncludedDateOnAGrainEdgeIsCutAtThatEdge)
 {
