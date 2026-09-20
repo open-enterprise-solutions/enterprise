@@ -1234,47 +1234,55 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			// everything that narrows it: its half of the cut, the upper bound, the caller's filters.
 			// The conditions above stay where they were; over rows already chosen by them they cost
 			// nothing and keep this a change of ROAD, not of meaning.
-			std::vector<wxString> carried;
-			const auto carry = [&carried](const wxString& name) {
-				if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
-					carried.push_back(name);
-			};
-			for (const wxString& k : spec.m_keyColumns) carry(k);
-			carry(spec.m_periodColumn);
-			carry(spec.m_markColumn);
-			for (const auto& b : spec.m_boundaryHead) carry(b.first);
-			for (const auto& b : spec.m_boundaryTail) carry(b.first);
-			for (const ibMaterializeReadColumn& c : spec.m_columns) { carry(c.m_columnA); carry(c.m_columnB); }
+			//
+			// ONLY WHERE THE SURFACE KEEPS THE HALVES APART (m_viewMoved). A reading that names one dressed
+			// relation for both - the accounting register's - would have each half select from that same
+			// union view: four arms expanded where there were two, the shard fold of the stored arm evaluated
+			// twice, and nothing gained, since neither half is any nearer an index than the OR was. It keeps
+			// the single selection above, exactly as it was.
+			if (!spec.m_viewMoved.IsEmpty()) {
+				std::vector<wxString> carried;
+				const auto carry = [&carried](const wxString& name) {
+					if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
+						carried.push_back(name);
+				};
+				for (const wxString& k : spec.m_keyColumns) carry(k);
+				carry(spec.m_periodColumn);
+				carry(spec.m_markColumn);
+				for (const auto& b : spec.m_boundaryHead) carry(b.first);
+				for (const auto& b : spec.m_boundaryTail) carry(b.first);
+				for (const ibMaterializeReadColumn& c : spec.m_columns) { carry(c.m_columnA); carry(c.m_columnB); }
 
-			// A plain turnover reads nothing below its interval: every stored row before `from` adds a zero to
-			// its group, and with all-zero rows dropped anyway the group is the same without them. Said to the
-			// stored half, it lets the index bound the period on BOTH sides — a day's turnovers no longer walk
-			// the warehouse's whole history. (With a head split the stored half is already bounded below.)
-			const bool boundStoredBelow = !readsHistory && !headSplit && spec.m_dropZeroRows
-				&& spec.m_from.GetType() == TYPE_DATE;
+				// A plain turnover reads nothing below its interval: every stored row before `from` adds a zero to
+				// its group, and with all-zero rows dropped anyway the group is the same without them. Said to the
+				// stored half, it lets the index bound the period on BOTH sides — a day's turnovers no longer walk
+				// the warehouse's whole history. (With a head split the stored half is already bounded below.)
+				const bool boundStoredBelow = !readsHistory && !headSplit && spec.m_dropZeroRows
+					&& spec.m_from.GetType() == TYPE_DATE;
 
-			const auto half = [&](const ibQueryExprPtr& cut, const wxString& relation) {
-				std::vector<ibQueryProjItem> columns;
-				for (const wxString& name : carried)
-					columns.push_back(ibQueryProjItem{ ibCol(name), wxString() });
-				ibDatabaseQueryBuilder arm;
-				arm.From(relation).Project(columns);
-				arm.Where(cut);
-				if (spec.m_to.GetType() == TYPE_DATE)
-					arm.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
-				for (const ibQueryExprPtr& f : spec.m_filters)
-					if (f) arm.Where(f);
-				return arm.Build().m_root;
-			};
-			// Each half of its OWN relation where the surface keeps them apart (m_viewMoved): asked of
-			// the union, the stored half still made the engine visit the movements to learn they hold
-			// no stored row, and the other way round (measured 2026-09-19: 0.15 s through the union
-			// against 0.05 s off the stored rows alone, for the same rows).
-			if (boundStoredBelow)
-				stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
-			filtersRideInside = true;
-			q.From(ibSubquery(ibUnionAll(half(stored, spec.m_view),
-				half(moved, spec.m_viewMoved.IsEmpty() ? spec.m_view : spec.m_viewMoved)), alias + wxT("_cut")));
+				const auto half = [&](const ibQueryExprPtr& cut, const wxString& relation) {
+					std::vector<ibQueryProjItem> columns;
+					for (const wxString& name : carried)
+						columns.push_back(ibQueryProjItem{ ibCol(name), wxString() });
+					ibDatabaseQueryBuilder arm;
+					arm.From(relation).Project(columns);
+					arm.Where(cut);
+					if (spec.m_to.GetType() == TYPE_DATE)
+						arm.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
+					for (const ibQueryExprPtr& f : spec.m_filters)
+						if (f) arm.Where(f);
+					return arm.Build().m_root;
+				};
+				// Each half of its OWN relation where the surface keeps them apart (m_viewMoved): asked of
+				// the union, the stored half still made the engine visit the movements to learn they hold
+				// no stored row, and the other way round (measured 2026-09-19: 0.15 s through the union
+				// against 0.05 s off the stored rows alone, for the same rows).
+				if (boundStoredBelow)
+					stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
+				filtersRideInside = true;
+				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_view),
+					half(moved, spec.m_viewMoved)), alias + wxT("_cut")));
+			}
 		}
 	}
 

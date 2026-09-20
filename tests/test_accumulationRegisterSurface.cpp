@@ -87,6 +87,30 @@ TEST(AccumulationRegisterSurface, TotalsCarryADimensionFirstIndex) {
 	EXPECT_TRUE(keyKept);
 }
 
+// A register with NO dimensions has nothing to put first: the index would be the period alone, which is how
+// the key already opens - one more index for the trigger to keep on every movement, serving no reading.
+TEST(AccumulationRegisterSurface, ARegisterWithoutDimensionsGetsNoDimensionFirstIndex) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	auto* reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
+		cfg.CreateMetaObject(g_metaAccumulationRegisterCLSID, root, /*runObject*/ false));
+	ASSERT_NE(reg, nullptr);
+	cfg.CreateMetaObject(g_metaResourceCLSID, reg, false);   // a resource, so the totals are declared at all
+
+	ibSchemaSnapshot snapshot;
+	reg->ContributeTables(snapshot);
+	bool sawTotals = false;
+	for (const ibSchemaTable& t : snapshot.Tables()) {
+		if (!t.m_derived || t.m_materialize.m_views.empty())
+			continue;
+		sawTotals = true;
+		for (const ibSchemaIndex& index : t.m_indexes)
+			EXPECT_FALSE(index.m_name.EndsWith(wxT("_DL"))) << index.m_name.ToStdString();
+	}
+	EXPECT_TRUE(sawTotals);
+}
+
 // The dressed view stays what it was — what a query reads directly — with both halves in it.
 TEST(AccumulationRegisterSurface, TheDressedViewIsUntouched) {
 	RegisterSurfaceFix f;

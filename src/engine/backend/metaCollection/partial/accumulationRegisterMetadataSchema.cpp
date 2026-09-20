@@ -150,7 +150,10 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	//
 	// As many leading columns as the engine's index will hold (ibDeclareLookupIndex), in the order the
 	// dimensions are declared — which is the order their author reads them in, most general first.
-	{
+	//
+	// A register with NO dimensions has nothing to put first: the index would be the period alone, which is
+	// how the key above already opens - one more index for the trigger to keep, serving no reading.
+	if (!GetDimensionArrayObject().empty()) {
 		std::vector<const ibBackendQueryColumn*> readCols;
 		for (const auto dimension : GetDimensionArrayObject())
 			readCols.push_back(dimension->GetQueryColumn());

@@ -215,13 +215,18 @@ TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
 	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL")));
 }
 
-// With no separate relation for the movements both halves read the one view — the road every other
-// register still takes — and they are still read apart.
-TEST(MaterializeCutRead, WithoutASecondRelationBothHalvesReadTheView) {
+// With no separate relation for the movements the reading stays ONE selection — the road every other
+// register (the accounting one) took before. Both halves would select from the same dressed union view:
+// four arms expanded where there were two, its shard fold evaluated twice, and neither half any nearer an
+// index than the OR it replaced.
+TEST(MaterializeCutRead, WithoutASecondRelationTheReadingStaysOneSelection) {
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
 	const wxString sql = ReadSql(BalanceRead(wxT("Reg9_Turnovers"), wxString(), moment, true));
-	EXPECT_TRUE(sql.Contains(wxT("UNION ALL")));
-	EXPECT_FALSE(sql.Contains(wxT("Reg9_FlowMoved")));
+	EXPECT_FALSE(sql.Contains(wxT("UNION ALL")));
+	EXPECT_FALSE(sql.Contains(wxT("_cut")));
+	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_Turnovers")));
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL")));        // the cut is still there, as the one condition it was
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL")));
 }
 
 // A reading that stops AT the grain needs no movements: no floor, no union — the stored rows alone.
