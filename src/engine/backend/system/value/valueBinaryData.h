@@ -53,6 +53,10 @@ public:
 	void ReadFile(const wxString& fileName);
 	void WriteFile(const wxString& fileName) const;
 
+	// A file's bytes, whole - the one place a file is read into memory (TextReader decodes what this hands
+	// over). `who` opens the refusal, so the message names the type the script was talking to.
+	static void ReadWholeFile(const wxString& fileName, const wxString& who, wxMemoryBuffer& bytes);
+
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
 	virtual wxString GetString() const;
 

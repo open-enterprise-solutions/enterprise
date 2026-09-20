@@ -154,7 +154,8 @@ TEST(TextWriter, WhatIsOnDiskAfterAWrite) {
 // half of a single-byte page is where the pages differ, which is the half this writes and reads back.
 TEST(TextWriter, AnsiAndOemAreTheSystemsOwnPages) {
 	const std::pair<ibTextEncoding, unsigned> pages[] = {
-		{ ibTextEncoding_ANSI, ::GetACP() }, { ibTextEncoding_OEM, ::GetOEMCP() } };
+		{ ibTextEncoding_ANSI, ::GetACP() }, { ibTextEncoding_OEM, ::GetOEMCP() },
+		{ ibTextEncoding_System, ::GetACP() } };   // on Windows the system's encoding IS its ANSI page
 
 	for (const auto& [encoding, page] : pages) {
 		CPINFO info{};

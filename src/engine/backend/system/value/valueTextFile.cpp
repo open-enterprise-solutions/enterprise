@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueTextFile.h"
+#include "valueBinaryData.h"   // ReadWholeFile - the one road a file is read into memory
 
 #include "backend/backend_exception.h"
 #include "backend/compiler/enumUnit.h"   // ConvertToEnumValue<> is declared in value.h and DEFINED here
@@ -77,7 +78,12 @@ std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
 		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
 #endif
 	case ibTextEncoding_System:
+#ifdef __WXMSW__
+		// On Windows the system's encoding IS its ANSI page - by the same road, for the same reason.
+		return std::make_unique<ibCodePageConv>(::GetACP());
+#else
 		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
+#endif
 	case ibTextEncoding_UTF8:
 	default:
 		// STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it.
@@ -128,24 +134,9 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 {
 	Close();
 
-	wxFFile file;
-	{
-		// A missing file is said in the platform's words below, not in a log line of the library's.
-		wxLogNull quiet;
-		file.Open(fileName, wxT("rb"));
-	}
-	if (!file.IsOpened())
-		ibBackendCoreException::Error(_("TextReader: cannot open the file '%s' for reading"), fileName);
-
-	const wxFileOffset length = file.Length();
-	wxMemoryBuffer bytes(length > 0 ? static_cast<size_t>(length) : 0);
-	if (length > 0) {
-		const size_t got = file.Read(bytes.GetData(), static_cast<size_t>(length));
-		if (got != static_cast<size_t>(length))
-			ibBackendCoreException::Error(_("TextReader: reading the file '%s' failed"), fileName);
-		bytes.SetDataLen(got);
-	}
-	file.Close();
+	// The bytes come whole, by the one road a file is read into memory (it refuses a file that does not fit).
+	wxMemoryBuffer bytes;
+	ibValueBinaryData::ReadWholeFile(fileName, wxT("TextReader"), bytes);
 
 	const unsigned char* data = static_cast<const unsigned char*>(bytes.GetData());
 	size_t size = bytes.GetDataLen(), skip = 0;
@@ -301,7 +292,8 @@ void ibValueTextWriter::Open(const wxString& fileName, ibTextEncoding encoding, 
 	// not: the mark is what breaks the first field for every reader that does not expect one.
 	if (encoding == ibTextEncoding_UTF16 && (!append || m_file->Length() == 0)) {
 		const unsigned char mark[2] = { 0xFF, 0xFE };
-		m_file->Write(mark, sizeof(mark));
+		if (m_file->Write(mark, sizeof(mark)) != sizeof(mark))
+			ibBackendCoreException::Error(_("TextWriter: writing to the file '%s' failed"), m_fileName);
 	}
 }
 
@@ -320,14 +312,29 @@ void ibValueTextWriter::Write(const wxString& text)
 		ibBackendCoreException::Error(_("TextWriter: writing to the file '%s' failed"), m_fileName);
 }
 
+// ⚠ THE TEXT IS ON DISK WHEN THE FILE CLOSED, NOT WHEN Write ANSWERED. The stream is buffered: a full disk, a
+// share that dropped - Write says yes to the buffer and the CLOSE is what reports it. A close taken on trust
+// lets a script delete its source believing the export whole. After a close that failed the stream is gone
+// all the same, so the handle is let go of rather than closed a second time by the destructor.
 void ibValueTextWriter::Close()
 {
-	if (m_file != nullptr) {
-		if (m_file->IsOpened())
-			m_file->Close();
-		m_file.reset();
-	}
+	if (m_file == nullptr)
+		return;
+
+	const std::unique_ptr<wxFFile> file = std::move(m_file);
 	m_conv.reset();
+	if (!file->IsOpened())
+		return;
+
+	bool closed = false;
+	{
+		wxLogNull quiet;
+		closed = file->Close();
+	}
+	if (!closed) {
+		file->Detach();
+		ibBackendCoreException::Error(_("TextWriter: the file '%s' could not be written to the end"), m_fileName);
+	}
 }
 
 bool ibValueTextWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
