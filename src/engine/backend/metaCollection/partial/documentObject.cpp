@@ -218,7 +218,14 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 		// A number that is owed is paid to the first handler that asks for it (OweUniqueIdentifier,
 		// commonObject.h). HERE, because this is the door a script reads an attribute through and it is not
 		// const: taking a number is a write, and a const read has no business doing one behind its caller.
-		if (IsIdentifierOwed()) {
+		//
+		// NOT FOR A WATCH. The debugger evaluates `ThisObject.Number` when somebody hovers over it at a
+		// breakpoint in Posting, and paying there would take the number and hold the numerator's row for as
+		// long as the person looks at the screen - a watch performing a write, which the write scope forbids
+		// in the same words (BeginWriteScope). A watch sees the number empty, as it is; the sandbox, whose
+		// transaction is always rolled back, is paid like any other caller.
+		const bool watch = ibBackendException::IsEvalMode() && !ibBackendException::IsEvalSandbox();
+		if (IsIdentifierOwed() && !watch) {
 			const auto code = m_metaObject->GetAttributeForCode();
 			if (code != nullptr && code->GetMetaID() == lPropData)
 				SettleUniqueIdentifier();

@@ -3445,6 +3445,28 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		}
 	}
 
+	// …and here the number is paid, if no handler asked for it sooner. The row was saved without it, so it goes
+	// there by one narrow UPDATE; the numerator's row is held from this line to the commit below.
+	//
+	// BEFORE the audit record, not after it: the record names the document by its caption, the caption is
+	// number + date, and a const read of the number pays nothing - paid after, every new document was audited
+	// as "posted" with no number in its name (measured 2026-09-20).
+	//
+	// …and the number is CHECKED. While it was owed the fill check let it through (SaveData); a generator that
+	// came back with nothing would otherwise commit a document with an empty number, which that check exists
+	// to refuse.
+	if (numberOwed) {
+		SettleUniqueIdentifier();
+		if (!IsSetUniqueIdentifier() || !SaveUniqueIdentifier()) {
+			ForgetOwedIdentifier();
+			scope.SafeRollBackTransaction();
+			ibBackendCoreException::Error(_("%s: failed to take or save the number"), GetSourceCaption());
+			return false;
+		}
+		m_identifierTaken = false;   // kept: the write made it
+		owedGuard.m_armed = false;
+	}
+
 	// Posting / UndoPosting audit. Layered on top of the generic
 	// record.saved that CommitWriteScope emits — admin sees BOTH the
 	// row change and the posting state change as distinct events.
@@ -3460,20 +3482,6 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
 			? wxT("posted") : wxT("unposted");
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
-	}
-
-	// …and here the number is paid, if no handler asked for it sooner. The row was saved without it, so it goes
-	// there by one narrow UPDATE; the numerator's row is held from this line to the commit below.
-	if (numberOwed) {
-		SettleUniqueIdentifier();
-		if (!SaveUniqueIdentifier()) {
-			ForgetOwedIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to save the number"), GetSourceCaption());
-			return false;
-		}
-		m_identifierTaken = false;   // kept: the write made it
-		owedGuard.m_armed = false;
 	}
 
 	CommitWriteScope(scope, valueForm, newObject);

@@ -2526,10 +2526,16 @@ protected:
 	// So the write only OWES the number (OweUniqueIdentifier), and pays just before the commit
 	// (SettleUniqueIdentifier): the row is then held for the instant it takes to commit. A handler that READS
 	// the number - `ThisObject.Number` in a message, a number copied into a movement - is paid on the spot
-	// (the document's GetPropVal, the door a script reads through), so nothing a configuration could see has
-	// changed; it simply keeps the old queue for itself. A const read in C++ (GetValueByMetaID) pays nothing:
-	// between the debt and the commit it sees the number empty, as it is. The numbering stays unbroken either
-	// way: it is still one transaction.
+	// (the document's GetPropVal, the door a script reads through); such a document simply keeps the old queue
+	// for itself. The numbering stays unbroken either way: it is still one transaction.
+	//
+	// ⚠ WHAT A CONFIGURATION CAN SEE OF THIS, said plainly. Between the debt and the payment the number is
+	// EMPTY everywhere except that door: in the row itself (a handler that SELECTs `Number ... WHERE Ref = &Ref`,
+	// or reads `Ref.Number`, or a record-set module reading `Recorder.Number`, gets "" for a NEW document), and in
+	// the document's caption (`"" + ThisObject`, an error message of a stage that failed). Only a NEW document,
+	// only during its first write, and the number it would have shown is one it does not keep if the write
+	// fails. The audit record is written after the payment and carries the number. A const read in C++
+	// (GetValueByMetaID) pays nothing, and neither does a debugger watch.
 	void OweUniqueIdentifier(const wxString& strPrefix);
 	bool SettleUniqueIdentifier();          // takes the number if it is still owed; true when it was taken by this call
 	bool SaveUniqueIdentifier();            // the row was saved without it - one narrow UPDATE puts it there
