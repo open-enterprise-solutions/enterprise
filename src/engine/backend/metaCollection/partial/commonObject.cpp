@@ -2637,12 +2637,6 @@ bool ibValueRecordDataObjectRef::SetValueByMetaID(const ibMetaID& id, const ibVa
 
 bool ibValueRecordDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
-	// A number that is owed is paid to whoever asks for it first (see OweUniqueIdentifier).
-	if (m_identifierOwed) {
-		const auto code = m_metaObject->GetAttributeForCode();
-		if (code != nullptr && code->GetMetaID() == id)
-			const_cast<ibValueRecordDataObjectRef*>(this)->SettleUniqueIdentifier();
-	}
 	if (m_metaObject->IsDataReference(id)) {
 		pvarMetaVal = GetReference();
 		return true; 

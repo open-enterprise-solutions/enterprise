@@ -215,6 +215,14 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 			pvarPropVal = GetReference();
 			return true;
 		}
+		// A number that is owed is paid to the first handler that asks for it (OweUniqueIdentifier,
+		// commonObject.h). HERE, because this is the door a script reads an attribute through and it is not
+		// const: taking a number is a write, and a const read has no business doing one behind its caller.
+		if (IsIdentifierOwed()) {
+			const auto code = m_metaObject->GetAttributeForCode();
+			if (code != nullptr && code->GetMetaID() == lPropData)
+				SettleUniqueIdentifier();
+		}
 		return GetValueByMetaID(lPropData, pvarPropVal);
 	}
 	return false;

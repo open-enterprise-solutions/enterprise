@@ -2526,8 +2526,10 @@ protected:
 	// So the write only OWES the number (OweUniqueIdentifier), and pays just before the commit
 	// (SettleUniqueIdentifier): the row is then held for the instant it takes to commit. A handler that READS
 	// the number - `ThisObject.Number` in a message, a number copied into a movement - is paid on the spot
-	// (GetValueByMetaID), so nothing a configuration could see has changed; it simply keeps the old queue for
-	// itself. The numbering stays unbroken either way: it is still one transaction.
+	// (the document's GetPropVal, the door a script reads through), so nothing a configuration could see has
+	// changed; it simply keeps the old queue for itself. A const read in C++ (GetValueByMetaID) pays nothing:
+	// between the debt and the commit it sees the number empty, as it is. The numbering stays unbroken either
+	// way: it is still one transaction.
 	void OweUniqueIdentifier(const wxString& strPrefix);
 	bool SettleUniqueIdentifier();          // takes the number if it is still owed; true when it was taken by this call
 	bool SaveUniqueIdentifier();            // the row was saved without it - one narrow UPDATE puts it there
@@ -2552,10 +2554,10 @@ protected:
 	friend class ibValueTabularSectionDataObjectRef;
 
 	bool m_objModified;
-	// The number this write owes (see OweUniqueIdentifier). Mutable: it is paid from a read.
-	mutable bool     m_identifierOwed = false;
-	mutable bool     m_identifierTaken = false;   // taken during THIS write - what a failure gives back
-	mutable wxString m_identifierPrefix;
+	// The number this write owes (see OweUniqueIdentifier).
+	bool     m_identifierOwed = false;
+	bool     m_identifierTaken = false;   // taken during THIS write - what a failure gives back
+	wxString m_identifierPrefix;
 	const ibValueMetaObjectRecordDataMutableRef* m_metaObject;
 	ibReference* m_reference_impl;
 
