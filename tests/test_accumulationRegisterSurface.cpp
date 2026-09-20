@@ -91,6 +91,43 @@ TEST(AccumulationRegisterSurface, TotalsCarryADimensionFirstIndex) {
 	EXPECT_TRUE(keyKept);
 }
 
+// 🛑 THE PERIOD CLOSES THE INDEX WHATEVER IS CUT. "Equalities on the dimensions, a RANGE on the period" is served
+// only while the period stands right after the dimensions that were kept. The columns were cut greedily from
+// the end, so with a key too wide for the engine it was the PERIOD that went first - the index then narrowed by
+// the dimensions and walked the key's whole history. Asked with a ceiling of the test's own: a suite has no
+// engine to ask, and with none nothing is ever cut.
+TEST(AccumulationRegisterSurface, WhenTheKeyIsTooWideTheDimensionsAreCutAndThePeriodStays) {
+	RegisterSurfaceFix f;
+	ASSERT_NE(f.reg, nullptr);
+	ASSERT_NE(f.totals, nullptr);
+	const ibSchemaIndex* read = nullptr;
+	for (const ibSchemaIndex& index : f.totals->m_indexes)
+		if (index.m_name.EndsWith(wxT("_DL")))
+			read = &index;
+	ASSERT_NE(read, nullptr);
+	ASSERT_EQ(read->m_columns.size(), 3u);
+	const ibBackendQueryColumn* first = read->m_columns[0];
+	const ibBackendQueryColumn* second = read->m_columns[1];
+	const ibBackendQueryColumn* period = read->m_columns[2];
+
+	const size_t room = DescribeColumnLayout(first).size() + DescribeColumnLayout(period).size();
+	const auto ceiling = [room](size_t fields, size_t) { return fields <= room; };   // the first dimension + the period, no more
+
+	const std::vector<const ibBackendQueryColumn*> fitted = ibFitLookupColumns({ first, second }, period, ceiling);
+	ASSERT_EQ(fitted.size(), 2u);
+	EXPECT_EQ(fitted[0], first);
+	EXPECT_EQ(fitted[1], period) << "the second dimension is what gives way, not the period";
+
+	// Without a closing column the cut is what it always was - the leading columns that fit…
+	const std::vector<const ibBackendQueryColumn*> leading = ibFitLookupColumns({ first, second, period }, nullptr, ceiling);
+	ASSERT_FALSE(leading.empty());
+	EXPECT_EQ(leading.front(), first);
+	EXPECT_NE(leading.back(), period) << "this is the defect the closing column is there for";
+
+	// …and with no ceiling at all nothing is cut.
+	EXPECT_EQ(ibFitLookupColumns({ first, second }, period, nullptr).size(), 3u);
+}
+
 // A register with NO dimensions has nothing to put first: the index would be the period alone, which is how
 // the key already opens - one more index for the trigger to keep on every movement, serving no reading.
 TEST(AccumulationRegisterSurface, ARegisterWithoutDimensionsGetsNoDimensionFirstIndex) {

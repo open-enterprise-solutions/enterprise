@@ -384,8 +384,21 @@ BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& table
 // lookup path for reads that name those columns first: the second index of a hashed totals key above,
 // and a calculation register's "records of this employee". Both ceilings are the engine's (segments,
 // and bytes — a string is declared in characters and indexed in bytes); nothing fits = no index.
+//
+// ⭐ `closing` IS A COLUMN THE INDEX ENDS WITH WHATEVER IS CUT. "Equalities on these, a RANGE on that" - the
+// dimensions of a totals table and its period - is served only while the range column stands right after the
+// equalities that were kept. Cut greedily from the end it was the PERIOD that went first, and the index a
+// register with many dimensions got could narrow by them and then walk the key's whole history. With a
+// closing column the cut takes trailing `cols` instead and the closing one stays last.
 BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
-                                      const std::vector<const ibBackendQueryColumn*>& cols);
+                                      const std::vector<const ibBackendQueryColumn*>& cols,
+                                      const ibBackendQueryColumn* closing = nullptr);
+
+// Which columns such an index takes - apart from the declaration so that the cut can be asked with a ceiling
+// of the caller's own (`fits(fields, bytes)`): a suite has no engine to ask, and with none nothing is ever cut.
+BACKEND_API std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+	const std::function<bool(size_t fields, size_t bytes)>& fits);
 
 class BACKEND_API ibSchemaSnapshot
 {
