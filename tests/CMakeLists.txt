@@ -34,6 +34,7 @@ add_executable(oes_tests
     test_string.cpp
     bench_string.cpp
     test_number.cpp
+    test_numberCalculator.cpp
     test_formatString.cpp
     test_blockSyntaxLINQ.cpp
     test_byteCodeAOT.cpp

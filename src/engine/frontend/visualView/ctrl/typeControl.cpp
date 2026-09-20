@@ -8,9 +8,13 @@
 #include <wx/calctrl.h>
 #include <wx/timectrl.h>
 #include <wx/popupwin.h>
+#include <wx/button.h>
+#include <wx/stattext.h>
+#include <wx/sizer.h>
 
 
 #include <map>
+#include <functional>
 
 #include "frontend/win/ctrls/dynamicBorder.h"
 #include "frontend/visualView/ctrl/frame.h"
@@ -21,6 +25,7 @@
 #include "frontend/win/dlgs/selectPredefined.h"      // the designer's declared-value window — one call, no widgets here
 
 #include "backend/appData.h"                                             // DesignerMode — the two roads part here
+#include "backend/utils/numberCalculator.hpp"                            // the arithmetic of the number field's calculator
 #include "backend/system/systemManager.h"                                // Message — "nothing is declared" is an answer
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
@@ -160,11 +165,180 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	return false;
 }
 
+namespace {
+
+// THE CALCULATOR A NUMBER FIELD OFFERS. The "..." beside a sum used to do nothing at all for a number
+// (it was answered `true` and left there), so the button was a button to nowhere. A number is worked out
+// more often than it is looked up, so what it opens is a pocket calculator: the field's own value is on
+// the display, a figure can be keyed in or calculated, and OK puts the result into the field.
+//
+// The arithmetic is ibNumberCalculator (exact decimals, no window); this is only its keys.
+class ibNumberCalculatorPopup : public wxPopupTransientWindow {
+public:
+
+	ibNumberCalculatorPopup(ibControlFrame* owner, wxWindow* parent, const ibNumber& initial)
+		: wxPopupTransientWindow(parent, wxBORDER_SIMPLE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS),
+		m_owner(owner), m_calc(initial)
+	{
+		SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_FRAMEBK));
+
+		const int gap = FromDIP(3);
+		wxBoxSizer* main = new wxBoxSizer(wxVERTICAL);
+
+		// The open operation, small, above the figure it is waiting for.
+		m_operation = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+			wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+		m_operation->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		main->Add(m_operation, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
+
+		m_display = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+			wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+		wxFont big = m_display->GetFont();
+		big.SetPointSize(big.GetPointSize() + 6);
+		m_display->SetFont(big);
+		main->Add(m_display, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxBOTTOM, gap * 2));
+
+		const wxSize keySize(FromDIP(48), FromDIP(34));
+		wxFlexGridSizer* keys = new wxFlexGridSizer(4, gap, gap);
+
+		using Op = ibNumberCalculator::Op;
+		const auto key = [&](const wxString& label, std::function<void()> action) {
+			wxButton* button = new wxButton(this, wxID_ANY, label, wxDefaultPosition, keySize);
+			button->Bind(wxEVT_BUTTON, [this, action](wxCommandEvent&) { action(); Refresh_(); });
+			keys->Add(button, wxSizerFlags().Expand());
+		};
+		key(wxT("C"),        [this] { m_calc.Clear(); });
+		key(wxT("⌫"),   [this] { m_calc.Backspace(); });
+		key(wxT("±"),   [this] { m_calc.Negate(); });
+		key(wxT("÷"),   [this] { m_calc.Operator(Op::Divide); });
+		for (int row = 2; row >= 0; --row) {
+			for (int col = 0; col < 3; ++col) {
+				const int digit = row * 3 + col + 1;
+				key(wxString::Format(wxT("%d"), digit), [this, digit] { m_calc.Digit(digit); });
+			}
+			key(row == 2 ? wxT("×") : row == 1 ? wxT("−") : wxT("+"),
+				[this, row] { m_calc.Operator(row == 2 ? Op::Multiply : row == 1 ? Op::Subtract : Op::Add); });
+		}
+		key(wxT("0"), [this] { m_calc.Digit(0); });
+		key(wxT("."), [this] { m_calc.Point(); });
+		key(wxT("="), [this] { m_calc.Equals(); });
+
+		wxButton* ok = new wxButton(this, wxID_OK, wxEmptyString, wxDefaultPosition, keySize);
+		ok->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Accept(); });
+		keys->Add(ok, wxSizerFlags().Expand());
+
+		main->Add(keys, wxSizerFlags().Expand().Border(wxALL, gap * 2));
+		SetSizerAndFit(main);
+
+		// Keys typed on the keyboard work as well as the ones clicked — a sum is keyed in far more
+		// often than it is clicked in.
+		Bind(wxEVT_CHAR_HOOK, &ibNumberCalculatorPopup::OnCharHook, this);
+		for (wxWindow* child : GetChildren())
+			child->Bind(wxEVT_CHAR_HOOK, &ibNumberCalculatorPopup::OnCharHook, this);
+
+		Refresh_();
+	}
+
+	virtual void Popup(wxWindow* focus = nullptr) override
+	{
+		wxPoint pos = m_parent->GetScreenPosition();
+		pos.x += (m_parent->GetSize().x - GetSize().x + 2);
+		pos.y += m_parent->GetSize().y;
+		SetPosition(pos);
+		wxPopupTransientWindow::Popup(focus);
+		SetFocus();
+	}
+
+	// Closed by a click elsewhere: nothing is taken into the field, and the window goes.
+	virtual void OnDismiss() override
+	{
+		Destroy();
+	}
+
+private:
+
+	void Refresh_()
+	{
+		m_display->SetLabel(m_calc.Display());
+		switch (m_calc.Pending()) {
+		case ibNumberCalculator::Op::Add:      m_operation->SetLabel(wxT("+")); break;
+		case ibNumberCalculator::Op::Subtract: m_operation->SetLabel(wxT("−")); break;
+		case ibNumberCalculator::Op::Multiply: m_operation->SetLabel(wxT("×")); break;
+		case ibNumberCalculator::Op::Divide:   m_operation->SetLabel(wxT("÷")); break;
+		default:                               m_operation->SetLabel(wxT(" ")); break;
+		}
+	}
+
+	// OK: whatever is worked out goes into the field, as a value of the field's own kind.
+	void Accept()
+	{
+		if (m_calc.HasError())
+			return;
+		m_calc.Equals();
+		ibValue result(m_calc.Value());
+		ibControlFrame* owner = m_owner;
+		Dismiss();
+		Destroy();
+		if (owner != nullptr)
+			owner->ChoiceProcessing(result);
+	}
+
+	void OnCharHook(wxKeyEvent& event)
+	{
+		using Op = ibNumberCalculator::Op;
+		const int code = event.GetKeyCode();
+		const wxUniChar ch = event.GetUnicodeKey();
+
+		if (code == WXK_ESCAPE) {
+			Dismiss();
+			Destroy();
+			return;
+		}
+		// Enter finishes an open operation first, and only then takes the result.
+		if (code == WXK_RETURN || code == WXK_NUMPAD_ENTER) {
+			if (m_calc.Pending() != Op::None) {
+				m_calc.Equals();
+				Refresh_();
+			}
+			else {
+				Accept();
+			}
+			return;
+		}
+		if (code == WXK_BACK) { m_calc.Backspace(); Refresh_(); return; }
+		if (code == WXK_DELETE) { m_calc.Clear(); Refresh_(); return; }
+
+		if (ch >= wxT('0') && ch <= wxT('9')) m_calc.Digit(static_cast<int>(ch.GetValue() - wxT('0')));
+		else if (ch == wxT('.') || ch == wxT(',')) m_calc.Point();
+		else if (ch == wxT('+')) m_calc.Operator(Op::Add);
+		else if (ch == wxT('-')) m_calc.Operator(Op::Subtract);
+		else if (ch == wxT('*')) m_calc.Operator(Op::Multiply);
+		else if (ch == wxT('/')) m_calc.Operator(Op::Divide);
+		else if (ch == wxT('=')) m_calc.Equals();
+		else { event.Skip(); return; }
+		Refresh_();
+	}
+
+	ibControlFrame*   m_owner = nullptr;
+	ibNumberCalculator m_calc;
+	wxStaticText*     m_display = nullptr;
+	wxStaticText*     m_operation = nullptr;
+};
+
+} // namespace
+
+
 bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent) {
 
 	ibValueTypes valType = ibValue::GetVTByID(clsid);
 
 	if (valType == ibValueTypes::TYPE_NUMBER) {
+		if (ownerValue != nullptr) {
+			ibValue current; ownerValue->GetControlValue(current);
+			ibNumberCalculatorPopup* popup = new ibNumberCalculatorPopup(ownerValue, parent,
+				current.GetType() == ibValueTypes::TYPE_NUMBER ? current.GetNumber() : ibNumber(0));
+			popup->Popup();
+		}
 		return true;
 	}
 	else if (valType == ibValueTypes::TYPE_DATE) {

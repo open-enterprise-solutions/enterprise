@@ -21,6 +21,7 @@
 #include "backend/compiler/value.h"                // control_to_clsid
 
 #include <wx/frame.h>
+#include "frontend/win/ctrls/controlTextEditor.h"   // ibControlTextEditor — the narrow-field tests
 
 namespace {
 
@@ -109,4 +110,89 @@ TEST_F(VisualHostFix, CreateVisualHostMaterialisesControl)
 		<< "the host walker builds the form's wx tree";
 	EXPECT_NE(host->GetWxObject(button), nullptr)
 		<< "the button control materialised into a wx widget in the host map";
+}
+
+
+// ------------------ a field the form made narrow still has somewhere to type -------------------
+//
+// A sum was given 72 pixels by the form, and the caption plus the "..." and "x" buttons are drawn
+// INSIDE that width: they took all of it and the text area was zero wide - nowhere to enter the value.
+
+namespace {
+
+// The text area is the one child window the editor owns.
+int TextAreaWidth(ibControlTextEditor* editor)
+{
+	for (wxWindow* child : editor->GetChildren())
+		if (child != nullptr)
+			return child->GetSize().x;
+	return -1;
+}
+
+ibControlTextEditor* MakeSumField(wxWindow* parent, int width)
+{
+	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);   // parent-owned
+	editor->SetLabel(wxT("Сумма"));
+	editor->ShowSelectButton(true);
+	editor->ShowClearButton(true);
+	editor->SetMinSize(wxSize(width, -1));
+	editor->SetMaxSize(wxSize(width, -1));
+	return editor;
+}
+
+} // namespace
+
+TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_IsRaisedToLeaveARoomToType)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibControlTextEditor* editor = MakeSumField(parent, 72);
+	editor->KeepRoomForText();
+
+	const int needed = editor->GetMinimumUsableWidth();
+	EXPECT_GT(needed, 72);
+	EXPECT_EQ(editor->GetMinSize().x, needed);
+	EXPECT_EQ(editor->GetMaxSize().x, needed);   // a maximum below the minimum would undo it
+
+	editor->SetSize(wxSize(editor->GetMinSize().x, 28));
+	editor->Layout();
+	EXPECT_GE(TextAreaWidth(editor), editor->FromDIP(ibControlTextEditor::kMinimumTextWidth) - 2);
+}
+
+TEST_F(VisualHostFix, TextEditor_FormWidthAlreadyWideEnough_IsLeftAsTheAuthorSetIt)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibControlTextEditor* editor = MakeSumField(parent, 400);
+	editor->KeepRoomForText();
+
+	EXPECT_EQ(editor->GetMinSize().x, 400);
+	EXPECT_EQ(editor->GetMaxSize().x, 400);
+}
+
+TEST_F(VisualHostFix, TextEditor_NoWidthSetByTheForm_StaysUnset)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);
+	editor->SetLabel(wxT("Сумма"));
+	editor->ShowSelectButton(true);
+	editor->KeepRoomForText();
+
+	EXPECT_LE(editor->GetMinSize().x, 0);   // the default best size already leaves room; nothing to force
+	EXPECT_LE(editor->GetMaxSize().x, 0);
+}
+
+TEST_F(VisualHostFix, TextEditor_MoreButtonsVisible_NeedMoreWidth)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);
+	editor->SetLabel(wxT("Сумма"));
+	editor->ShowSelectButton(false);
+	editor->ShowClearButton(false);
+	const int bare = editor->GetMinimumUsableWidth();
+	editor->ShowSelectButton(true);
+	editor->ShowClearButton(true);
+	EXPECT_GT(editor->GetMinimumUsableWidth(), bare);
 }
