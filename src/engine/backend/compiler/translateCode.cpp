@@ -1157,18 +1157,25 @@ bool ibTranslateCode::PrepareLexem()
 
 				const int k = IsKeyWord(s);
 
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
 				//undefined
-				if (k == KEY_UNDEFINED) {
+				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
 				}
 				//boolean
-				else if (k == KEY_TRUE || k == KEY_FALSE) {
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetBoolean(s);
 				}
 				//null
-				else if (k == KEY_NULL) {
+				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
 				}
@@ -1486,18 +1493,25 @@ void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
 
 				const int k = IsKeyWord(s);
 
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
 				//undefined
-				if (k == KEY_UNDEFINED) {
+				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
 				}
 				//boolean
-				else if (k == KEY_TRUE || k == KEY_FALSE) {
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetBoolean(s);
 				}
 				//null
-				else if (k == KEY_NULL) {
+				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
 				}
