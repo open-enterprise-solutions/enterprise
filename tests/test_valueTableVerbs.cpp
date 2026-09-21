@@ -316,6 +316,40 @@ TEST_F(ValueTableVerbs, TheTable_ExposesTheNewVerbs)
     EXPECT_GE(m_table->FindMethod(wxT("Sort")), 0);
 }
 
+// ------------------------------------- Clone ----------------------------------------
+
+// A copy is the same columns and the same rows, and NOTHING shared. Clone answered with an EMPTY table
+// whose column collection was the original's own, so a column added to the copy appeared in the
+// original (2026-09-21).
+TEST_F(ValueTableVerbs, Clone_CopiesColumnsAndRows_AndSharesNothing)
+{
+    Column(wxT("Code")); Column(wxT("Name"));
+    AddRow({ Text(wxT("A")), Text(wxT("one")) });
+    AddRow({ Text(wxT("B")), Text(wxT("two")) });
+
+    const ibValue copyValue = Call(wxT("Clone"), {});
+    ibValueModelTable* const copy = copyValue.ConvertToType<ibValueModelTable>();
+    ASSERT_NE(copy, nullptr);
+    ASSERT_EQ(copy->GetRowCount(), 2);
+    ASSERT_EQ(copy->GetColumnCollection()->GetColumnCount(), 2u);
+
+    ibValue row;
+    ASSERT_TRUE(copy->GetAt(ibValue(1), row));
+    EXPECT_EQ(Cell(row, wxT("Code")), wxT("B"));
+    EXPECT_EQ(Cell(row, wxT("Name")), wxT("two"));
+
+    // Changing the copy does not change the original: a cell, a new row, a new column.
+    const long prop = row.FindProp(wxT("Name"));
+    ASSERT_GE(prop, 0);
+    row.SetPropVal(prop, Text(wxT("changed")));
+    copy->AppendRow();
+    copy->GetColumnCollection()->AddColumn(wxT("Extra"), ibTypeDescription(), wxT("Extra"));
+
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("one,two"));
+    EXPECT_EQ(m_table->GetRowCount(), 2);
+    EXPECT_EQ(m_table->GetColumnCollection()->GetColumnCount(), 2u);
+}
+
 // A column added with no type holds a string of ANY length: it carried the designer's default of ten
 // characters, and a cell kept the first ten of whatever was written into it (2026-09-21).
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)

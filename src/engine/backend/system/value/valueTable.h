@@ -348,7 +348,9 @@ public:
 	}
 
 	ibValueModelTable();
-	ibValueModelTable(const ibValueModelTable& val);
+	// No copy constructor: the one there was built no rows and took the SAME column collection, so the only
+	// caller - Clone - answered with an empty table whose columns were the original's. A copy is Clone.
+	ibValueModelTable(const ibValueModelTable& val) = delete;
 	virtual ~ibValueModelTable();
 
 	// Two different questions, and the front answers both: WHERE it goes is the selection (user on row 3 + Add
@@ -460,8 +462,8 @@ public:
 	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
 	// sense a database layer or a drag item uses it in. It no longer collides with anything: the
 	// root's packed-form copy is `ibValue::CloneValue`, which is a different operation and now
-	// carries a different name (see value.h).
-	ibValueModelTable* Clone() const { return new ibValueModelTable(*this); }
+	// carries a different name (see value.h). The same columns and the same rows, nothing shared.
+	ibValuePtr<ibValueModelTable> Clone() const;
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 

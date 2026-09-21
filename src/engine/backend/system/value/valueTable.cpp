@@ -50,11 +50,41 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 	// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual bind.)
 }
 
-ibValueModelTable::ibValueModelTable(const ibValueModelTable& valueTable) : ibValueModelStorage(),
-m_tableColumnCollection(valueTable.m_tableColumnCollection)
+// ⭐ A COPY IS THE SAME COLUMNS AND THE SAME ROWS, AND NOTHING SHARED. It was `new ibValueModelTable(*this)`,
+// and that copy constructor built no rows and took the original's column collection itself: `t.Clone()`
+// came back EMPTY, and a column added to the copy was added to the original (read 2026-09-21; no test
+// had asked). The columns are declared again - name, type, caption, width, index - and each row's
+// cells are carried across by the column they stand in; the values themselves are copied as values, so a
+// reference in a cell is the same reference in both.
+ibValuePtr<ibValueModelTable> ibValueModelTable::Clone() const
 {
-	m_members.Bind(this, &ibValueModelTable::FillMembers);
-	// (RAM composer auto-bound in ibValueModelStorage's ctor.)
+	ibValuePtr<ibValueModelTable> copy(new ibValueModelTable());
+
+	std::vector<std::pair<ibMetaID, ibMetaID>> columns;   // a column here -> the same column there
+	for (unsigned int i = 0; i < m_tableColumnCollection->GetColumnCount(); ++i) {
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const from = m_tableColumnCollection->GetColumnInfo(i);
+		if (from == nullptr)
+			continue;
+		ibValueModelColumnCollection::ibValueModelColumnInfo* const made = copy->m_tableColumnCollection->AddColumn(
+			from->GetColumnName(), from->GetColumnType(), from->GetColumnCaption(), from->GetColumnWidth());
+		if (made == nullptr)
+			continue;
+		made->SetColumnIndexed(from->IsColumnIndexed());
+		columns.emplace_back(static_cast<ibMetaID>(from->GetColumnID()), static_cast<ibMetaID>(made->GetColumnID()));
+	}
+
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const from = GetViewData<ibComposerNode>(GetItem(row));
+		if (from == nullptr)
+			continue;
+		const long at = copy->AppendRow();
+		ibComposerNode* const to = copy->GetViewData<ibComposerNode>(copy->GetItem(at));
+		if (to == nullptr)
+			continue;
+		for (const std::pair<ibMetaID, ibMetaID>& column : columns)
+			to->SetValue(column.second, from->GetTableValue(column.first));
+	}
+	return copy;
 }
 
 ibValueModelTable::~ibValueModelTable()
