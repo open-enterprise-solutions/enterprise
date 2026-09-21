@@ -16,6 +16,7 @@
 // so a report that printed on three pages here prints on three there.
 
 #include "backend/sheetFormat/sheetFormatDocx.h"
+#include "backend/backend_localization.h"   // a caption goes out in one language
 
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -403,7 +404,8 @@ bool ibSheetFormatDocx::Write(const wxString& fileName, const ibSpreadsheetDescr
 				}
 			}
 
-			const wxString text = cell != nullptr ? cell->GetValue() : wxString();
+			// the text, not the stored form — see the xlsx writer
+			const wxString text = cell != nullptr ? ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue()) : wxString();
 
 			wxString paragraph = wxT("<w:p>");
 			if (!paragraphProperties.IsEmpty())

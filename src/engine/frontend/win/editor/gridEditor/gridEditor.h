@@ -393,25 +393,12 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 			if (col >= static_cast<int>(m_data[row].GetCount()))
 				return nullptr;
 
+			// A caption and a template are asked for AS WRITTEN — every language, for the editor that edits
+			// them. The stored form of a plain text is the language in force (CreateLocalizationRawLocText),
+			// which the text fills used to take apart by hand and lost: a cell holding plain text came back empty.
 			const ibSpreadsheetFillType typeFill = GetTypeString(row, col);
-			if (stringUtils::CompareString(typeName, s_strTypeTextOrString)) {
-				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					ibBackendLocalizationEntryArray array;
-					ibBackendLocalization::CreateLocalizationArray(m_data[row][col], array);
-					wxString* s = new wxString;
-					ibBackendLocalization::GetRawLocText(array, *s);
-					return s;
-				}
-				return new wxString(ibBackendLocalization::CreateLocalizationRawLocText(m_data[row][col]));
-			}
-			else if (stringUtils::CompareString(typeName, s_strTypeTemplate)) {
-				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					ibBackendLocalizationEntryArray array;
-					ibBackendLocalization::CreateLocalizationArray(m_data[row][col], array);
-					wxString* s = new wxString;
-					ibBackendLocalization::GetRawLocText(array, *s);
-					return s;
-				}
+			if (stringUtils::CompareString(typeName, s_strTypeTextOrString)
+				|| stringUtils::CompareString(typeName, s_strTypeTemplate)) {
 				return new wxString(ibBackendLocalization::CreateLocalizationRawLocText(m_data[row][col]));
 			}
 			else if (stringUtils::CompareString(typeName, s_strTypeParameter)) {
