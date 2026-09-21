@@ -19,6 +19,7 @@
 
 #include "frontend/visualView/visualHostClient.h"  // ibVisualHostClient + ibFormVisualDocument
 #include "backend/compiler/value.h"                // control_to_clsid
+#include "frontend/visualView/ctrl/notebook.h"      // g_controlNotebookCLSID / g_controlNotebookPageCLSID
 
 #include <wx/frame.h>
 
@@ -109,4 +110,66 @@ TEST_F(VisualHostFix, CreateVisualHostMaterialisesControl)
 		<< "the host walker builds the form's wx tree";
 	EXPECT_NE(host->GetWxObject(button), nullptr)
 		<< "the button control materialised into a wx widget in the host map";
+}
+
+// ---------------------------------------------------------------------------
+// A NOTEBOOK PAGE WITH SEVERAL CONTROLS UNDER IT (#160).
+//
+// The form factory wraps every control added to a NotebookPage in a SizerItem that sits directly under
+// the page, so a page with several controls has several SizerItems as direct children — and that is
+// the ordinary shape, not an odd one. Opening the item form of a catalog built that way crashed
+// `enterprise` in wxSizer::SetContainingWindow, called from RefreshControl's `wxparent->SetSizer(...)`.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Notebook -> one page -> `controls` buttons, built the way the designer's Add command builds them.
+ibVisualHostClient* MakeNotebookHost(VisualHostFix& fix, ibValueForm*& form, int controls, ibValueFrame** outPage = nullptr)
+{
+	form = fix.NewForm();
+	if (form == nullptr) return nullptr;
+
+	// The form is a frame: a control added to it comes back wrapped in a SizerItem, and the notebook
+	// itself is that item's only child.
+	ibValueFrame* notebookItem = form->NewObject(g_controlNotebookCLSID, form);
+	if (notebookItem == nullptr) return nullptr;
+	ibValueFrame* notebook = notebookItem->GetChildCount() > 0 ? notebookItem->GetChild(0) : notebookItem;
+
+	ibValueFrame* page = form->NewObject(g_controlNotebookPageCLSID, notebook);
+	if (page == nullptr) return nullptr;
+	if (outPage != nullptr) *outPage = page;
+
+	for (int i = 0; i < controls; ++i)
+		form->NewObject(g_hostButtonCLSID, page);
+
+	auto* doc = new ibFormVisualDocument(form);                 // leaked, see the file header
+	return new ibVisualHostClient(doc, form, fix.parent);       // leaked (parent child)
+}
+
+} // namespace
+
+TEST_F(VisualHostFix, NotebookPage_OneControl_Builds)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibValueForm* form = nullptr;
+	ibVisualHostClient* host = MakeNotebookHost(*this, form, 1);
+	ASSERT_NE(host, nullptr);
+
+	EXPECT_TRUE(host->CreateAndUpdateVisualHost());
+}
+
+TEST_F(VisualHostFix, NotebookPage_SeveralControls_Builds)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibValueForm* form = nullptr;
+	ibValueFrame* page = nullptr;
+	ibVisualHostClient* host = MakeNotebookHost(*this, form, 4, &page);
+	ASSERT_NE(host, nullptr);
+	ASSERT_NE(page, nullptr);
+	ASSERT_EQ(page->GetChildCount(), 4u) << "each control is its own SizerItem directly under the page";
+
+	EXPECT_TRUE(host->CreateAndUpdateVisualHost())
+		<< "the page's controls are laid out, whatever their number";
 }
