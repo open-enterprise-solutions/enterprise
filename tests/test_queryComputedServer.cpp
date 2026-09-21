@@ -41,6 +41,7 @@
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibScan / ibFunc — a statement written by hand (the codec test)
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
 #include "backend/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
@@ -426,6 +427,42 @@ MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const wxString& table
 }
 
 } // namespace
+
+// =============================================================================
+// A CELL WHOSE TAG THE RESULT DOES NOT CARRY reads as the column's TYPED EMPTY value, and `false`.
+//
+// That is ibColumnCodec::ReadValue's documented answer to "field not in the result set": a caller that
+// projected one field of a metadata column (a MAX over its date, say) and read it back through the column.
+//
+// 🛑 It was an ACCESS VIOLATION in a process with no active configuration. The codec built the empty value
+// with AdjustValue(type) and left the metadata it had been handed behind, so AdjustValue went to
+// `activeMetaData->` - which a headless tool before it opens a base, and every test here, does not have.
+// Where a configuration IS active the same line quietly used THAT one instead of the caller's - wrong for a
+// second configuration held beside it (compare / merge, an external processor). Found through a sequence's
+// border, whose retreat read a lone MAX this way: on a file base it lost the border, under a test it crashed.
+// =============================================================================
+TEST_F(ComputedServerFix, Codec_ACellWhoseTagIsNotInTheResultReadsAsTheTypedEmptyValue)
+{
+	if (!ready) return;
+
+	TypedCol region(wxT("region"), 370, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m7"), &region, { { wxT("North"), 10 } });
+	ASSERT_EQ(f.fields.size(), 2u);
+
+	// One field of the column's two: the value, with no `_TYPE` beside it.
+	ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(ibScan(wxT("m7"), wxT("r")));
+	q.Project({ ibQueryProjItem{ ibFunc(wxT("MAX"), { ibCol(wxT("r"), f.strField) }), f.strField } });
+	ibQueryResult rs = q.Execute();
+	ASSERT_TRUE(rs.Next());
+
+	ibValue value(ibNumber(7));   // anything but what it must become
+	bool read = true;
+	ASSERT_NO_THROW(read = ibColumnCodec::ReadValue(region.GetPhysicalName(), &region, /*metaData*/ nullptr, value, rs));
+	EXPECT_FALSE(read) << "the cell was not read - the caller is told so";
+	EXPECT_EQ(value.GetType(), ibValueTypes::TYPE_STRING) << "the column's typed empty value, not what was there before";
+	EXPECT_TRUE(value.GetString().IsEmpty());
+}
 
 TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 {

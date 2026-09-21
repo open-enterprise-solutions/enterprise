@@ -197,8 +197,20 @@ ibValue PeriodBefore(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 	q.Where(AndCounts(seq, where, kRows));
 	q.Project({ ibQueryProjItem{ ibFunc(wxT("MAX"), { ibCol(kRows, PeriodField(seq)) }), PeriodField(seq) } });
 	ibQueryResult rs = q.Execute();
-	if (rs.Next())
-		column->ReadValue(column->GetPhysicalName(), metaData, found, rs);
+	// 🛑 READ AS THE DATE IT IS, NOT THROUGH THE COLUMN'S CODEC. The projection above is one field — MAX over
+	// the period's date — and the codec reads a TAGGED cell: finding no `_TYPE` beside it, it answers "field
+	// not in the result set" with the type's EMPTY value and a false nobody looked at. An empty date here
+	// reads as "nothing stands before this document", so every retreat that had to cross into an earlier
+	// period took the border AWAY instead of back: posting a document behind the border, and even posting
+	// again the very document the border stood on, left the key with no border at all — and a border that
+	// is gone sends the restoring run over the key's whole history (measured 2026-09-20: R1, R2, R3 posted
+	// in turn, R1.5 posted behind them - the border was expected at R1 and was gone).
+	// A MAX over no rows is NULL, which is the one case that really means "nothing before".
+	if (rs.Next() && !rs.IsResultNull(PeriodField(seq))) {
+		const wxDateTime earlier = rs.GetResultDate(PeriodField(seq));
+		if (earlier.IsValid())
+			found = ibValue(earlier);
+	}
 	return found;
 }
 

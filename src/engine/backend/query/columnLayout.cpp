@@ -489,7 +489,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
 		// column's TYPED EMPTY value, not UNDEFINED.
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return true;
 	}
 	}
@@ -560,7 +560,7 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 	catch (const ibDatabaseLayerException& err) {
 		if (err.GetDriverErrorCode() != DATABASE_LAYER_FIELD_NOT_IN_RESULTSET)
 			throw;
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return false;
 	}
 }
@@ -619,7 +619,7 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 	ibFieldTypes fieldType = static_cast<ibFieldTypes>(result.GetResultInt(tagField));
 
 	if (col != nullptr && !cell.TagFits(col, fieldType)) {
-		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc());
+		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData);
 		return true;
 	}
 
@@ -650,7 +650,7 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
 		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
 		// (docs/query-language-arc.md §22.4b — typed-empty dot-walk)
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return true;
 	}
 	// (No tail return: the `default` above answers every tag there is, so one here is unreachable —

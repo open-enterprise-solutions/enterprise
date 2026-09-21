@@ -11,5 +11,6 @@ ENUM_TYPE_REGISTER(ibValueEnumStatusMessage, "StatusMessage", enum_to_clsid("EN_
 ENUM_TYPE_REGISTER(ibValueEnumQuestionMode, "QuestionMode", enum_to_clsid("EN_QSMD"));
 ENUM_TYPE_REGISTER(ibValueEnumQuestionReturnCode, "QuestionReturnCode", enum_to_clsid("EN_QSRC"));
 ENUM_TYPE_REGISTER(ibValueEnumRoundMode, "RoundMode", enum_to_clsid("EN_ROMO"));
+ENUM_TYPE_REGISTER(ibValueEnumTextEncoding, "TextEncoding", enum_to_clsid("EN_TXEN"));
 
 ENUM_TYPE_REGISTER(ibValueChars, "Chars", enum_to_clsid("EN_CHAR"));

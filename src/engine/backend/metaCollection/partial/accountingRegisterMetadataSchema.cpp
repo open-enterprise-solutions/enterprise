@@ -16,6 +16,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"       // ibCanMaterialize — ask L2-2, never a dialect
 #include "backend/appData.h"                                        // db_query
 #include "backend/valueInfo.h"                                      // ibReference — the width of a zero id
+#include "backend/metaData.h"                                       // ibMetaData whole — AdjustValue(…, account->GetMetaData()) must see it is no ibValue
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — the account's empty reference
 
 // ⭐⭐ THE STORED NAME OF A SIDE'S TURNOVER COLUMN — `<the resource's own field>TurnoverDr|Cr`, spelled
@@ -301,7 +302,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			if (!typeRefField.IsEmpty() && !idField.IsEmpty()) {
 				const wxString zeroId(wxT('0'), sizeof(ibReference) * 2);
-				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc());
+				// The empty account of THIS register's configuration - the one the schema is declared for, which
+				// in the designer is not necessarily the active one.
+				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc(), account->GetMetaData());
 				m.Guard(wxT("({row}.") + typeRefField + wxT(" <> 0) AND ({row}.") + idField + wxT(" <> {binary:") + zeroId + wxT("})"),
 					ibRegSideNamed(account->GetQueryColumn(), emptyAccount));
 			}

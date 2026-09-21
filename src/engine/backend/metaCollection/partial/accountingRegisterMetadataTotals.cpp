@@ -63,6 +63,7 @@
 #include "backend/databaseLayer/databaseLayer.h"                   // ibTruncateToPeriod / ibNextPeriodStart — the GRAIN, in RAM terms
 #include "backend/system/value/valueArray.h"                        // ibValueArray — a requested breakdown may be a LIST
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — a column's typed empty
+#include "backend/metaData.h"                                       // ibMetaData whole — AdjustValue(…, metaData) must see it is no ibValue
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegBound / ibRegFold / ibRegFillArmCut
 #include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource — one value for the entry, or one per side
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"   // the chart's flag a figure is kept under
@@ -1003,7 +1004,7 @@ void WhereSideNamed(ibDataQueryBuilder& b, const ibBackendQueryable* source, con
 	if (!onMovements || sideAccount == nullptr)
 		return;
 	if (const ibBackendQueryColumn* here = ColumnOn(source, sideAccount))
-		if (const ibQueryPredicatePtr named = ibRegSideNamed(here, ibValueTypeDescription::AdjustValue(here->GetTypeDesc())))
+		if (const ibQueryPredicatePtr named = ibRegSideNamed(here, ibValueTypeDescription::AdjustValue(here->GetTypeDesc(), sideAccount->GetMetaData())))
 			b.Where(named);
 }
 
@@ -4237,7 +4238,7 @@ std::unordered_map<wxString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQuer
 		fields.push_back(slot.m_name);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(column, metaData, ibValueTypeDescription::AdjustValue(column->GetTypeDesc()), &capture, pos);
+	ibColumnCodec::WriteValue(column, metaData, ibValueTypeDescription::AdjustValue(column->GetTypeDesc(), metaData), &capture, pos);
 	const std::vector<ibQueryExprPtr>& empty = capture.CapturedValues();
 
 	const ibQueryExprPtr untagged = ibBinOp(ibQueryBinOp::Or, ibIsNull(ibCol(alias, tag)),

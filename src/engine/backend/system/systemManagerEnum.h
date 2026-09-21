@@ -53,6 +53,19 @@ class ibValueEnumRoundMode : public ibValueEnumeration<ibRoundMode> {
 	}
 };
 
+class ibValueEnumTextEncoding : public ibValueEnumeration<ibTextEncoding> {
+	public:
+	ibValueEnumTextEncoding() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibTextEncoding::ibTextEncoding_UTF8, wxT("UTF8"), _("UTF-8"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_UTF16, wxT("UTF16"), _("UTF-16"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_ANSI, wxT("ANSI"), _("ANSI code page of the system"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_OEM, wxT("OEM"), _("OEM code page of the system"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_System, wxT("System"), _("Encoding of the current locale"));
+	}
+};
+
 class ibValueChars : public ibValueEnumeration<ibChars> {
 	public:
 	ibValueChars() : ibValueEnumeration() {}
