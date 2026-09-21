@@ -70,21 +70,10 @@ ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, co
 				typeCtor->GetClassName());
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
-			// 🛑 AN Init MAY REFUSE BY RAISING, and until it returns the object is nobody's: held here in a raw
-			// pointer, it was deleted when Init ANSWERED false and leaked when Init RAISED - which is how a type
-			// says WHY it refuses (`New TextReader(path)` for a file that is not there, a text that does not
-			// parse). A service that catches the refusal and goes on to the next message leaked one object per
-			// bad message.
-			try {
-				if (lSizeArray > 0)
-					succes = created_value->Init(paParams, lSizeArray);
-				else
-					succes = created_value->Init();
-			}
-			catch (...) {
-				wxDELETE(created_value);
-				throw;
-			}
+			if (lSizeArray > 0)
+				succes = created_value->Init(paParams, lSizeArray);
+			else
+				succes = created_value->Init();
 			if (!succes) {
 				wxDELETE(created_value);
 				ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());

@@ -1,7 +1,7 @@
 // =============================================================================
-// The value factory and an Init that REFUSES BY RAISING - which is how a type says why it refuses. Until Init
-// returns, the new object is held in a raw pointer: it was deleted when Init answered false and leaked when
-// Init raised.
+// The value factory and an Init that REFUSES BY RAISING - which is how a type says why it refuses. The object
+// used to be held in a raw pointer until Init returned: deleted when Init answered false, leaked when Init
+// raised. A new value is now born owned (the factory answers with its holder), so a refusal either way lets it go.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -38,7 +38,7 @@ TEST(ValueFactory, AnInitThatRaisesDoesNotLeakTheObject) {
 	ibValue raise(true);
 	ibValue* params[] = { &raise };
 	try {
-		ibValue::CreateObjectRef(wxT("TestRefusingInit"), params, 1);
+		ibValue::CreateObject(wxT("TestRefusingInit"), params, 1);
 		FAIL() << "the refusal must reach the caller";
 	}
 	catch (const ibBackendException& e) {
@@ -51,6 +51,6 @@ TEST(ValueFactory, AnInitThatAnswersFalseIsStillCleanedUpAfter) {
 	ASSERT_EQ(g_alive, 0);
 	ibValue quiet(false);
 	ibValue* params[] = { &quiet };
-	EXPECT_THROW(ibValue::CreateObjectRef(wxT("TestRefusingInit"), params, 1), ibBackendException);
+	EXPECT_THROW(ibValue::CreateObject(wxT("TestRefusingInit"), params, 1), ibBackendException);
 	EXPECT_EQ(g_alive, 0);
 }
