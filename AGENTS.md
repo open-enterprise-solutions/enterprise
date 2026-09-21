@@ -1,32 +1,13 @@
 # Agent rules — OES Enterprise
 
-Rules for any AI assistant or coding agent working in this repository
-(Claude Code, Cursor, Codex, Copilot, Grok Bot, and the same class of tools).
-Human contributors follow [CONTRIBUTING.md](CONTRIBUTING.md); this file is the
-agent-facing counterpart for habits that only show up when a tool writes the
-commit or the pull request.
+For any AI assistant or coding agent working in this repository (Claude Code, Codex, Cursor, Copilot
+and the like). This file only points the way; the rules live where the people read them too.
 
-Architecture and code conventions remain in [CLAUDE.md](CLAUDE.md).
-
-## Commits and pull requests — authorship
-
-**The human who asked for the change is the only author.** Do not put the
-agent (or the product that runs it) in the git history or on the pull request
-as a co-author.
-
-In particular, do **not**:
-
-- add a `Co-Authored-By:` / `Co-authored-by:` trailer naming Claude, Cursor,
-  Codex, Copilot, GPT, Gemini, Grok, or any other assistant;
-- append “Generated with …”, “Made with …”, “🤖 …”, or similar footers to
-  commit messages or pull-request bodies;
-- set `GIT_AUTHOR_*` / `GIT_COMMITTER_*` (or the hosting UI’s co-author field)
-  to an agent identity.
-
-Commit and open the PR as the human: their name and email from the local git
-config / signed-in account. If a tool would inject a co-author trailer by
-default, strip it before `git commit` and before the PR is opened.
-
-A pull request that already shows an agent as co-author should be fixed by
-rewriting the commit messages on that branch (and updating the PR body), not
-by leaving the trailer in place.
+- **Context:** [CLAUDE.md](CLAUDE.md) — layout, naming, key decisions, how to run it and reach the
+  MCP server. [docs/ai-context.md](docs/ai-context.md) when you generate metadata or scripts.
+- **The rules a change is reviewed against:** [docs/development.md](docs/development.md).
+- **What a script can check is checked:** run `bash .github/lint.sh origin/develop` before you push;
+  CI runs the same script before any build.
+- **Authorship:** the person who asked for the change is its only author. No `Co-Authored-By:`
+  trailer and no "Generated with …" footer, in commits or in the pull request
+  ([development.md §1](docs/development.md); the lint refuses them).

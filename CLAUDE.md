@@ -539,7 +539,7 @@ See `docs/eval-scope-refactor.md` for the full architecture.
 - Do not use raw `RunQueryWithResults(wxT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`
 - Do not commit changes to `enterprise.sln` project GUIDs or global section entries unless you are adding/removing a project
 - Do not define `NDEBUG` in Debug configurations
-- **Do not add an AI agent as a git co-author.** No `Co-Authored-By:` trailer for Claude / Cursor / Codex / Copilot / etc., and no “Generated with …” footer in commit messages or pull-request bodies. The human who asked for the change is the only author — see [AGENTS.md](AGENTS.md).
+- **Do not add an AI agent as a git co-author.** No `Co-Authored-By:` trailer for Claude / Cursor / Codex / Copilot / etc., and no “Generated with …” footer in commit messages or pull-request bodies. The human who asked for the change is the only author — [docs/development.md](docs/development.md) §1; `.github/lint.sh` refuses it.
 - Do not catch `const ibBackendException*` and swallow it silently
 - **Do not wave off a slow Debug build with "Release will be fast".** Speed is accepted in the DEBUG
   build (Max, 2026-09-12: *"if debug works at a normal level, release will work fine — the debug
@@ -554,8 +554,6 @@ See `docs/eval-scope-refactor.md` for the full architecture.
 ---
 
 ## AI Agents
-
-Authorship rules for every assistant that commits or opens a PR are in [AGENTS.md](AGENTS.md) — do not co-author as the agent.
 
 Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*.md`.
 
