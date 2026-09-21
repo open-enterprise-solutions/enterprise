@@ -23,16 +23,14 @@
 
 namespace {
 
-// ⚠ A COMPUTED CELL IS LOCALISABLE TEXT, not a bare string. The parameter and
-// template fill types run their result through the localisation layer, so what
-// comes back is a raw loc-text envelope (`en = '42';`) and has to be translated
-// before it is compared. Plain TEXT cells skip that entirely — the asymmetry is
-// real and is why these helpers exist rather than a direct EXPECT_EQ.
+// ⭐ A COMPUTED CELL IS TEXT. Until 2026-09-21 the parameter and template fills
+// came back WRAPPED (`en = '42';`) and a caption came back as written, every
+// language at once, so each test translated before comparing — and so did every
+// reader, except the printout, which put the wrapped form on paper. The door now
+// answers with the text; this helper reads a text written in every language the
+// one way the platform reads it, for the tests about that form itself.
 wxString Translated(const wxString& raw) {
 	return ibBackendLocalization::GetTranslateGetRawLocText(raw);
-}
-wxString Localised(const wxString& plain) {
-	return ibBackendLocalization::CreateLocalizationRawLocText(plain);
 }
 
 wxObjectDataPtr<ibBackendSpreadsheetObject> MakeDocument() {
@@ -198,8 +196,8 @@ TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 	auto doc = MakeDocument();
 	doc->SetParameter(wxT("Total"), ibValue(wxT("42")));
 
-	EXPECT_EQ(wxT("42"), Translated(doc->ComputeStringValueFromParameters(
-		wxT("Total"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter)));
+	EXPECT_EQ(wxT("42"), doc->ComputeStringValueFromParameters(
+		wxT("Total"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
 	// Nobody supplied it -> empty, never the name itself: a report showing the word
 	// "Total" where a number belongs is worse than a blank.
 	EXPECT_TRUE(doc->ComputeStringValueFromParameters(
@@ -213,14 +211,46 @@ TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
 	doc->SetParameter(wxT("Sum"), ibValue(wxT("10")));
 
-	// The template ITSELF is localisable text — it is authored in a template cell, and
-	// a bare string translates to nothing at all.
-	const wxString out = Translated(doc->ComputeStringValueFromParameters(
-		Localised(wxT("[Name] owes [Sum]")), ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate));
+	// A template typed plainly is its own text — it used to translate to NOTHING, and
+	// the cell came out blank.
+	EXPECT_EQ(wxT("Alpha owes 10"), doc->ComputeStringValueFromParameters(
+		wxT("[Name] owes [Sum]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate));
 
-	EXPECT_TRUE(out.Contains(wxT("Alpha")));
-	EXPECT_TRUE(out.Contains(wxT("10")));
-	EXPECT_FALSE(out.Contains(wxT("[")));
+	// …and one written in every language is filled in the language asked for.
+	EXPECT_EQ(wxT("Alpha borhuie 10"), doc->ComputeStringValueFromParameters(
+		wxT("en = '[Name] owes [Sum]'; uk = '[Name] borhuie [Sum]';"),
+		ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, wxT("uk")));
+}
+
+// ⭐ A CAPTION IS READ IN THE LANGUAGE ASKED FOR, and a language it was not written in reads as the
+// first one written — not as the stored form, and not as nothing. This is the answer the printout
+// gets: before 2026-09-21 a caption came back exactly as written and was printed so.
+TEST(SpreadsheetDocument, FillTypeText_ACaptionIsReadInOneLanguage)
+{
+	auto doc = MakeDocument();
+	const wxString caption = wxT("en = 'Invoice'; uk = 'Rakhunok';");
+
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		caption, ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("uk")));
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		wxT("uk = 'Rakhunok';"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, wxT("de")));
+
+	// The document's own language is what it is read in when none is named.
+	doc->SetLangCode(wxT("uk"));
+	EXPECT_EQ(wxT("Rakhunok"), doc->ComputeStringValueFromParameters(
+		caption, ibSpreadsheetFillType::ibSpreadsheetFillType_StrText));
+}
+
+// A PARAMETER'S VALUE WRITTEN IN EVERY LANGUAGE is read in the document's — the same reading as a
+// caption, so a value never lands on the sheet in its stored form.
+TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
+{
+	auto doc = MakeDocument();
+	doc->SetLangCode(wxT("uk"));
+	doc->SetParameter(wxT("Title"), ibValue(wxT("en = 'Total'; uk = 'Razom';")));
+
+	EXPECT_EQ(wxT("Razom"), doc->ComputeStringValueFromParameters(
+		wxT("Title"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
 }
 
 // ⭐ AN APOSTROPHE SURVIVES THE ENVELOPE. A computed cell travels as `en = '...';`, and the quote
@@ -232,8 +262,8 @@ TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 	auto doc = MakeDocument();
 	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")));
 
-	EXPECT_EQ(wxT("O'Brien"), Translated(doc->ComputeStringValueFromParameters(
-		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter)));
+	EXPECT_EQ(wxT("O'Brien"), doc->ComputeStringValueFromParameters(
+		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
 	EXPECT_EQ(wxT("the document's movements"), Translated(wxT("en = 'the document''s movements';")));
 }
 
@@ -257,7 +287,7 @@ TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
 	EXPECT_FALSE(out.Contains(wxT("Whoever")));
 }
 
-// Plain text is returned untouched — the default fill type computes nothing.
+// Plain text is returned untouched — a caption is read, never filled.
 TEST(SpreadsheetDocument, FillTypeText_IsLeftAlone)
 {
 	auto doc = MakeDocument();
@@ -473,15 +503,34 @@ TEST(SpreadsheetDocument, PutArea_ResolvesTemplateCellsFromTheAreaParameters)
 	auto doc = MakeDocument();
 
 	auto area = MakeDocument();
-	area->SetCellValue(0, 0, Localised(wxT("[Name]")));
+	area->SetCellValue(0, 0, wxT("[Name]"));
 	area->SetCellFillType(0, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
 	area->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
 
 	doc->PutArea(area);
 
-	EXPECT_EQ(wxT("Alpha"), Translated(doc->GetCellValue(0, 0)));
+	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(0, 0));
 	// …and it lands as TEXT: resolving it twice would look for parameters the
 	// receiving document does not have.
+	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, doc->GetCellFillType(0, 0));
+}
+
+// ⭐⭐ A CAPTION LANDS AS TEXT, IN THE LANGUAGE OF THE DOCUMENT IT LANDS IN. The template keeps
+// every language; the printed document keeps what they came to. Until 2026-09-21 a caption landed
+// exactly as written — `en = '…'; uk = '…';` — and the printout put that on the paper.
+TEST(SpreadsheetDocument, PutArea_ACaptionLandsAsTextInTheDocumentsLanguage)
+{
+	auto doc = MakeDocument();
+	doc->SetLangCode(wxT("uk"));
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("en = 'Invoice'; uk = 'Rakhunok';"));
+
+	doc->PutArea(area);
+	doc->JoinArea(area);
+
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 1));
 	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, doc->GetCellFillType(0, 0));
 }
 

@@ -17,6 +17,7 @@
 // thousands of times, and costs a second index that can disagree with the cells.
 
 #include "backend/sheetFormat/sheetFormatXlsx.h"
+#include "backend/backend_localization.h"   // a caption goes out in one language
 
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
@@ -579,7 +580,10 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 			const unsigned styleIndex = found != styleAt.end()
 				? static_cast<unsigned>(found->second + 1) : 0u;
 
-			const wxString value = cell->GetValue();
+			// The text, not the stored form: a caption written in every language goes out in one,
+			// read the way the grid and the printout read it (a printed document's cells are text
+			// already — a template's are not).
+			const wxString value = ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue());
 			if (value.IsEmpty() && styleIndex == 0)
 				continue;   // nothing to say about this cell at all
 

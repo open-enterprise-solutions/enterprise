@@ -191,12 +191,13 @@ enterprise/
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
-├── NOTICE.md                 # third-party licences, the wx fork, the LGPL past
+├── NOTICE.md                 # third-party licenses, the wx fork, the LGPL past
 ├── locale/                   # interface translations (ru, uk)
 ├── tests/                    # Google Test suites (built by CMake)
-├── docs/                     # PRIVATE submodule — resolves for members of the organisation
-│                             # only, and is empty for everyone else. The build never needs it,
-│                             # so links to docs/… elsewhere in this file will not open for you.
+├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
+│   └── private/              # PRIVATE submodule (design docs) — resolves for members of the
+│                             # organisation only and is empty for everyone else. The build never
+│                             # needs it, so links to docs/private/… will not open for you.
 └── src/
     ├── 3rdparty/
     │   └── wxWidgets/        # Git submodule — wxWidgets 3.3.2
@@ -269,20 +270,35 @@ Bug reports and feature requests are welcome as GitHub Issues.
 ## License
 
 OES is **source-available, not open source**, under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Maxim Kornienko and
-Yurii Bulakh.
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Copyright is held by Open Enterprise
+Solutions.
 
 **Free, and meant to be used:** clone it, build it, break it, change it, run it on your own
 machine, write configurations for it, teach a course from it, write a thesis about it, publish
 what you learned. No notification, no permission, no explanation owed to anyone.
 
-**Needs a licence from us:** earning from it. Running it in a business, providing a service
+**Also free: evaluation, for a business too.** A company or an implementer may install it and
+run it to decide whether to build on it — trial configurations, test data, its own people.
+Live work is not evaluation.
+
+**Needs a license from us:** earning from it. Running it in a business, providing a service
 with it, shipping it inside something you are paid for — and, said outright because it is what
 these sources are most likely to be taken for, forking it to ship a rival platform or lifting a
 piece of it (the query engine, the composition and reporting engine, the metadata layer) into a
 product of your own.
 
+**A commercial license is for a build we release** — we answer for it, and it carries the
+license check. The platform as you build it yourself may be used for noncommercial and
+evaluation purposes: to study it, or to decide whether to use it, for example.
+
+**Under your own brand** — an implementer that takes the platform to its customers under its
+own name, builds it itself and licenses it to them on its own terms — the platform is licensed
+separately, case by case. It stays ours all the same: we develop it and release its patches,
+and the implementer decides whether and when to take them. Its own features on top — what it
+sells besides the brand — are its own, because it wrote them. We own the land; what you cook
+on it is yours.
+
 Two things the terms above do not cover, both in [NOTICE.md](NOTICE.md): releases up to
-2026-08-22 went out under the **LGPL 2.1** and stay available under it — a licence already
+2026-08-22 went out under the **LGPL 2.1** and stay available under it — a license already
 granted cannot be withdrawn — and the wxWidgets-derived widget sources remain under the
 **wxWindows Library Licence**.

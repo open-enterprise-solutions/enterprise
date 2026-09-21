@@ -1,7 +1,5 @@
 #include "valueSpreadsheet.h"
 
-#include "backend/backend_localization.h"   // the cell's Value resolves the localisation envelope
-
 
 enum
 {
@@ -212,23 +210,15 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	}
 	case eValue:
 	{
-		// ⭐ WHAT THE CELL SAYS, NOT HOW IT IS STORED. A cell filled by parameter substitution
-		// keeps its text in the localisation envelope — ComputeStringValueFromParameters ends
-		// on CreateLocalizationRawLocText for both the parameter and the template fill — while
-		// a caption typed into the template is stored as it stands. The renderer resolves the
-		// envelope on its way to the paper, so the printout is right; a SCRIPT asking a cell
-		// what it holds got `en = 'Автомобиль';` from one cell and plain text from the caption
-		// beside it (2026-09-09, reading a built printout back cell by cell).
-		//
-		// The unwrap ANSWERS FALSE AND CLEARS on a string that is not an envelope, so the raw
-		// value is the fallback rather than the empty string that would otherwise be handed
-		// back for every caption on the sheet.
-		const wxString strRaw = m_spreadsheetDoc->GetCellValue(m_row, m_col);
-		wxString strText;
-		if (!ibBackendLocalization::GetTranslateGetRawLocText(
-				m_spreadsheetDoc->GetLangCode(), strRaw, strText))
-			strText = strRaw;
-		pvarPropVal = strText;
+		// ⭐ WHAT THE CELL SAYS, NOT HOW IT IS STORED — asked of the document's one door for a
+		// cell's text, the door the grid and the printout ask. A SCRIPT asking a cell what it holds
+		// got `en = 'Автомобиль';` from one cell and plain text from the caption beside it
+		// (2026-09-09, reading a built printout back cell by cell); it read the stored form with a
+		// reader and a fallback of its own until 2026-09-21. Read AS TEXT: a document's cells are
+		// text once an area has landed, and a template's cell answers with what is written in it —
+		// a parameter's name, a template's own wording — in the document's language, as it always did.
+		pvarPropVal = m_spreadsheetDoc->ComputeStringValueFromParameters(
+			m_spreadsheetDoc->GetCellValue(m_row, m_col), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText);
 		return true;
 	}
 	}

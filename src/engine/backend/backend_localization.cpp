@@ -2,7 +2,6 @@
 #include "appData.h"
 #include "session/session.h"
 
-static wxString ms_strEmptyLanguage;
 static wxString ms_strUserLanguage = wxT("en");
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,21 +141,28 @@ bool ibBackendLocalization::CreateLocalizationArray(const wxString& strRawLocale
 	return array.size() > 0;
 }
 
+// 🛑 A STORED TEXT WAS TRANSLATED, A PLAIN ONE WRAPPED — two answers under one name, so what a cell held
+// depended on what it said, and a filled template landed in either form. It makes the stored form now:
+// one already in it is kept as it is (2026-09-21).
 wxString ibBackendLocalization::CreateLocalizationRawLocText(const wxString& strLocale)
 {
-	thread_local ibBackendLocalizationEntryArray array;
-	const wxString& activeLang = GetUserLanguage();
-	if (CreateLocalizationArray(strLocale, array))
-		return GetTranslateFromArray(activeLang, array);
+	if (IsLocalizationString(strLocale))
+		return strLocale;
 
 	wxString text = strLocale;
 	text.Replace(wxT("'"), wxT("''"));   // an apostrophe is written doubled (CreateLocalizationArray)
-	return wxString::Format(wxT("%s = '%s';"), activeLang, text);
+	return wxString::Format(wxT("%s = '%s';"), GetUserLanguage(), text);
 }
 
 bool ibBackendLocalization::IsLocalizationString(const wxString& strRawLocale)
 {
 	if (strRawLocale.IsEmpty())
+		return false;
+
+	// ⭐ NO `=`, NO LANGUAGE — and nothing to copy or walk. Every cell of a composed report is plain text
+	// read as it lands (PutArea), so this answer is asked hundreds of thousands of times on a large sheet,
+	// and almost always "no".
+	if (strRawLocale.find(wxT('=')) == wxString::npos)
 		return false;
 
 	bool open_text = false,
@@ -218,58 +224,21 @@ bool ibBackendLocalization::GetRawLocText(const ibBackendLocalizationEntryArray&
 	return array.size() > 0;
 }
 
+// 🛑 IT ASKED ONLY THE LANGUAGE IN FORCE, with a parser of its own, so a caption written in another was
+// empty here while the screen showed it (GetTranslateFromArray falls back). Empty now means empty in
+// every language — the same array the reading uses.
 bool ibBackendLocalization::IsEmptyLocalizationString(const wxString& strRawLocale)
 {
-	if (strRawLocale.IsEmpty())
-		return true;
+	thread_local ibBackendLocalizationEntryArray array;
+	if (!CreateLocalizationArray(strRawLocale, array))
+		return strRawLocale.IsEmpty();
 
-	bool open_text = false,
-		open_symbol = false;
-
-	bool success = false;
-	bool closed  = false;   // see IsLocalizationString — the last language may end with the string
-
-	thread_local wxString code, data;
-	code.Clear(); data.Clear();
-
-	for (const auto& c : strRawLocale.ToStdWstring()) {
-
-		if ((!open_text && (c == wxT(' ') || c == wxT('\n'))) || c == wxT('\'')) {
-			if (open_text && c == wxT('\'')) {
-				open_symbol = !open_symbol;
-				if (!open_symbol)
-					closed = true;
-			}
-			success = false;
-			continue;
-		}
-		else if (!open_text && !open_symbol && c == wxT('=')) {
-			open_text = true;
-			closed = false;
-			success = false;
-			continue;
-		}
-		else if (open_text && !open_symbol && c == wxT(';')) {
-			open_text = open_symbol = false;
-			success = true;
-			if (stringUtils::CompareString(GetUserLanguage(), code))
-				break;
-			continue;
-		}
-
-		if (open_text && open_symbol)
-			data += c;
-		else if (!open_text && !open_symbol)
-			code += c;
+	for (const ibBackendLocalizationEntry& entry : array) {
+		if (!entry.m_data.IsEmpty())
+			return false;
 	}
 
-	if (!success && open_text && !open_symbol && closed)
-		success = true;
-
-	if (success && stringUtils::CompareString(GetUserLanguage(), code))
-		return data.IsEmpty();
-	
-	return true; 
+	return true;
 }
 
 bool ibBackendLocalization::GetTranslateGetRawLocText(const wxString& strRawLocale, wxString& strResult)
@@ -277,33 +246,42 @@ bool ibBackendLocalization::GetTranslateGetRawLocText(const wxString& strRawLoca
 	return GetTranslateGetRawLocText(GetUserLanguage(), strRawLocale, strResult);
 }
 
+// ⭐⭐ THE READING OF A TEXT — every caption, template, title and cell asks here: the language asked for,
+// else the one in force, else the first written (GetTranslateFromArray, the rule ibTranslateString reads
+// by too); and A TEXT IN NO FORMAT IS ITSELF. False only when there is nothing to say.
+//
+// 🛑 A PLAIN TEXT READ AS NOTHING. It answered EMPTY for anything not written in every language — a
+// caption typed plainly, a value a template was filled with — so four callers wrote "…then the source"
+// back by hand and two did not and showed nothing. With CreateLocalizationRawLocText translating a stored
+// text and IsEmptyLocalizationString asking one language, a printed sheet carried every caption in its
+// stored form, every language at once (2026-09-21). The rules are here, and the callers only ask.
+//
+// ⚠ HOT: every cell that lands (PutArea), every cell painted, every cell the content edge walks over — so
+// the array is a per-thread scratch, and a plain text, almost every cell of a composed report, is
+// answered without allocating anything but the answer (IsLocalizationString stops at the missing `=`).
 bool ibBackendLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, const wxString& strRawLocale, wxString& strResult)
 {
 	thread_local ibBackendLocalizationEntryArray array;
+	if (CreateLocalizationArray(strRawLocale, array))
+		GetTranslateFromArray(strLangCode, array, strResult);
+	else
+		strResult = strRawLocale;   // ⭐ a text in no format is itself
 
-	if (CreateLocalizationArray(strRawLocale, array) &&
-		GetTranslateFromArray(strLangCode, array, strResult))
-		return true;
-
-	strResult.Clear();
-	//strResult = strRawLocale;
-	return false;
+	return !strResult.IsEmpty();
 }
 
 wxString ibBackendLocalization::GetTranslateGetRawLocText(const wxString& strRawLocale)
 {
-	thread_local wxString strResult;
-	if (GetTranslateGetRawLocText(strRawLocale, strResult))
-		return std::move(strResult);
-	return ms_strEmptyLanguage;
+	wxString strResult;
+	GetTranslateGetRawLocText(strRawLocale, strResult);
+	return strResult;
 }
 
 wxString ibBackendLocalization::GetTranslateGetRawLocText(const wxString& strLangCode, const wxString& strRawLocale)
 {
-	thread_local wxString strResult;
-	if (GetTranslateGetRawLocText(strLangCode, strRawLocale, strResult))
-		return std::move(strResult);
-	return ms_strEmptyLanguage;
+	wxString strResult;
+	GetTranslateGetRawLocText(strLangCode, strRawLocale, strResult);
+	return strResult;
 }
 
 void ibBackendLocalization::SetArrayTranslate(ibBackendLocalizationEntryArray& array, const wxString& strResult)

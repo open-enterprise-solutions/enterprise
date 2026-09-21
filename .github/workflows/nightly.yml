@@ -84,7 +84,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # docs/ is private and not needed; wxWidgets is — see ci.yml.
+      # docs/private/ is private and not needed; wxWidgets is — see ci.yml.
       - run: bash .github/fetch-wxwidgets.sh
         shell: bash
 

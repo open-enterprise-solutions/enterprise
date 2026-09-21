@@ -237,6 +237,11 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 	const int maxRowBrake = GetMaxRowBrake();
 	const int maxColBrake = GetMaxColBrake();
 
+	// ⭐ THE AREA IS READ IN THE LANGUAGE OF THE DOCUMENT IT LANDS IN — the language the document's own
+	// PutArea renders the same cells in, through the same door, so the grid and the stored cell say
+	// one thing.
+	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : wxString();
+
 	ibGrid::AppendRows(doc->GetNumberRows());
 	if (doc->GetNumberCols() > m_table->GetNumberCols())
 		ibGrid::AppendCols(doc->GetNumberCols() - m_table->GetNumberCols());
@@ -270,7 +275,7 @@ void ibGridEditor::PutDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>
 			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
 
-			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
+			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode)));
 			m_table->SetValueAsCustom(maxRowBrake + row, col, s_strTypeTextOrString, ptr.get());
 		}
 	}
@@ -308,6 +313,9 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 	const int maxRowBrake = GetMaxRowBrake();
 	const int maxColBrake = GetMaxColBrake();
 
+	// the language of the document the area lands in — see PutDocument
+	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : wxString();
+
 	if (doc->GetNumberRows() > m_table->GetNumberRows())
 		ibGrid::AppendRows(doc->GetNumberRows() - m_table->GetNumberRows());
 	ibGrid::AppendCols(doc->GetNumberCols());
@@ -341,7 +349,7 @@ void ibGridEditor::JoinDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject
 			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 			attr->SetReadOnly(cell->m_isReadOnly);
 
-			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
+			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode)));
 			m_table->SetValueAsCustom(row, maxColBrake + col, s_strTypeTextOrString, ptr.get());
 		}
 	}

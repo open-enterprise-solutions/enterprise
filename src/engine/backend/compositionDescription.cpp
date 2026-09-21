@@ -159,13 +159,8 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
 // and a synonym written plainly (no languages in it at all) is its own caption.
 wxString ibVariantDescription::GetPresentation() const
 {
-	if (!m_synonym.IsEmpty()) {
-		wxString caption;
-		if (ibBackendLocalization::GetTranslateGetRawLocText(m_synonym, caption) && !caption.IsEmpty())
-			return caption;
-		return m_synonym;
-	}
-	return m_name;
+	const wxString caption = ibBackendLocalization::GetTranslateGetRawLocText(m_synonym);
+	return caption.IsEmpty() ? m_name : caption;
 }
 
 // (A LEVEL'S FIELD had a pair of its own here, writing {path, unfold} into a node. What a level

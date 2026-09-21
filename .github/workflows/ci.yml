@@ -43,7 +43,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh
@@ -135,7 +135,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh
@@ -218,7 +218,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh
@@ -280,7 +280,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh
@@ -442,7 +442,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh
@@ -533,7 +533,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # ⚠ NOT `submodules: recursive`. docs/ is a PRIVATE submodule, and the workflow token cannot
+      # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
       # documentation; the build needs wxWidgets, so that one is initialised by name.
       - run: bash .github/fetch-wxwidgets.sh

@@ -365,19 +365,11 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 // or the source text when there is none" - and the function did not keep it (2026-09-09; the
 // helper's own example, `Message(Tstr("Total", "uk"));`, showed an empty line).
 //
-// The three-argument reader is the one that says WHETHER it found anything, which is what makes
-// the fallback possible at all - the string-returning overload cannot tell "no translation" from
-// "translated to nothing".
+// Since 2026-09-21 the reading itself says so — a source in no format is itself — and this function
+// no longer adds it back by hand.
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	const wxString source = cSource.GetString();
-
-	wxString translated;
-	if (ibBackendLocalization::GetTranslateGetRawLocText(
-			cLanguage.GetString(), source, translated))
-		return translated;
-
-	return source;
+	return ibBackendLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
 }
 
 //--- Date and time:
