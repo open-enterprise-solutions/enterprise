@@ -267,7 +267,7 @@ public:
 	// ContributeTables makes — the turnovers view's columns over the two tables — so nothing but those two
 	// tables has to exist in the base, and a base built before this reading answers it as it stands.
 	// `moved` is null when there is no movement arm. False when no totals are declared at all.
-	bool GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const;
+	BACKEND_API bool GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const;
 
 	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
 	// parameter (the caller asks for daily / weekly / monthly rows, or for none at all and gets the

@@ -137,19 +137,19 @@ struct ibSchemaMaterialize
 	const ibBackendQueryable* m_source = nullptr;
 
 	// The source's physical table — resolved from the queryable, for the trigger DDL.
-	wxString SourceTable() const;
+	BACKEND_API wxString SourceTable() const;
 
 	// Lower this DECLARATION into the L2-2 render spec: logical columns expand into their physical
 	// fields (a reference dimension is two), the source queryable resolves to a table name. That
 	// expansion is a metadata question, so it happens HERE and never inside the renderer — which is
 	// what keeps L2-1 metadata-blind and the dependency pointing downward.
-	ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
+	BACKEND_API ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
 
 	// …AND FOR A READ OF THE ROWS AS THEY STAND (RenderStoredRows / RenderMovementRows): the same spec with
 	// its IR forms filled — the guard, the movement's instant, each contribution — lowered by the source's
 	// own door from the regeneration forms declared below, so a reading counts a movement by the very
 	// expression a rebuild sums it by. Only a reading asks for this; the apply renders text and never pays.
-	ibMaterializeSpec ToReadSpec(const wxString& tableName) const;
+	BACKEND_API ibMaterializeSpec ToReadSpec(const wxString& tableName) const;
 
 	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
