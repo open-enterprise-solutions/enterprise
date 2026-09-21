@@ -127,7 +127,7 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectGenericData::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), [this]() -> ibValue* { return CreateRecordDataObjectValue(); });
+			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordDataObjectValue(); });
 
 		return false;
 	}

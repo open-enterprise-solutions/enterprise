@@ -1363,10 +1363,10 @@ public:
 			}
 
 			ibValue* under[] = { root };
-			ibValueMetaObject* sample = nullptr;
+			ibValuePtr<ibValueMetaObject> sample;
 
 			try {
-				sample = ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(clsid, under, 1);
+				sample = ibValue::CreateObject(clsid, under, 1);
 			}
 			catch (...) {
 				sample = nullptr;

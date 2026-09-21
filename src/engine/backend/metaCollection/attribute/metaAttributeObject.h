@@ -147,7 +147,6 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
 
 #pragma endregion
 

@@ -273,9 +273,9 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTab
 	return true;
 }
 
-ibValueModel* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
+ibValuePtr<ibValueModel> ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 {
-	ibValueModelTable* valueTable = new ibValueModelTable();
+	const ibValuePtr<ibValueModelTable> valueTable(new ibValueModelTable());
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnInfo(idx);

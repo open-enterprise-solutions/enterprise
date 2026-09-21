@@ -323,7 +323,7 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 
 	if (m_tableModel == nullptr) {
 
-		m_tableModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
+		m_tableModel = ibTypeControlFactory::CreateValue();
 
 		if (m_tableModel != nullptr) {
 			// Through the WALK, not the children: a column inside a group is still a

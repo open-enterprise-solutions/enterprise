@@ -776,7 +776,7 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 	if (selectDataType->ShowModal(sel_id)) {
 		const ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
 		if (meta != nullptr) {
-			ibValueRecordDataObjectRef* genObj = meta->CreateObjectValue(obj, true);
+			const ibValuePtr<ibValueRecordDataObjectRef> genObj = meta->CreateObjectValue(obj, true);
 			if (genObj != nullptr) {
 				genObj->ShowFormValue();
 				selectDataType->Destroy();

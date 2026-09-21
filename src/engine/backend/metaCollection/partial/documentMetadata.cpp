@@ -59,38 +59,38 @@ ibValueMetaObjectFormBase* ibValueMetaObjectDocument::GetDefaultFormByID(const i
 
 #include "documentManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectDocument::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectDocument::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectDocument(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectDocument(this));
 }
 
 #include "backend/appData.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
-ibValueRecordDataObjectRef* ibValueMetaObjectDocument::CreateObjectRefValue(const ibGuid& objGuid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectDocument::CreateObjectRefValue(const ibGuid& objGuid) const
 {
 	ibValueRecordDataObjectDocument* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return new ibValueRecordDataObjectDocument(this, objGuid);
+			pDataRef = new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 	else {
 		pDataRef = new ibValueRecordDataObjectDocument(this, objGuid);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormObject: return CreateObjectValue(); break;
+	case eFormObject: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue()); break;
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn());   // migrated onto the universal dynamic list
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn()));   // migrated onto the universal dynamic list
 		break;
 	case eFormSelect:
-		return ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 		break;
 	}
 
@@ -272,7 +272,7 @@ bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(flags)) {
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateObjectValue(); });
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(); });
 		}
 
 		return false;

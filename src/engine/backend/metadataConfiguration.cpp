@@ -123,8 +123,8 @@ m_commonObject(nullptr)
 
 	{
 		ibValue* ppParams[] = { m_commonObject };
-		ibValueMetaObjectLanguage* commonLanguage =
-			ibValue::CreateAndConvertObjectRef<ibValueMetaObjectLanguage>(g_metaLanguageCLSID, ppParams, 1);
+		const ibValuePtr<ibValueMetaObjectLanguage> commonLanguage =
+			ibValue::CreateObject(g_metaLanguageCLSID, ppParams, 1);
 
 		if (commonLanguage->OnCreateMetaObject(this, newObjectFlag)) {
 
@@ -136,7 +136,7 @@ m_commonObject(nullptr)
 		}
 
 		commonLanguage->InvalidateNames();
-		// owned by m_commonObject's child vector (AddChild inside Init) — no IncrRef
+		// owned by m_commonObject's child vector (AddChild inside Init) — the holder here only covers the build
 
 		m_commonObject->SetLanguage(commonLanguage->GetMetaID());
 	}

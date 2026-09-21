@@ -425,6 +425,56 @@ protected:
 	mutable ibSourceExplorer m_sourceExplorer;
 };
 
+// ----------------------------------------------------------------------------
+// ibSourcePtr<T>: an owning reference to a SOURCE — ibValuePtr's twin for the interface side. A source
+// is not an ibValue, so it cannot sit in an ibValuePtr; it holds through SourceIncrRef / SourceDecrRef,
+// which ARE the refcount of the value that implements it. What hands out a new source (a form's
+// CreateSourceObject) answers with one — a new data object is born owned — and what borrows a source
+// for a while (CreateAndBuildForm) holds it in one.
+// ----------------------------------------------------------------------------
+
+template <class T>
+class ibSourcePtr {
+public:
+
+	constexpr ibSourcePtr() = default;
+	constexpr ibSourcePtr(nullptr_t) {}
+
+	explicit ibSourcePtr(T* ptr) { Bind(ptr); }
+
+	ibSourcePtr(const ibSourcePtr& to_copy) { Bind(to_copy.m_ptr); }
+
+	// generalized copy ctor: U* must be convertible to T*
+	template <typename U>
+	ibSourcePtr(const ibSourcePtr<U>& to_copy) { Bind(static_cast<U*>(to_copy)); }
+
+	~ibSourcePtr() { Reset(); }
+
+	ibSourcePtr& operator = (const ibSourcePtr& other) {
+		if (m_ptr != other.m_ptr) { Reset(); Bind(other.m_ptr); }
+		return *this;
+	}
+
+	inline T* operator->() const { return m_ptr; }
+	inline operator T* () const { return m_ptr; }
+	inline explicit operator bool() const noexcept { return m_ptr != nullptr; }
+
+private:
+
+	void Bind(T* ptr) {
+		m_ptr = ptr;
+		if (m_ptr != nullptr) m_ptr->SourceIncrRef();
+	}
+
+	void Reset() {
+		T* const ptr = m_ptr;
+		m_ptr = nullptr;
+		if (ptr != nullptr) ptr->SourceDecrRef();
+	}
+
+	T* m_ptr = nullptr;
+};
+
 // Global alias so every existing 'ibSourceExplorer' spelling keeps resolving now the type is nested.
 using ibSourceExplorer = ibSourceDataObject::ibSourceExplorer;
 

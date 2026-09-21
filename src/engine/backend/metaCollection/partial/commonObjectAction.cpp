@@ -212,7 +212,7 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 {
 	if (!key.IsOk()) return;
 	try {
-		ibValueRecordDataObjectRef* obj(CreateObjectValue(key));
+		const ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue(key));
 		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
 	catch (const ibBackendInterruptException&) {}

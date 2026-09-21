@@ -271,7 +271,7 @@ public:
 	virtual bool DeleteData() { return true; }
 
 	virtual bool LoadDataFromTable(ibValueModel* srcTable);
-	virtual ibValueModel* SaveDataToTable() const;
+	virtual ibValuePtr<ibValueModel> SaveDataToTable() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *

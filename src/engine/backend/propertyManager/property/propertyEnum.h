@@ -105,7 +105,7 @@ protected:
 		return list;
 	}
 private:
-	ibValuePtr<valEnumProp> m_enumCreator = ibValuePtr<valEnumProp>(ibValue::CreateAndConvertObjectRef<valEnumProp>());
+	ibValuePtr<valEnumProp> m_enumCreator = ibValue::CreateObject<valEnumProp>();
 };
 
 #endif

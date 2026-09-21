@@ -57,39 +57,39 @@ ibValueMetaObjectFormBase* ibValueMetaObjectParameterizedJob::GetDefaultFormByID
 
 #include "parameterizedJobManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectParameterizedJob::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectParameterizedJob::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectJob(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectJob(this));
 }
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectParameterizedJob::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectParameterizedJob::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
 	ibValueRecordDataObjectParameterizedJob* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
+			pDataRef = new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
 	}
 	else {
 		pDataRef = new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectParameterizedJob::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectParameterizedJob::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormObject:
-		return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
-		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));
 	}
 
 	return nullptr;
@@ -138,7 +138,7 @@ bool ibValueMetaObjectParameterizedJob::OnCreateMetaObject(ibMetaData* metaData,
 
 	// The job's OWN attributes first — they are declared on this leaf, so this leaf is what gives
 	// them their metadata. An attribute that never got it has no factory behind it, and the first
-	// empty object built from this metatype asserts in CreateValueRef.
+	// empty object built from this metatype asserts in CreateValue.
 	if (!(*m_propertyAttributeActive)->OnCreateMetaObject(metaData, flags) ||
 		!(*m_propertyAttributeSchedule)->OnCreateMetaObject(metaData, flags) ||
 		!(*m_propertyAttributeLastRun)->OnCreateMetaObject(metaData, flags) ||
@@ -266,7 +266,7 @@ bool ibValueMetaObjectParameterizedJob::OnAfterRunMetaObject(int flags)
 
 		// The designer builds the compile value and stops — it must not declare a job.
 		return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(),
-			[this]() -> ibValue* { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
+			[this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 	}
 
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))

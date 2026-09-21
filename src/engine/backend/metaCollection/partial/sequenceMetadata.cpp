@@ -98,12 +98,12 @@ ibValueMetaObjectFormBase* ibValueMetaObjectSequence::GetDefaultFormByID(const i
 
 // The list shows the REGISTRATIONS, ordered by the moment they carry — which is what a person opens
 // a sequence to look at: what is registered, for which key, and how far it has got.
-ibSourceDataObject* ibValueMetaObjectSequence::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectSequence::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));
 	}
 
 	return nullptr;
@@ -121,14 +121,14 @@ ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const wxString& strFo
 	);
 }
 
-ibValueManagerDataObject* ibValueMetaObjectSequence::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectSequence::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectSequence(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectSequence(this));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectSequence::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectSequence::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
-	return new ibValueRecordSetObjectSequence(this, uniqueKey);
+	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectSequence(this, uniqueKey));
 }
 
 // ⭐⭐ AND WHAT THIS METATYPE OWNS, IT ALSO WRITES AND READS. The borders' holder is written for its
