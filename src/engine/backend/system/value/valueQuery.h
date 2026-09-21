@@ -149,11 +149,13 @@ public:
 	bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 };
 
+class BACKEND_API ibValueQuerySelect;
+
 // What Execute() returns: the raw result + its output schema. res.Select(kind?) consumes it into a
 // QuerySelect (the walkable selection) — flat cursor for a plain query, a folded ibSelector for TOTALS.
 class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 {
-	enum { enSelect = 0 };
+	enum { enSelect = 0, enUnload = 1 };
 
 	std::unique_ptr<ibDataQueryResult>         m_result;   // move-only L3 result (cursor); consumed by Select()
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
@@ -176,6 +178,10 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 
 	void FillMembers(ibMemberTable& helper) const;
 
+	// The selection Select() hands out, made the one way - so Unload() reads exactly the rows Select() would walk.
+	// Consumes the result's cursor.
+	std::unique_ptr<ibValueQuerySelect> MakeSelection(ibSelectKind kind, const wxString& branch);
+
 public:
 	ibValueQueryResult();                                                                            // empty
 	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
@@ -184,7 +190,7 @@ public:
 	~ibValueQueryResult() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
-	                ibValue** paParams, const long lSizeArray) override;                              // Select
+	                ibValue** paParams, const long lSizeArray) override;                              // Select / Unload
 };
 
 // The SELECTION cursor — flat list OR grouped/TOTALS tree, one uniform surface.
@@ -225,6 +231,11 @@ public:
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	                ibValue** paParams, const long lSizeArray) override;                              // Next/Reset/HasChildren/Select/Total/Level
+	// ⭐ THE ROWS FROM HERE ON, AS A VALUE TABLE - what QueryResult.Unload() returns. Walks the selection to its end
+	// (a forward cursor is spent by it) and copies every row out: one table column per output column, typed as the
+	// query types it. See queryUnload.h for what the shape is and why an unknown type stays untyped.
+	ibValue ToTable();
+
 	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;                              // s.ColumnName (direct attribute)
 	bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;                         // read-only
 };

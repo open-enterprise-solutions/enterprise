@@ -7,6 +7,7 @@
 #include "backend/query/queryParser.h"
 #include "backend/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
+#include "queryUnload.h"                 // ibQueryUnload — the value table Unload() hands back
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
 #include "backend/appData.h"             // appData->DesignerMode()
@@ -292,38 +293,65 @@ void ibValueQueryResult::FillMembers(ibMemberTable& helper) const
 	// argument, so a second was swallowed in silence and the walk quietly returned every branch
 	// (measured 2026-09-04: a branch name nobody answers to still walked all of them).
 	helper.AppendFunc(wxT("Select"), 2, wxT("Select(method?, branch?)"));   // -> a QuerySelect (consumes the result)
+	// ⭐ …OR THE ROWS THEMSELVES, as a value table: `Table = Query.Execute().Unload()`. Same reading as Select()
+	// (it consumes the result), for the script that wants to count, index, sort or pass the rows on rather
+	// than walk them once. The order of the two lines is the order of the enum above.
+	helper.AppendFunc(wxT("Unload"), 1, wxT("Unload(method?)"));            // -> a value table (consumes the result)
+}
+
+std::unique_ptr<ibValueQuerySelect> ibValueQueryResult::MakeSelection(ibSelectKind kind, const wxString& branch)
+{
+	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals)
+		return std::make_unique<ibValueQuerySelect>(std::move(m_result), m_schema, m_snapshot, m_temps);
+
+	// Select(method, branch) — walk ONE branch of a SPLIT from the top. A name nobody answers to
+	// yields an empty walk rather than falling back to all of them: asking for a branch that is
+	// not there is a mistake worth seeing (ibSelector::CollectVisits says the same).
+	ibSelector top = branch.IsEmpty() ? m_result->Select(kind) : m_result->Select(kind, branch);
+	ibJournalInfo(wxT("query.walk"), wxT("select(%d)%s: %ld node(s) at the first level"),
+		static_cast<int>(kind),
+		branch.IsEmpty() ? wxString() : (wxT(" branch '") + branch + wxT("'")), top.NodeCount());
+	return std::make_unique<ibValueQuerySelect>(std::move(top), m_schema, m_snapshot, m_temps);
 }
 
 bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
                                     ibValue** paParams, const long lSizeArray)
 {
-	if (lMethodNum != enSelect)
+	if (lMethodNum != enSelect && lMethodNum != enUnload)
 		return false;
-	if (m_result == nullptr) {        // already selected (the cursor was consumed) — empty selection
+
+	if (m_result == nullptr) {        // already read (the cursor was consumed)
+		if (lMethodNum == enUnload) {
+			// ⚠ NOT AN EMPTY TABLE. A cursor is read once; a result asked for its rows a second time has none
+			// to give, and handing back an empty table would look exactly like "the query found nothing" - the
+			// two are told apart only by saying so. (Select() has always answered an empty selection here; a
+			// walk that ends at once is at least a walk.)
+			ibBackendCoreException::Error(_("The query result has already been read: run the query again to unload it"));
+		}
 		pvarRetValue = new ibValueQuerySelect();
 		return true;
 	}
-	// Select(method) — an explicit ibSelectKind (a QueryResultIteration variant) folds the result that way.
-	// DEFAULT is a DIRECT (flat) walk: a plain query streams the forward cursor; any fold (or a totals
+
+	// Select(method) / Unload(method) — an explicit ibSelectKind (a QueryResultIteration variant) folds the result
+	// that way. DEFAULT is a DIRECT (flat) walk: a plain query streams the forward cursor; any fold (or a totals
 	// result) goes through the selector. ConvertToEnumValue yields the first value (Direct) for no/non-enum arg.
 	const ibSelectKind kind = (lSizeArray >= 1 && paParams[0] != nullptr)
 		? paParams[0]->ConvertToEnumValue<ibSelectKind>()
 		: ibSelectKind::ibSelectKind_Direct;
-	if (kind == ibSelectKind::ibSelectKind_Direct && !m_hasTotals) {
-		pvarRetValue = new ibValueQuerySelect(std::move(m_result), m_schema, m_snapshot, m_temps);
+
+	if (lMethodNum == enUnload) {
+		// A table is a flat list of records. A grouped walk is a tree - its rows are nodes of different depths with
+		// different meaning - and pressing that into a flat table would invent a layout nobody asked for. Refused
+		// where it is asked for, before the cursor is touched (the result stays readable).
+		if (kind != ibSelectKind::ibSelectKind_Direct)
+			ibBackendCoreException::Error(_("Unload() gives the records as a table: only the Direct traversal can be unloaded; use Select(...) to walk grouped results"));
+		pvarRetValue = MakeSelection(kind, wxString())->ToTable();
+		return true;
 	}
-	else {
-		// Select(method, branch) — walk ONE branch of a SPLIT from the top. A name nobody answers to
-		// yields an empty walk rather than falling back to all of them: asking for a branch that is
-		// not there is a mistake worth seeing (ibSelector::CollectVisits says the same).
-		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
-			? paParams[1]->GetString() : wxString();
-		ibSelector top = branch.IsEmpty() ? m_result->Select(kind) : m_result->Select(kind, branch);
-		ibJournalInfo(wxT("query.walk"), wxT("select(%d)%s: %ld node(s) at the first level"),
-			static_cast<int>(kind),
-			branch.IsEmpty() ? wxString() : (wxT(" branch '") + branch + wxT("'")), top.NodeCount());
-		pvarRetValue = new ibValueQuerySelect(std::move(top), m_schema, m_snapshot, m_temps);
-	}
+
+	const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
+		? paParams[1]->GetString() : wxString();
+	pvarRetValue = MakeSelection(kind, branch).release();
 	return true;
 }
 
@@ -376,6 +404,19 @@ ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::OutputColumn& oc) 
 	if (m_tree != nullptr)
 		return oc.m_byAlias ? m_tree->GetColumn(oc.m_alias) : m_tree->GetValue(oc.m_col);
 	return ibValue();
+}
+
+ibValue ibValueQuerySelect::ToTable()
+{
+	std::vector<ibQueryUnloadColumn> columns;
+	columns.reserve(m_schema.size());
+	for (const ibQueryLowering::OutputColumn& oc : m_schema)
+		columns.push_back({ oc.m_name, oc.m_type });
+
+	// The same two reads a script does with `Next()` and `s.Column` - so the table holds exactly what a walk would show.
+	return ibQueryUnload::BuildTable(columns,
+		[this]() { return m_flat != nullptr ? m_flat->Next() : (m_tree != nullptr && m_tree->Next()); },
+		[this](size_t index) { return ReadColumn(m_schema[index]); });
 }
 
 void ibValueQuerySelect::FillMembers(ibMemberTable& helper) const

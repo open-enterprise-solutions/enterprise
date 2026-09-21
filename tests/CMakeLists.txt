@@ -91,6 +91,7 @@ add_executable(oes_tests
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp
+    test_queryUnload.cpp
     test_columnCodec.cpp
     test_queryPredicate.cpp
     test_queryColumnExpr.cpp
