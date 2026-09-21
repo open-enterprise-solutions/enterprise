@@ -1,4 +1,5 @@
 #include "metaSectionObject.h"
+#include <algorithm>   // std::find — GetInterfaceItemArrayObject() lists an object once
 #include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
@@ -33,6 +34,23 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(ibInterfaceCommandSec
 	}
 
 	return array.size() > 0;
+}
+
+std::vector<ibValueMetaObject*> ibValueMetaObjectSection::GetInterfaceItemArrayObject() const
+{
+	std::vector<ibValueMetaObject*> every;
+	for (const ibInterfaceCommandSection area : {
+		ibInterfaceCommandSection_Default, ibInterfaceCommandSection_Create,
+		ibInterfaceCommandSection_Report,  ibInterfaceCommandSection_Service }) {
+
+		std::vector<ibValueMetaObject*> inArea;
+		GetInterfaceItemArrayObject(area, inArea);
+
+		for (ibValueMetaObject* object : inArea)
+			if (std::find(every.begin(), every.end(), object) == every.end())
+				every.push_back(object);
+	}
+	return every;
 }
 
 // ibBackendCommandSender — a section id, when reached, HOPS WITHIN ITSELF: a sub-section (descend), its own

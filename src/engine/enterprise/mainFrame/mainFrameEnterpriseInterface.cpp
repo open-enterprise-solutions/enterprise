@@ -452,13 +452,9 @@ class ibSubSystemWindow : public wxWindow {
 
 				for (const auto child : metaObject->GetInterfaceArrayObject()) {
 
-					std::vector<ibValueMetaObject*> array;
-
-					child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, array);
-
-					child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Create, array);
-					child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Report, array);
-					child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Service, array);
+					// Each command ONCE: a catalog answers both the Default and the Create area (see
+					// GetInterfaceItemArrayObject), and four calls into one array listed it twice.
+					const std::vector<ibValueMetaObject*> array = child->GetInterfaceItemArrayObject();
 
 					if (array.size() > 0) {
 
@@ -482,12 +478,7 @@ class ibSubSystemWindow : public wxWindow {
 
 								for (const auto child : parent->GetInterfaceArrayObject()) {
 
-									std::vector<ibValueMetaObject*> subArray;
-
-									child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, subArray);
-									child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Create, subArray);
-									child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Report, subArray);
-									child->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Service, subArray);
+									const std::vector<ibValueMetaObject*> subArray = child->GetInterfaceItemArrayObject();
 
 									if (subArray.size() > 0) {
 
@@ -506,9 +497,11 @@ class ibSubSystemWindow : public wxWindow {
 											df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, wnd);
 
 											sizerSubSystemItem->Add(df, 0, wxEXPAND, df->FromDIP(5));
-
-											NextChildConstruct(sizerSubSystemItem, child, wnd);
 										}
+
+										// ONCE PER SUBSECTION, not once per item in it: it stood inside the loop above,
+										// so a group of five commands built its nested groups five times over.
+										NextChildConstruct(sizerSubSystemItem, child, wnd);
 									}
 								}
 							}
