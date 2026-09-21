@@ -147,6 +147,7 @@ add_executable(oes_tests
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
     test_sectionInterfaceItems.cpp
+    test_socketLock.cpp
 )
 
 target_link_libraries(oes_tests

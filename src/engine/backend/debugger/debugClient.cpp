@@ -662,8 +662,8 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 		commandChannel.w_u16(kill ? CommandId_Destroy : CommandId_Detach);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 
-		if (m_socketClient != nullptr)
-			m_socketClient->Close();
+		// From the caller's thread, while the connection's own thread may be closing it too.
+		m_socketLock.Close(m_socketClient);
 
 		m_verifiedConnection = false;
 
@@ -699,23 +699,19 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 {
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
+	m_socketLock.Destroy(m_socketClient);
 
 	wxIPV4address addr;
 	addr.Hostname(m_hostName);
 	addr.Service(m_port);
 
 	// set the appropriate flags for the socket
-	m_socketClient = new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL);
+	m_socketLock.Assign(m_socketClient, new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL));
 
 	// step wait connect  
 	m_number_connection_attempts = 0;
@@ -837,8 +833,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 					sessionEnded = true;
 			}
 
-			if (m_socketClient != nullptr)
-				m_socketClient->Close();
+			// The far end has gone (or this thread was told to stop) — and DetachConnection may be closing
+			// the same socket right now, from another thread.
+			m_socketLock.Close(m_socketClient);
 
 			m_number_connection_attempts = 0;
 		}
@@ -860,10 +857,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, unsigned int length)
