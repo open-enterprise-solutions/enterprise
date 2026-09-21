@@ -63,6 +63,7 @@
 #include "backend/databaseLayer/databaseLayer.h"                   // ibTruncateToPeriod / ibNextPeriodStart — the GRAIN, in RAM terms
 #include "backend/system/value/valueArray.h"                        // ibValueArray — a requested breakdown may be a LIST
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — a column's typed empty
+#include "backend/metaData.h"                                       // ibMetaData whole — AdjustValue(…, metaData) must see it is no ibValue
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegBound / ibRegFold / ibRegFillArmCut
 #include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource — one value for the entry, or one per side
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"   // the chart's flag a figure is kept under
