@@ -726,7 +726,7 @@ ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
 {
 	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
 	// "no rows" would be the wrong way to say it.
-	struct Term { ibMetaID m_id; ibValue m_value; };
+	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
 	std::vector<Term> terms;
 	for (const std::pair<ibValue, ibValue>& entry : filter.Entries()) {
 		const wxString name = entry.first.GetString();
@@ -734,32 +734,48 @@ ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
 			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
 		if (colInfo == nullptr)
 			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
-		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.second });
+		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.second, colInfo->IsColumnIndexed() });
 	}
 
-	ibValueArray* const found = new ibValueArray();
-	ibValue result;
-	result = found;   // the wrapper owns it
+	// Born held (development.md, "A new value is born owned").
+	ibValuePtr<ibValueArray> found(new ibValueArray());
 
-	for (long row = 0; row < GetRowCount(); ++row) {
-		const ibDataViewItem item = GetItem(row);
+	// A row is taken when EVERY term matches it.
+	const auto take = [&](const ibDataViewItem& item) {
 		ibComposerNode* const node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
-			continue;
-		bool matches = true;
-		for (const Term& term : terms) {
-			if (!(term.m_value == node->GetTableValue(term.m_id))) {
-				matches = false;
-				break;
-			}
-		}
-		if (matches) {
-			ibValue line;
-			line = GetRowAt(item);
-			found->Add(line);
+			return;
+		for (const Term& term : terms)
+			if (!(term.m_value == node->GetTableValue(term.m_id)))
+				return;
+		ibValue line;
+		line = GetRowAt(item);
+		found->Add(line);
+	};
+
+	// ⭐ THE INDEX ANSWERS FIRST WHEN A TERM'S COLUMN ASKED FOR ONE, as it does for Find (FindRowValue): that
+	// term's rows - already in row order - are the only candidates, and the other terms only thin them. With
+	// no indexed column in the filter every row is a candidate.
+	const Term* byIndex = nullptr;
+	for (const Term& term : terms) {
+		if (term.m_indexed) {
+			byIndex = &term;
+			break;
 		}
 	}
-	return result;
+
+	if (byIndex != nullptr) {
+		const std::vector<ibDataViewItem>* const rows =
+			GetRowsByValue(static_cast<unsigned int>(byIndex->m_id), byIndex->m_value);
+		if (rows != nullptr)
+			for (const ibDataViewItem& item : *rows)
+				take(item);
+	}
+	else {
+		for (long row = 0; row < GetRowCount(); ++row)
+			take(GetItem(row));
+	}
+	return found;
 }
 
 void ibValueModelTable::EditRow(const ibDataViewItem& row)

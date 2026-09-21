@@ -339,6 +339,39 @@ TEST_F(ValueTableVerbs, FindRows_ReturnsTheTablesOwnRows)
     EXPECT_EQ(Joined(ColumnInOrder(wxT("Note"))), wxT("old,new"));
 }
 
+// A term on an INDEXED column is answered by that column's index, as Find is - and the answer is the scan's:
+// the same rows in table order, the other terms still thinning them.
+TEST_F(ValueTableVerbs, FindRows_OnAnIndexedColumn_AnswersAsTheScanDoes)
+{
+    auto* priority = Column(wxT("Priority")); Column(wxT("Level")); Column(wxT("Name"));
+    AddRow({ ibValue(1.0), ibValue(1.0), Text(wxT("a")) });
+    AddRow({ ibValue(1.0), ibValue(2.0), Text(wxT("b")) });
+    AddRow({ ibValue(2.0), ibValue(1.0), Text(wxT("c")) });
+    AddRow({ ibValue(1.0), ibValue(1.0), Text(wxT("d")) });
+
+    const ibValue filter = MakeFilter({ { wxT("Priority"), ibValue(1.0) }, { wxT("Level"), ibValue(1.0) } });
+    const auto namesFound = [&]() {
+        std::vector<wxString> names;
+        const ibValue found = Call(wxT("FindRows"), { filter });
+        ibValueArray* const rows = found.ConvertToType<ibValueArray>();
+        if (rows == nullptr)
+            return names;
+        for (unsigned int i = 0; i < rows->Count(); ++i) {
+            ibValue row;
+            rows->GetAt(ibValue(static_cast<double>(i)), row);
+            names.push_back(Cell(row, wxT("Name")));
+        }
+        return names;
+    };
+
+    const std::vector<wxString> scanned = namesFound();
+    priority->SetColumnIndexed(true);
+    const std::vector<wxString> indexed = namesFound();
+
+    EXPECT_EQ(Joined(scanned), wxT("a,d"));
+    EXPECT_EQ(Joined(indexed), Joined(scanned)) << "the index answers what the scan answered";
+}
+
 // The surface a script and the syntax helper see.
 TEST_F(ValueTableVerbs, TheTable_ExposesTheNewVerbs)
 {
