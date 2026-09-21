@@ -14,6 +14,7 @@
 #define wxART_METATREE				wxART_MAKE_CLIENT_ID(wxART_METATREE)
 #define wxART_VISUALHOST			wxART_MAKE_CLIENT_ID(wxART_VISUALHOST)
 #define wxART_SERVICE				wxART_MAKE_CLIENT_ID(wxART_SERVICE)
+#define wxART_DEBUG					wxART_MAKE_CLIENT_ID(wxART_DEBUG)
 
 ///////////////////////////////////////////////////////////////////////////////
 #define wxART_FRONTEND				wxART_MAKE_CLIENT_ID(wxART_FRONTEND)
@@ -86,5 +87,19 @@
 // A NESTED QUERY - a query standing where a table would. Same argument as the temp table above: it
 // is a source with no metatype behind it, so it carries its own picture rather than borrowing one.
 #define wxART_NESTED_QUERY			wxART_MAKE_ART_ID(wxART_NESTED_QUERY)
+
+// The debug toolbar's pictures (client wxART_DEBUG), one per command of the Debug menu that has a button.
+// Drawn in debugIcons.h. Prefixed wxART_DEBUG_ because wxWidgets already owns wxART_STOP.
+#define wxART_DEBUG_START						wxART_MAKE_ART_ID(wxART_DEBUG_START)
+#define wxART_DEBUG_START_WITHOUT_DEBUGGING		wxART_MAKE_ART_ID(wxART_DEBUG_START_WITHOUT_DEBUGGING)
+#define wxART_DEBUG_ATTACH						wxART_MAKE_ART_ID(wxART_DEBUG_ATTACH)
+#define wxART_DEBUG_CONTINUE					wxART_MAKE_ART_ID(wxART_DEBUG_CONTINUE)
+#define wxART_DEBUG_PAUSE						wxART_MAKE_ART_ID(wxART_DEBUG_PAUSE)
+#define wxART_DEBUG_STEP_INTO					wxART_MAKE_ART_ID(wxART_DEBUG_STEP_INTO)
+#define wxART_DEBUG_STEP_OVER					wxART_MAKE_ART_ID(wxART_DEBUG_STEP_OVER)
+#define wxART_DEBUG_STEP_OUT					wxART_MAKE_ART_ID(wxART_DEBUG_STEP_OUT)
+#define wxART_DEBUG_STOP_DEBUGGING				wxART_MAKE_ART_ID(wxART_DEBUG_STOP_DEBUGGING)
+#define wxART_DEBUG_STOP_PROGRAM				wxART_MAKE_ART_ID(wxART_DEBUG_STOP_PROGRAM)
+#define wxART_DEBUG_REMOVE_ALL_BREAKPOINTS		wxART_MAKE_ART_ID(wxART_DEBUG_REMOVE_ALL_BREAKPOINTS)
 
 #endif

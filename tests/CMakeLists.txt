@@ -429,6 +429,7 @@ add_executable(oes_frontend_runtime_test
     test_frontendQueryConstructor.cpp
     test_frontendTranslateConstructor.cpp
     test_frontendFormatConstructor.cpp
+    test_frontendDebugIcons.cpp
 )
 
 target_link_libraries(oes_frontend_runtime_test

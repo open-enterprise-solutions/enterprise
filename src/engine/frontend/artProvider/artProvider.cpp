@@ -44,6 +44,9 @@
 // ----------------------------------------------------------------------------
 
 #include "private/picturePredefined.h"
+#include "artProvider/debugIcons.h"
+
+#include <wx/bmpbndl.h>
 
 class wxFrontendArtProvider : public wxArtProvider {
 public:
@@ -120,6 +123,29 @@ protected:
 			{ wxART_METATREE, wxART_COMMON_FOLDER, s_commonFolder_xpm },
 			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_xpm }
 		};
+
+		if (client == wxART_DEBUG) {
+
+			static const struct { wxArtID id; const char* svg; } s_debugIcons[] = {
+				{ wxART_DEBUG_START,					ibDebugIcons::kStart },
+				{ wxART_DEBUG_START_WITHOUT_DEBUGGING,	ibDebugIcons::kStartWithoutDebugging },
+				{ wxART_DEBUG_ATTACH,					ibDebugIcons::kAttach },
+				{ wxART_DEBUG_CONTINUE,					ibDebugIcons::kContinue },
+				{ wxART_DEBUG_PAUSE,					ibDebugIcons::kPause },
+				{ wxART_DEBUG_STEP_INTO,				ibDebugIcons::kStepInto },
+				{ wxART_DEBUG_STEP_OVER,				ibDebugIcons::kStepOver },
+				{ wxART_DEBUG_STEP_OUT,					ibDebugIcons::kStepOut },
+				{ wxART_DEBUG_STOP_DEBUGGING,			ibDebugIcons::kStopDebugging },
+				{ wxART_DEBUG_STOP_PROGRAM,				ibDebugIcons::kStopProgram },
+				{ wxART_DEBUG_REMOVE_ALL_BREAKPOINTS,	ibDebugIcons::kRemoveAllBreakpoints },
+			};
+
+			for (const auto& icon : s_debugIcons) {
+				if (icon.id == id)
+					return wxBitmapBundle::FromSVG(icon.svg, size.IsFullySpecified() ? size : wxSize(16, 16));
+			}
+			return wxNullBitmap;
+		}
 
 		for (unsigned n = 0; n < WXSIZEOF(s_allBitmaps); n++) {
 			const wxFrontendArtProviderIconEntry& entry = s_allBitmaps[n];

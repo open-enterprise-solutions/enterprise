@@ -181,6 +181,11 @@ protected:
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
 
+	// The debug commands as buttons, beside the main toolbar. They are the Debug menu's own commands
+	// (same ids, same handlers, same OnUpdateDebugCommand for enabling) - a button is a second way to
+	// press a menu item, not a second implementation of it.
+	void CreateDebugToolbar();
+
 	// Opening loads the metadata tree (no session scripts here — the
 	// Designer has no runtime); closing asks about an unsaved
 	// configuration.
@@ -244,6 +249,7 @@ private:
 	wxMenu* m_menuEdit;
 	wxMenu* m_menuConfiguration;
 	wxMenu* m_menuDebug;
+	wxAuiToolBar* m_debugToolbar = nullptr;
 	wxMenu* m_menuSetting;
 	wxMenu* m_menuAdministration;
 	wxMenu* m_menuHelp;
