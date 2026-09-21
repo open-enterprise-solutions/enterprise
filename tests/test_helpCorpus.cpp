@@ -191,24 +191,27 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
 	ASSERT_TRUE(loaded.ok());
 	ASSERT_NE(loaded.corpus, nullptr);
+	// What a bucket's entries are told is kept INSIDE the corpus (LoadErrors) - result.errors carries only what
+	// happened around the load (a locale fallen back, a construction that failed); helpLoader.cpp says why.
+	const std::vector<ibHelpLoadError>& said = loaded.corpus->LoadErrors();
 
 	const ibHelpEntry* table = loaded.corpus->FindById(wxT("cls.Table"));
 	ASSERT_NE(table, nullptr);
 	EXPECT_EQ(table->classId, value_to_clsid("VL_TABL")) << "the tag resolves to the class the registry holds";
-	EXPECT_FALSE(SaysSomethingAbout(loaded.errors, wxT("cls.Table")));
+	EXPECT_FALSE(SaysSomethingAbout(said, wxT("cls.Table")));
 
 	const ibHelpEntry* nothing = loaded.corpus->FindById(wxT("cls.Nothing"));
 	ASSERT_NE(nothing, nullptr) << "a wrong join key does not cost the article its prose";
 	EXPECT_EQ(nothing->classId, 0u);
-	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Nothing"))) << "an id nothing is registered under is said";
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Nothing"))) << "an id nothing is registered under is said";
 
-	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Misnamed")))
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Misnamed")))
 		<< "an article about Array that points at the Table class is said";
 
 	const ibHelpEntry* text = loaded.corpus->FindById(wxT("cls.Text"));
 	ASSERT_NE(text, nullptr);
 	EXPECT_EQ(text->classId, 0u) << "a class id is a number; a tag in its place is not read as one";
-	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Text")));
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Text")));
 
 	const ibHelpEntry* plain = loaded.corpus->FindById(wxT("kw.Plain"));
 	ASSERT_NE(plain, nullptr);
