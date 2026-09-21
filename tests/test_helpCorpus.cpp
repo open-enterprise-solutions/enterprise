@@ -19,6 +19,16 @@
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpCategory.h"
 #include "backend/syntaxHelper/helpEntry.h"
+#include "backend/syntaxHelper/helpLoader.h"
+#include "backend/syntaxHelper/helpLoadError.h"
+
+#include <wx/file.h>
+#include <wx/filename.h>
+#include <wx/stdpaths.h>
+#include <wx/utils.h>
+
+#include <algorithm>
+#include <string>
 
 namespace {
 
@@ -132,4 +142,75 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 	ASSERT_NE(dates, nullptr);
 	EXPECT_EQ(dates->displayName, wxT("Даты и периоды"))
 		<< "the configuration's own name did not overlay the platform's";
+}
+
+// =============================================================================
+// The hidden class id — an article's join key to the runtime value it describes
+// =============================================================================
+
+namespace {
+
+// A locale directory holding one bucket, in a folder of its own under the temp directory.
+wxString WriteHelpBucket(const std::string& bucket)
+{
+	const wxString root = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()
+		+ wxString::Format(wxT("oes_help_classid_%ld"), (long)wxGetProcessId());
+	const wxString locale = root + wxFileName::GetPathSeparator() + wxT("en");
+	wxFileName::Mkdir(locale, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	wxFile out(locale + wxFileName::GetPathSeparator() + wxT("types.json"), wxFile::write);
+	out.Write(bucket.data(), bucket.size());
+	out.Close();
+	return root;
+}
+
+bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const wxString& id)
+{
+	return std::any_of(errors.begin(), errors.end(), [&id](const ibHelpLoadError& e) {
+		return e.severity == ibHelpLoadSeverity::kWarning && e.message.Contains(id);
+	});
+}
+
+} // namespace
+
+// An article on a runtime value names its class by the id the registry holds, and the loader asks the
+// REGISTRY about it - so the article is joined to the value by id, not by a localised name, and an article
+// whose class was removed or renamed says so at load instead of pointing at nothing.
+TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
+{
+	const std::string table = std::to_string(value_to_clsid("VL_TABL"));
+	const wxString root = WriteHelpBucket(
+		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
+		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + table + R"( },)"
+		R"({ "id": "cls.Nothing",  "name_local": "Nothing", "name_en": "Nothing", "kind": "collection", "class_id": 12345 },)"
+		R"({ "id": "cls.Misnamed", "name_local": "Array",   "name_en": "Array",   "kind": "collection", "class_id": )" + table + R"( },)"
+		R"({ "id": "cls.Text",     "name_local": "Text",    "name_en": "Text",    "kind": "collection", "class_id": "VL_TABL" },)"
+		R"({ "id": "kw.Plain",     "name_local": "Plain",   "name_en": "Plain",   "kind": "keyword" })"
+		R"(] })");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+
+	const ibHelpEntry* table = loaded.corpus->FindById(wxT("cls.Table"));
+	ASSERT_NE(table, nullptr);
+	EXPECT_EQ(table->classId, value_to_clsid("VL_TABL")) << "the tag resolves to the class the registry holds";
+	EXPECT_FALSE(SaysSomethingAbout(loaded.errors, wxT("cls.Table")));
+
+	const ibHelpEntry* nothing = loaded.corpus->FindById(wxT("cls.Nothing"));
+	ASSERT_NE(nothing, nullptr) << "a wrong join key does not cost the article its prose";
+	EXPECT_EQ(nothing->classId, 0u);
+	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Nothing"))) << "an id nothing is registered under is said";
+
+	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Misnamed")))
+		<< "an article about Array that points at the Table class is said";
+
+	const ibHelpEntry* text = loaded.corpus->FindById(wxT("cls.Text"));
+	ASSERT_NE(text, nullptr);
+	EXPECT_EQ(text->classId, 0u) << "a class id is a number; a tag in its place is not read as one";
+	EXPECT_TRUE(SaysSomethingAbout(loaded.errors, wxT("cls.Text")));
+
+	const ibHelpEntry* plain = loaded.corpus->FindById(wxT("kw.Plain"));
+	ASSERT_NE(plain, nullptr);
+	EXPECT_EQ(plain->classId, 0u) << "an article about no class carries none";
 }

@@ -9,7 +9,7 @@
       "name_en": "Date",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types",
         "date"
       ],
@@ -31,7 +31,7 @@
       "name_en": "Number",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types"
       ],
       "signature": "Number(<value>) — or a literal: 42, -3.14",
@@ -50,7 +50,7 @@
       "name_en": "String",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types"
       ],
       "signature": "String(<value>) — or a literal: \"text\"",
@@ -69,7 +69,7 @@
       "name_en": "Boolean",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types"
       ],
       "signature": "Boolean(<value>) — or a literal: True / False",
@@ -88,7 +88,7 @@
       "name_en": "Undefined",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types"
       ],
       "signature": "Undefined",
@@ -107,7 +107,7 @@
       "name_en": "Null",
       "kind": "primitive_type",
       "category_keys": [
-        "common_lang",
+        "value_types",
         "primitive_types"
       ],
       "signature": "Null",

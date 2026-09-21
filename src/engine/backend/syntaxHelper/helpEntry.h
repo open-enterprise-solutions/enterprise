@@ -17,6 +17,7 @@
 #define _IB_HELP_ENTRY_H_
 
 #include "backend/backend.h"
+#include "backend/clsid.h"   // ibClassID — the class an article is about
 
 #include <vector>
 
@@ -97,6 +98,14 @@ struct BACKEND_API ibHelpEntry {
 	// (e.g. "Designer, codeRunner, daemon, wenterprise-server").
 	// Localised string, no parsing required by readers.
 	wxString availability;
+
+	// ⭐ THE CLASS THIS ARTICLE IS ABOUT, by its id — set on the article of a runtime value type
+	// (`cls.<Name>`, the Value types section). A HIDDEN field: the detail pane does not show it. It is
+	// the join key between an article and a live value, which carries the same id, so the two are matched
+	// without comparing names — a localised name is not an identity. The loader checks it against the
+	// type registry at load (helpLoader.cpp), so an article cannot drift from its class
+	// unnoticed. JSON `class_id`: the id as the registry holds it, a number. 0 = none.
+	ibClassID classId = 0;
 
 	ibHelpKind kind = ibHelpKind::kKeyword;
 

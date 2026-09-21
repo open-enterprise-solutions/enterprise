@@ -10,6 +10,8 @@
 
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpEntry.h"
+#include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — an article's class_id, checked
+#include "backend/stringUtils.h"
 
 #include <wx/dir.h>
 #include <wx/file.h>
@@ -296,6 +298,32 @@ void ParseBucket(const std::string&            raw,
 			e.categoryKeys   = SafeStrArray(obj, "category_keys");
 			e.seeAlso        = SafeStrArray(obj, "see_also");
 			e.reviewed       = SafeBool(obj, "reviewed", false);
+
+			// The hidden class id (helpEntry.h), checked against the registry HERE: an article whose
+			// class was renamed or removed says so at load instead of pointing at nothing. The entry
+			// still loads - the prose is right even when the join key is not.
+			const auto classIt = obj.find("class_id");
+			if (classIt != obj.end()) {
+				ibHelpLoadError warn;
+				warn.bucketPath = bucketPath;
+				warn.severity   = ibHelpLoadSeverity::kWarning;
+				const ibClassID asked = classIt->is_number_unsigned() ? classIt->get<ibClassID>() : 0;
+				if (asked == 0 || !ibValue::IsRegisterCtor(asked)) {
+					warn.message = wxString::Format(
+						wxT("%s: class_id %s names no registered class."), e.id, Utf8(classIt->dump()));
+					errors.push_back(std::move(warn));
+				}
+				else {
+					e.classId = asked;
+					const wxString registered = ibValue::GetNameObjectFromID(asked);
+					if (!stringUtils::CompareString(registered, e.nameEn)) {
+						warn.message = wxString::Format(
+							wxT("%s: class_id %s is registered as '%s', but the article is about '%s'."),
+							e.id, Utf8(classIt->dump()), registered, e.nameEn);
+						errors.push_back(std::move(warn));
+					}
+				}
+			}
 
 			// modes: array of "ves" / "ces"; missing or empty = both.
 			const auto modeArr = SafeStrArray(obj, "modes");

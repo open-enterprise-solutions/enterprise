@@ -380,6 +380,11 @@ public:
 		result.SetValue(wxT("nameEn"), entry->nameEn);
 		result.SetValue(wxT("kind"), KindWord(entry->kind));
 
+		// The runtime class the article is about, named by the REGISTRY from the article's hidden class id
+		// (helpEntry.h) - the name `New` takes, whatever the article is called in this locale.
+		if (entry->classId != 0)
+			result.SetValue(wxT("class"), ibValue::GetNameObjectFromID(entry->classId));
+
 		if (!entry->signature.IsEmpty())   result.SetValue(wxT("signature"), entry->signature);
 		if (!entry->description.IsEmpty()) result.SetValue(wxT("description"), entry->description);
 		if (!entry->parameters.IsEmpty())  result.SetValue(wxT("parameters"), entry->parameters);

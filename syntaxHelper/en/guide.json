@@ -43,7 +43,8 @@
         "kw.Select",
         "kw.OrderBy",
         "kw.Join",
-        "kw.Group"
+        "kw.Group",
+        "cls.Table"
       ],
       "reviewed": true
     },
