@@ -511,8 +511,9 @@ TEST(JsonWriter, WhatIsWrittenIsWhatIsRead) {
 		writer.SetFormatting(formatting);
 		writer.WriteValue(value);
 		const wxString written = writer.Close();
-		if (formatting == ibJsonFormatting_Compact)
+		if (formatting == ibJsonFormatting_Compact) {
 			EXPECT_EQ(written, text);
+		}
 
 		ibValueJsonWriter again;
 		again.WriteValue(ReadWhole(written));

@@ -401,8 +401,9 @@ TEST(JsonRoundTrip, DamagedTextIsReadOrRefusedAndNeverAnythingElse)
 				ASSERT_FALSE(why.empty()) << "seed " << seed << ": refused without a sentence\ntext: " << Shown(text);
 				// Refused by the reader and accepted by the library is legitimate for ONE reason: a limit this
 				// reader declares on a number. Anything else is the two disagreeing about what JSON is.
-				if (libraryAccepts)
+				if (libraryAccepts) {
 					ASSERT_TRUE(why.Contains(wxT("number"))) << "seed " << seed << ": " << Shown(why) << "\ntext: " << Shown(text);
+				}
 				continue;
 			}
 			accepted++;
