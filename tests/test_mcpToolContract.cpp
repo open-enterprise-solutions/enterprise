@@ -409,6 +409,22 @@ TEST(McpToolContract, EveryRequiredArgument_IsAlsoDeclared)
 	}
 }
 
+// ⭐ AN ARGUMENT A TOOL READS MUST BE ONE IT DECLARES. picture_set takes an image as base64 in `data` and
+// refuses it without a `name` — but `name` was read (ArgName) and never listed, so the server refused
+// the name as undeclared and the route was unusable. EveryRequiredArgument_IsAlsoDeclared cannot see
+// this: `name` is required only WHEN `data` is given, so it is not in the schema's required list.
+// The tool is named because that is the only place the fact lives; the general shape of the rule
+// (a declared argument the tool reads) cannot be asked of a tool from outside.
+TEST(McpToolContract, PictureSet_DeclaresTheNameItAsksForWhenTheImageComesAsData)
+{
+	const ibMcpTool* tool = ibFindMcpTool(wxT("picture_set"));
+	ASSERT_NE(tool, nullptr);
+
+	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
+	for (const wxString& name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("name") })
+		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << wxString(name).ToStdString() << "'";
+}
+
 TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 {
 	for (const ibMcpTool* tool : ibMcpTools()) {

@@ -190,7 +190,12 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgEngine(), ArgConfiguration(), ArgData() };
+		// ⭐ `name` IS DECLARED HERE because Call ASKS for it: an image handed over in `data` has to be
+		// known by something, and Call refuses without one. It was read through ArgName() and left out of
+		// this list, so the server — which refuses any argument a tool did not declare — turned it away
+		// before Call ever saw it: the only route that takes an image from the caller could not be used at
+		// all ("needs a `name`" / "takes no argument called 'name'").
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgEngine(), ArgConfiguration(), ArgData(), ArgName() };
 		return s_arguments;
 	}
 
