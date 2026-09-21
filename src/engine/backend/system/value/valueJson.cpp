@@ -321,8 +321,8 @@ ibValue ibValueJsonReader::BuildValue(int depth)
 		if (depth >= kMaxDepth)
 			ibBackendCoreException::Error(_("JSONReader: the value nests deeper than %d levels"), kMaxDepth);
 
-		ibValueStructure* const object = new ibValueStructure();
-		const ibValue holder(object);   // owns it from here, whatever is raised below
+		// Born held (development.md, "A new value is born owned") - and let go of by itself, whatever is raised below.
+		const ibValuePtr<ibValueStructure> object(new ibValueStructure());
 		for (++m_at; m_tokens[m_at].m_type != ibJsonValueType_ObjectEnd; ++m_at) {
 			const ibValue name = m_tokens[m_at].m_value;
 			++m_at;
@@ -347,18 +347,17 @@ ibValue ibValueJsonReader::BuildValue(int depth)
 			}
 			object->SetAt(name, member);
 		}
-		return holder;
+		return object;
 	}
 
 	if (token.m_type == ibJsonValueType_ArrayStart) {
 		if (depth >= kMaxDepth)
 			ibBackendCoreException::Error(_("JSONReader: the value nests deeper than %d levels"), kMaxDepth);
 
-		ibValueArray* const list = new ibValueArray();
-		const ibValue holder(list);
+		const ibValuePtr<ibValueArray> list(new ibValueArray());   // born held
 		for (++m_at; m_tokens[m_at].m_type != ibJsonValueType_ArrayEnd; ++m_at)
 			list->Add(BuildValue(depth + 1));
-		return holder;
+		return list;
 	}
 
 	return token.m_value;

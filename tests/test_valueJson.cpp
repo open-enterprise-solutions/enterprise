@@ -455,38 +455,34 @@ TEST(JsonWriter, TheDocumentStaysWellFormed) {
 
 // A Structure / Array goes out whole, to any depth...
 TEST(JsonWriter, AStructureGoesOutWhole) {
-	ibValueStructure* line = new ibValueStructure();
-	const ibValue lineHolder(line);
+	const ibValuePtr<ibValueStructure> line(new ibValueStructure());   // born held, as the engine makes them
 	line->Insert(ibValue(wxString(wxT("item"))), ibValue(wxString(wxT("x"))));
 	line->Insert(ibValue(wxString(wxT("qty"))), ibValue(ibNumber(2)));
 
-	ibValueArray* lines = new ibValueArray();
-	const ibValue linesHolder(lines);
-	lines->Add(lineHolder);
+	const ibValuePtr<ibValueArray> lines(new ibValueArray());
+	lines->Add(line);
 
-	ibValueStructure* order = new ibValueStructure();
-	const ibValue orderHolder(order);
+	const ibValuePtr<ibValueStructure> order(new ibValueStructure());
 	order->Insert(ibValue(wxString(wxT("number"))), ibValue(wxString(wxT("A-1"))));
-	order->Insert(ibValue(wxString(wxT("lines"))), linesHolder);
+	order->Insert(ibValue(wxString(wxT("lines"))), lines);
 
 	ibValueJsonWriter writer;
-	writer.WriteValue(orderHolder);
+	writer.WriteValue(order);
 	EXPECT_EQ(writer.Close(), wxString(wxT("{\"number\":\"A-1\",\"lines\":[{\"item\":\"x\",\"qty\":2}]}")));
 }
 
 // ...or not at all: a value with no JSON form three levels down is refused BY NAME, what was already written
 // of it is taken back, and the writer stands where it stood.
 TEST(JsonWriter, ARefusedValueLeavesNothingBehind) {
-	ibValueStructure* bad = new ibValueStructure();
-	const ibValue badHolder(bad);
+	const ibValuePtr<ibValueStructure> bad(new ibValueStructure());
 	bad->Insert(ibValue(wxString(wxT("fine"))), ibValue(ibNumber(1)));
-	bad->Insert(ibValue(wxString(wxT("reader"))), ibValue(new ibValueJsonReader()));   // no JSON form
+	bad->Insert(ibValue(wxString(wxT("reader"))), ibValuePtr<ibValueJsonReader>(new ibValueJsonReader()));   // no JSON form
 
 	ibValueJsonWriter writer;
 	writer.WriteStartArray();
 	writer.WriteValue(ibValue(ibNumber(1)));
 	try {
-		writer.WriteValue(badHolder);
+		writer.WriteValue(bad);
 		FAIL() << "a value with no JSON form must be refused";
 	}
 	catch (const ibBackendException& e) {
@@ -498,11 +494,10 @@ TEST(JsonWriter, ARefusedValueLeavesNothingBehind) {
 }
 
 TEST(JsonWriter, AContainerWithAKeyThatIsNotAStringIsRefused) {
-	ibValueContainer* map = new ibValueContainer();
-	const ibValue holder(map);
+	const ibValuePtr<ibValueContainer> map(new ibValueContainer());
 	map->Insert(ibValue(ibNumber(1)), ibValue(wxString(wxT("x"))));
 	ibValueJsonWriter writer;
-	EXPECT_THROW(writer.WriteValue(holder), ibBackendException);
+	EXPECT_THROW(writer.WriteValue(map), ibBackendException);
 	writer.WriteValue(ibValue(ibNumber(1)));   // nothing of the refused value was left: the document is still to be written
 	EXPECT_EQ(writer.Close(), wxString(wxT("1")));
 }
