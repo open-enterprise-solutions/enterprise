@@ -113,7 +113,12 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 		// ONLY such a number. Everything a double does carry goes the way it always did, for two reasons: an
 		// INTEGER parameter would turn `Amount / &Count` into SQLite's integer division where it was a real one,
 		// and the exactness test below walks the bignum tier - not something to pay on every bind of a journal
-		// row. A kind byte of 0x80 and above (plugin kinds) is past int64 as well and still goes in as a double.
+		// row.
+		//
+		// ⚠ Past int64 is NOT a reference left out. `_RTRef` holds a reference kind (0x10..0x1D, clsid.h), which
+		// fits; the 0x80.. range is a reserved seam nobody registers; and Firebird REFUSES such a value for a
+		// BIGINT outright (firebirdParameter.cpp). Spelling it here as an unsigned int64 would make this driver
+		// accept what the default one refuses - a second road - so a number past int64 goes in as a double.
 		const double approximate = dblValue.ToDouble();
 		long long whole = 0;
 		const bool exact = (approximate >= 9007199254740992.0 || approximate <= -9007199254740992.0)   // 2^53
