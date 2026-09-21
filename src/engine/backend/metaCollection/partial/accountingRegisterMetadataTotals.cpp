@@ -1003,7 +1003,7 @@ void WhereSideNamed(ibDataQueryBuilder& b, const ibBackendQueryable* source, con
 	if (!onMovements || sideAccount == nullptr)
 		return;
 	if (const ibBackendQueryColumn* here = ColumnOn(source, sideAccount))
-		if (const ibQueryPredicatePtr named = ibRegSideNamed(here, ibValueTypeDescription::AdjustValue(here->GetTypeDesc())))
+		if (const ibQueryPredicatePtr named = ibRegSideNamed(here, ibValueTypeDescription::AdjustValue(here->GetTypeDesc(), sideAccount->GetMetaData())))
 			b.Where(named);
 }
 
@@ -4237,7 +4237,7 @@ std::unordered_map<wxString, ibQueryExprPtr> KeyFieldsAsRead(const ibBackendQuer
 		fields.push_back(slot.m_name);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(column, metaData, ibValueTypeDescription::AdjustValue(column->GetTypeDesc()), &capture, pos);
+	ibColumnCodec::WriteValue(column, metaData, ibValueTypeDescription::AdjustValue(column->GetTypeDesc(), metaData), &capture, pos);
 	const std::vector<ibQueryExprPtr>& empty = capture.CapturedValues();
 
 	const ibQueryExprPtr untagged = ibBinOp(ibQueryBinOp::Or, ibIsNull(ibCol(alias, tag)),

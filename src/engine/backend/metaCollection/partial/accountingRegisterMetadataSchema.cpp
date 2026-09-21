@@ -301,7 +301,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			if (!typeRefField.IsEmpty() && !idField.IsEmpty()) {
 				const wxString zeroId(wxT('0'), sizeof(ibReference) * 2);
-				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc());
+				// The empty account of THIS register's configuration - the one the schema is declared for, which
+				// in the designer is not necessarily the active one.
+				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc(), account->GetMetaData());
 				m.Guard(wxT("({row}.") + typeRefField + wxT(" <> 0) AND ({row}.") + idField + wxT(" <> {binary:") + zeroId + wxT("})"),
 					ibRegSideNamed(account->GetQueryColumn(), emptyAccount));
 			}
