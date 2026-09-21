@@ -87,6 +87,11 @@ public:
 	void SetSelectedObject(ibValueFrame* object) { m_selObj = object; }
 	void SetSelectedPanel(wxWindow* actPanel) { m_actPanel = actPanel; }
 
+	// Clear the selection — the four pointers go together, none is meaningful without the others. The host
+	// calls it from Cleanup, the one door every control's widgets leave through (a removal, an undo, a whole
+	// rebuild of the form), so the canvas never paints from a control that is gone.
+	void ClearSelection() { m_selSizer = nullptr; m_selItem = nullptr; m_selObj = nullptr; m_actPanel = nullptr; }
+
 	wxSizer* GetSelectedSizer() const { return m_selSizer; }
 	wxObject* GetSelectedItem() const { return m_selItem; }
 	ibValueFrame* GetSelectedObject() const { return m_selObj; }

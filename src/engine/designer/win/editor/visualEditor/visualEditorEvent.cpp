@@ -100,5 +100,12 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnUpdated(ibVal
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Cleanup(ibValueFrame* control, wxObject* obj)
 {
+	// The canvas remembers the selected control AND the wx objects made for it; both go with the control's
+	// widgets, so a selection on a control being cleaned up is dropped here. Whoever rebuilds the host
+	// selects again (SelectObject) — until then there is simply no highlight, which is better than one
+	// drawn from a window that is gone.
+	if (m_back != nullptr && m_back->GetSelectedObject() == control)
+		m_back->ClearSelection();
+
 	control->CleanupWithLayers(obj, this);
 }
