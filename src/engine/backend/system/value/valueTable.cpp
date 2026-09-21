@@ -6,6 +6,8 @@
 #include "valueTable.h"
 #include "backend/backend_exception.h"
 
+#include <wx/tokenzr.h>
+
 // L5-1 composer — full type to bind the base m_composer to this table's source in the ctor (the RAM
 // queryable itself now lives in model.cpp, generalised onto ibValueModelStorage).
 #include "backend/composition/dataComposer.h"   // ibDataDBComposer — m_composer.FromSource(...)
@@ -84,8 +86,12 @@ void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, column : string)"));
 	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(row : tableRow)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Sort"), 2, wxT("Sort(column : string, ascending = true : boolean)"));
+	// `columns` is one column name, or several with a way each ("Priority, Level Desc"); `ascending` is the way
+	// for a key that says none.
+	helper.AppendFunc(wxT("Sort"), 2, wxT("Sort(columns : string, ascending = true : boolean)"));
 	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
+	helper.AppendFunc(wxT("Total"), 1, wxT("Total(column : string) : number"));
+	helper.AppendFunc(wxT("FindRows"), 1, wxT("FindRows(filter : structure) : array"));
 
 	helper.AppendProp(wxT("Columns"));
 }
@@ -165,11 +171,31 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enSort: {
 		// ONE MEANING OF "SORT" for this table: the script's Sort() re-seats the rows, exactly as the two
 		// order commands do. A script that sorts a table and then walks it must walk it sorted.
-		ibDataViewColumnItem column;
-		column.m_name = paParams[0]->GetString();
-		if (m_tableColumnCollection->GetColumnByName(column.m_name) == nullptr)
-			return false;
-		SortValue(column, lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
+		//
+		// The columns may be several, each with its own way ("Priority, Level Desc"); the second argument is
+		// the way for a key that names none, and is what a single-column call has always used it for.
+		// (⚠ It read paParams[1] whenever there was ANY argument - `Sort("A")` looked one past what was given.)
+		std::vector<std::pair<wxString, bool>> keys;
+		wxString badToken;
+		const bool defaultAscending = lSizeArray > 1 && paParams[1] != nullptr ? paParams[1]->GetBoolean() : true;
+		if (!ParseSortSpec(paParams[0]->GetString(), defaultAscending, keys, badToken))
+			ibBackendCoreException::Error(_("Sort: cannot read '%s' - write a column name, optionally followed by Asc or Desc"), badToken);
+		SortByKeys(keys);
+		return true;
+	}
+
+	// ⭐⭐ THE TOTAL OF A COLUMN and THE ROWS THAT MATCH - see the two methods below.
+	case enTotal:
+		pvarRetValue = TotalOf(paParams[0]->GetString());
+		return true;
+
+	case enFindRows: {
+		// ConvertToValue, not ConvertToType: it CHECKS what the argument is (a string handed in by mistake is
+		// answered with the message below), where the raw cast has no way to say "not one of these".
+		ibValueContainer* filter = nullptr;
+		if (paParams[0] == nullptr || !paParams[0]->ConvertToValue(filter))
+			ibBackendCoreException::Error(_("FindRows expects a Structure of column = value"));
+		pvarRetValue = FindRows(*filter);
 		return true;
 	}
 	}
@@ -584,8 +610,21 @@ long ibValueModelTable::AppendRow(const std::vector<std::pair<ibMetaID, ibValue>
 
 void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascending)
 {
-	if (!column.IsOk() || ibBackendException::IsEvalMode())
+	if (!column.IsOk())
 		return;
+	SortByKeys({ { column.m_name, ascending } });
+}
+
+void ibValueModelTable::SortByKeys(const std::vector<std::pair<wxString, bool>>& keys)
+{
+	if (keys.empty() || ibBackendException::IsEvalMode())
+		return;
+
+	// A key naming a column that is not there is refused BEFORE the rows are touched: a sort that carried out
+	// its first keys and stopped at the third would leave the table in an order nobody asked for.
+	for (const std::pair<wxString, bool>& key : keys)
+		if (m_tableColumnCollection->GetColumnByName(key.first) == nullptr)
+			ibBackendCoreException::Error(_("Table column '%s' not found"), key.first);
 
 	// ⭐⭐ A SORT CHANGES THE DATA — the rows are re-seated, and that is the order the table then IS (Max,
 	// 2026-08-29: moving and sorting change the rows physically; a filter, a grouping or a setting is a layer
@@ -593,10 +632,12 @@ void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascen
 	// SIT in this order, and a read-order left on top would go on answering over them.
 	//
 	// L5-2 says WHAT the order is — nothing here compares — and the rows are then placed into it with the
-	// storage's own move. Sorting lives on L5, not in a loop.
+	// storage's own move. Sorting lives on L5, not in a loop. Several keys are several sort lines, in the order
+	// given: the composer's sort is stable, so the later keys only break the ties of the earlier ones.
 	ibDataRamComposer& composer = GetModelComposer();
 	composer.ClearSorts();
-	composer.Sort(column.m_name, ascending);
+	for (const std::pair<wxString, bool>& key : keys)
+		composer.Sort(key.first, key.second);
 	Storage().SetColumns(GetColumnCollection());
 	const std::vector<long> order = composer.ComputeOrder();
 	composer.ClearSorts();
@@ -618,6 +659,107 @@ void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascen
 	}
 
 	NotifyReset();
+}
+
+bool ibValueModelTable::ParseSortSpec(const wxString& spec, bool defaultAscending,
+                                      std::vector<std::pair<wxString, bool>>& keys, wxString& badToken)
+{
+	keys.clear();
+	badToken.clear();
+
+	wxStringTokenizer keyList(spec, wxT(","), wxTOKEN_RET_EMPTY_ALL);
+	while (keyList.HasMoreTokens()) {
+		const wxString key = keyList.GetNextToken().Trim(true).Trim(false);
+
+		// "Column" or "Column <way>": anything else is not a key.
+		wxStringTokenizer parts(key, wxT(" \t"), wxTOKEN_STRTOK);
+		const size_t count = parts.CountTokens();
+		if (count == 0 || count > 2) {
+			badToken = key;
+			return false;
+		}
+		const wxString column = parts.GetNextToken();
+		bool ascending = defaultAscending;
+		if (count == 2) {
+			const wxString way = parts.GetNextToken().Lower();
+			if (way == wxT("asc") || way == wxT("ascending"))
+				ascending = true;
+			else if (way == wxT("desc") || way == wxT("descending"))
+				ascending = false;
+			else {
+				badToken = key;
+				return false;
+			}
+		}
+		keys.emplace_back(column, ascending);
+	}
+	return !keys.empty();
+}
+
+ibValue ibValueModelTable::TotalOf(const wxString& column) const
+{
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+		m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(column) : nullptr;
+	if (colInfo == nullptr)
+		ibBackendCoreException::Error(_("Table column '%s' not found"), column);
+
+	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+	ibNumber total(0);
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
+		if (node == nullptr)
+			continue;
+		const ibValue cell = node->GetTableValue(id);
+		if (cell.GetType() == ibValueTypes::TYPE_NUMBER) {
+			total += cell.GetNumber();
+			continue;
+		}
+		if (cell.IsEmpty())
+			continue;   // nothing there adds nothing
+		ibBackendCoreException::Error(_("Table column '%s' holds a value that is not a number (row %d); a column added without a type holds text - declare it as a Number"),
+			column, static_cast<int>(row + 1));
+	}
+	return ibValue(total);
+}
+
+ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
+{
+	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
+	// "no rows" would be the wrong way to say it.
+	struct Term { ibMetaID m_id; ibValue m_value; };
+	std::vector<Term> terms;
+	for (const std::pair<ibValue, ibValue>& entry : filter.Entries()) {
+		const wxString name = entry.first.GetString();
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
+		if (colInfo == nullptr)
+			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
+		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.second });
+	}
+
+	ibValueArray* const found = new ibValueArray();
+	ibValue result;
+	result = found;   // the wrapper owns it
+
+	for (long row = 0; row < GetRowCount(); ++row) {
+		const ibDataViewItem item = GetItem(row);
+		ibComposerNode* const node = GetViewData<ibComposerNode>(item);
+		if (node == nullptr)
+			continue;
+		bool matches = true;
+		for (const Term& term : terms) {
+			if (!(term.m_value == node->GetTableValue(term.m_id))) {
+				matches = false;
+				break;
+			}
+		}
+		if (matches) {
+			ibValue line;
+			line = GetRowAt(item);
+			found->Add(line);
+		}
+	}
+	return result;
 }
 
 void ibValueModelTable::EditRow(const ibDataViewItem& row)
