@@ -67,10 +67,10 @@ while IFS= read -r file; do
   done < <(git show "$head:$file" | perl -ne 'print "$.\n" if /^(?:\xEF\xBB\xBF)?\s*#\s*pragma\s+once\b/')
 done < <(git -c core.quotePath=false diff --name-only -M --diff-filter=ACMR "$base...$head" -- '*.h' '*.hpp' "${exclude[@]}")
 
-# 3. A new picture is SVG, never XPM (development.md section 2).
+# 3. A new picture is SVG or PNG, never XPM (development.md section 2).
 while IFS= read -r file; do
   [ -n "$file" ] || continue
-  report "$file" 1 "a new XPM picture - icons are SVG: an .svg beside the .svg.h that embeds it, as in src/engine/frontend/artProvider/debugger/. See docs/development.md section 2."
+  report "$file" 1 "a new XPM picture - a new icon is SVG (an .svg beside the .svg.h that embeds it, as in src/engine/frontend/artProvider/debugger/), and a picture embedded as a raster is PNG. See docs/development.md section 2."
 done < <(git -c core.quotePath=false diff --name-only -M --diff-filter=AC "$base...$head" -- '*.xpm' "${exclude[@]}")
 
 # 4. A _() message id is ASCII (portability.md section 1.9a). Asked of the ADDED lines only, and never of a

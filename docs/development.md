@@ -62,9 +62,10 @@ in its document.
 **Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Every header of ours uses
 them, and CI refuses a header that brings `#pragma once`.
 
-**Icons are SVG.** A new icon is an `.svg` beside the `.svg.h` that embeds it, registered in the
-art provider's vector table, as in `frontend/artProvider/debugger/`. XPM renders poorly at any
-size but its own, and no new one goes in. A picture a user supplies is stored as base64 PNG.
+**New pictures are SVG or PNG, never XPM.** A new icon is an `.svg` beside the `.svg.h` that
+embeds it, registered in the art provider's vector table, as in `frontend/artProvider/debugger/`.
+A picture that is embedded as a raster is PNG. XPM renders poorly at any size but its own, and no
+new one goes in.
 
 **The backend stays GUI-free and never shows a modal window.** Its callers include the daemon,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.
