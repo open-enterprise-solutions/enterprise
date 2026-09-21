@@ -73,6 +73,16 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			);
 		}
 
+		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
+		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
+		// been handed left behind (columnLayout.cpp), so reading a cell whose tag the result does not carry was
+		// an access violation instead of the typed empty value it is documented to answer (2026-09-20). What
+		// the value registry can make by itself - a primitive - it makes; anything that needs a configuration
+		// and has none is the empty value.
+		if (activeMetaData == nullptr)
+			return ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())
+				? ibValue::CreateObject(typeDescription.GetFirstClsid()) : ibValue();
+
 		return activeMetaData->CreateObject(
 			typeDescription.GetFirstClsid()
 		);
@@ -119,7 +129,11 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 	if (typeDescription.GetClsidCount() == 1) {
 
-		if (metaData != nullptr ? metaData->IsRegisterCtor(typeDescription.GetFirstClsid()) : activeMetaData->IsRegisterCtor(typeDescription.GetFirstClsid())) {
+		// The same rule as the overload above: the metadata handed in, else the active one - and with neither
+		// (a headless tool before it opens a base, a test) what the value registry can make by itself.
+		const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
+		if (source != nullptr ? source->IsRegisterCtor(typeDescription.GetFirstClsid())
+			: ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())) {
 
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
@@ -141,14 +155,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				}
 			}
 
-			if (metaData != nullptr)
-				return metaData->CreateObject(
-					typeDescription.GetFirstClsid()
-				);
-
-			return activeMetaData->CreateObject(
-				typeDescription.GetFirstClsid()
-			);
+			return source != nullptr
+				? source->CreateObject(typeDescription.GetFirstClsid())
+				: ibValue::CreateObject(typeDescription.GetFirstClsid());
 		}
 	}
 	return wxEmptyValue;
