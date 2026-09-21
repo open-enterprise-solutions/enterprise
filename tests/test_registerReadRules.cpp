@@ -30,6 +30,16 @@
 #include "backend/system/value/valuePointInTime.h"
 #include "backend/system/value/valueBoundary.h"
 
+#include <wx/init.h>                                           // wxInitializer - the live reading below
+#include "backend/appData.h"
+#include "backend/clsid.h"                                     // reference_to_clsid - the recorder's type
+#include "backend/metadataConfiguration.h"                     // ibMetaDataConfigurationFile - a register in memory
+#include "backend/metaCollection/metaObject.h"
+#include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"  // ibMaterializeReadSpec / RenderMaterializedRead
+#include "backend/databaseLayer/databaseQueryBuilder.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
+
 namespace {
 
 // The three names a register's own scaffold columns carry in these tests. Real registers read them
@@ -272,6 +282,175 @@ TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
     EXPECT_EQ(when, bound.m_date.GetDateTime());
     EXPECT_TRUE(bound.HasRecorder());
     EXPECT_TRUE(bound.m_excluding);
+}
+
+// =============================================================================
+//  Where the two arms are cut - and which side of its edge the boundary stands on
+//
+//  🛑 "THE BALANCE BEFORE 10.01, EXCLUDING" INCLUDED THE WHOLE OF 10.01. A date exactly on a grain edge
+//  needs no cut, so ibRegFillArmCut returned early - BEFORE it had said which side of the edge the
+//  boundary stands on. The reader took it as included: `period <= midnight` admits the stored row keyed
+//  by that midnight, and a stored row is the whole day that starts there. Measured on a file base
+//  (2026-09-20): 164 / 26 291.37 where the movements fold to 116 / 6 612 - the difference being every
+//  movement of that day, to the cent. Silent, and on the commonest question an accounting system is
+//  asked: what was there at the start of the day.
+// =============================================================================
+
+namespace {
+
+// A register in a configuration in memory, recorded by a document - what the cut is asked of.
+struct ArmCutFix {
+    ibMetaDataConfigurationFile cfg;
+    ibValueMetaObjectAccumulationRegister* reg = nullptr;
+
+    ArmCutFix() {
+        ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+        if (root == nullptr) return;
+        ibValueMetaObject* document = cfg.CreateMetaObject(g_metaDocumentCLSID, root, /*runObject*/ false);
+        reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
+            cfg.CreateMetaObject(g_metaAccumulationRegisterCLSID, root, /*runObject*/ false));
+        if (document == nullptr || reg == nullptr || reg->GetRegisterRecorder() == nullptr) { reg = nullptr; return; }
+        reg->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID()));
+    }
+
+    ibMaterializeReadSpec CutAt(const wxDateTime& upTo, bool excluding) const {
+        ibRegBound upper;
+        upper.m_date = ibValue(upTo);
+        upper.m_excluding = excluding;
+        ibMaterializeReadSpec read;
+        ibRegFillArmCut(read, reg, upper);
+        return read;
+    }
+};
+
+const wxDateTime kMidnight(5, wxDateTime::Mar, 2026);
+const wxDateTime kAfternoon(5, wxDateTime::Mar, 2026, 14, 0, 0);
+
+} // namespace
+
+// The defect itself: no cut is needed, and the side is still said.
+TEST(RegisterArmCut, AnExcludedDateOnAGrainEdgeNeedsNoCutAndStillSaysItIsExcluded)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    const ibMaterializeReadSpec read = f.CutAt(kMidnight, /*excluding*/ true);
+
+    EXPECT_FALSE(read.m_markColumn.IsEmpty());
+    EXPECT_NE(read.m_floor.GetType(), TYPE_DATE) << "the grain that starts at the edge is wholly out - nothing to cut";
+    EXPECT_TRUE(read.m_toExcluding) << "said before the early return, or the reader reads `<=` and takes the day";
+}
+
+// ...on EVERY way out of the function, the one for a view with a single arm included. No register takes
+// that way today (each has a recorder); the day one does, the defect must not come back with it.
+TEST(RegisterArmCut, WithNothingToCutTheSideIsStillSaid)
+{
+    ibRegBound upper;
+    upper.m_date = ibValue(kMidnight);
+    upper.m_excluding = true;
+    ibMaterializeReadSpec read;
+    ibRegFillArmCut(read, static_cast<const ibValueMetaObjectAccumulationRegister*>(nullptr), upper);
+
+    EXPECT_TRUE(read.m_markColumn.IsEmpty()) << "one arm: nothing to cut, no mark";
+    EXPECT_TRUE(read.m_toExcluding);
+}
+
+// An INCLUDED midnight takes the instant and not the day: that is a partial grain, so it is cut there.
+TEST(RegisterArmCut, AnIncludedDateOnAGrainEdgeIsCutAtThatEdge)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    const ibMaterializeReadSpec read = f.CutAt(kMidnight, /*excluding*/ false);
+
+    ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_floor.GetDateTime(), kMidnight);
+    EXPECT_FALSE(read.m_toExcluding);
+}
+
+// Inside a grain the cut stands at the grain's start, and the side travels with it.
+TEST(RegisterArmCut, ADateInsideAGrainIsCutAtItsStartAndKeepsItsSide)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    const ibMaterializeReadSpec read = f.CutAt(kAfternoon, /*excluding*/ true);
+
+    ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_floor.GetDateTime(), kMidnight);
+    EXPECT_TRUE(read.m_toExcluding);
+}
+
+// ⭐ AND THE NUMBERS, LIVE ON SQLITE: the cut the register fills, the reading the builder renders, the
+// totals its own triggers keep. 100 received on 03.03, 12 written off on 04.03 - and 30 received on 05.03 at
+// 09:00, which is the day the boundary stands at the start of. Before 05.03 there were 88; the defect said 118.
+TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
+{
+    wxInitializer wxInit;
+    if (!wxInit.IsOk())
+        GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+    if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+        GTEST_SKIP() << "appData env unavailable headless";
+    struct EnvGuard { ~EnvGuard() { if (ibApplicationData::Get() != nullptr) ibApplicationData::DestroyAppDataEnv(); } } guard;
+    ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+    if (pool == nullptr)
+        GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
+    auto db = std::make_shared<ibDatabaseLayerSQLite>();
+    if (!db->Open(wxT(":memory:")))
+        GTEST_SKIP() << "in-memory SQLite open failed";
+    pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
+
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    // The mark is whatever the register's recorder lays out first - the movements carry it under that name.
+    const wxString mark = f.CutAt(kMidnight, true).m_markColumn;
+    ASSERT_FALSE(mark.IsEmpty());
+
+    ibMaterializeSpec spec;
+    spec.m_table            = wxT("Reg9_T");
+    spec.m_source           = wxT("Reg9");
+    spec.m_keyColumns       = { wxT("wh") };
+    spec.m_periodColumn     = wxT("period_");
+    spec.m_periodSourceExpr = wxT("{row}.period_");
+    spec.m_periodUnit       = ibTotalsPeriod::Day;
+    spec.m_guard            = wxT("{row}.active_ <> 0");
+    spec.m_deltas = {
+        { wxT("qty_in"),  wxT("CASE WHEN {row}.rectype_ = 1 THEN {row}.qty ELSE 0 END") },
+        { wxT("qty_out"), wxT("CASE WHEN {row}.rectype_ = 1 THEN 0 ELSE {row}.qty END") },
+    };
+    ibMaterializeView view;
+    view.m_name = wxT("Reg9_Turnovers");
+    view.m_columns = { { wxT("Qty_Turnover"), wxT("qty_in"), wxT("qty_out"), ibMaterializeAgg::Difference } };
+    view.m_withMovements = true;
+    view.m_movementColumns = { { mark, ibTypeString(36) } };
+    spec.m_views = { view };
+
+    db->RunQuery(wxT("%s"), wxT("CREATE TABLE Reg9 (") + mark + wxT(" TEXT NOT NULL, line_ INTEGER NOT NULL, period_ TEXT NOT NULL, ")
+        wxT("active_ INTEGER NOT NULL, wh TEXT NOT NULL, rectype_ INTEGER NOT NULL, qty NUMERIC NOT NULL)"));
+    db->RunQuery(wxT("CREATE TABLE Reg9_T (period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
+        wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (period_, wh))"));
+    const ibMaterializeSql sql = RenderMaterialization(spec, &ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
+    ASSERT_TRUE(sql.Apply(*db));
+
+    db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('r1', 1, '2026-03-03 09:00:00', 1, 'kitchen', 1, 100)"));
+    db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('w1', 1, '2026-03-04 23:00:00', 1, 'kitchen', 0, 12)"));
+    db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('r2', 1, '2026-03-05 09:00:00', 1, 'kitchen', 1, 30)"));
+
+    const auto balance = [&](const wxDateTime& upTo, bool excluding) {
+        ibMaterializeReadSpec read = f.CutAt(upTo, excluding);   // the cut, as the register fills it
+        read.m_view         = wxT("Reg9_Turnovers");
+        read.m_periodColumn = wxT("period_");
+        read.m_keyColumns   = { wxT("wh") };
+        read.m_to           = ibValue(upTo);
+        read.m_columns = { { wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true } };
+
+        ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+        q.From(RenderMaterializedRead(read, wxT("b")));
+        q.Project({ ibQueryProjItem{ ibCol(wxT("b"), wxT("Qty_Balance")), wxT("Qty_Balance") } });
+        ibQueryResult rs = q.Execute();
+        return rs.Next() ? rs.GetResultDouble(wxT("Qty_Balance")) : -1e9;
+    };
+
+    EXPECT_DOUBLE_EQ(balance(kMidnight, /*excluding*/ true), 88.0) << "the day that starts at the edge is not before it";
+    EXPECT_DOUBLE_EQ(balance(kMidnight, /*excluding*/ false), 88.0) << "the instant of midnight holds no movement";
+    EXPECT_DOUBLE_EQ(balance(kAfternoon, /*excluding*/ true), 118.0) << "inside the day its morning counts";
 }
 
 // =============================================================================
