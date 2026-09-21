@@ -2,22 +2,28 @@
 
 ## Who holds the copyright
 
-OES Enterprise is the work of two authors, and both hold copyright in what they wrote:
+OES Enterprise is owned by **Open Enterprise Solutions**
+(<https://github.com/open-enterprise-solutions>), which holds the copyright and grants the
+licenses: the noncommercial one in [LICENSE.md](LICENSE.md) and the commercial ones.
 
-- Maxim Kornienko
-- Yurii Bulakh
+Open Enterprise Solutions is not yet registered as a company. Until it is, the copyright is
+held, and licenses are granted, by Maxim Kornienko, who wrote most of the platform, acting as
+Open Enterprise Solutions. Everyone else's work is contributed under the grant in
+[CONTRIBUTING.md](CONTRIBUTING.md), in return for the platform free for noncommercial use and
+for evaluation.
 
-Both agreed to the change of terms recorded below.
+The copyright holders agreed to the change of terms recorded below.
 
 ## Contributors
 
 People who improved this platform and let it be licensed as it is. A contribution accepted
-here goes into something owned and sold by the authors above and is not paid for — see
-[CONTRIBUTING.md](CONTRIBUTING.md), which says so plainly. This list is the credit that was
-promised in return, and it is kept accurate on purpose.
+here goes into something owned and sold by Open Enterprise Solutions and is not paid for — see
+[CONTRIBUTING.md](CONTRIBUTING.md), which says so plainly.
 
-- **fishca** (`sergrud@mail.ru`) — PR #39, February 2026: a fix in the spreadsheet document
-  view and the external data-processor window.
+Their credit is the history itself. A pull request is merged as it is, not squashed, so every
+contributor stays the author of their own commits, and the repository's contributor list on
+GitHub names them. It is not copied here by hand, because a copy kept by hand drifts from the
+record it copies.
 
 ## The change of terms, 2026-08-23
 
@@ -25,7 +31,7 @@ Until 2026-08-23 this software was published under the GNU LGPL 2.1. From that d
 terms are the PolyForm Noncommercial License 1.0.0 — see [LICENSE.md](LICENSE.md).
 
 The change applies **going forward only**. Anything already released under the LGPL 2.1
-stays available under it to whoever obtained it; a licence already granted cannot be
+stays available under it to whoever obtained it; a license already granted cannot be
 withdrawn.
 
 ## Third-party components

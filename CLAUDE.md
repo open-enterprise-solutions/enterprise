@@ -41,7 +41,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
 | Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
-| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use is free; any commercial use needs a licence from the copyright holders. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
+| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
 
 ---
 

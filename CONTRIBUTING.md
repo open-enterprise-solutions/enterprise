@@ -12,20 +12,21 @@ OES is **source-available, not open source** ([LICENSE.md](LICENSE.md)): free fo
 noncommercial use, and licensed separately to anyone who wants to earn from it. That second
 half is how the work is paid for.
 
-A licence describes what a **user** may do. It says nothing about what the project receives
+A license describes what a **user** may do. It says nothing about what the project receives
 from a **contributor** — and your change is your copyright, not ours. So without an explicit
-grant from you, an accepted contribution would sit inside code we sell commercial licences
+grant from you, an accepted contribution would sit inside code we sell commercial licenses
 for while we hold no right to license it that way. That is not a theoretical tidiness
-problem: it would make the commercial licence untrue for every customer.
+problem: it would make the commercial license untrue for every customer.
 
-So, by opening a pull request, you grant Maxim Kornienko and Yurii Bulakh a perpetual,
-worldwide, irrevocable, royalty-free licence to use, reproduce, modify and distribute your
+So, by opening a pull request, you grant Open Enterprise Solutions (who holds its rights until
+it is registered as a company: [NOTICE.md](NOTICE.md)) a perpetual,
+worldwide, irrevocable, royalty-free license to use, reproduce, modify and distribute your
 contribution, **and to sublicense it**, including under commercial terms and under future
-versions of the project's licence. You keep your copyright; you are giving permission, not
+versions of the project's license. You keep your copyright; you are giving permission, not
 giving it away, and you remain free to use your own contribution however you like elsewhere.
 
 You also confirm that the contribution is yours to give: that you wrote it, or have the right
-to submit it, and that it does not carry obligations from somebody else's licence.
+to submit it, and that it does not carry obligations from somebody else's license.
 
 If you cannot make that grant — because an employer holds rights to your work, or because the
 code came from somewhere else — say so in the pull request instead of quietly leaving it out.
@@ -39,18 +40,20 @@ already says; there is nothing extra in it.
 It is worth being blunt about this, because the usual assumption on GitHub is the opposite
 one and nobody should discover it afterwards.
 
-This is not a commons. The platform stays owned by the people named above and is sold
+This is not a commons. The platform stays owned by Open Enterprise Solutions and is sold
 commercially. A change you contribute goes into something that earns money for someone else,
 and you are not paid for it. If that is not what you want, do not send it — fork the project
-for your own noncommercial work instead, which the licence expressly allows and which owes us
+for your own noncommercial work instead, which the license expressly allows and which owes us
 nothing.
 
 What we offer in return is not money, and we would rather say so than imply otherwise.
 
 **The platform itself, free, for anything noncommercial.** Not a trial, not a cut-down
-edition, not a licence that expires — the whole thing: the designer, the language, the query
-engine, the reports, every driver. Build your own systems on it, run them, keep them. That
-offer stands whether you ever contribute a line or not; contributing is not how you earn it.
+edition, not a license that expires — the whole thing: the designer, the language, the query
+engine, the reports, every driver. Build your own systems on it, run them, keep them. And for
+evaluation: a business weighing whether to build on it may try it the same way
+([LICENSE.md](LICENSE.md)). That offer stands whether you ever contribute a line or not;
+contributing is not how you earn it.
 
 **The sources, to read and to learn from.** For a platform of this kind that is rarer than it
 sounds, and the debugging you did to find that bug is the proof of what it is worth: nobody
@@ -60,9 +63,10 @@ can do that to a product they cannot read.
 on three toolchains, tested, and still here next year — rather than into a fork that goes
 quiet.
 
-**Your name on it.** In `NOTICE.md` and in the release notes of the version that carries your
-change. A contribution accepted here is a contribution to the platform, and it is recorded as
-one.
+**Your name on it.** A pull request is merged as it is, not squashed, so the history names you
+as the author of every commit you sent, and GitHub lists you among the repository's
+contributors once a release carries your change. A contribution accepted here is a
+contribution to the platform, and it is recorded as one.
 
 If that trade is fair to you, we are glad of the help. If it is not, that is a reasonable
 conclusion and no hard feelings.
@@ -78,13 +82,13 @@ contribute anything back.
 
 ## What a change should look like
 
+The short version is below. The whole of it — how a pull request is taken, the design rules a
+change is reviewed against, tests and CI — is [docs/development.md](docs/development.md).
+
 **Branch from `develop`, pull-request into `develop`.** `master` carries release-tagged
 commits only.
 
 **Match the code around you before matching this file.** Naming, comment density, brace
-The short version is below. The whole of it — how a pull request is taken, the design rules a
-change is reviewed against, tests and CI — is [docs/development.md](docs/development.md).
-
 placement and file layout vary a little by area, and the local convention wins. Broadly: `ib`
 prefix for public classes, `m_` for members, `s_` for statics, `g_` for compile-time
 constants; tabs for indentation.
