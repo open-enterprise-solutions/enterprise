@@ -110,6 +110,15 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 
+	// ⭐⭐ incrRef - for control delete — TAKEN BEFORE THE MODULE'S FIRST LINE, let go at the end of
+	// StartMainModule, where it always was: the form takes the object there, or nobody does and it unloads,
+	// container and all. It used to be taken in StartMainModule, but the module body runs HERE, and `ThisObject`
+	// in it loads the object into a temporary — zero, one, zero, and the object went with its container and this
+	// manager in the middle of the run (issue #154). A load that fails before StartMainModule leaves it held, as
+	// it used to leave it at zero — never let go, so the opener's own delete of the container stays the only one.
+	m_objectValue->IncrRef();
+
+
 	// Imperative pipeline — SetParent cascades compile+procUnit parents
 	// to configuration root's; BindContextVariable wires thisObject;
 	// InitializeRuntime / Compile / Run drive the top-level.
@@ -197,8 +206,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 	if (!m_initialized)
 		return false;
 
-	//incrRef - for control delete
-	m_objectValue->IncrRef();
+	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
 
 	const ibValueMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
 	wxASSERT(commonObject);
@@ -361,6 +369,9 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	wxASSERT(moduleManager);
 
+	// incrRef - for control delete — before the module's first line, as the data processor's twin says.
+	m_objectValue->IncrRef();
+
 	// Imperative pipeline — see ExternalDataProcessor::CreateMainModule
 	// for the same shape; parent cascade, context var, shared procUnit
 	// with m_objectValue.
@@ -435,8 +446,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	if (!m_initialized)
 		return false;
 
-	//incrRef - for control delete
-	m_objectValue->IncrRef();
+	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
 
 	// THE METAOBJECT IS A REPORT'S, and it says so — so both questions below are asked of it
 	// directly: which form is the default one, and which composer is.
