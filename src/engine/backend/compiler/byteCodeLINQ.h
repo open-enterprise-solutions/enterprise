@@ -131,6 +131,14 @@ struct ibLinqPendingJoin {
 	bool        m_needsReset    = false;
 };
 
+// ONE ORDERING KEY: the cell its value is computed into per row, and the way it runs. The way is the
+// KEY'S - `orderby a, b descending, c` runs `b` down and `a`, `c` up (linq.md § 0.5) - so it is recorded
+// on the key and travels with it onto the tape (OPER_LINQ_KEEP).
+struct ibLinqOrderKey {
+	ibParamUnit m_slot;
+	bool        m_descending = false;
+};
+
 // ONE QUERY, while it is being compiled. Owned by the BYTECODE (ibByteExtCode::m_listLinq) — the
 // compile context that is inside this query only points at it, so the entry outlives every scope
 // that reads it and the slice at the end of compilation is what ends its life.
@@ -162,9 +170,10 @@ struct ibLinqQuery {
 	// refused the comma and the only way round was a second sort in script. Each key gets its own
 	// cell, recomputed per row, and they are kept together in clause order (procUnitLINQ.cpp,
 	// KeepKey); the comparison walks them until one differs, which is what "then by" means.
-	std::vector<ibParamUnit> m_orderByKeySlots;
+	// 🛑 EACH WITH ITS OWN WAY. It was one flag for the whole query, read after the last key, so
+	// `descending` there turned every key round and no key before a comma could run the other way.
+	std::vector<ibLinqOrderKey> m_orderByKeys;
 	bool        m_hasOrderBy        = false;
-	bool        m_orderByDescending = false;
 
 	// GROUP BY — TRULY linq-scope (one group accumulator per query;
 	// terminal at exactly one level). Shared here so the per-row

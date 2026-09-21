@@ -183,7 +183,25 @@ TEST(ScriptQueryOutline, AMultiKeyOrderByIsReportedAsAnOrdering)
 
 	ASSERT_EQ(queries.size(), 1u);
 	EXPECT_TRUE(queries[0].m_orders);
-	EXPECT_TRUE(queries[0].m_orderDescending);
+	// `descending` is the key's it follows.
+	EXPECT_EQ(queries[0].m_orderKeysDescending, (std::vector<bool>{ false, true }));
+}
+
+// Each key its own way, the middle one included: the outline says which way EACH
+// key runs, because one flag for the query could only have said one of them.
+TEST(ScriptQueryOutline, EachOrderingKeyReportsItsOwnWay)
+{
+	const std::vector<ibQueryOutline> queries = ibOutlineScriptQueries(
+		wxT("Function Handler() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  q = from r in rows orderby r.A, r.B descending, r.C select { A = r.A };\n")
+		wxT("  Return q;\n")
+		wxT("EndFunction\n"));
+
+	ASSERT_EQ(queries.size(), 1u);
+	EXPECT_TRUE(queries[0].m_orders);
+	EXPECT_EQ(queries[0].m_orderKeysDescending, (std::vector<bool>{ false, true, false }));
 }
 
 // The text a query was read from is HANDED BACK rather than regenerated — the

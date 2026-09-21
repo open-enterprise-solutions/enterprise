@@ -1537,12 +1537,14 @@ start_label:
 				break;
 
 			// p2 = the row (SKIP when this instruction carries only a further key), p3 = the key
-			// (SKIP when the query does not order), p4 = which key it is. See ibLinqKeep.
+			// (SKIP when the query does not order), p4 = which key it is (index) and its way (array,
+			// 1 = descending). See ibLinqKeep.
 			case OPER_LINQ_KEEP:
 				ibLinqKeep(variable1,
 					array2 == DEF_VAR_SKIP ? nullptr : &cvariable2,
 					array3 == DEF_VAR_SKIP ? nullptr : &cvariable3,
-					(long)curCode.m_param4.m_numIndex);
+					(long)curCode.m_param4.m_numIndex,
+					curCode.m_param4.m_numArray != 0);
 				break;
 
 			case OPER_LINQ_BUCKET:

@@ -35,9 +35,9 @@ BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& r
 // loop does, which is what a frame slot means.
 BACKEND_API bool ibLinqSeen(ibValue& scratch, const ibValue& value);
 // `row` null = this instruction carries only a further ordering key for the row already kept;
-// `keyAt` is that key's position among the clause's keys. See the definition.
-BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt);
-// `ordering`: 0 leave as they came · 1 descending by key · 2 ascending · 3 simply reversed.
+// `keyAt` is that key's position among the clause's keys, `descending` the way it runs. See the definition.
+BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt, bool descending);
+// `ordering`: 0 leave as they came · 2 by the keys, each the way it was kept with · 3 simply reversed.
 // `wantFirst` asks for the first row instead of all of them (an empty value when there are none).
 //
 // What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a

@@ -224,7 +224,10 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // is not kept by `where` — a v30 blob's zero there keeps it; and `Not` no longer gates its own result cell
 // before computing it (a v30 blob does, and raises on the second row of a filter); and `Not` reads its operand
 // only up to the next And / Or (a v30 blob compiled `Not a And b` as `Not (a And b)`). The layout did not move.
-constexpr uint16_t kAOTFormatVersion = 31;
+// 🛑 31 → 32 (2026-09-21): an ordering key's WAY rides its own `OPER_LINQ_KEEP` (m_param4.m_numArray, 1 =
+// descending), and `OPER_LINQ_RESULT` says only "by the keys" (2). A v31 blob wrote the way once, as 1 in the
+// RESULT, and a zero in every KEEP - read now, a descending query would come back ascending, quietly.
+constexpr uint16_t kAOTFormatVersion = 32;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

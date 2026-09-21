@@ -2356,7 +2356,8 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 		outline.m_groups           = query.m_grouped;
 		outline.m_groupInto        = query.m_groupIntoName;
 		outline.m_orders           = query.m_hasOrderBy;
-		outline.m_orderDescending  = query.m_orderByDescending;
+		for (const ibLinqOrderKey& key : query.m_orderByKeys)
+			outline.m_orderKeysDescending.push_back(key.m_descending);
 
 		// The query as it was written — see ibQueryOutline::m_text. Bounds-checked because a
 		// tolerant compile may have stopped mid-query, and then there is no closing position yet.
