@@ -16,6 +16,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"       // ibCanMaterialize — ask L2-2, never a dialect
 #include "backend/appData.h"                                        // db_query
 #include "backend/valueInfo.h"                                      // ibReference — the width of a zero id
+#include "backend/metaData.h"                                       // ibMetaData must be complete: GetMetaData() is passed to AdjustValue
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — the account's empty reference
 
 // ⭐⭐ THE STORED NAME OF A SIDE'S TURNOVER COLUMN — `<the resource's own field>TurnoverDr|Cr`, spelled
