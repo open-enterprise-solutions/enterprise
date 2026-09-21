@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <regex>
 
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -135,6 +136,14 @@ wxString SqlOf(const ibQueryRelPtr& rel)
 	return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(ibQueryIR(ibProject(rel))).m_sql;
 }
 
+// 🛑 WHETHER THE SQL NAMES A RELATION IS ASKED OF THE WHOLE IDENTIFIER. A balance register's totals table is
+// `<register>_BalanceTotals`, so a plain Contains took it for the balance view `<register>_Balance`: the stored
+// rows read exactly the table they should, and the test called that the view (CI, 2026-09-21).
+bool NamesRelation(const wxString& sql, const wxString& name)
+{
+	return std::regex_search(sql.ToStdString(), std::regex("\\b" + name.ToStdString() + "\\b"));
+}
+
 } // namespace
 
 // ⭐ THE ROWS AS THEY STAND COME FROM THE DECLARATION: the stored half is the totals table itself, the movement
@@ -152,13 +161,13 @@ TEST(AccumulationRegisterSurface, TheRowsAsTheyStandReadTheTwoTables) {
 
 	const wxString storedSql = SqlOf(stored);
 	const wxString movedSql  = SqlOf(moved);
-	EXPECT_TRUE(storedSql.Contains(f.totals->m_name)) << storedSql;
+	EXPECT_TRUE(NamesRelation(storedSql, f.totals->m_name)) << storedSql;
 	EXPECT_FALSE(storedSql.Contains(wxT("GROUP BY"))) << storedSql;
-	EXPECT_TRUE(movedSql.Contains(f.totals->m_materialize.SourceTable())) << movedSql;
-	EXPECT_FALSE(movedSql.Contains(f.totals->m_name)) << movedSql;
+	EXPECT_TRUE(NamesRelation(movedSql, f.totals->m_materialize.SourceTable())) << movedSql;
+	EXPECT_FALSE(NamesRelation(movedSql, f.totals->m_name)) << movedSql;
 	for (const wxString& sql : { storedSql, movedSql }) {
-		EXPECT_FALSE(sql.Contains(f.reg->GetTurnoverViewName())) << sql;
-		EXPECT_FALSE(sql.Contains(f.reg->GetBalanceViewName())) << sql;
+		EXPECT_FALSE(NamesRelation(sql, f.reg->GetTurnoverViewName())) << sql;
+		EXPECT_FALSE(NamesRelation(sql, f.reg->GetBalanceViewName())) << sql;
 	}
 
 	const ibMaterializeView* dressed = f.View(f.reg->GetTurnoverViewName());
