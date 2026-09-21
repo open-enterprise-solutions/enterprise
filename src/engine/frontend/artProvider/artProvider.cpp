@@ -1,6 +1,6 @@
 #include "artProvider.h"
 
-#include "backend/backend_picture.h"   // ibBackendPicture::GetBitmapFromBase64
+#include "backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64
 
 // EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the
 // size of its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which
@@ -10,6 +10,25 @@
 #include "private/picturePredefined.h"
 
 #include <wx/bmpbndl.h>
+
+// THE BUNDLE CARRIES THE MASTER AT THE SIZE ASKED AND AT TWICE AND FOUR TIMES IT, so a display scaled to 150 or
+// 200 % is handed a picture drawn for it rather than the small one stretched - never larger than the master,
+// which would only be stretched in its turn.
+static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
+{
+	const wxImage master = ibBackendPicture::GetImageFromBase64(png);
+	if (!master.IsOk())
+		return wxBitmapBundle();
+
+	wxVector<wxBitmap> bitmaps;
+	for (const int times : { 1, 2, 4 }) {
+		const wxSize at(size.x * times, size.y * times);
+		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
+			break;
+		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
+	}
+	return wxBitmapBundle::FromBitmaps(bitmaps);
+}
 
 // ----------------------------------------------------------------------------
 // wxOESArtProvider class
@@ -110,7 +129,7 @@ protected:
 
 		for (const auto& entry : s_allPictures) {
 			if (entry.client == client && entry.id == id)
-				return ibBackendPicture::GetBitmapFromBase64(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		// ⭐ WX'S OWN PICTURES, FOR EVERY CLIENT. This provider stands first (pushed over wx's), so a stock id asked
@@ -157,7 +176,7 @@ protected:
 
 		for (const auto& entry : s_stockPictures) {
 			if (entry.id == id)
-				return ibBackendPicture::GetBitmapFromBase64(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		return wxNullBitmap;

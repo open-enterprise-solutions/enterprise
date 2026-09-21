@@ -114,14 +114,19 @@ TEST(DebugToolbarIcons, NoTwoCommands_ShareAPicture)
 	}
 }
 
-// The same id at a larger size gives a picture of that size. (It is the one scaled from the master at the size
-// asked; handing the bundle the master's larger sizes too, for a display scaled to 200 %, is still to do.)
+// Sharp at every scale: the same id at a larger size gives a larger picture, not a stretched small one. The
+// bundle carries the master at the size asked and at twice and four times it (artProvider.cpp, BundleOf).
 TEST(DebugToolbarIcons, ScalesWithTheDisplay)
 {
 	const wxBitmapBundle bundle = wxArtProvider::GetBitmapBundle(wxART_DEBUG_STEP_OVER, wxART_DEBUG, wxSize(16, 16));
 	ASSERT_TRUE(bundle.IsOk());
 	EXPECT_EQ(bundle.GetBitmap(wxSize(16, 16)).GetSize(), wxSize(16, 16));
 	EXPECT_EQ(bundle.GetBitmap(wxSize(48, 48)).GetSize(), wxSize(48, 48));
+
+	// At 32 the picture is the master's own, not the 16 one blown up: they differ pixel for pixel.
+	const wxImage drawn = bundle.GetBitmap(wxSize(32, 32)).ConvertToImage();
+	const wxImage stretched = bundle.GetBitmap(wxSize(16, 16)).ConvertToImage().Scale(32, 32, wxIMAGE_QUALITY_NEAREST);
+	EXPECT_NE(Fingerprint(drawn), Fingerprint(stretched)) << "the 32 px picture is the 16 px one stretched";
 }
 
 // An id that is not a debug picture gets none, rather than somebody else's.
