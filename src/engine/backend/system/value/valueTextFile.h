@@ -7,6 +7,7 @@
 #include <wx/buffer.h>
 
 #include <memory>
+#include <vector>
 
 class wxFFile;
 class wxMBConv;
@@ -39,6 +40,8 @@ class BACKEND_API ibValueTextReader : public ibValueStaticMembers<&ibValueTextRe
 		enReadLine,
 		enRead,
 		enClose,
+		enLineCount,
+		enGetLine,
 	};
 public:
 
@@ -59,12 +62,22 @@ public:
 	void Close();
 	bool IsOpen() const { return m_loaded; }
 
+	// ⭐ A LINE BY ITS NUMBER, counted from one, and how many there are — the very lines ReadLine hands over,
+	// cut by the same index, so a loop to LineCount() and a loop to Undefined see one file. A break at the
+	// very end of the file ENDS the last line rather than opening an empty one after it: "a" + LF is ONE line
+	// here, where StrLineCount, which counts a TEXT, says two. Neither moves where ReadLine is.
+	size_t LineCount() const;
+	bool GetLine(size_t number, wxString& line) const;   // false when there is no such line
+
 private:
+	wxString LineAt(size_t index) const;
+
 	// The whole file is decoded once, when it is opened: a text file a script reads line by line is an
 	// exchange file, not a log of gigabytes, and one decode is what makes every encoding — a UTF-16 pair, a
 	// multi-byte sequence split across a buffer's edge — come out whole.
 	wxString m_text;
-	size_t   m_at = 0;
+	std::vector<size_t> m_lineStarts;   // where each line begins in m_text — ONE cut, for every verb
+	size_t   m_next = 0;                // the line ReadLine hands over next
 	bool     m_loaded = false;
 };
 

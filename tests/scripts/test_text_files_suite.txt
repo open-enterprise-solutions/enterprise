@@ -9,6 +9,8 @@
 //   3. A file written as UTF-16 reads back as UTF-16 (its byte-order mark is not text).
 //   4. Appending adds to the end; Read() hands over the rest as one text.
 //   5. BinaryData takes a file's bytes whole and puts them back unchanged.
+//   6. A line by its number is the line ReadLine hands over there; LineCount is how many - a break at the
+//      very end ends the last line, it opens none; no such line is Undefined; GetLine does not move ReadLine.
 // ============================================================================
 
 var path = GetTempFileName();
@@ -71,6 +73,22 @@ var back = New BinaryData();
 back.Read(copy);
 if (back <> bytes) { Raise("the bytes written are not the bytes read"); }
 Message("binary size: " + bytes.Size());
+
+// 6
+var numbered = New TextWriter(path, TextEncoding.UTF8);
+numbered.WriteLine("first");
+numbered.WriteLine("");
+numbered.WriteLine("third");
+numbered.Close();
+var byNumber = New TextReader(path);
+if (byNumber.LineCount() <> 3) { Raise("the break at the end ends line 3, it opens no line 4: got " + byNumber.LineCount()); }
+if (byNumber.GetLine(1) <> "first") { Raise("line 1 by number: " + byNumber.GetLine(1)); }
+if (byNumber.GetLine(2) <> "") { Raise("line 2 by number is an EMPTY line"); }
+if (byNumber.GetLine(3) <> "third") { Raise("line 3 by number: " + byNumber.GetLine(3)); }
+if (byNumber.GetLine(4) <> Undefined) { Raise("there is no line 4"); }
+if (byNumber.ReadLine() <> "first") { Raise("GetLine moved where ReadLine is"); }
+Message("lines by number: " + byNumber.LineCount());
+byNumber.Close();
 
 FileDelete(path);
 FileDelete(copy);

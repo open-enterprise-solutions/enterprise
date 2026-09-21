@@ -8,6 +8,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <wx/ffile.h>
 #include <wx/filename.h>
@@ -87,6 +88,86 @@ TEST(TextReader, TheScriptMethodAnswersUndefinedAtTheEnd) {
 
 	ASSERT_TRUE(reader.CallAsFunc(readLine, line, nullptr, 0));
 	EXPECT_EQ(line.GetType(), ibValueTypes::TYPE_EMPTY) << "the end of the file is Undefined";
+}
+
+// A line BY ITS NUMBER is the line ReadLine hands over at that place, and LineCount is how many it hands over:
+// one index cuts the file for both. A break at the very end ENDS the last line - it opens no empty one after
+// it, which is where a FILE differs from a text counted by StrLineCount. Counts are pinned, not only agreement:
+// two roads wrong the same way would agree too.
+TEST(TextReader, LineCountAndGetLineAreTheLinesReadLineHandsOver) {
+	const std::pair<std::string, size_t> files[] = {
+		{ "", 0 }, { "\n", 1 }, { "a", 1 }, { "a\n", 1 }, { "a\r\nb\r\n", 2 }, { "a\n\nb", 3 }, { "a\n\nb\n\n", 4 } };
+
+	for (const auto& [bytes, lines] : files) {
+		TempFile f;
+		f.Put(bytes);
+		ibValueTextReader reader;
+		reader.Open(f.path);
+		EXPECT_EQ(reader.LineCount(), lines) << "[" << bytes << "]";
+
+		std::vector<wxString> walked;
+		wxString line;
+		while (reader.ReadLine(line))
+			walked.push_back(line);
+		ASSERT_EQ(walked.size(), lines) << "[" << bytes << "]";
+
+		for (size_t n = 1; n <= lines; n++) {
+			ASSERT_TRUE(reader.GetLine(n, line)) << "[" << bytes << "] line " << n;
+			EXPECT_EQ(line, walked[n - 1]) << "[" << bytes << "] line " << n;
+		}
+		EXPECT_FALSE(reader.GetLine(0, line)) << "lines are counted from one";
+		EXPECT_FALSE(reader.GetLine(lines + 1, line)) << "[" << bytes << "] has no line past the last";
+	}
+}
+
+// GetLine jumps; it does not move where ReadLine is, nor what Read() hands over as the rest.
+TEST(TextReader, GetLineDoesNotMoveReadLine) {
+	TempFile f;
+	f.Put("one\ntwo\nthree\n");
+	ibValueTextReader reader;
+	reader.Open(f.path);
+	wxString line;
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("one")));
+	ASSERT_TRUE(reader.GetLine(3, line)); EXPECT_EQ(line, wxString(wxT("three")));
+	ASSERT_TRUE(reader.ReadLine(line)); EXPECT_EQ(line, wxString(wxT("two")));
+	EXPECT_EQ(reader.ReadRest(), wxString(wxT("three\n")));
+}
+
+// ...and the SCRIPT sees "no such line" as Undefined, the way it sees the end of the file: an empty string
+// is an empty LINE. Asked of the methods a script calls, by the names a script calls them by.
+TEST(TextReader, TheScriptAsksForALineByItsNumber) {
+	TempFile f;
+	f.Put("a\n\n");   // two lines, the second empty
+	ibValueTextReader reader;
+	reader.Open(f.path);
+	const long lineCount = reader.FindMethod(wxT("LineCount"));
+	const long getLine = reader.FindMethod(wxT("GetLine"));
+	ASSERT_GE(lineCount, 0);
+	ASSERT_GE(getLine, 0);
+
+	ibValue count;
+	ASSERT_TRUE(reader.CallAsFunc(lineCount, count, nullptr, 0));
+	EXPECT_EQ(count.GetInteger(), 2);
+
+	ibValue number(ibNumber(2));
+	ibValue* params[] = { &number };
+	ibValue line;
+	ASSERT_TRUE(reader.CallAsFunc(getLine, line, params, 1));
+	EXPECT_EQ(line.GetType(), ibValueTypes::TYPE_STRING) << "an empty line is a line";
+	EXPECT_TRUE(line.GetString().empty());
+
+	for (int past : { 0, 3, -1 }) {
+		number = ibValue(ibNumber(past));
+		ASSERT_TRUE(reader.CallAsFunc(getLine, line, params, 1));
+		EXPECT_EQ(line.GetType(), ibValueTypes::TYPE_EMPTY) << "there is no line " << past;
+	}
+}
+
+TEST(TextReader, CountingWithNothingOpenIsRefused) {
+	ibValueTextReader reader;
+	wxString line;
+	EXPECT_THROW(reader.LineCount(), ibBackendException);
+	EXPECT_THROW(reader.GetLine(1, line), ibBackendException);
 }
 
 // UTF-16 of either end is told by its mark.

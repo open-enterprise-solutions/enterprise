@@ -116,6 +116,8 @@ void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* 
 	helper.AppendFunc(wxT("ReadLine"), wxT("ReadLine()"));
 	helper.AppendFunc(wxT("Read"), wxT("Read()"));
 	helper.AppendFunc(wxT("Close"), wxT("Close()"));
+	helper.AppendFunc(wxT("LineCount"), wxT("LineCount()"));
+	helper.AppendFunc(wxT("GetLine"), 1, wxT("GetLine(line : number)"));
 }
 
 ibValueTextReader::ibValueTextReader() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -165,28 +167,37 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 		if (m_text.empty())
 			ibBackendCoreException::Error(_("TextReader: the file '%s' cannot be read in the encoding given"), fileName);
 	}
-	m_at = 0;
+
+	// Where every line begins, found ONCE: ReadLine walks this index and GetLine jumps into it, so the two
+	// cannot disagree about what a line is. A break at the very end ENDS the last line - it opens none after it.
+	for (size_t start = 0; start < m_text.length(); ) {
+		m_lineStarts.push_back(start);
+		const size_t brk = m_text.find(wxT('\n'), start);
+		if (brk == wxString::npos)
+			break;
+		start = brk + 1;
+	}
+	m_next = 0;
 	m_loaded = true;
+}
+
+wxString ibValueTextReader::LineAt(size_t index) const
+{
+	const size_t start = m_lineStarts[index];
+	const size_t brk = m_text.find(wxT('\n'), start);
+	wxString line = (brk == wxString::npos) ? m_text.Mid(start) : m_text.Mid(start, brk - start);
+	if (!line.empty() && line.Last() == wxT('\r'))
+		line.RemoveLast();   // a line ends the way its file says - CRLF as readily as LF
+	return line;
 }
 
 bool ibValueTextReader::ReadLine(wxString& line)
 {
 	if (!m_loaded)
 		ibBackendCoreException::Error(_("TextReader: no file is open"));
-	if (m_at >= m_text.length())
+	if (m_next >= m_lineStarts.size())
 		return false;
-
-	const size_t end = m_text.find(wxT('\n'), m_at);
-	if (end == wxString::npos) {
-		line = m_text.Mid(m_at);
-		m_at = m_text.length();
-	}
-	else {
-		line = m_text.Mid(m_at, end - m_at);
-		m_at = end + 1;
-	}
-	if (!line.empty() && line.Last() == wxT('\r'))
-		line.RemoveLast();   // a line ends the way its file says - CRLF as readily as LF
+	line = LineAt(m_next++);
 	return true;
 }
 
@@ -194,15 +205,33 @@ wxString ibValueTextReader::ReadRest()
 {
 	if (!m_loaded)
 		ibBackendCoreException::Error(_("TextReader: no file is open"));
-	const wxString rest = m_at < m_text.length() ? m_text.Mid(m_at) : wxString();
-	m_at = m_text.length();
+	const wxString rest = m_next < m_lineStarts.size() ? m_text.Mid(m_lineStarts[m_next]) : wxString();
+	m_next = m_lineStarts.size();
 	return rest;
+}
+
+size_t ibValueTextReader::LineCount() const
+{
+	if (!m_loaded)
+		ibBackendCoreException::Error(_("TextReader: no file is open"));
+	return m_lineStarts.size();
+}
+
+bool ibValueTextReader::GetLine(size_t number, wxString& line) const
+{
+	if (!m_loaded)
+		ibBackendCoreException::Error(_("TextReader: no file is open"));
+	if (number < 1 || number > m_lineStarts.size())
+		return false;
+	line = LineAt(number - 1);
+	return true;
 }
 
 void ibValueTextReader::Close()
 {
 	m_text.clear();
-	m_at = 0;
+	m_lineStarts.clear();
+	m_next = 0;
 	m_loaded = false;
 }
 
@@ -229,6 +258,21 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enClose:
 		Close();
 		return true;
+	case enLineCount:
+		pvarRetValue = ibNumber(static_cast<long long>(LineCount()));
+		return true;
+	case enGetLine: {
+		if (lSizeArray < 1)
+			return false;
+		// NO SUCH LINE IS Undefined, as the end of the file is for ReadLine - an empty line is a line.
+		const int number = paParams[0]->GetInteger();
+		wxString line;
+		if (number > 0 && GetLine(static_cast<size_t>(number), line))
+			pvarRetValue = line;
+		else
+			pvarRetValue = ibValue();
+		return true;
+	}
 	}
 	return false;
 }
