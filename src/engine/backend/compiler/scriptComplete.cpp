@@ -1908,6 +1908,18 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// (measured 2026-09-07). A name is not a candidate for its own completion.
 	const auto writtenBelowCaret = [&](const ibByteCode::ibByteCodeVarInfo& var) {
 
+		// 🛑 ONLY A NAME THE TEXT WRITES HAS A PLACE IN IT. `ThisObject`, the object's attributes, a
+		// global bound from outside — kind Context / ContextProp / External — are handed to the module,
+		// visible from its first line to its last, and dating one by the tape asked a question with no
+		// answer: the scan below counts ANY operand of frame 0 as a touch of that cell, an instruction
+		// at the very start of the tape touches cell 0, and whichever binding sat in cell 0 was judged
+		// "written at the caret" and dropped. That was `ThisObject` in every module with no export of
+		// its own — a catalog's, a report's, an external data processor's once its borrowed `Metadata`
+		// and `Data` exports were gone — while a document kept it only because `RegisterRecords` took
+		// cell 0 (measured 2026-09-21).
+		if (var.IsContext() || var.IsContextProp() || var.IsExternal())
+			return false;
+
 		const auto at = declaredAt.find((wxLongLong_t)var.m_slotIndex);
 		if (at != declaredAt.end())
 			return at->second >= compiled.Caret();
