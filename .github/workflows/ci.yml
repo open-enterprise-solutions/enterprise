@@ -32,6 +32,34 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # The review remarks a script can make (.github/lint.sh): header guards, attribution lines, XPM, ASCII
+  # message ids. Seconds and no build, so a pull request hears them before anyone reads it.
+  # ---------------------------------------------------------------------------
+  review-rules:
+    name: Review rules
+    runs-on: ubuntu-22.04
+    steps:
+      # The whole history is needed to find the merge base and walk the commits, but not the contents of
+      # every file ever written: blob:none fetches commits and trees, and git fetches the few blobs the
+      # rules read on demand.
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check the change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch or a manual run has no "before"; the last commit is then the change.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE="$HEAD_SHA~1"
+          fi
+          bash .github/lint.sh "$BASE" "$HEAD_SHA"
+
+  # ---------------------------------------------------------------------------
   # The primary signal: the backend suite (~850 tests), no GUI, no display.
   # ---------------------------------------------------------------------------
   tests-linux:

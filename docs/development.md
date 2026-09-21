@@ -59,8 +59,12 @@ user interface is translated; a `_()` message id stays ASCII ([portability.md §
 products do not go into identifiers; a comparison, if a design needs one at all, is a footnote
 in its document.
 
-**Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Almost every header uses
-them; the few with `#pragma once` are exceptions to fix, not examples to follow.
+**Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Every header of ours uses
+them, and CI refuses a header that brings `#pragma once`.
+
+**Icons are SVG.** A new icon is an `.svg` beside the `.svg.h` that embeds it, registered in the
+art provider's vector table, as in `frontend/artProvider/debugger/`. XPM renders poorly at any
+size but its own, and no new one goes in. A picture a user supplies is stored as base64 PNG.
 
 **The backend stays GUI-free and never shows a modal window.** Its callers include the daemon,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.
@@ -185,6 +189,13 @@ the designer, not only from code or an assistant.
 ---
 
 ## 5. Tests and CI
+
+**The review remarks a script can make, it makes first.** `.github/lint.sh` checks what a change
+brings, and CI runs it before any build: a tool attribution line in a commit message, a header
+with `#pragma once`, a new XPM file, a `_()` message id that is not ASCII. Each finding lands on
+its line with the rule and the fix. Run it before you push:
+`bash .github/lint.sh origin/develop`. A rule that keeps coming up in review and needs no
+judgement belongs in that script.
 
 **The solution does not build the tests; CMake does.** A green `enterprise.sln` says nothing
 about `tests/`. CI builds and runs them on Windows, Linux and macOS, and its verdict is the one
