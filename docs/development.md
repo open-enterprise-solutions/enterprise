@@ -147,6 +147,15 @@ until it survives serialisation and a restart.
 data: copyable, comparable, storable as versions. A live reference inside one comes back as
 `Unknown value type`.
 
+**A new value is born owned.** Whatever makes a value answers with its holder, never a bare
+pointer: the ctor registry and `ibValue::CreateObject` with an `ibValue`, a creator whose type the
+caller needs with an `ibValuePtr<T>`, a source with an `ibSourcePtr<T>`. A bare pointer starts at
+reference count zero, and a new object runs code of its own while it is being made (a data
+object's module, its `Filling`): anything that takes `ThisObject` and lets it go frees the object
+halfway through (#154). Hold it before initialising it. Keep the answer in a holder, never in a
+`T*` — the holder converts to one silently, and the pointer dangles once the temporary goes. Where
+no type is needed the holder is plain `ibValue`; `ibValuePtr<ibValue>` adds nothing.
+
 **The schema diff is the only authority on DDL.** Nothing reads the database to decide what DDL
 to run. A schema change that exists only in code, and not in the declaration, is invisible to
 the diff, so the declaration must carry the difference.
