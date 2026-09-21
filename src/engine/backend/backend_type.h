@@ -34,18 +34,8 @@ public:
 
 #pragma endregion
 
-	//Create value by selected type
+	//Create value by selected type — the owner of a new value (born owned)
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
-
-	//convert value
-	template<class retType = ibValue>
-	retType* CreateAndConvertValueRef() {
-		ibValue* retVal = CreateValueRef();
-		if (retVal != nullptr)
-			return CastValue<retType>(retVal);
-		return (retType*)nullptr;
-	}
 
 	//Adjust value
 	virtual ibValue AdjustValue() const;
@@ -120,7 +110,6 @@ public:
 
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
 
 	//Adjust value
 	virtual ibValue AdjustValue() const;

@@ -124,13 +124,13 @@ public:
 protected:
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectExt* CreateObjectExtValue() const;  //create object
+	virtual ibValuePtr<ibValueRecordDataObjectExt> CreateObjectExtValue() const;  //create object
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
 	//load & save metaData from DB
 

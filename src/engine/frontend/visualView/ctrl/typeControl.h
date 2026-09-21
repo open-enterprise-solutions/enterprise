@@ -62,7 +62,6 @@ public:
 	
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
-	virtual ibValue* CreateValueRef() const;
 
 	//Get data type
 	virtual ibClassID GetDataType() const;

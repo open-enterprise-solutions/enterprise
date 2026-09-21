@@ -2,7 +2,7 @@
 #include "backend/query/columnSpread.h"   // ibColumnSpread::DriveSpread — shared role-spread binding (value + wire codecs)
 
 #include "backend/backend_core.h"    // emptyDate
-#include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateAndConvertObjectRef
+#include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateObject
 #include "backend/objCtor.h"         // ibCtorMetaValueType / ibCtorObjectMetaType / ibCtorAbstractType
 #include "backend/valueInfo.h"       // reference_size_t (= sizeof(ibReference)), ibReference
 #include "backend/compiler/value.h"  // ibValue accessors + ibValuePtr
@@ -430,8 +430,8 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 			ibValue* ppParams[] = { &enumVariant };
 
 			try {
-				ibValuePtr<ibValueEnumerationWrapper> creator(
-					metaData->CreateAndConvertObjectRef<ibValueEnumerationWrapper>(so->GetClassName(), ppParams, 1));
+				const ibValuePtr<ibValueEnumerationWrapper> creator(
+					metaData->CreateObject(so->GetClassName(), ppParams, 1));
 				retValue = creator->GetEnumVariantValue();
 			}
 			catch (...) {

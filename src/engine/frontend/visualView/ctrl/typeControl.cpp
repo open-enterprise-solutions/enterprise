@@ -622,14 +622,9 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 
 ibValue ibTypeControlFactory::CreateValue() const
 {
-	return ibTypeControlFactory::CreateValueRef();
-}
-
-ibValue* ibTypeControlFactory::CreateValueRef() const
-{
 	// Value creation is the FACTORY's job — it knows its bound Type (GetTypeDesc); delegating to
 	// the source attribute was a duplicate of exactly this.
-	return ibBackendTypeSourceFactory::CreateValueRef();
+	return ibBackendTypeSourceFactory::CreateValue();
 }
 
 ibClassID ibTypeControlFactory::GetDataType() const

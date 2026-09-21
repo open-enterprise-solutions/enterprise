@@ -358,17 +358,16 @@ public:
 
 			// HELD IN AN ibValue, never on the stack as a raw pointer: these are refcounted, and a
 			// bare pointer here is the shape that has produced heap corruption in this tree before.
-			ibValue* const made = ctor->CreateObject();
+			// The registry answers with the owner, so it is held from the moment it exists.
+			value = ctor->CreateObject();
 
-			if (made == nullptr) {
+			if (!value.IsReference()) {
 				refusal = wxString::Format(
 					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
 					  "exists only against the object that declares it. Read that object with "
 					  "metadata_get, its fields with query_fields."), name);
 				return false;
 			}
-
-			value = ibValue(made);
 
 			// ⭐⭐ AND THE CLASS ID SAYS MORE THAN "IT EXISTS" — it says WHAT KIND OF THING this is
 			// and WHICH METAOBJECT declares it, and both are answers a caller otherwise infers from

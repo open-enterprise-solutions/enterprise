@@ -129,17 +129,9 @@ ibSelectorDataType ibValueMetaObjectAttributeBase::GetFilterDataType() const
 
 ibValue ibValueMetaObjectAttributeBase::CreateValue() const
 {
-	ibValue* refData = CreateValueRef();
-	if (refData == nullptr)
-		return ibValue();
-	return refData;
-}
-
-ibValue* ibValueMetaObjectAttributeBase::CreateValueRef() const
-{
-	if (m_defValue.IsEmpty()) 
-		return ibBackendTypeConfigFactory::CreateValueRef();
-	return new ibValue(m_defValue);
+	if (m_defValue.IsEmpty())
+		return ibBackendTypeConfigFactory::CreateValue();
+	return m_defValue;
 }
 
 //***********************************************************************

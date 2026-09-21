@@ -790,8 +790,8 @@ void ibCodeEditor::LoadCallTip()
 			break;
 
 		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(at.m_expression);
-		std::unique_ptr<ibValue> newObject(ctor->CreateObject());
-		if (ibValue::ibMemberTable* members = newObject->GetPMethods()) {
+		const ibValue newObject = ctor->CreateObject();
+		if (ibValue::ibMemberTable* members = newObject.GetPMethods()) {
 			for (long idx = 0; idx < members->GetNConstructors(); idx++)
 				description = members->GetConstructorHelper(idx);
 		}

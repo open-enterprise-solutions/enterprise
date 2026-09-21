@@ -272,7 +272,7 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 		if (ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateRecordSetObjectValue(); }))
+			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordSetObjectValue(); }))
 				return false;
 
 			return true;
@@ -355,29 +355,29 @@ void ibValueMetaObjectAccumulationRegister::OnRemoveMetaForm(ibValueMetaObjectFo
 }
 #include "accumulationRegisterManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectAccumulationRegister::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectAccumulationRegister::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectAccumulationRegister(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectAccumulationRegister(this));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectAccumulationRegister::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObject* pDataRef = nullptr;
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey);
+			return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey));
 		}
-		return pDataRef;
+		return ibValuePtr<ibValueRecordSetObject>(pDataRef);
 	}
-	return new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey);
+	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectAccumulationRegister(this, uniqueKey));
 }
 
-ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectAccumulationRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn());   // migrated onto the universal dynamic list
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;

@@ -701,13 +701,13 @@ public:
 
 	template<typename T, typename... Args>
 	T* CreateMetaObjectAndSetParent(Args&&... args) {
-		T* createdObject = ibValue::CreateAndConvertObjectValueRef<T>(args...);
+		const ibValuePtr<T> createdObject = ibValue::CreateObjectValue<T>(args...);
 		wxASSERT(createdObject);
 		//set child/parent - predefined child, pinned to this parent for life
 		createdObject->SetParent(this);
 		createdObject->SetFlag(metaPredefinedFlag);
 		this->AddChild(createdObject);
-		return createdObject;
+		return createdObject;   // the child vector holds it now
 	}
 
 	// Predefined children (set in CreateMetaObjectAndSetParent) are bound to the

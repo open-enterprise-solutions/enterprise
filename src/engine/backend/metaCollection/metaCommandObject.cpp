@@ -89,7 +89,7 @@ bool ibValueMetaObjectCommand::OnAfterRunMetaObject(int flags)
 			return false;
 
 		return cc->AddCompileModule(m_propertyCommandModule->GetMetaObject(),
-			[this]() -> ibValue* { return new ibValueCommandDataObject(this); });
+			[this]() -> ibValue { return new ibValueCommandDataObject(this); });
 	}
 
 	return ibValueMetaObject::OnAfterRunMetaObject(flags);

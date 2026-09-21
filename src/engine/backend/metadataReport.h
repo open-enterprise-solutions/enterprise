@@ -21,13 +21,6 @@ public:
 	virtual wxString GetFileName() const { return m_fullPath; }
 
 	//runtime support:
-	virtual ibValue* CreateObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const;
-	virtual ibValue* CreateObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		return CreateObjectRef(
-			GetIDObjectFromString(className), paParams, lSizeArray
-		);
-	}
-
 	virtual bool IsRegisterCtor(const wxString& className) const;
 	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const;
 	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType, enum ibCtorObjectMetaType refType) const;

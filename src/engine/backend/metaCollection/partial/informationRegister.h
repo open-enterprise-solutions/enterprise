@@ -198,14 +198,14 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
-	virtual ibValueRecordManagerObject* CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
 	//get command section 
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
@@ -472,8 +472,8 @@ class ibValueRecordSetObjectInformationRegister : public ibValueRecordSetObject 
 public:
 
 	//default methods
-	virtual ibValueRecordSetObject* CopyRegisterValue() {
-		return new ibValueRecordSetObjectInformationRegister(*this);
+	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue() {
+		return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectInformationRegister(*this));
 	}
 
 	// WriteRecordSet / DeleteRecordSet inherited from
@@ -513,8 +513,8 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 	{
 		m_members.Bind(this, &ibValueRecordManagerObjectInformationRegister::FillMembers);
 	}
-	virtual ibValueRecordManagerObject* CopyRegister(bool showValue = false) {
-		ibValueRecordManagerObject* objectRef = CopyRegisterValue();
+	virtual ibValuePtr<ibValueRecordManagerObject> CopyRegister(bool showValue = false) {
+		const ibValuePtr<ibValueRecordManagerObject> objectRef = CopyRegisterValue();
 		if (objectRef != nullptr && showValue)
 			objectRef->ShowFormValue();
 		return objectRef;

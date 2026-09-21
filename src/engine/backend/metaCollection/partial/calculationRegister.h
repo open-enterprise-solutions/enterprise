@@ -358,13 +358,13 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set — and no record manager (the base answers null): see the form list above
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
@@ -783,8 +783,8 @@ class ibValueRecordSetObjectCalculationRegister : public ibValueRecordSetObject 
 public:
 
 	//default methods
-	virtual ibValueRecordSetObject* CopyRegisterValue() {
-		return new ibValueRecordSetObjectCalculationRegister(*this);
+	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue() {
+		return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectCalculationRegister(*this));
 	}
 
 	const ibValueMetaObjectCalculationRegister* GetCalculationMetaObject() const {

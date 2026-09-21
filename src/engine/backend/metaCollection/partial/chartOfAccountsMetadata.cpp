@@ -47,42 +47,42 @@ ibValueMetaObjectFormBase* ibValueMetaObjectChartOfAccounts::GetDefaultFormByID(
 
 #include "chartOfAccountsManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectChartOfAccounts::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectChartOfAccounts::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectChartOfAccounts(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectChartOfAccounts(this));
 }
 
 #include "backend/appData.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectChartOfAccounts::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfAccounts::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
 	ibValueRecordDataObjectChartOfAccounts* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return new ibValueRecordDataObjectChartOfAccounts(this, guid, mode);
+			pDataRef = new ibValueRecordDataObjectChartOfAccounts(this, guid, mode);
 	}
 	else {
 		pDataRef = new ibValueRecordDataObjectChartOfAccounts(this, guid, mode);
 	}
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfAccounts::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
-	case eFormObject: return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
-	case eFormFolder: return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+	case eFormObject: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
+	case eFormFolder: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	// ⭐ SORTED BY WHAT AN ITEM READS AS — for a chart of accounts its CODE, by default. In a catalog the code
 	// is a serial number and the name is what a person reads, so the name is the order. In a chart of
 	// accounts the CODE IS THE ACCOUNT — "51", "60.01" — and its order is the plan itself: sorted by name,
 	// 51 lands between two unrelated account names and the chart stops reading as a chart. This road said
 	// "code" by itself while the forms below said "description"; both ask the one declaration now
 	// (DataPresentation, which a chart of accounts states as Code at construction).
-	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
-	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
-	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+	case eFormList: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
+	case eFormSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
+	case eFormFolderSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 	return nullptr;
 }
@@ -434,7 +434,7 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 		return false;
 	}
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags);

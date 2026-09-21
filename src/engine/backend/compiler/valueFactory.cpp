@@ -52,41 +52,41 @@ static std::atomic<unsigned int> s_factoryCtorCountChanges = 0;
 //*                      Support dynamic object                                 *
 //*******************************************************************************
 
-ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
+ibValue ibValue::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(clsid);
 
 	if (typeCtor != nullptr) {
-		ibValue* created_value = typeCtor->CreateObject();
+		// OWNED FROM THE MOMENT IT EXISTS — Init() below may run code that takes a reference to it and
+		// lets it go (see ibCtorAbstractType::CreateObject). A refusal throws, and the owner lets it go.
+		ibValue created = typeCtor->CreateObject();
 
-		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers nullptr, and that
+		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers empty, and that
 		// is an ORDINARY answer for the parameterised families — a reference type, a register's
 		// record set, a document object. Asking about one of those is a normal thing to do
 		// (type_members does it, wrapped in a try, precisely because it expects a refusal), and the
 		// assert turned that question into a debug break: the caller's own handling never ran, and a
 		// person at the designer got a stack instead of a sentence.
-		if (created_value == nullptr)
+		if (!created.IsReference())
 			ibBackendCoreException::Error(_("Object '%s' cannot be created without arguments"),
 				typeCtor->GetClassName());
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
 			if (lSizeArray > 0)
-				succes = created_value->Init(paParams, lSizeArray);
+				succes = created.Init(paParams, lSizeArray);
 			else
-				succes = created_value->Init();
-			if (!succes) {
-				wxDELETE(created_value);
+				succes = created.Init();
+			if (!succes)
 				ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-			}
 			// Name surface builds lazily on first GetPMethods() — no eager populate.
 		}
-		return created_value;
+		return created;
 	}
 	else {
 		ibBackendCoreException::Error(_("Error creating object '%llu'"), clsid);
 	}
 
-	return nullptr;
+	return wxEmptyValue;
 }
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)

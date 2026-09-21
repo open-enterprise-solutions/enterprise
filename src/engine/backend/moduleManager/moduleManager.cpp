@@ -381,7 +381,8 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
 		// EnumManager / SystemManager — transparent scope containers too.
-		BindScopeVariable(ctor->GetClassName(), ctor->CreateObject());
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
 	// Compile only — runtime (ibProcUnit) is created per session by
@@ -550,7 +551,8 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 
 	//ctor-context objects (EnumManager / SystemManager) — transparent too.
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		BindScopeVariable(ctor->GetClassName(), ctor->CreateObject());
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
 	// No unit compilation here — see AddCommonModule. The editor parses common

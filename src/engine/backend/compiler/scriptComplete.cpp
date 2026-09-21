@@ -523,10 +523,11 @@ private:
 			if (ctor == nullptr)
 				continue;
 
-			// The wrapper IS the owner: ibValue(ibValue*) takes a reference on what it is handed,
-			// and the branch is constructed IN the vector so nothing is ever copied out of a local.
-			if (ibValue* const created = ctor->CreateObject()) {
-				out.emplace_back(created, ibNameOrigin::Member);   // the metadata declared this field
+			// Born owned, and the wrapper takes a reference of its own on what it is handed; the
+			// branch is constructed IN the vector so nothing is ever copied out of a local.
+			const ibValue created = ctor->CreateObject();
+			if (created.IsReference()) {
+				out.emplace_back(created.GetRef(), ibNameOrigin::Member);   // the metadata declared this field
 				any = true;
 			}
 		}

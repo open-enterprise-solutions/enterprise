@@ -56,43 +56,43 @@ ibValueMetaObjectFormBase* ibValueMetaObjectChartOfCharacteristicTypes::GetDefau
 
 #include "chartOfCharacteristicTypesManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectChartOfCharacteristicTypes(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectChartOfCharacteristicTypes(this));
 }
 
 #include "backend/appData.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectChartOfCharacteristicTypes::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfCharacteristicTypes::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
 	ibValueRecordDataObjectChartOfCharacteristicTypes* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef)) {
-			return new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
+			pDataRef = new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 		}
 	}
 	else {
 		pDataRef = new ibValueRecordDataObjectChartOfCharacteristicTypes(this, guid, mode);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormObject:
-		return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
-		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn());   // migrated onto the universal dynamic list (hierarchy via queryable)
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
@@ -304,7 +304,7 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::OnAfterRunMetaObject(int flags
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
+			return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 
 		return false;
 	}

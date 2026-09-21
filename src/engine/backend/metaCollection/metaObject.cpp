@@ -158,8 +158,8 @@ bool ibValueMetaObject::Init(ibValue** paParams, const long lSizeArray)
 		if (parent == nullptr)
 			return true;
 		// Check acceptance BEFORE attaching: with owning children a rejected node
-		// would already sit in the parent's vector when CreateObjectRef wxDELETEs
-		// it on Init failure → double free. Reject first, attach only if accepted.
+		// would already sit in the parent's vector when Init reports the failure —
+		// kept alive there, a child nobody asked for. Reject first, attach only if accepted.
 		if (!parent->FilterChild(GetClassType()))
 			return false;
 		SetParent(parent);
