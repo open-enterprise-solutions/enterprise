@@ -105,7 +105,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Cleanup(ibValue
 	// selects again (SelectObject) — until then there is simply no highlight, which is better than one
 	// drawn from a window that is gone.
 	if (m_back != nullptr && m_back->GetSelectedObject() == control)
-		m_back->ForgetSelection();
+		m_back->ClearSelection();
 
 	control->CleanupWithLayers(obj, this);
 }

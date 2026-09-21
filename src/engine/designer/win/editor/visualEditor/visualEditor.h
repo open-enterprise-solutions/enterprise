@@ -2,7 +2,6 @@
 #define __VISUAL_EDITOR_H__
 
 #include "innerFrame.h"
-#include "designerSelection.h"
 #include "win/editor/codeEditor/codeEditorDesigner.h"
 
 #include "frontend/visualView/ctrl/form.h"
@@ -88,12 +87,10 @@ public:
 	void SetSelectedObject(ibValueFrame* object) { m_selObj = object; }
 	void SetSelectedPanel(wxWindow* actPanel) { m_actPanel = actPanel; }
 
-	// The owner of the wx tree says whether a control is still one of its own. Without it the selection
-	// is trusted (see designerSelection.h for why it must not be).
-	void SetSelectionLiveCheck(ibSelectionLiveCheck isLive) { m_isSelectionLive = std::move(isLive); }
-
-	// Forget the selection — the four pointers go together, none is meaningful without the others.
-	void ForgetSelection() { m_selSizer = nullptr; m_selItem = nullptr; m_selObj = nullptr; m_actPanel = nullptr; }
+	// Clear the selection — the four pointers go together, none is meaningful without the others. The host
+	// calls it from Cleanup, the one door every control's widgets leave through (a removal, an undo, a whole
+	// rebuild of the form), so the canvas never paints from a control that is gone.
+	void ClearSelection() { m_selSizer = nullptr; m_selItem = nullptr; m_selObj = nullptr; m_actPanel = nullptr; }
 
 	wxSizer* GetSelectedSizer() const { return m_selSizer; }
 	wxObject* GetSelectedItem() const { return m_selItem; }
@@ -111,7 +108,6 @@ private:
 	wxObject* m_selItem = nullptr;
 	ibValueFrame* m_selObj = nullptr;
 	wxWindow* m_actPanel = nullptr;
-	ibSelectionLiveCheck m_isSelectionLive;
 
 	wxDECLARE_EVENT_TABLE();
 };
