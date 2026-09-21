@@ -643,7 +643,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerSubsystem = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st = new wxStaticText(this, wxID_ANY, child->GetSynonym());
 
-						st->SetBackgroundColour(*wxWHITE);
 						st->SetForegroundColour(wxDefaultStypeFGColour);
 						st->Wrap(-1);
 						st->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -712,7 +711,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerCreate = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_create = new wxStaticText(this, wxID_ANY, _("Create"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_create->SetBackgroundColour(*wxWHITE);
 						st_create->SetForegroundColour(wxDefaultStypeFGColour);
 						st_create->Wrap(-1);
 						st_create->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -748,7 +746,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerReport = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_report = new wxStaticText(this, wxID_ANY, _("Report"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_report->SetBackgroundColour(*wxWHITE);
 						st_report->SetForegroundColour(wxDefaultStypeFGColour);
 						st_report->Wrap(-1);
 						st_report->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -784,7 +781,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerService = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_service = new wxStaticText(this, wxID_ANY, _("Service"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_service->SetBackgroundColour(*wxWHITE);
 						st_service->SetForegroundColour(wxDefaultStypeFGColour);
 						st_service->Wrap(-1);
 						st_service->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
