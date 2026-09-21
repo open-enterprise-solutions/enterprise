@@ -1,4 +1,5 @@
-#pragma once
+#ifndef __STRING_UTILS_H__
+#define __STRING_UTILS_H__
 
 #include <wx/wx.h>
 #include <wx/string.h>
@@ -316,3 +317,5 @@ struct ibCaseFoldLess {
 private:
 	static bool IsLatinLetter(wchar_t c) noexcept { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); }
 };
+
+#endif

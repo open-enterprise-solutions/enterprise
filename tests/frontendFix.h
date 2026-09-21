@@ -19,7 +19,8 @@
 // suite. Locally (a real desktop session) it runs for real.
 // =============================================================================
 
-#pragma once
+#ifndef __FRONTEND_FIX_H__
+#define __FRONTEND_FIX_H__
 
 #include <gtest/gtest.h>
 
@@ -138,3 +139,5 @@ struct FrontendRuntimeFix : ::testing::Test {
 			ibApplicationData::DestroyAppDataEnv();
 	}
 };
+
+#endif
