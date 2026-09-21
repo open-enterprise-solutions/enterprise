@@ -237,8 +237,10 @@ public:
 	bool HasBorders() const { return m_borders->GetMetaID() != 0; }
 
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
+	virtual bool OnBeforeRunMetaObject(int flags) override;
 	virtual bool OnAfterRunMetaObject(int flags) override;
 	virtual bool OnBeforeCloseMetaObject() override;
+	virtual bool OnAfterCloseMetaObject() override;
 
 	// …and everything that reads the registrations meets the surface that knows about the moment.
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_ownQueryable.GetQueryable(); }

@@ -21,7 +21,8 @@ public:
 	}
 	virtual ~ibValueManagerDataObjectSequence() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const override { return nullptr; }
+	// The sequence's own manager module: its Public methods are this manager's too, beside the two verbs.
+	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const override { return m_metaObject->GetManagerModule(); }
 	virtual const ibValueMetaObjectSequence* GetMetaObject() const override { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;
