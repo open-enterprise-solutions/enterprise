@@ -17,7 +17,7 @@
 #include <wx/init.h>
 #include <wx/socket.h>
 
-#include "backend/debugger/socketLock.h"
+#include "backend/debugger/debugClient.h"   // ibSocketLock lives beside the one class that holds such a socket
 
 namespace {
 
