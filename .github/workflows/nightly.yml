@@ -272,7 +272,7 @@ jobs:
           |---|---|---|
           | Windows 10/11 x64 | \`oes-nightly-windows-x64.zip\` | Unpack, run \`designer.exe\` or \`enterprise.exe\` from the \`oes\` folder. Firebird and the PostgreSQL client are inside. |
           | Linux x64 (Ubuntu 22.04 / Debian 12 or newer) | \`oes-nightly-linux-x64.tar.gz\` | \`tar xzf\`, run \`./designer\` or \`./enterprise\` in \`oes/\`. Firebird 5 is inside (\`_fb\`). Needs GTK 3 (\`libgtk-3-0\`); a PostgreSQL base needs \`libpq\`. |
-          | macOS 14+ on Apple Silicon | \`oes-nightly-macos-arm64.dmg\` | Drag the \`OES\` folder to Applications — the applications in it need each other, so move the folder, not one app. Firebird 5 is inside (\`_fb\`). The build is not signed: the first time, right-click the app → Open (or \`xattr -dr com.apple.quarantine /Applications/OES\`). |
+          | macOS 14+ on Apple Silicon | \`oes-nightly-macos-arm64.dmg\` | Drag the \`OES\` folder to Applications — the applications in it need each other, so move the folder, not one app. Firebird 5 is inside (\`_fb\`). The build is signed ad hoc, not with a Developer ID, so macOS quarantines every file that came with it: once, after dragging, run \`find /Applications/OES -exec xattr -d com.apple.quarantine {} \; 2>/dev/null\` in Terminal. Right-click → Open lets one app through while the launcher starts the others, and macOS 15 no longer offers it. |
           EOF
           gh release delete "$TAG" --cleanup-tag --yes || true
           gh release create "$TAG" assets/* \
