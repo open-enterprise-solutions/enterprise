@@ -1,70 +1,15 @@
 #include "toolBar.h"
 
-/* XPM */
-static const char* s_toolbar_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 36 1",
-	"  c None",
-	"t c #E1DECE",
-	"< c #DFF3FF",
-	"q c #FFDA00",
-	"* c #FFFFFF",
-	"$ c #FFFD00",
-	"; c #E2F4FF",
-	"> c #0A87DA",
-	", c #2F9AE3",
-	"1 c #D6EFFF",
-	"+ c #CC9900",
-	"r c #48A5E9",
-	"# c #F4FBFF",
-	": c #EAE7D6",
-	". c #ACA899",
-	"y c #E3E0D0",
-	"3 c #FFE200",
-	"- c #EBF7FF",
-	"9 c #E6E4D3",
-	"O c #EBE8D7",
-	"u c #E1DDCE",
-	"4 c #168EDD",
-	"6 c #42A2E8",
-	"X c #ECE9D8",
-	"5 c #2394E1",
-	"w c #E5E2D2",
-	"0 c #FFE700",
-	"7 c #C9EAFF",
-	"e c #C8C8C8",
-	"& c #0083D7",
-	"o c #666699",
-	"= c #1E92DF",
-	"% c #ECE8D7",
-	"2 c #FFF200",
-	"@ c #003399",
-	"8 c #C1E7FF",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	"................",
-	"XXXXXXXXXXXXXXXX",
-	"ooXXOO++XXXX@@@X",
-	"o#oOX+$$+%O@&*=@",
-	"o-;o:+$++O:@>*,@",
-	"o<1o:++23+:@456@",
-	"o78o9++0q+w@ere@",
-	"ooooty+++yyt@@@y",
-	"uuuttuutuuutuuuu",
-	"................",
-	"                ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_toolBar_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADWUlEQVR4nOyaS0wTQRjH/92+pBRbnvKyvAvyMBKRSDwhqCEa9CaJB6MJnDwZogf1pMaYeCDxJIp3Ek2M0cSLEGLwhYkeKK9GxJbwJspDXm23zlbR7rZ0WyGxy8wvmXRndnay33++mX7ftBwohwPlMAFAOUwAUA4TAJTDBADlMAFAOZq6U6e9oBi2BEA5bA+QNty8cR3bmStXr4nqbAmActgeINehqakJm6G1tRXRDPMAKBAPD/Q4PLBP8xie5fF55lcwm5+kQm4SB2syhwqLGpxKfizFCTA+78WdjlVifGAE/8HpJYX3XRelcGg+rENKXGgVIhagp7sz5P0Dh6pD3q+/v4xIeNoY8+f6Rb8HbW9dWHXLpy8DUzwuPFpFY5UGR4o2NlMxHvC8z4173a6InlkhQt195YKbOEVdcXBTFSHAGHH7h28Cjd9nNaMk24Ts1FhffWTiB2wjc/g09F3Ur+2dC+WZHFJ3Bu75US8AT7y9pXMNLv5vW5xBg4ZaC/IzjKK+e/NMvrLfmoD2DgcWl9y+9jXy0dLlwq0T+oDxo/5rsH/S41vP/pw5lhVgvD/W3UY01FhEbX0TPAYl4whEvQBDU+INr3JPAnJ+u3woCjKNqCiMF7UpUgDp7JcSFw+X0lxTyLEEFOAB4pe2pMjP/jrpyQZRfWBSgQLwknd2uXn8K3yQR6NegJxE8SuOzYYfSI1Ni/sKYbIUxQnwvm8W4fK6d0YyVmBYrAABxHXbl3nYRxdlnxP6DTkXRG15iQr0gEqS1aWbxDPX/tIBu3NjEQYdC3jcNSpqyzSrfBmilKiPBHdoVbhUo0fzkxWs738LJMJ78GwY5QVmlOWZYdllICmyF86pJdiG5/DRLg6FtWSaL9fqoA9irSJygVyyds9Wan2ZoD+CoVJjg3HuoBZZ8cGdXTHZ4MkyDWJ0JLEhSdFymEmhQQucr9LiaOEWpsNy+b4c/vl9pAiGlGeoyYHIGskRQscDZWkcLlbrkBi7xQci/5tkowq36/X4+o1H7zgP27gHtgkv1MTO4lQOJUJJU8MSH8Z5GBR6JiggrGmhHC/enAnsVFiuQ7Sf628W9tMYKId6AVTsP0KUwwQA5YQXL25j2BIA5TABQDlMAFAOEwCUwwQA5VAvwE8AAAD//x84Y2gAAAAGSURBVAMA0+XyKD6VRJcAAAAASUVORK5CYII=";
 
 wxIcon ibValueToolbar::GetIcon() const
 {
-	return wxIcon(s_toolbar_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_toolBar_png, wxSize(16, 16));
 }
 
 wxIcon ibValueToolbar::GetIconGroup()
 {
-	return wxIcon(s_toolbar_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_toolBar_png, wxSize(16, 16));
 }

@@ -1,37 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_static_line_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 3 1",
-	"  c None",
-	"X c #FFFFFF",
-	". c #ACA899",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	" .............  ",
-	"  XXXXXXXXXXXXX ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_staticLine_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAhklEQVR4nOzToRGAQBDF0NwNJaFQlI5C0RM0AA2QPLnrMvMnchO5AiBXAOQKgFwBkCsAcgVArgDIFQC5AiBXAOQKgFwBkCsAcsvXY932mx+5zmO83ZsAcgVArgDI6QMM5JoAcgVArgDIFQC5AiBXAOQKgFwBkCsAcgVArgDIFQC5AiCnD/AAAAD//82BpW0AAAAGSURBVAMACI0Egv3h7FoAAAAASUVORK5CYII=";
 
 wxIcon ibValueStaticLine::GetIcon() const
 {
-	return wxIcon(s_static_line_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_staticLine_png, wxSize(16, 16));
 }
 
 wxIcon ibValueStaticLine::GetIconGroup()
 {
-	return wxIcon(s_static_line_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_staticLine_png, wxSize(16, 16));
 }

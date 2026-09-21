@@ -23,7 +23,9 @@ bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const ch
 bool RegisterBackendPicture(const wxString name, const ibPictureID& id, const wxString& base64)
 {
 	if (!ibBackendPicture::IsRegisterPicture(id)) {
-		ibBackendPicture::RegisterPicture(name, id, ibBackendPicture::GetImageFromBase64(base64));
+		// The string is a MASTER, drawn larger than it is shown (tools/pictures/render.js); a registered picture is
+		// handed out as it is kept, and every reader of one shows it at 16 - so it is kept at 16, scaled down once here.
+		ibBackendPicture::RegisterPicture(name, id, ibBackendPicture::GetImageFromBase64(base64, wxSize(16, 16)));
 		return true;
 	}
 

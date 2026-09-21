@@ -2,10 +2,10 @@
 // The debugger's pictures.
 //
 // The designer's Debug toolbar and Debug menu ask the art provider for one picture per command, under client
-// wxART_DEBUG — artProvider/debugger/<name>.svg, compiled in as the string beside it (<name>.svg.h). A picture
-// drawn as text can fail quietly: a typo in the markup gives a blank button, not an error. These tests draw
-// each one and look at the pixels, so a button that would be empty or a twin of its neighbour is caught here
-// and not by somebody squinting at the toolbar.
+// wxART_DEBUG — a PNG in Base64 in artProvider/private/picturePredefined.h, drawn from its SVG by
+// tools/pictures/render.js. A picture kept as text can fail quietly: a string cut short gives a blank button,
+// not an error. These tests draw each one and look at the pixels, so a button that would be empty or a twin
+// of its neighbour is caught here and not by somebody squinting at the toolbar.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -114,7 +114,8 @@ TEST(DebugToolbarIcons, NoTwoCommands_ShareAPicture)
 	}
 }
 
-// Sharp at every scale: the same id at a larger size gives a larger picture, not a stretched small one.
+// The same id at a larger size gives a picture of that size. (It is the one scaled from the master at the size
+// asked; handing the bundle the master's larger sizes too, for a display scaled to 200 %, is still to do.)
 TEST(DebugToolbarIcons, ScalesWithTheDisplay)
 {
 	const wxBitmapBundle bundle = wxArtProvider::GetBitmapBundle(wxART_DEBUG_STEP_OVER, wxART_DEBUG, wxSize(16, 16));

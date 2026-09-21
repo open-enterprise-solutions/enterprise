@@ -242,8 +242,8 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	toolbar->AddTool(wxID_CR_REMOVE_COMMENTS, _("Remove comments"), wxArtProvider::GetBitmapBundle(wxART_REMOVE_COMMENT, wxART_DOC_MODULE), _("Remove"));
 	toolbar->AddSeparator();
 	toolbar->AddTool(wxID_CR_FORMAT_CODE,     _("Format selection"), wxArtProvider::GetBitmapBundle(wxART_FORMAT_CODE,   wxART_DOC_MODULE), _("Format"));
-	toolbar->AddTool(wxID_CR_INCREASE_INDENT, _("Increase indent"),  wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD,    wxART_TOOLBAR),    _("Indent"));
-	toolbar->AddTool(wxID_CR_DECREASE_INDENT, _("Decrease indent"),  wxArtProvider::GetBitmapBundle(wxART_GO_BACK,       wxART_TOOLBAR),    _("Unindent"));
+	toolbar->AddTool(wxID_CR_INCREASE_INDENT, _("Increase indent"),  wxArtProvider::GetBitmapBundle(wxART_INCREASE_INDENT, wxART_DOC_MODULE), _("Indent"));
+	toolbar->AddTool(wxID_CR_DECREASE_INDENT, _("Decrease indent"),  wxArtProvider::GetBitmapBundle(wxART_DECREASE_INDENT, wxART_DOC_MODULE), _("Unindent"));
 	toolbar->AddSeparator();
 	toolbar->AddTool(wxID_CR_GOTO_LINE,       _("Goto line"),                wxArtProvider::GetBitmapBundle(wxART_GOTO_LINE,    wxART_DOC_MODULE), _("Goto"));
 	toolbar->AddTool(wxID_CR_PROC_AND_FUNC,   _("Procedures and functions"), wxArtProvider::GetBitmapBundle(wxART_PROC_AND_FUNC, wxART_DOC_MODULE), _("Procedures and functions"));

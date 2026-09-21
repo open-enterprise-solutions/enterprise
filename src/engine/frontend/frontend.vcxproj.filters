@@ -1743,6 +1743,9 @@
     <ClInclude Include="artProvider\private\picturePredefined.h">
       <Filter>artProvider\private</Filter>
     </ClInclude>
+    <ClInclude Include="artProvider\splash\splashLogo.h">
+      <Filter>artProvider</Filter>
+    </ClInclude>
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -2102,32 +2105,6 @@
     <Filter Include="win\editor\codeEditor\res">
       <UniqueIdentifier>{F9A98E34-3B01-4FE6-B842-1C8FB64ED407}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="win\ctrls\res\checked_d.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked_ld.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked_mo.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked2.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_d.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_ld.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_mo.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked2.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\frontend.rc">

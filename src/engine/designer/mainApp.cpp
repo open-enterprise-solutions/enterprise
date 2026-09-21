@@ -24,7 +24,8 @@
 #include "backend/system/value/valueOLE.h"   // ibValueOLE::ReleaseComObjects in normal OnExit
 #endif
 
-#include "resources/splashLogo.xpm"
+#include "backend/backend_picture.h"
+#include "frontend/artProvider/splash/splashLogo.h"   // one picture for the designer and the application
 
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 #include <wx/xrc/xh_auinotbk.h>
@@ -160,7 +161,7 @@ int ibAppDesigner::DoOnRun()
 	}
 
 	ibProcessSplashScreen* splashScreenLoader =
-		new ibProcessSplashScreen(wxBitmap(splashLogo_xpm),
+		new ibProcessSplashScreen(ibBackendPicture::GetBitmapFromBase64(s_splashLogo_png),
 			wxSPLASH_CENTRE_ON_SCREEN,
 			-1, nullptr, -1, wxDefaultPosition, wxDefaultSize,
 			wxBORDER_SIMPLE

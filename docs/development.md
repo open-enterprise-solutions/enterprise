@@ -62,10 +62,14 @@ in its document.
 **Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Every header of ours uses
 them, and CI refuses a header that brings `#pragma once`.
 
-**New pictures are SVG or PNG, never XPM.** A new icon is an `.svg` beside the `.svg.h` that
-embeds it, registered in the art provider's vector table, as in `frontend/artProvider/debugger/`.
-A picture that is embedded as a raster is PNG. XPM renders poorly at any size but its own, and no
-new one goes in.
+**A picture is a PNG in Base64, in the source file that reads it; never XPM.** It is a string
+(`static const wxString s_<name>_png = "..."`) beside the code that uses it — the art provider's in
+`frontend/artProvider/private/picturePredefined.h`, a control's in its `_res.cpp`, a metatype's in its
+`_res.cpp` — kept as a MASTER four times the size it is drawn at, and scaled down by whoever reads it to
+the size it shows it at. Its source is an SVG in `tools/pictures/render.js`, which draws the PNG and
+writes the string: to change a picture, change its SVG there and run the script; to add one, add the SVG,
+a line in its `TARGETS` and a placeholder string. One act has one drawing everywhere it appears, and the
+manner is the one that file describes. XPM renders poorly at any size but its own, and no new one goes in.
 
 **The backend stays GUI-free and never shows a modal window.** Its callers include the daemon,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.

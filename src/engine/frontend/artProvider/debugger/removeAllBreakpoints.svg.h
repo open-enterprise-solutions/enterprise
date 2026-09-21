@@ -1,7 +1,0 @@
-/* SVG */
-static const char s_removeAllBreakpoints_svg[] =
-"<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'>"
-"  <circle cx='8' cy='8' r='5.4' fill='#e03131' stroke='#b02525' stroke-width='0.8'/>"
-"  <path d='M2.2 13.8 L13.8 2.2' stroke='#343a40' stroke-width='2' stroke-linecap='round'/>"
-"</svg>"
-;

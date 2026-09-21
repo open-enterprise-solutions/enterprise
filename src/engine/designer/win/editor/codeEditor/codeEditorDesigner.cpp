@@ -10,6 +10,7 @@
 
 #include <wx/menu.h>
 #include <wx/textdlg.h>   // wxTextEntryDialog - the breakpoint's condition
+#include "frontend/artProvider/artProvider.h"   // wxART_BREAKPOINT_CONDITION
 
 bool ibCodeEditorDesigner::IsDebuggerEnterLoop() const
 {
@@ -86,6 +87,7 @@ void ibCodeEditorDesigner::AppendDebugMenu(wxMenu& menu, int line)
 
 	menu.AppendSeparator();
 	wxMenuItem* item = menu.Append(wxID_ANY, _("Breakpoint condition..."));
+	item->SetBitmap(wxArtProvider::GetBitmap(wxART_BREAKPOINT_CONDITION, wxART_DEBUG, FromDIP(wxSize(16, 16))));
 	item->Enable(IsEditable());
 
 	menu.Bind(wxEVT_MENU, [this, line](wxCommandEvent&) {

@@ -106,7 +106,7 @@ private:
 	friend class ibValueForm;
 };
 
-#include "frontend/artProvider/null/null.xpm"
+#include "frontend/artProvider/artProvider.h"
 
 class ibValueToolBarItem : public ibValueControl {
 	public:
@@ -143,7 +143,7 @@ public:
 				}
 			}
 			else if (m_propertyTitle->IsEmptyProperty()) {
-				return wxBitmap(s_null_xpm);
+				return wxArtProvider::GetBitmap(wxART_NO_PICTURE, wxART_VISUALHOST, wxSize(16, 16));
 			}
 		}
 

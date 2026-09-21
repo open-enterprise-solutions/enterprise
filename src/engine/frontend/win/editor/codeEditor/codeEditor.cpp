@@ -1169,6 +1169,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// caption's own (ibDialogTranslateConstructor). The languages are those of the configuration THIS
 	// module belongs to, asked of its document; no document (a code runner) is the language in force.
 	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
+	miTranslate->SetBitmap(wxArtProvider::GetBitmap(wxART_TRANSLATION_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		const ibValueMetaObject* moduleObject = m_document != nullptr ? m_document->GetMetaObject() : nullptr;
 		const ibTranslateString before(literal.m_text);
@@ -1186,6 +1187,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// …AND THE THIRD: the string Format(value, format) reads. Same literal, same rule — and a string that
 	// comes back unchanged is not written, so it keeps its author's spelling.
 	wxMenuItem* miFormat = menu.Append(wxID_ANY, _("Format string constructor"));
+	miFormat->SetBitmap(wxArtProvider::GetBitmap(wxART_FORMAT_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		const ibFormatString before = ibFormatString::Parse(literal.m_text);
 		ibDialogFormatConstructor dialog(this, _("Format string constructor"), before, !IsEditable());
@@ -1204,6 +1206,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// it opens that query and replaces it; anywhere else it writes a new block at the caret.
 	const int caretChars = GetRealPosition();
 	wxMenuItem* miLinq = menu.Append(wxID_ANY, _("LINQ query constructor"));
+	miLinq->SetBitmap(wxArtProvider::GetBitmap(wxART_LINQ_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, caret, caretChars](wxCommandEvent&) {
 		const wxString text = GetText();
 		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars,
@@ -1239,9 +1242,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	miCut  ->SetBitmap(wxArtProvider::GetBitmap(wxART_CUT,   wxART_MENU));
 	miCopy ->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY,  wxART_MENU));
 	miPaste->SetBitmap(wxArtProvider::GetBitmap(wxART_PASTE, wxART_MENU));
-	// Select All — no canonical wxArt id; left unset so the row aligns
-	// with the icon column without a placeholder.
-	(void)miSelectAll;
+	// Select All has no stock id; the provider draws it (a dashed selection round the lines).
+	miSelectAll->SetBitmap(wxArtProvider::GetBitmap(wxART_SELECT_ALL, wxART_DOC_MODULE, FromDIP(wxSize(16, 16))));
 
 	miCut  ->Enable(GetSelectionStart() != GetSelectionEnd() && IsEditable());
 	miCopy ->Enable(GetSelectionStart() != GetSelectionEnd());
