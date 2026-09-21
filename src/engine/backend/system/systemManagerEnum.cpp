@@ -14,3 +14,6 @@ ENUM_TYPE_REGISTER(ibValueEnumRoundMode, "RoundMode", enum_to_clsid("EN_ROMO"));
 ENUM_TYPE_REGISTER(ibValueEnumTextEncoding, "TextEncoding", enum_to_clsid("EN_TXEN"));
 
 ENUM_TYPE_REGISTER(ibValueChars, "Chars", enum_to_clsid("EN_CHAR"));
+
+ENUM_TYPE_REGISTER(ibValueEnumJsonValueType, "JSONValueType", enum_to_clsid("EN_JSVT"));
+ENUM_TYPE_REGISTER(ibValueEnumJsonFormatting, "JSONFormatting", enum_to_clsid("EN_JSFM"));

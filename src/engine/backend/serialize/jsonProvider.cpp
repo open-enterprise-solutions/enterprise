@@ -1,4 +1,5 @@
 #include "backend/serialize/jsonProvider.h"
+#include "backend/serialize/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
 #include "backend/compiler/value.h"   // ibValue::GetAvailableCtor — clsid -> type name
 #include "backend/objCtor.h"           // ibCtorAbstractType::GetClassName
 #include "backend/backend_exception.h" // ibBackendCoreException — malformed-JSON throw
@@ -19,31 +20,10 @@ wxString BuiltinTypeName(ibClassID clsid) {
 	return wxString();
 }
 
-// JSON string literal: quote + escape. UTF-8 bytes pass through (JSON is UTF-8).
+// JSON string literal: quote + escape. HOW is said in one place for the whole backend (ibJsonText) - the same
+// rule the script's JSONWriter writes by.
 std::string JsonString(const wxString& s) {
-	const wxScopedCharBuffer utf8 = s.utf8_str();
-	std::string r = "\"";
-	for (const char* p = utf8.data(); *p; ++p) {
-		const unsigned char c = (unsigned char)*p;
-		switch (c) {
-		case '\"': r += "\\\""; break;
-		case '\\': r += "\\\\"; break;
-		case '\n': r += "\\n";  break;
-		case '\r': r += "\\r";  break;
-		case '\t': r += "\\t";  break;
-		default:
-			if (c < 0x20) {
-				char buf[8];
-				snprintf(buf, sizeof(buf), "\\u%04x", c);
-				r += buf;
-			}
-			else {
-				r += (char)c;
-			}
-		}
-	}
-	r += "\"";
-	return r;
+	return ibJsonText::QuotedUtf8(s);
 }
 
 std::string Base64(const wxMemoryBuffer& b) {

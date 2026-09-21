@@ -89,4 +89,34 @@ private:
 	}
 };
 
+class ibValueEnumJsonValueType : public ibValueEnumeration<ibJsonValueType> {
+	public:
+	ibValueEnumJsonValueType() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibJsonValueType::ibJsonValueType_None, wxT("None"), _("None"));
+		// `JSONValueType.Null` is writable since the lexer takes a constant's word after a dot as a member name
+		// (translateCode.cpp) - before that, a member of this name was one nobody could spell.
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Null, wxT("Null"), _("Null"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Boolean, wxT("Boolean"), _("Boolean"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Number, wxT("Number"), _("Number"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_String, wxT("String"), _("String"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_PropertyName, wxT("PropertyName"), _("Property name"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ObjectStart, wxT("ObjectStart"), _("Object start"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ObjectEnd, wxT("ObjectEnd"), _("Object end"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ArrayStart, wxT("ArrayStart"), _("Array start"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ArrayEnd, wxT("ArrayEnd"), _("Array end"));
+	}
+};
+
+class ibValueEnumJsonFormatting : public ibValueEnumeration<ibJsonFormatting> {
+	public:
+	ibValueEnumJsonFormatting() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Compact, wxT("Compact"), _("Compact"));
+		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Indented, wxT("Indented"), _("Indented"));
+	}
+};
+
 #endif

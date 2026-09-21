@@ -50,4 +50,27 @@ enum ibChars {
 	eVTab = 11,
 };
 
+// What a JSONReader stands on after a Read(): the kind of the current token. `None` is "nothing read yet" and
+// "nothing left" - the two moments a reader has no token under it.
+enum ibJsonValueType
+{
+	ibJsonValueType_None = 1,
+	ibJsonValueType_Null,
+	ibJsonValueType_Boolean,
+	ibJsonValueType_Number,
+	ibJsonValueType_String,
+	ibJsonValueType_PropertyName,
+	ibJsonValueType_ObjectStart,
+	ibJsonValueType_ObjectEnd,
+	ibJsonValueType_ArrayStart,
+	ibJsonValueType_ArrayEnd
+};
+
+// How a JSONWriter lays its text out: in one line, or a member to a line with tab indents.
+enum ibJsonFormatting
+{
+	ibJsonFormatting_Compact = 1,
+	ibJsonFormatting_Indented
+};
+
 #endif
