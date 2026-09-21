@@ -367,17 +367,6 @@ public:
 	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
 	void SortValue(const ibDataViewColumnItem& column, bool ascending);
 
-	// ⭐ THE SAME SORT ON SEVERAL KEYS AT ONCE — `Sort("Priority, Level Desc")`. Each key is a column and the
-	// way it runs (true = ascending); the first key decides, the next breaks its ties, and rows equal on
-	// every key keep the order they had. Nothing is touched unless every named column exists.
-	void SortByKeys(const std::vector<std::pair<wxString, bool>>& keys);
-
-	// The keys a script wrote: "Column [Asc|Desc], Column [Asc|Desc]". A key with no direction word takes
-	// `defaultAscending`. False (and `badToken` says which key) when a key is empty or is not
-	// `Column` / `Column Asc|Ascending|Desc|Descending` - a misread direction must not become a silent sort.
-	static bool ParseSortSpec(const wxString& spec, bool defaultAscending,
-	                          std::vector<std::pair<wxString, bool>>& keys, wxString& badToken);
-
 	// ⭐ THE TOTAL OF A COLUMN: its numbers added exactly (ibNumber, not a double), an empty cell adding nothing.
 	// A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
 	// and so does a cell holding something that is not a number, naming the row. An empty table totals zero.

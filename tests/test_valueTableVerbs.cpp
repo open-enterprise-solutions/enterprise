@@ -1,9 +1,9 @@
 // =============================================================================
-// The value table's column-and-row verbs: Total, FindRows, and Sort on several keys.
+// The value table's column-and-row verbs: Total, FindRows, and Sort.
 //
 // Code ported from a table-of-values language leans on them all the time - a column's total, the rows
-// that match a filter, `Sort("Priority, Level Desc")` - and the table had none of the three (card MIG-61
-// of the migration board, issue #201): a script calling `Total` failed with "field not found".
+// that match a filter - and the table had neither (card MIG-61 of the migration board, issue #201): a
+// script calling `Total` failed with "field not found".
 //
 // What these pin down is what makes an answer TRUSTWORTHY rather than merely present:
 //
@@ -12,9 +12,9 @@
 //               worst answer a sum can give;
 //   FindRows  - every term must match, in table order; an empty filter is every row; a filter naming a column
 //               that is not there raises instead of "no rows";
-//   Sort      - several keys, each with its own way, later keys breaking only the ties of earlier ones (rows
-//               equal on every key keep their order); nothing moves when a named column is missing; and
-//               `Sort("A")` with ONE argument works (it used to read a second that was never given).
+//   Sort      - ONE column, the second argument its way; `Sort("A")` with one argument works (it used to read a
+//               second that was never given); a column that is not there raises and nothing moves. An order
+//               over several keys is not parsed out of the string: that is a query's (`orderby A, B`).
 //
 // Pure RAM: no database, no session, no configuration. Columns are untyped (typing one needs metadata).
 // =============================================================================
@@ -100,76 +100,7 @@ wxString Joined(const std::vector<wxString>& items)
 
 } // namespace
 
-// --------------------------------- ParseSortSpec -----------------------------------
-
-TEST(SortSpec, OneColumn_TakesTheDefaultWay)
-{
-    std::vector<std::pair<wxString, bool>> keys;
-    wxString bad;
-    ASSERT_TRUE(ibValueModelTable::ParseSortSpec(wxT("Code"), true, keys, bad));
-    ASSERT_EQ(keys.size(), 1u);
-    EXPECT_EQ(keys[0].first, wxT("Code"));
-    EXPECT_TRUE(keys[0].second);
-
-    ASSERT_TRUE(ibValueModelTable::ParseSortSpec(wxT("Code"), false, keys, bad));
-    EXPECT_FALSE(keys[0].second) << "the second argument of Sort() is the way for a key that names none";
-}
-
-TEST(SortSpec, SeveralColumns_EachWithItsOwnWay)
-{
-    std::vector<std::pair<wxString, bool>> keys;
-    wxString bad;
-    ASSERT_TRUE(ibValueModelTable::ParseSortSpec(wxT("Priority, Level Desc"), true, keys, bad));
-    ASSERT_EQ(keys.size(), 2u);
-    EXPECT_EQ(keys[0].first, wxT("Priority"));
-    EXPECT_TRUE(keys[0].second);
-    EXPECT_EQ(keys[1].first, wxT("Level"));
-    EXPECT_FALSE(keys[1].second);
-}
-
-TEST(SortSpec, SpacingAndCaseOfTheWayAreForgiven)
-{
-    std::vector<std::pair<wxString, bool>> keys;
-    wxString bad;
-    ASSERT_TRUE(ibValueModelTable::ParseSortSpec(wxT("  A   desc ,B ASC , C  Descending,D ascending "), false, keys, bad));
-    ASSERT_EQ(keys.size(), 4u);
-    EXPECT_FALSE(keys[0].second);
-    EXPECT_TRUE(keys[1].second);
-    EXPECT_FALSE(keys[2].second);
-    EXPECT_TRUE(keys[3].second);
-    EXPECT_EQ(keys[3].first, wxT("D"));
-}
-
-TEST(SortSpec, AMisreadKey_IsRefused_AndSaidWhich)
-{
-    std::vector<std::pair<wxString, bool>> keys;
-    wxString bad;
-
-    EXPECT_FALSE(ibValueModelTable::ParseSortSpec(wxT("A Sideways"), true, keys, bad));
-    EXPECT_EQ(bad, wxT("A Sideways")) << "a misread direction must not become a silent ascending sort";
-
-    EXPECT_FALSE(ibValueModelTable::ParseSortSpec(wxT("A B C"), true, keys, bad));
-    EXPECT_FALSE(ibValueModelTable::ParseSortSpec(wxT("A,,B"), true, keys, bad)) << "an empty key between commas";
-    EXPECT_FALSE(ibValueModelTable::ParseSortSpec(wxT(""), true, keys, bad)) << "nothing to sort by";
-    EXPECT_FALSE(ibValueModelTable::ParseSortSpec(wxT("A,"), true, keys, bad)) << "a trailing comma leaves an empty key";
-}
-
 // ------------------------------------- Sort -----------------------------------------
-
-TEST_F(ValueTableVerbs, SortOnSeveralKeys_LaterKeysBreakTiesOnly)
-{
-    Column(wxT("Priority")); Column(wxT("Level")); Column(wxT("Name"));
-    AddRow({ ibValue(2.0), ibValue(1.0), Text(wxT("c")) });
-    AddRow({ ibValue(1.0), ibValue(2.0), Text(wxT("b")) });
-    AddRow({ ibValue(1.0), ibValue(1.0), Text(wxT("a")) });
-    AddRow({ ibValue(2.0), ibValue(2.0), Text(wxT("d")) });
-    AddRow({ ibValue(1.0), ibValue(1.0), Text(wxT("e")) });
-
-    Call(wxT("Sort"), { Text(wxT("Priority, Level Desc")) });
-
-    // Priority ascending; inside it Level descending; a and e are equal on both keys and keep their order.
-    EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("b,a,e,d,c"));
-}
 
 TEST_F(ValueTableVerbs, SortWithOneArgument_DoesNotReadASecond)
 {
@@ -183,7 +114,7 @@ TEST_F(ValueTableVerbs, SortWithOneArgument_DoesNotReadASecond)
     EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("x,y,z"));
 }
 
-TEST_F(ValueTableVerbs, SortSecondArgument_IsTheWayForAKeyThatNamesNone)
+TEST_F(ValueTableVerbs, SortSecondArgument_IsTheWay)
 {
     Column(wxT("N")); Column(wxT("Name"));
     AddRow({ ibValue(1.0), Text(wxT("x")) });
@@ -201,8 +132,13 @@ TEST_F(ValueTableVerbs, SortNamingAMissingColumn_RaisesAndMovesNothing)
     AddRow({ ibValue(2.0), Text(wxT("b")) });
     AddRow({ ibValue(1.0), Text(wxT("a")) });
 
-    EXPECT_THROW(Call(wxT("Sort"), { Text(wxT("N, NoSuchColumn")) }), ibBackendException);
-    EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("b,a")) << "the first key must not have been carried out";
+    EXPECT_THROW(Call(wxT("Sort"), { Text(wxT("NoSuchColumn")) }), ibBackendException);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("b,a")) << "nothing moves";
+
+    // Nor is a list of keys read out of the string: an order over several is a query's -
+    // `from r in t orderby r.N, r.Name`.
+    EXPECT_THROW(Call(wxT("Sort"), { Text(wxT("N, Name Desc")) }), ibBackendException);
+    EXPECT_EQ(Joined(ColumnInOrder(wxT("Name"))), wxT("b,a"));
 }
 
 // ------------------------------------- Total ----------------------------------------
