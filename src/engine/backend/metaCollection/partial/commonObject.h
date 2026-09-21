@@ -161,6 +161,7 @@ public:
 	// ROW DATA / presentation
 	ibValue GetSelectValue(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetSelectValue(rowValues); }
 	ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetItemKey(rowValues); }
+	ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetRowPicture(rowValues); }
 	// (FillSourceExplorer is INHERITED from the query descriptor — asking a source what it holds is
 	//  a query question, and a source that is not a list has it too.)
 	// COMMAND INTERFACE
@@ -575,6 +576,9 @@ public:
 	// ROW DATA / presentation — what a row IS and how it shows:
 	virtual ibValue GetSelectValue(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE cell
 	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE guid
+	// The row's state picture — none here: an enumeration's value is declared, it has no state to show. The
+	// writeable levels answer by their own cells (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& /*rowValues*/) const { return 0; }
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;         // enum: reference VISIBLE, rest hidden
 	// COMMAND INTERFACE — the command band (the writeable levels override to fill these):
 	virtual void GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& /*commands*/) const {}
@@ -979,6 +983,8 @@ public:
 	// by id against `key` (create/copy/open/delete/mark) and refreshes `srcForm`; ShowValueByKey opens the row's form.
 	// Bodies in objectList.cpp (next to the list models they were lifted from). Document overrides to add Post.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: the record, or the record marked for deletion (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
@@ -1423,6 +1429,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// flat catalog reaching here shows no folder command). CallAsCommand handles eAddFolder (new folder) and
 	// delegates the rest to the base. Bodies in objectList.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: a group is the folder, the rest the base's record — each marked for deletion or not.
+	// An arrangement without groups has no folder cell, and its rows are records (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//process choice
@@ -1872,6 +1881,8 @@ public:
 	// ITEM KEY — a register has SEVERAL key columns; its identity is the COMPOSITE record key built from the row's
 	// dimension cells (CreateUniqueKeyPair). commonObjectAction.cpp.
 	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;
+	// The row's state picture: the record, or the same shaded when it is not active. commonObjectAction.cpp.
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const;
 	// REGISTER variant — all columns (dimensions / resources / period …) visible by default. commonObjectAction.cpp.
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;
 

@@ -138,6 +138,33 @@ ibUniqueKey ibValueMetaObjectRecordDataRef::GetItemKey(const ibRowMetaValues& ro
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// THE ROW'S STATE PICTURE — what a list's first column shows at its left. Read off the row's cells by the kind
+// that owns them, as the key is: the list knows no metadata and asks through the source descriptor.
+// ---------------------------------------------------------------------------------------------------------
+
+// A flag of the row, by the attribute that holds it. A row that does not carry the cell (an arrangement without
+// groups has no folder column) answers false - the ordinary state, not an error.
+static bool ibRowFlag(const ibRowMetaValues& rowValues, const ibValueMetaObjectAttributePredefined* attribute)
+{
+	if (attribute == nullptr)
+		return false;
+	const ibRowMetaValues::const_iterator it = rowValues.find(attribute->GetMetaID());
+	return it != rowValues.end() && it->second.GetBoolean();
+}
+
+ibPictureID ibValueMetaObjectRecordDataMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowItemDeletedCLSID : g_picRowItemCLSID;
+}
+
+ibPictureID ibValueMetaObjectRecordDataHierarchyMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	if (ibRowFlag(rowValues, GetDataIsFolder()))
+		return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowFolderDeletedCLSID : g_picRowFolderCLSID;
+	return ibValueMetaObjectRecordDataMutableRef::GetRowPicture(rowValues);
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Writeable-record BASE (MutableRef) — the command set + execution of the ref list models, lifted onto the
 // metaobject so a metadata-blind dynamic list reaches it through the source descriptor. Execute is BY KEY (the
 // front-owned row's handle) + srcForm (parent / to refresh). Hierarchy adds AddFolder, Document adds Post.
@@ -388,6 +415,19 @@ ibValue ibValueMetaObjectRegisterData::GetSelectValue(const ibRowMetaValues& row
 ibUniqueKey ibValueMetaObjectRegisterData::GetItemKey(const ibRowMetaValues& rowValues) const
 {
 	return CreateUniqueKeyPair(rowValues);
+}
+
+// The record, or the same shaded when it is switched off. A register whose rows carry no activity cell (one
+// written without a recorder) has only active records.
+ibPictureID ibValueMetaObjectRegisterData::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	const ibValueMetaObjectAttributePredefined* const active = GetRegisterActive();
+	if (active != nullptr) {
+		const ibRowMetaValues::const_iterator it = rowValues.find(active->GetMetaID());
+		if (it != rowValues.end() && !it->second.IsEmpty() && !it->second.GetBoolean())
+			return g_picRowRecordInactiveCLSID;
+	}
+	return g_picRowRecordCLSID;
 }
 
 // REGISTER variant — all columns (dimensions / resources / period / recorder …) visible by default.

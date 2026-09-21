@@ -224,6 +224,11 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 			return m_ownerModel->IsEnabled(item, col);
 		}
 
+		// The row's state picture — asked by the control once per row (see ibDataViewModel::GetRowPicture).
+		virtual ibPictureID GetRowPicture(const ibDataViewItem& item) const {
+			return m_ownerModel->GetRowPicture(item);
+		}
+
 		// define hierarchy
 		virtual ibDataViewItem GetParent(const ibDataViewItem& item) const {
 			return m_ownerModel->GetParent(item);
@@ -1546,6 +1551,12 @@ public:
 	virtual long GetRowCount() const { return 0; }
 	virtual long GetRow(const ibDataViewItem& /*item*/) const { return wxNOT_FOUND; }
 	virtual ibDataViewItem GetItem(long /*row*/) const { return ibDataViewItem(); }
+
+	// THE ROW'S STATE PICTURE — asked by the control once per row, drawn at the start of its first column
+	// (ibDataViewModel::GetRowPicture; the provider forwards here). The model that knows what its rows are
+	// answers — a dynamic list asks its source, which reads the row's cells; a model whose rows have no state
+	// (a table of values, a tabular section) answers 0 and nothing is drawn.
+	virtual ibPictureID GetRowPicture(const ibDataViewItem& /*item*/) const { return 0; }
 
 #pragma endregion
 };

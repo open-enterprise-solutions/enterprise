@@ -160,8 +160,10 @@ void ibBackendPicture::RegisterPicture(const wxString name, const ibPictureID& i
 
 wxBitmap ibBackendPicture::GetPicture(const ibPictureID& id)
 {
+	// By reference: a list asks for a row's picture on every paint, and a copy of each entry passed over (its
+	// name and its bitmap) was the whole cost of the search.
 	auto iterator = std::find_if(s_arrayPicture.begin(), s_arrayPicture.end(),
-		[id](const auto entry) { return entry.m_id == id; });
+		[id](const auto& entry) { return entry.m_id == id; });
 
 	if (iterator != s_arrayPicture.end())
 		return iterator->m_data;

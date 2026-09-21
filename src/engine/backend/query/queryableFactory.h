@@ -334,6 +334,10 @@ public:
 	// a record → its reference guid, a register → its COMPOSITE record key (registers have several key columns).
 	// The node carries no metaobject id, so only the metaobject can shape it. Given the row's value map. Empty = none.
 	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& /*rowValues*/) const { return ibUniqueKey(); }
+	// The row's STATE PICTURE (what a list's first column shows at its left), read PER SOURCE off the row's cells —
+	// a record by its deletion mark, a document by that and its posting, a register's record by its activity. The
+	// kind knows which cells say it, as it knows which cell is the key. 0 = this source's rows carry none.
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& /*rowValues*/) const { return 0; }
 	// The restore ROW-KEY (primary-key column VALUES) from a row's identity VALUE — the INVERSE of what the fetch
 	// stamps into a node's m_rowKey. The list's FindRowValue selection-restore forwards here: the stub carries this
 	// key, matched against the freshly-fetched batch by m_rowKey. Base (no queryable) = the value IS the key
@@ -466,6 +470,15 @@ private:
 
 	static wxString Key(const wxString& ns, const wxString& name);   // upper("ns|name")
 	std::map<wxString, ibQueryableSourceDescriptor*> m_descriptors;  // non-owning
+
+	// ⭐ THE SAME DESCRIPTORS, BY TABLE ID — so a lookup by id is a lookup and not a walk. Kept by Register /
+	// Unregister / Clear alongside m_descriptors: for each id, its descriptors in KEY order (the first one is what
+	// the walk found first), and for each key the id it was filed under — so a key is taken out of the index
+	// without asking the descriptor that stood under it, which may already be gone.
+	void IndexById(const wxString& key, ibQueryableSourceDescriptor* descriptor);
+	void UnindexById(const wxString& key);
+	std::map<ibMetaID, std::map<wxString, ibQueryableSourceDescriptor*>> m_byTableId;   // non-owning
+	std::map<wxString, ibMetaID> m_tableIdOfKey;
 };
 
 // The PER-CONFIG source factory — one per open snapshot (ibMetaImage), holding that config's OWN metadata-backed

@@ -628,6 +628,12 @@ public:
 	// (folders-on-top etc.) which the user must not flip.
 	virtual bool IsSortable(unsigned int col) const { (void)col; return true; }
 
+	// ⭐ THE ROW'S STATE PICTURE — a ROW's, not a cell's: the control asks once per row and draws it at the start
+	// of its first column, after the tree's expander, the way it draws the expander; the cell renderers never
+	// see it. Asked of a cell instead (the cell's attributes), it was asked once per COLUMN of every row on every
+	// paint, and scrolling a list slowed down (2026-09-22). 0 = the row shows none.
+	virtual ibPictureID GetRowPicture(const ibDataViewItem& WXUNUSED(item)) const { return 0; }
+
 protected:
 	// Dtor is protected because the objects of this class must not be deleted,
 	// DecRef() must be used instead. It JOINS the fetch thread — a read must never

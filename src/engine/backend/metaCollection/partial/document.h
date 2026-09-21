@@ -50,6 +50,8 @@ public:
 	// source COMMANDS — the writeable-ref base set PLUS Post / ClearPosting. CallAsCommand loads the document by
 	// key and writes it in the posting / undo-posting mode; the rest delegates to the base. Bodies in documentAction.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: the document marked for deletion, posted, or neither (documentAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//support icons

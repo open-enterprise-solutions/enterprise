@@ -227,7 +227,12 @@ public:
 	// Key on the dynamic LIST comes from the METAOBJECT through the source descriptor (the node has no metaobject
 	// id): the key = the family-correct identity (record → reference guid, register → composite key). GetGuid()
 	// above is the LIST's own query-table identity — a different thing.
-	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+	virtual ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+
+	// The row's STATE PICTURE — the same bridge as the key: the row's cells handed to the source descriptor, which
+	// knows which of them say the state. Asked by the control once per row. A custom query has no source to ask,
+	// and its rows show none.
+	virtual ibPictureID GetRowPicture(const ibDataViewItem& item) const override;
 
 	// Selection-restore lookup (after a child-form save changes/creates a row): the identity VALUE →
 	// a stub carrying the ROW-KEY, matched against the fetched batch by m_rowKey. The row-key is built by the
