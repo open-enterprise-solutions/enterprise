@@ -38,6 +38,7 @@ add_executable(oes_tests
     test_blockSyntaxLINQ.cpp
     test_byteCodeAOT.cpp
     test_compiler.cpp
+    test_lexerComments.cpp
     test_runtime.cpp
     test_compileTree.cpp
     test_compilerContract.cpp
