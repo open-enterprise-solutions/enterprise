@@ -372,6 +372,20 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	if (ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(ns, name))
 		descriptor->DescribeParameters(declared);
 
+	// 🛑 AN ARGUMENT PAST THE LAST ONE THE SOURCE DECLARED IS REFUSED, NOT DROPPED. A source reads its
+	// arguments by position and never looks past the ones it declared, so an extra one simply vanished: the
+	// accounting listing asked for `"Period DESC", 10` after it lost its Order and Top came back unordered and
+	// uncut, and read as an answer (measured 2026-09-21) - an ignored ORDER BY is the kind of wrong nobody
+	// notices. A source that declares nothing is not judged here: it has not said what it takes.
+	if (!declared.empty() && src.m_args.size() > declared.size()) {
+		wxString names;
+		for (const ibQuerySourceParameter& parameter : declared)
+			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + parameter.m_name;
+		ibBackendQueryNameException::ErrorAt(src.m_line, src.m_col,
+			_("'%s' takes %d arguments (%s), and %d were given. How its rows are ordered and how many are taken is said in the query around it: ORDER BY, TOP."),
+			ns + wxT(".") + name, static_cast<int>(declared.size()), names, static_cast<int>(src.m_args.size()));
+	}
+
 	// ⚠ A CONDITION SLOT TAKES EITHER SHAPE, and the shape decides the road — not the declaration.
 	// `Balance(&P, Warehouse = &W)` is a predicate and becomes a condition; `Balance(&P, &Filter)`
 	// hands the source a VALUE (the filter structure it has always understood) and must keep doing
