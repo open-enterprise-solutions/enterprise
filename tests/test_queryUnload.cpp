@@ -79,11 +79,6 @@ ibValue Str(const wxString& text) { return ibValue(text); }
 
 ibQueryUnloadColumn Untyped(const wxString& name) { return { name, ibTypeDescription() }; }
 
-ibQueryUnloadColumn StringColumn(const wxString& name)
-{
-	return { name, ibTypeDescription(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING)) };
-}
-
 } // namespace
 
 // 1 - the table's columns are the query's, in the query's order and under the query's names.
@@ -138,25 +133,22 @@ TEST(QueryUnload, NoRows_StillHasTheColumns)
 	EXPECT_EQ(rows.m_reads, 0);
 }
 
-// 4 - an untyped column keeps a number a number; the same value in a String column becomes text.
+// 4 - an untyped column keeps a number a number. (A DECLARED column type converts what it is given - that is
+// what a type is for - which is exactly why "the query does not know the type" must not be given one; creating a
+// typed column needs the configuration's metadata, which a headless test does not have.)
 TEST(QueryUnload, UntypedColumn_KeepsTheValueItReceives)
 {
-	FakeRows untypedRows;
-	untypedRows.m_rows = { { ibValue(12.5) } };
-	const ibValue untyped = Unload({ Untyped(wxT("Sum")) }, untypedRows);
-	const auto keptOnes = ReadRows(TableOf(untyped), { wxT("Sum") });
-	ASSERT_EQ(keptOnes.size(), 1u);
-	EXPECT_EQ(keptOnes[0][0].GetType(), ibValueTypes::TYPE_NUMBER)
-		<< "an untyped column must not turn a number into text";
-	EXPECT_DOUBLE_EQ(keptOnes[0][0].GetDouble(), 12.5);
+	FakeRows rows;
+	rows.m_rows = { { ibValue(12.5) }, { Str(wxT("text")) } };
+	const ibValue result = Unload({ Untyped(wxT("Sum")) }, rows);
 
-	FakeRows typedRows;
-	typedRows.m_rows = { { ibValue(12.5) } };
-	const ibValue typed = Unload({ StringColumn(wxT("Sum")) }, typedRows);
-	const auto convertedOnes = ReadRows(TableOf(typed), { wxT("Sum") });
-	ASSERT_EQ(convertedOnes.size(), 1u);
-	EXPECT_EQ(convertedOnes[0][0].GetType(), ibValueTypes::TYPE_STRING)
-		<< "a declared String column converts - which is exactly what an unknown type must not be given";
+	const auto read = ReadRows(TableOf(result), { wxT("Sum") });
+	ASSERT_EQ(read.size(), 2u);
+	EXPECT_EQ(read[0][0].GetType(), ibValueTypes::TYPE_NUMBER)
+		<< "an untyped column must not turn a number into text";
+	EXPECT_DOUBLE_EQ(read[0][0].GetDouble(), 12.5);
+	EXPECT_EQ(read[1][0].GetType(), ibValueTypes::TYPE_STRING) << "and it holds a value of another kind as it is";
+	EXPECT_EQ(read[1][0].GetString(), wxT("text"));
 }
 
 // 5 - the returned table is alive and complete after the loop that made it is gone.
