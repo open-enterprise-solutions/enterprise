@@ -148,8 +148,10 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// ten-warehouse base: 0.15 s for one warehouse's balances straight off this table, 0.06 s with this
 	// index — and with it the cost stops growing with the NUMBER of warehouses at all).
 	//
-	// As many leading columns as the engine's index will hold (ibDeclareLookupIndex), in the order the
-	// dimensions are declared — which is the order their author reads them in, most general first.
+	// As many leading DIMENSIONS as the engine's index will hold beside the period (ibDeclareLookupIndex), in
+	// the order they are declared — which is the order their author reads them in, most general first. The
+	// period CLOSES the index whatever is cut: cut from the end it was the period that went first, and a
+	// register with many dimensions got an index that narrowed by them and then walked the whole history.
 	//
 	// A register with NO dimensions has nothing to put first: the index would be the period alone, which is
 	// how the key above already opens - one more index for the trigger to keep, serving no reading.
@@ -157,8 +159,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		std::vector<const ibBackendQueryColumn*> readCols;
 		for (const auto dimension : GetDimensionArrayObject())
 			readCols.push_back(dimension->GetQueryColumn());
-		readCols.push_back(periodCol);
-		ibDeclareLookupIndex(t, totalsName + wxT("_DL"), readCols);
+		ibDeclareLookupIndex(t, totalsName + wxT("_DL"), readCols, /*closing*/ periodCol);
 	}
 
 	ibSchemaMaterialize& m = t.Derived(GetQueryable());

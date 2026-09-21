@@ -178,26 +178,59 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	ibDeclareLookupIndex(table, tableName + wxT("_KL"), keyCols);
 }
 
+std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+	const std::function<bool(size_t fields, size_t bytes)>& fits)
+{
+	const auto measure = [](const ibBackendQueryColumn* col, size_t& fields, size_t& bytes) {
+		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
+		fields = slots.size();
+		bytes = 0;
+		for (const ibColumnSlot& field : slots)
+			bytes += ibIndexFieldByteWidth(field.m_type);
+	};
+
+	// The closing column is paid for FIRST: what is cut to make room is a trailing column before it, never it.
+	// One that does not fit even alone closes nothing, and the leading columns are taken as they always were.
+	size_t fields = 0, bytes = 0;
+	if (closing != nullptr) {
+		measure(closing, fields, bytes);
+		if (fits && !fits(fields, bytes)) {
+			closing = nullptr;
+			fields = bytes = 0;
+		}
+	}
+
+	std::vector<const ibBackendQueryColumn*> lookup;
+	for (const ibBackendQueryColumn* col : cols) {
+		if (col == closing)
+			continue;
+		size_t colFields = 0, colBytes = 0;
+		measure(col, colFields, colBytes);
+		if (fits && !fits(fields + colFields, bytes + colBytes))
+			break;
+		lookup.push_back(col);
+		fields += colFields;
+		bytes += colBytes;
+	}
+	if (closing != nullptr)
+		lookup.push_back(closing);
+	return lookup;
+}
+
 void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
-                          const std::vector<const ibBackendQueryColumn*>& cols)
+                          const std::vector<const ibBackendQueryColumn*>& cols,
+                          const ibBackendQueryColumn* closing)
 {
 	// ⚠ ASKED THROUGH L2-2, never read off a dialect from here. A dictionary is the level below's to
 	// read; this floor knows that it wants "as many leading columns as an index will hold" and nothing
 	// about which engine answers. BOTH ceilings — the count alone let a key of wide strings through to a
 	// CREATE INDEX the engine refused (see ibKeyNeedsHash).
-	std::vector<const ibBackendQueryColumn*> lookup;
-	size_t fields = 0, bytes = 0;
-	for (const ibBackendQueryColumn* col : cols) {
-		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
-		size_t width = 0;
-		for (const ibColumnSlot& field : slots)
-			width += ibIndexFieldByteWidth(field.m_type);
-		if (db_query != nullptr && !ibIndexKeyFits(*db_query, fields + slots.size(), bytes + width))
-			break;
-		lookup.push_back(col);
-		fields += slots.size();
-		bytes += width;
-	}
+	std::function<bool(size_t, size_t)> fits;
+	if (db_query != nullptr)
+		fits = [](size_t fields, size_t bytes) { return ibIndexKeyFits(*db_query, fields, bytes); };
+
+	const std::vector<const ibBackendQueryColumn*> lookup = ibFitLookupColumns(cols, closing, fits);
 	if (!lookup.empty())
 		table.Index(indexName, lookup, /*unique*/ false);
 }
