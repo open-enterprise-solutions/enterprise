@@ -24,6 +24,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>   // std::max — the depth of a folded IN
+
 #include <map>
 #include <memory>
 #include <vector>
@@ -242,4 +244,92 @@ TEST_F(LinqExecFix, Bail_UnresolvableColumn)
 	auto expr = Record(wxT("{ return x.nosuchcol > 1; }"));
 	ASSERT_TRUE(expr != nullptr) << "the recorder accepts the shape; lowering is where an unknown column bails";
 	EXPECT_TRUE(ibQueryLowering::LowerLambdaPredicate(&src, *expr, {}) == nullptr);
+}
+
+// =============================================================================
+// `col IN (list)` — the SHAPE the lowering gives it, and that the shape changes nothing a row can see.
+//
+// A list used to fold as `acc = Or(acc, eq)`: a tree as DEEP as the list is long, walked recursively by
+// everything downstream. A query with an array of some 155 references in `IN (&Items)` ran a checked
+// build out of stack and took the client down with 0xc0000005 and no dump (measured 2026-09-19 on
+// Firebird; reproducible on an empty catalog). The AST is built by hand here because a lambda body has
+// no spelling for a thousand literals.
+// =============================================================================
+namespace {
+
+std::shared_ptr<ibQueryAstExpr> InList(const wxString& column, const std::vector<ibValue>& values, bool negated = false)
+{
+	auto in = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
+	in->m_negated = negated;
+	in->m_lhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	in->m_lhs->m_path = { column };
+	for (const ibValue& v : values) {
+		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		literal->m_literal = v;
+		in->m_list.push_back(literal);
+	}
+	return in;
+}
+
+int DepthOf(const ibQueryPredicatePtr& p)
+{
+	if (!p) return 0;
+	int deepest = 0;
+	for (const ibQueryPredicatePtr& child : p->m_children)
+		deepest = std::max(deepest, DepthOf(child));
+	return deepest + 1;
+}
+
+} // namespace
+
+// A plain list over one column travels as ONE set-valued leaf — the `In` the door already renders as the
+// engine's own IN — however long it is.
+TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
+{
+	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) };
+	for (int i = 0; i < 1000; ++i)
+		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
+	ASSERT_TRUE(p != nullptr);
+	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
+	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::In);
+	EXPECT_EQ(p->m_leaf.m_values.size(), values.size());
+	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region IN ('North', 'East')")));   // 2 == 2, the NULL row excluded
+}
+
+// NOT IN is the same leaf under a Not — and keeps SQL's three-valued answer for the NULL row.
+TEST_F(LinqExecFix, NotIn_ParityWithSql)
+{
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src,
+		*InList(wxT("region"), { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) }, /*negated*/ true), {});
+	ASSERT_TRUE(p != nullptr);
+	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
+	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
+}
+
+// One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
+TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
+{
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibValue(wxString(wxT("North"))) }), {});
+	ASSERT_TRUE(p != nullptr);
+	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
+	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
+	EXPECT_EQ(RamCount(p.get()), 1);
+}
+
+// 🛑 A list that cannot be one leaf (a NULL among the values) still folds pair by pair — as a BALANCED
+// tree. A thousand values are some ten levels deep, not a thousand: this is the test that fails if the
+// chain comes back.
+TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
+{
+	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(ibValueTypes::TYPE_NULL) };
+	for (int i = 0; i < 1000; ++i)
+		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
+	ASSERT_TRUE(p != nullptr);
+	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Or);
+	EXPECT_LE(DepthOf(p), 12) << "an OR over " << values.size() << " values must be ~log2(N) deep";
+	EXPECT_EQ(RamCount(p.get()), 1);   // North; a NULL in the list matches nothing
 }

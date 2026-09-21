@@ -115,6 +115,8 @@ add_executable(oes_tests
     test_calcRecalculation.cpp
     test_calcSchedule.cpp
     test_calcViews.cpp
+    test_materializeCutRead.cpp
+    test_accumulationRegisterSurface.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
     test_valueTableIndex.cpp

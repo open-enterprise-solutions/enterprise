@@ -183,6 +183,13 @@ public:
 	                                                   const ibQueryPredicatePtr& predicate,
 	                                                   const wxString& qualifier = wxEmptyString);
 
+	// …AND A COMPUTED VALUE, the same way — arithmetic, a CASE, a column read field by field — for the same
+	// caller: one that writes its own SELECT over this table and needs the value in its projection (the rows
+	// of a register's movements, each one's contribution to the totals, ibSchemaMaterialize::ToReadSpec).
+	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const ibBackendQueryable* queryable,
+	                                                    const ibQueryColumnExprPtr& expr,
+	                                                    const wxString& qualifier = wxEmptyString);
+
 private:
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
 	// execute path runs it, the relation path takes its IR. Split for exactly that reason — two
