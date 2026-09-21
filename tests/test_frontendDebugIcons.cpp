@@ -1,11 +1,11 @@
 // =============================================================================
-// The debug toolbar's pictures.
+// The debugger's pictures.
 //
-// The designer's Debug toolbar (mainFrameDesignerParts.cpp, CreateDebugToolbar) asks the art provider for one
-// picture per command, under client wxART_DEBUG. They are drawn as SVG (artProvider/debugIcons.h) - and a
-// picture drawn as text can fail quietly: a typo in the markup gives a blank button, not an error. These tests
-// draw each one and look at the pixels, so a button that would be empty or a twin of its neighbour is caught
-// here and not by somebody squinting at the toolbar.
+// The designer's Debug toolbar and Debug menu ask the art provider for one picture per command, under client
+// wxART_DEBUG — artProvider/debugger/<name>.svg, compiled in as the string beside it (<name>.svg.h). A picture
+// drawn as text can fail quietly: a typo in the markup gives a blank button, not an error. These tests draw
+// each one and look at the pixels, so a button that would be empty or a twin of its neighbour is caught here
+// and not by somebody squinting at the toolbar.
 // =============================================================================
 
 #include <gtest/gtest.h>

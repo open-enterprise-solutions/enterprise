@@ -88,8 +88,8 @@
 // is a source with no metatype behind it, so it carries its own picture rather than borrowing one.
 #define wxART_NESTED_QUERY			wxART_MAKE_ART_ID(wxART_NESTED_QUERY)
 
-// The debug toolbar's pictures (client wxART_DEBUG), one per command of the Debug menu that has a button.
-// Drawn in debugIcons.h. Prefixed wxART_DEBUG_ because wxWidgets already owns wxART_STOP.
+// The debugger's pictures (client wxART_DEBUG) — the Debug menu's and the debug toolbar's, one per command.
+// Drawn as SVG in artProvider/debugger/. Prefixed wxART_DEBUG_ because wxWidgets already owns wxART_STOP.
 #define wxART_DEBUG_START						wxART_MAKE_ART_ID(wxART_DEBUG_START)
 #define wxART_DEBUG_START_WITHOUT_DEBUGGING		wxART_MAKE_ART_ID(wxART_DEBUG_START_WITHOUT_DEBUGGING)
 #define wxART_DEBUG_ATTACH						wxART_MAKE_ART_ID(wxART_DEBUG_ATTACH)

@@ -39,14 +39,28 @@
 
 #include "artProvider/service/property.xpm"
 
+// The debugger's pictures, as VECTORS: each drawn in debugger/<name>.svg, the .svg.h beside it is that same
+// document as a string — sharp at whatever scale the display asks for, a toolbar at 2x or a menu alike.
+// (Not `debug/`: the repository ignores every folder of that name, the build output's.)
+#include "artProvider/debugger/start.svg.h"
+#include "artProvider/debugger/startWithoutDebugging.svg.h"
+#include "artProvider/debugger/attach.svg.h"
+#include "artProvider/debugger/continue.svg.h"
+#include "artProvider/debugger/pause.svg.h"
+#include "artProvider/debugger/stepInto.svg.h"
+#include "artProvider/debugger/stepOver.svg.h"
+#include "artProvider/debugger/stepOut.svg.h"
+#include "artProvider/debugger/stopDebugging.svg.h"
+#include "artProvider/debugger/stopProgram.svg.h"
+#include "artProvider/debugger/removeAllBreakpoints.svg.h"
+
+#include <wx/bmpbndl.h>
+
 // ----------------------------------------------------------------------------
 // wxOESArtProvider class
 // ----------------------------------------------------------------------------
 
 #include "private/picturePredefined.h"
-#include "artProvider/debugIcons.h"
-
-#include <wx/bmpbndl.h>
 
 class wxFrontendArtProvider : public wxArtProvider {
 public:
@@ -124,35 +138,34 @@ protected:
 			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_xpm }
 		};
 
-		if (client == wxART_DEBUG) {
-
-			static const struct { wxArtID id; const char* svg; } s_debugIcons[] = {
-				{ wxART_DEBUG_START,					ibDebugIcons::kStart },
-				{ wxART_DEBUG_START_WITHOUT_DEBUGGING,	ibDebugIcons::kStartWithoutDebugging },
-				{ wxART_DEBUG_ATTACH,					ibDebugIcons::kAttach },
-				{ wxART_DEBUG_CONTINUE,					ibDebugIcons::kContinue },
-				{ wxART_DEBUG_PAUSE,					ibDebugIcons::kPause },
-				{ wxART_DEBUG_STEP_INTO,				ibDebugIcons::kStepInto },
-				{ wxART_DEBUG_STEP_OVER,				ibDebugIcons::kStepOver },
-				{ wxART_DEBUG_STEP_OUT,					ibDebugIcons::kStepOut },
-				{ wxART_DEBUG_STOP_DEBUGGING,			ibDebugIcons::kStopDebugging },
-				{ wxART_DEBUG_STOP_PROGRAM,				ibDebugIcons::kStopProgram },
-				{ wxART_DEBUG_REMOVE_ALL_BREAKPOINTS,	ibDebugIcons::kRemoveAllBreakpoints },
-			};
-
-			for (const auto& icon : s_debugIcons) {
-				if (icon.id == id)
-					return wxBitmapBundle::FromSVG(icon.svg, size.IsFullySpecified() ? size : wxSize(16, 16));
-			}
-			return wxNullBitmap;
-		}
-
 		for (unsigned n = 0; n < WXSIZEOF(s_allBitmaps); n++) {
 			const wxFrontendArtProviderIconEntry& entry = s_allBitmaps[n];
 			if (entry.id != id)
 				continue;
 
 			return wxIcon(entry.data.m_data);
+		}
+
+		// The vector pictures: an SVG document, drawn at the size asked for (16x16 when none is).
+		static const struct { wxArtClient client; wxArtID id; const char* svg; } s_allVectors[] =
+		{
+			// ******* wxART_DEBUG *******
+			{ wxART_DEBUG, wxART_DEBUG_START, s_start_svg },
+			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_svg },
+			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_svg },
+			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_svg },
+			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_svg }
+		};
+
+		for (const auto& entry : s_allVectors) {
+			if (entry.client == client && entry.id == id)
+				return wxBitmapBundle::FromSVG(entry.svg, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		if (client == wxART_FRONTEND) {
