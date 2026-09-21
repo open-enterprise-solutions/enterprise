@@ -82,6 +82,9 @@ contribute anything back.
 commits only.
 
 **Match the code around you before matching this file.** Naming, comment density, brace
+The short version is below. The whole of it — how a pull request is taken, the design rules a
+change is reviewed against, tests and CI — is [docs/development.md](docs/development.md).
+
 placement and file layout vary a little by area, and the local convention wins. Broadly: `ib`
 prefix for public classes, `m_` for members, `s_` for statics, `g_` for compile-time
 constants; tabs for indentation.

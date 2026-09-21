@@ -6,7 +6,7 @@
 # twice within a minute — nothing in the code, and nothing a person could do but press Re-run. So the fetch
 # is tried again, with a longer wait each time, before the job gives up.
 #
-# docs/ is deliberately NOT fetched: it is a private submodule the workflow token cannot read.
+# docs/private/ is deliberately NOT fetched: it is a private submodule the workflow token cannot read.
 set -u
 
 attempts=4

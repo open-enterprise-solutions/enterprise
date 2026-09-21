@@ -57,7 +57,7 @@ They live in:
 | `src/engine/frontend/uikit/ctrl` | 2 |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
-`docs/wx-fork.md` (private) for what was changed and why.
+`docs/private/wx-fork.md` (private) for what was changed and why.
 
 ## Icons
 
@@ -74,12 +74,13 @@ Both are downscaled to 16px and embedded as base64 in
 
 ⚠ This section was missing until 2026-08-31 even though the code had said for months that the
 credit "is kept in the docs" — the note existed, the attribution did not. It is here rather
-than in the private `docs` submodule for the reason that matters: an obligation to a third
+than in the private `docs/private` submodule for the reason that matters: an obligation to a third
 party has to survive somebody not having access to the documentation.
 
 ## Documentation
 
 The design documentation moved to a private repository on 2026-08-23 and is attached here
-as the `docs` submodule. It resolves for members of the Open Enterprise Solutions
+as the `docs/private` submodule. It resolves for members of the Open Enterprise Solutions
 organisation and is simply absent for everyone else — the build does not need it, and CI
-initialises only the wxWidgets submodule for that reason.
+initialises only the wxWidgets submodule for that reason. What a contributor needs — how we
+work, the build, portability, the architecture — is public, in `docs/`.

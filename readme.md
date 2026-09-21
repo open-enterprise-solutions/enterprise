@@ -194,9 +194,10 @@ enterprise/
 ├── NOTICE.md                 # third-party licences, the wx fork, the LGPL past
 ├── locale/                   # interface translations (ru, uk)
 ├── tests/                    # Google Test suites (built by CMake)
-├── docs/                     # PRIVATE submodule — resolves for members of the organisation
-│                             # only, and is empty for everyone else. The build never needs it,
-│                             # so links to docs/… elsewhere in this file will not open for you.
+├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
+│   └── private/              # PRIVATE submodule (design docs) — resolves for members of the
+│                             # organisation only and is empty for everyone else. The build never
+│                             # needs it, so links to docs/private/… will not open for you.
 └── src/
     ├── 3rdparty/
     │   └── wxWidgets/        # Git submodule — wxWidgets 3.3.2

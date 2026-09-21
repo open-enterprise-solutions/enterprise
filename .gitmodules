@@ -3,6 +3,6 @@
 	url = https://github.com/wxWidgets/wxWidgets.git
 	branch = 3.2
 [submodule "docs"]
-	path = docs
+	path = docs/private
 	url = https://github.com/open-enterprise-solutions/enterprise-docs.git
 	branch = main

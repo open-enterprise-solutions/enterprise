@@ -53,67 +53,72 @@ enterprise/
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
-├── docs/                     # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs).
-│   │                         # It resolves for members of the organisation and is simply ABSENT
-│   │                         # for everyone else — the build never needs it, and CI initialises
-│   │                         # only the wxWidgets submodule. The map below is what is inside it.
+├── docs/                     # PUBLIC documentation — start with README.md
+│   ├── README.md             # map of the public documents
+│   ├── development.md        # HOW WE WORK — pull requests, commits, code and design rules, tests
 │   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
-│   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
-│   ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
-│   ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
-│   ├── data-composer.md      # L5 — declarative composition over the query language
-│   ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
-│   ├── column-groups.md      # a row is N bands — column groups (stack/row/in-cell), width law, resize drag
-│   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
-│   ├── command-interface.md  # Interface metaobject = subsystem + command bar
-│   ├── job-manager.md        # scheduled + background work — the engine (built)
-│   ├── session-parameters.md # values that exist once per session — metatype, module, write window
-│   ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
-│   ├── query-constructor.md  # the shell over the AST: nine tabs, package, temp tables, ALLOWED (BUILT)
-│   ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
-│   ├── plugins.md           # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
-│   ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
-│   ├── form-engine.md        # RUNTIME forms — build, identity (the form key), open, close
-│   ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
-│   ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
-│   ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
-│   ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
-│   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
-│   ├── metadata-tree.md      # Designer navigator + external reports/processors
-│   ├── compatibility-version.md # the version a configuration declares — the USER's step up, gating code AND schema
-│   ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
-│   ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
-│   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
-│   ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
-│   ├── spreadsheet-editor.md # the grid behind templates and report output
-│   ├── sheet-formats.md      # reading/writing foreign tables — xlsx in and out, docx out, the registry
-│   ├── printing.md           # Print / Print Preview — the two roads, pagination, what is NOT built
-│   ├── system-functions.md   # the global script API — 94 functions + 6 procedures
-│   ├── database-modes.md     # file vs server base — where each puts its artefacts
-│   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
-│   ├── technology-journal.md # ibJournal — the engine's running commentary (wxLog* lives in one file)
-│   ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
-│   ├── script-value-types.md # every script type — creatable vs vended
-│   ├── fnumber.md            # ibNumber — exact-decimal number in 8 bytes (tagged word + bignum tier)
-│   ├── compiler-pipeline.md  # the spine: translate → compile → execute, runtime assembly
-│   ├── factories.md          # ctor registries + the two-phase Init idiom
-│   ├── enumerations.md       # the enum template system + RECIPE to add one
-│   ├── descriptions.md       # the ibXxxDescription storage-shape pattern
-│   ├── source-object.md      # what a form binds to — the metadata-free source node
-│   ├── reference-registry.md # one reference object per identity, per session — the live table
-│   ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
-│   ├── session-ownership.md  # the window owns the session — holder/watch, open & close paths
-│   ├── designer-editors.md   # code / role / interface editors
-│   ├── wx-fork.md            # forked + vendored widget layer (dataview, grid, charts)
-│   ├── pictures.md           # three picture kinds, one description
-│   ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
-│   ├── ROADMAP.md            # state of the platform — landed / in flight / not built
-│   ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
-│   ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
-│   ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
-│   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
+│   ├── portability.md        # rules for code that must compile on MSVC and GCC/Clang
+│   ├── release-notes/
+│   └── private/              # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs):
+│       │                     # design docs, arcs, plans. It resolves for members of the organisation
+│       │                     # and is simply EMPTY for everyone else — the build never needs it, and
+│       │                     # CI initialises only the wxWidgets submodule. The map below is inside it.
+│       ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
+│       ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
+│       ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
+│       ├── data-composer.md      # L5 — declarative composition over the query language
+│       ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
+│       ├── column-groups.md      # a row is N bands — column groups (stack/row/in-cell), width law, resize drag
+│       ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
+│       ├── command-interface.md  # Interface metaobject = subsystem + command bar
+│       ├── job-manager.md        # scheduled + background work — the engine (built)
+│       ├── session-parameters.md # values that exist once per session — metatype, module, write window
+│       ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
+│       ├── query-constructor.md  # the shell over the AST: nine tabs, package, temp tables, ALLOWED (BUILT)
+│       ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
+│       ├── plugins.md            # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
+│       ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
+│       ├── form-engine.md        # RUNTIME forms — build, identity (the form key), open, close
+│       ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
+│       ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
+│       ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
+│       ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
+│       ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
+│       ├── metadata-tree.md      # Designer navigator + external reports/processors
+│       ├── compatibility-version.md # the version a configuration declares — the USER's step up, gating code AND schema
+│       ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
+│       ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
+│       ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
+│       ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
+│       ├── spreadsheet-editor.md # the grid behind templates and report output
+│       ├── sheet-formats.md      # reading/writing foreign tables — xlsx in and out, docx out, the registry
+│       ├── printing.md           # Print / Print Preview — the two roads, pagination, what is NOT built
+│       ├── system-functions.md   # the global script API — 94 functions + 6 procedures
+│       ├── database-modes.md     # file vs server base — where each puts its artefacts
+│       ├── debugger-architecture.md # TCP transport, why the debuggee is the server
+│       ├── technology-journal.md # ibJournal — the engine's running commentary (wxLog* lives in one file)
+│       ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
+│       ├── script-value-types.md # every script type — creatable vs vended
+│       ├── fnumber.md            # ibNumber — exact-decimal number in 8 bytes (tagged word + bignum tier)
+│       ├── compiler-pipeline.md  # the spine: translate → compile → execute, runtime assembly
+│       ├── factories.md          # ctor registries + the two-phase Init idiom
+│       ├── enumerations.md       # the enum template system + RECIPE to add one
+│       ├── descriptions.md       # the ibXxxDescription storage-shape pattern
+│       ├── source-object.md      # what a form binds to — the metadata-free source node
+│       ├── reference-registry.md # one reference object per identity, per session — the live table
+│       ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
+│       ├── session-ownership.md  # the window owns the session — holder/watch, open & close paths
+│       ├── designer-editors.md   # code / role / interface editors
+│       ├── wx-fork.md            # forked + vendored widget layer (dataview, grid, charts)
+│       ├── pictures.md           # three picture kinds, one description
+│       ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
+│       ├── ROADMAP.md            # state of the platform — landed / in flight / not built
+│       ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
+│       ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
+│       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
+│       └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
     └── engine/
@@ -362,7 +367,7 @@ under the debugger as well as for the designer itself.
 | `master` | Release-tagged commits; stable |
 | `develop` | Active development; target branch for all PRs |
 
-All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged.
+All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md).
 
 ---
 
