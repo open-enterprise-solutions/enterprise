@@ -1498,6 +1498,13 @@ ibQueryExprPtr ibDbTableProvider::BuildPredicateIR(const ibBackendQueryable* que
 	return ibMetaIRBuilder::BuildPredicateExpr(queryable, predicate, qualifier, /*pathAsExists*/ true);
 }
 
+ibQueryExprPtr ibDbTableProvider::BuildColumnExprIR(const ibBackendQueryable* queryable,
+                                                    const ibQueryColumnExprPtr& expr,
+                                                    const wxString& qualifier)
+{
+	return ibMetaIRBuilder::BuildColumnExpr(queryable, expr, qualifier);
+}
+
 ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
                                            const std::vector<ibQueryCondition>& conditions,
                                            const ibQueryPredicatePtr& predicate,

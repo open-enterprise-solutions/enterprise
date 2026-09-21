@@ -8,12 +8,12 @@
 // for a walk of the whole register (measured on Firebird, 193 000 stored rows: 0.6 s a balance,
 // 0.04 s after). What changed is the ROAD, not the answer, and that is what these tests pin:
 //
-//   * the renderer — a view of the rows as they stand computes nothing per row and groups nothing,
-//     and a movements-only view has no stored arm at all;
-//   * the reader — a cut becomes a UNION ALL of two selections, each narrowed on its own, each read
-//     from its own relation when the surface keeps them apart;
+//   * the rows — the two arms of the view's own declaration rendered as RELATIONS over the two tables
+//     (RenderStoredRows / RenderMovementRows): nothing computed per row, nothing grouped, and nothing in
+//     the database but the tables — no view a base built before them would lack;
+//   * the reader — a cut becomes a UNION ALL of two selections, each narrowed on its own;
 //   * and the NUMBERS — the same balance through the old single view, through the two halves, and
-//     summed by hand from the movements, on a live SQLite with split totals on and off.
+//     summed by hand from the movements, on a live SQLite.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -30,11 +30,11 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"   // a dialect that really splits totals
 
 namespace {
 
-// One register: a warehouse key, one quantity, a recorder mark that only a movement carries.
+// One register: a warehouse key, one quantity, a recorder mark that only a movement carries. The
+// deltas and the guard in BOTH forms the declaration carries — text for the trigger, IR for a reading.
 ibMaterializeSpec CutSpec()
 {
 	ibMaterializeSpec spec;
@@ -45,63 +45,52 @@ ibMaterializeSpec CutSpec()
 	spec.m_periodSourceExpr = wxT("{row}.period_");
 	spec.m_periodUnit       = ibTotalsPeriod::Day;
 	spec.m_guard            = wxT("{row}.active_ <> 0");
-	spec.m_deltas = {
-		{ wxT("qty_in"),  wxT("CASE WHEN {row}.rectype_ = 1 THEN {row}.qty ELSE 0 END") },
-		{ wxT("qty_out"), wxT("CASE WHEN {row}.rectype_ = 1 THEN 0 ELSE {row}.qty END") },
-	};
 
-	const std::vector<ibMaterializeViewColumn> figures = {
+	const ibQueryExprPtr receipt = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Reg9"), wxT("rectype_")), ibConst(ibValue(ibNumber(1))));
+	const ibQueryExprPtr qty     = ibCol(wxT("Reg9"), wxT("qty"));
+	const ibQueryExprPtr zero    = ibConst(ibValue(ibNumber(0)));
+	spec.m_deltas = {
+		{ wxT("qty_in"),  wxT("CASE WHEN {row}.rectype_ = 1 THEN {row}.qty ELSE 0 END"), ibCase({ { receipt, qty } }, zero) },
+		{ wxT("qty_out"), wxT("CASE WHEN {row}.rectype_ = 1 THEN 0 ELSE {row}.qty END"), ibCase({ { receipt, zero } }, qty) },
+	};
+	spec.m_guardIR        = ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("Reg9"), wxT("active_")), zero);
+	spec.m_periodSourceIR = ibCol(wxT("Reg9"), wxT("period_"));
+	spec.m_periodIsDateIR = ibIsNull(ibCol(wxT("Reg9"), wxT("period_")), /*negated*/ true);
+
+	ibMaterializeView dressed;
+	dressed.m_name = wxT("Reg9_Turnovers");
+	dressed.m_columns = {
 		{ wxT("Qty_Receipt"),  wxT("qty_in"),  wxString(),     ibMaterializeAgg::Value },
 		{ wxT("Qty_Expense"),  wxT("qty_out"), wxString(),     ibMaterializeAgg::Value },
 		{ wxT("Qty_Turnover"), wxT("qty_in"),  wxT("qty_out"), ibMaterializeAgg::Difference },
 	};
-	const std::vector<std::pair<wxString, ibColumnType>> marks = { { wxT("rec_"), ibTypeString(36) } };
-
-	ibMaterializeView dressed;
-	dressed.m_name = wxT("Reg9_Turnovers");
-	dressed.m_columns = figures;
 	dressed.m_withMovements = true;
-	dressed.m_movementColumns = marks;
+	dressed.m_movementColumns = { { wxT("rec_"), ibTypeString(36) } };
 
-	ibMaterializeView stored;
-	stored.m_name = wxT("Reg9_Flow");
-	stored.m_columns = figures;
-	stored.m_rawRows = true;
-	stored.m_movementColumns = marks;      // published as typed nulls — one column list for both halves
-
-	ibMaterializeView moved;
-	moved.m_name = wxT("Reg9_FlowMoved");
-	moved.m_columns = figures;
-	moved.m_rawRows = true;
-	moved.m_movementsOnly = true;
-	moved.m_movementColumns = marks;
-	moved.m_movementWhere = wxT("{row}.period_ IS NOT NULL");
-
-	spec.m_views = { dressed, stored, moved };
+	spec.m_views = { dressed };
 	return spec;
 }
 
-const ibMaterializationDialect& Sqlite()  { return ibDatabaseLayerSQLite::MaterializationDialect(); }
-const ibDialectDictionary&      SqliteQ() { return ibDatabaseLayerSQLite::Dialect(); }
+const ibDialectDictionary& SqliteQ() { return ibDatabaseLayerSQLite::Dialect(); }
 
-// The CREATE VIEW of one named view out of the bundle.
-wxString ViewText(const ibMaterializeSpec& spec, const wxString& name)
+wxString SqlOf(const ibQueryRelPtr& rel)
 {
-	const ibMaterializeSql sql = RenderMaterialization(spec, &Sqlite(), SqliteQ());
-	const wxString all = sql.CreateText();
-	const size_t at = all.find(wxT("VIEW ") + name + wxT(" "));
-	if (at == wxString::npos)
-		return wxString();
-	const size_t next = all.find(wxT("CREATE "), at);
-	return all.Mid(at, next == wxString::npos ? wxString::npos : next - at);
+	return ibQueryRenderer(SqliteQ()).Render(ibQueryIR(ibProject(rel))).m_sql;
 }
 
-// A balance as of `moment`, cut at the start of its day. `movedView` empty = both halves of the dressed view.
-ibMaterializeReadSpec BalanceRead(const wxString& view, const wxString& movedView, const wxDateTime& moment, bool excluding)
+// A balance as of `moment`, cut at the start of its day — off the rows as they stand, or (rows = false) off
+// the dressed view the way every reading went before.
+ibMaterializeReadSpec BalanceRead(bool rows, const wxDateTime& moment, bool excluding)
 {
 	ibMaterializeReadSpec r;
-	r.m_view         = view;
-	r.m_viewMoved    = movedView;
+	if (rows) {
+		const ibMaterializeSpec spec = CutSpec();
+		r.m_storedRows = RenderStoredRows(spec, spec.m_views.front());
+		r.m_movedRows  = RenderMovementRows(spec, spec.m_views.front());
+		r.m_rowsAlias  = wxT("b_rows");
+	}
+	else
+		r.m_view = wxT("Reg9_Turnovers");
 	r.m_periodColumn = wxT("period_");
 	r.m_keyColumns   = { wxT("wh") };
 	r.m_to           = ibValue(moment);
@@ -117,140 +106,121 @@ ibMaterializeReadSpec BalanceRead(const wxString& view, const wxString& movedVie
 
 wxString ReadSql(const ibMaterializeReadSpec& spec)
 {
-	const ibQueryRelPtr rel = RenderMaterializedRead(spec, wxT("src"));
-	return ibQueryRenderer(SqliteQ()).Render(ibQueryIR(ibProject(rel))).m_sql;
+	return SqlOf(RenderMaterializedRead(spec, wxT("b")));
 }
 
 } // namespace
 
 // =============================================================================
-// The renderer
+// The rows
 // =============================================================================
 
-// The dressed view projects the coarser units — that is what it is FOR. The rows as they stand do not:
-// each unit is a date expression evaluated on every stored row of every read, asked for or not.
-TEST(MaterializeRawRows, ProjectsThePeriodAloneAndNothingComputedFromIt) {
-	const ibMaterializeSpec spec = CutSpec();
-	const wxString dressed = ViewText(spec, wxT("Reg9_Turnovers"));
-	const wxString raw     = ViewText(spec, wxT("Reg9_Flow"));
-
-	ASSERT_FALSE(dressed.IsEmpty());
-	ASSERT_FALSE(raw.IsEmpty());
-	EXPECT_TRUE(dressed.Contains(wxT("period__Month")));
-	EXPECT_FALSE(raw.Contains(wxT("period__Month")));
-	EXPECT_FALSE(raw.Contains(wxT("period__Year")));
-	EXPECT_TRUE(raw.Contains(wxT("period_")));           // the period itself is still there
-	EXPECT_TRUE(raw.Contains(wxT("Qty_Turnover")));      // and the figures under the same names
-}
-
-// ⭐ NOTHING IS GROUPED, EVEN SPLIT. A GROUP BY in a view is a line the engine will not push a condition
-// under, so "this warehouse" was decided after every warehouse had been summed. The reader of these rows
-// folds them itself — once, above a condition that was free to reach an index.
-TEST(MaterializeRawRows, NeverGroupsEvenWhenTheTotalsAreSplit) {
+// The dressed view projects the coarser units — that is what it is FOR. The rows as they stand do not: each
+// unit is a date expression evaluated on every stored row of every read, asked for or not. Nor do they fold
+// the shards: a GROUP BY is a line the engine will not push "this warehouse" beneath.
+TEST(MaterializeRows, TheStoredRowsAreTheTotalsTableAsItStands) {
 	ibMaterializeSpec spec = CutSpec();
-	spec.m_shards = 4;
-	const ibMaterializationDialect& pg = ibDatabaseLayerPostgres::MaterializationDialect();
-	const ibMaterializeSql sql = RenderMaterialization(spec, &pg, ibDatabaseLayerPostgres::Dialect());
-	const wxString all = sql.CreateText();
+	spec.m_shards = 4;   // split: the rows are still the rows, one per shard, for the reader to fold
+	const wxString sql = SqlOf(RenderStoredRows(spec, spec.m_views.front()));
 
-	const size_t rawAt = all.find(wxT("VIEW Reg9_Flow "));
-	ASSERT_NE(rawAt, wxString::npos);
-	const size_t rawEnd = all.find(wxT("CREATE "), rawAt);
-	const wxString raw = all.Mid(rawAt, rawEnd == wxString::npos ? wxString::npos : rawEnd - rawAt);
-	EXPECT_FALSE(raw.Contains(wxT("GROUP BY")));
-	EXPECT_FALSE(raw.Contains(wxT("SUM(")));
-
-	const size_t dressedAt = all.find(wxT("VIEW Reg9_Turnovers "));
-	ASSERT_NE(dressedAt, wxString::npos);
-	const size_t dressedEnd = all.find(wxT("CREATE "), dressedAt);
-	const wxString dressed = all.Mid(dressedAt, dressedEnd == wxString::npos ? wxString::npos : dressedEnd - dressedAt);
-	EXPECT_TRUE(dressed.Contains(wxT("GROUP BY")));      // the dressed view still absorbs the split
+	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("period_"))) << sql;          // the period itself, as stored
+	EXPECT_FALSE(sql.Contains(wxT("period__Month"))) << sql;   // and no unit computed from it
+	EXPECT_TRUE(sql.Contains(wxT("Qty_Turnover"))) << sql;     // the figures under the view's own names
+	EXPECT_FALSE(sql.Contains(wxT("GROUP BY"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("SUM("))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("CAST("))) << sql;            // the mark, published as a typed null
+	EXPECT_FALSE(sql.Contains(wxT("Reg9_Turnovers"))) << sql;  // and no view anywhere
 }
 
-// The stored half reads the totals and no movements; the movement half reads the movements and no totals.
-TEST(MaterializeRawRows, TheTwoHalvesAreTwoRelations) {
+// The movement rows read the movements — never the totals — under the same guard the trigger accumulates by,
+// and the condition that lets a floor ride the period index joins it rather than replacing it.
+TEST(MaterializeRows, TheMovementRowsAreTheMovementsUnderTheGuard) {
 	const ibMaterializeSpec spec = CutSpec();
-	const wxString stored = ViewText(spec, wxT("Reg9_Flow"));
-	const wxString moved  = ViewText(spec, wxT("Reg9_FlowMoved"));
+	const wxString sql = SqlOf(RenderMovementRows(spec, spec.m_views.front()));
 
-	EXPECT_TRUE(stored.Contains(wxT(" FROM Reg9_T")));
-	EXPECT_FALSE(stored.Contains(wxT("UNION ALL")));
-	EXPECT_TRUE(stored.Contains(wxT("CAST(NULL AS")));   // the mark column, published as a typed null
-
-	EXPECT_TRUE(moved.Contains(wxT(" FROM Reg9 ")) || moved.EndsWith(wxT(" FROM Reg9")) || moved.Contains(wxT(" FROM Reg9\n")));
-	EXPECT_FALSE(moved.Contains(wxT("Reg9_T")));
-	EXPECT_FALSE(moved.Contains(wxT("UNION ALL")));
+	EXPECT_TRUE(sql.Contains(wxT("Reg9.active_"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("Reg9.period_ IS NOT NULL"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("Reg9.rec_"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("Reg9_T"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("UNION"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("{row}"))) << sql;
 }
 
-// The arm's own condition is ANDed to the guard — it narrows, and never replaces, what is in force.
-TEST(MaterializeRawRows, TheMovementConditionJoinsTheGuard) {
-	const wxString moved = ViewText(CutSpec(), wxT("Reg9_FlowMoved"));
-	EXPECT_TRUE(moved.Contains(wxT("Reg9.active_ <> 0")));
-	EXPECT_TRUE(moved.Contains(wxT("Reg9.period_ IS NOT NULL")));
-	EXPECT_FALSE(moved.Contains(wxT("{row}")));
-}
-
-// …and a guard with an OR of its own lends the AND all of itself, not its last term.
-TEST(MaterializeRawRows, AGuardWithAnOrIsTakenWhole) {
+// Without its read forms a spec cannot say which movements count, and rows read past the guard would be
+// figures the totals never held — so there are no rows rather than rows without the guard.
+TEST(MaterializeRows, WithoutTheReadFormsThereAreNoMovementRows) {
 	ibMaterializeSpec spec = CutSpec();
-	spec.m_guard = wxT("{row}.active_ = 1 OR {row}.active_ = 2");
-	const wxString moved = ViewText(spec, wxT("Reg9_FlowMoved"));
-	EXPECT_TRUE(moved.Contains(wxT("(Reg9.active_ = 1 OR Reg9.active_ = 2) AND (Reg9.period_ IS NOT NULL)"))) << moved;
+	spec.m_guardIR = nullptr;
+	EXPECT_FALSE(RenderMovementRows(spec, spec.m_views.front()));
+
+	spec = CutSpec();
+	spec.m_deltas.front().m_valueIR = nullptr;
+	EXPECT_FALSE(RenderMovementRows(spec, spec.m_views.front()));
 }
 
 // =============================================================================
 // The reader
 // =============================================================================
 
-// A cut inside the grain is read as two selections. The bound of each stands in ITS OWN WHERE, which is
-// the whole point: under an OR neither could ride an index.
+// A cut inside the grain is read as two selections, each of its own table. The bound of each stands in ITS OWN
+// WHERE, which is the whole point: under an OR neither could ride an index.
 TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	const wxString sql = ReadSql(BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, /*excluding*/ true));
+	const wxString sql = ReadSql(BalanceRead(/*rows*/ true, moment, /*excluding*/ true));
 
-	EXPECT_TRUE(sql.Contains(wxT("UNION ALL")));
-	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_Flow")));
-	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_FlowMoved")));
-	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL")));
-	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL")));
+	EXPECT_TRUE(sql.Contains(wxT("UNION ALL"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9 "))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("Reg9_Turnovers"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL"))) << sql;
 }
 
-// With no separate relation for the movements the reading stays ONE selection — the road every other
-// register (the accounting one) took before. Both halves would select from the same dressed union view:
-// four arms expanded where there were two, its shard fold evaluated twice, and neither half any nearer an
+// Off a named view the reading stays ONE selection — the road the accounting register takes. Both halves would
+// select from the same dressed union: four arms expanded where there were two, and neither half any nearer an
 // index than the OR it replaced.
-TEST(MaterializeCutRead, WithoutASecondRelationTheReadingStaysOneSelection) {
+TEST(MaterializeCutRead, OffANamedViewTheReadingStaysOneSelection) {
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	const wxString sql = ReadSql(BalanceRead(wxT("Reg9_Turnovers"), wxString(), moment, true));
-	EXPECT_FALSE(sql.Contains(wxT("UNION ALL")));
-	EXPECT_FALSE(sql.Contains(wxT("_cut")));
-	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_Turnovers")));
-	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL")));        // the cut is still there, as the one condition it was
-	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL")));
+	const wxString sql = ReadSql(BalanceRead(/*rows*/ false, moment, true));
+	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("_cut"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9_Turnovers"))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL"))) << sql;        // the cut is still there, as the one condition it was
+	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NOT NULL"))) << sql;
 }
 
 // A reading that stops AT the grain needs no movements: no floor, no union — the stored rows alone.
-TEST(MaterializeCutRead, AtTheGrainNothingIsUnioned) {
-	ibMaterializeReadSpec r = BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), wxDateTime(5, wxDateTime::Mar, 2026), false);
+TEST(MaterializeCutRead, AtTheGrainOnlyTheStoredRowsAreRead) {
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, wxDateTime(5, wxDateTime::Mar, 2026), false);
 	r.m_floor = ibValue();   // what ibRegFillArmCut leaves when the bound does not reach inside a grain
 	const wxString sql = ReadSql(r);
-	EXPECT_FALSE(sql.Contains(wxT("UNION ALL")));
-	EXPECT_TRUE(sql.Contains(wxT("rec_ IS NULL")));
+	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("FROM Reg9 "))) << sql;
+	EXPECT_TRUE(sql.Contains(wxT("Reg9_T"))) << sql;
 }
 
-// The caller's filters narrow EACH half — that is what lets "this warehouse" reach an index in both — and
-// are NOT said a third time around them: the relation the halves publish carries only the columns the reading
-// names, and a filter is free to name another (an accounting register's correspondence, say).
+// 🛑 Stored rows cannot be cut without the movements: the partial grain would be read from nowhere, a balance
+// short of today's postings. Refused, not answered.
+TEST(MaterializeCutRead, StoredRowsWithoutTheMovementsAreNotCut) {
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, wxDateTime(5, wxDateTime::Mar, 2026, 14, 0, 0), true);
+	r.m_movedRows = nullptr;
+	EXPECT_ANY_THROW(RenderMaterializedRead(r, wxT("b")));
+}
+
+// The caller's filters narrow EACH half — that is what lets "this warehouse" reach an index in both — and are
+// NOT said a third time around them: the relation the halves publish carries only the columns the reading
+// names, and a filter is free to name another.
 TEST(MaterializeCutRead, FiltersNarrowEachHalf) {
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	ibMaterializeReadSpec r = BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, true);
-	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
+	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
 	const wxString sql = ReadSql(r);
 
 	int seen = 0;
-	for (size_t at = 0; (at = sql.find(wxT("wh = "), at)) != wxString::npos; at += 5)
+	for (size_t at = 0; (at = sql.find(wxT("b_rows.wh = "), at)) != wxString::npos; at += 5)
 		++seen;
-	EXPECT_EQ(seen, 2);   // once in each half, and not around them
+	EXPECT_EQ(seen, 2) << sql;   // once in each half, and not around them
 }
 
 // A turnover looks at nothing below its interval, and the stored half is told so: bounded on both sides, the
@@ -258,15 +228,14 @@ TEST(MaterializeCutRead, FiltersNarrowEachHalf) {
 TEST(MaterializeCutRead, ATurnoverBoundsItsStoredHalfBelow) {
 	const wxDateTime from(3, wxDateTime::Mar, 2026);
 	const wxDateTime to(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	ibMaterializeReadSpec r = BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), to, false);
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, to, false);
 	r.m_from = ibValue(from);
 	r.m_columns = {
 		{ wxT("Qty_Moved"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
 	};
-	// The stored half's own WHERE: from its FROM up to the UNION (the projection before it names the
-	// interval too, inside each figure's CASE — that is not the bound being looked for).
+	// The stored half: from the totals table up to the UNION — its rows' subquery, then its own WHERE.
 	const auto storedHalf = [](const wxString& sql) {
-		const size_t fromAt = sql.find(wxT("FROM Reg9_Flow "));
+		const size_t fromAt = sql.find(wxT("Reg9_T"));
 		const size_t unionAt = sql.find(wxT("UNION ALL"));
 		return fromAt == wxString::npos || unionAt == wxString::npos || unionAt < fromAt
 			? wxString() : sql.Mid(fromAt, unionAt - fromAt);
@@ -276,7 +245,7 @@ TEST(MaterializeCutRead, ATurnoverBoundsItsStoredHalfBelow) {
 	EXPECT_TRUE(turnover.Contains(wxT("period_ >= "))) << turnover;
 
 	// A balance reads the whole history — its stored half has no lower bound to be given.
-	const wxString balance = storedHalf(ReadSql(BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), to, false)));
+	const wxString balance = storedHalf(ReadSql(BalanceRead(/*rows*/ true, to, false)));
 	ASSERT_FALSE(balance.IsEmpty());
 	EXPECT_FALSE(balance.Contains(wxT("period_ >= "))) << balance;
 }
@@ -310,7 +279,8 @@ struct CutReadFix : ::testing::Test {
 		db->RunQuery(wxT("CREATE TABLE Reg9_T (period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
 			wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (period_, wh))"));
 
-		const ibMaterializeSql sql = RenderMaterialization(CutSpec(), &Sqlite(), SqliteQ());
+		// The maintenance — the triggers that keep Reg9_T, and the dressed view the old road reads.
+		const ibMaterializeSql sql = RenderMaterialization(CutSpec(), &ibDatabaseLayerSQLite::MaterializationDialect(), SqliteQ());
 		ASSERT_TRUE(sql.Apply(*db));
 	}
 	void TearDown() override {
@@ -365,50 +335,86 @@ struct CutReadFix : ::testing::Test {
 
 } // namespace
 
-// ⭐ ONE BALANCE, THREE ROADS. The dressed view read both halves at once (the old road), the two relations
-// read half by half (the new one), the movements summed by hand. Excluding the moment and including it —
-// the movement standing exactly AT the moment is the row the two differ by.
-TEST_F(CutReadFix, TheHalvesAnswerWhatTheSingleViewAnswered) {
+// ⭐ ONE BALANCE, THREE ROADS. The dressed view read both halves at once (the old road), the rows as they stand
+// read half by half (the new one), the movements summed by hand. Excluding the moment and including it — the
+// movement standing exactly AT the moment is the row the two differ by.
+TEST_F(CutReadFix, TheRowsAnswerWhatTheSingleViewAnswered) {
 	Fill();
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
 
 	for (const bool excluding : { true, false }) {
 		const double hand   = ByHand(wxT("kitchen"), wxT("2026-03-05 14:00:00"), excluding);
-		const double oldWay = Balance(BalanceRead(wxT("Reg9_Turnovers"), wxString(), moment, excluding), wxT("kitchen"));
-		const double newWay = Balance(BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, excluding), wxT("kitchen"));
+		const double oldWay = Balance(BalanceRead(/*rows*/ false, moment, excluding), wxT("kitchen"));
+		const double newWay = Balance(BalanceRead(/*rows*/ true, moment, excluding), wxT("kitchen"));
 
 		EXPECT_DOUBLE_EQ(hand, excluding ? 100.0 : 91.0);   // 100 - 12 + 30 - 25 + 7 [- 9]
 		EXPECT_DOUBLE_EQ(oldWay, hand) << "the dressed view, excluding = " << excluding;
-		EXPECT_DOUBLE_EQ(newWay, hand) << "the two halves, excluding = " << excluding;
+		EXPECT_DOUBLE_EQ(newWay, hand) << "the rows as they stand, excluding = " << excluding;
 	}
+}
+
+// ⭐⭐ NOTHING BUT THE TABLES. The rows need no view in the base: a base built before this reading — or one whose
+// views are gone — answers it all the same. (The reading the rows replaced named a second view, and a base
+// without it failed every balance, the one inside every posting included.)
+TEST_F(CutReadFix, TheRowsNeedNoViewInTheBase) {
+	Fill();
+	db->RunQuery(wxT("DROP VIEW Reg9_Turnovers"));
+	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, true), wxT("kitchen")), 100.0);
 }
 
 // The other warehouse is untouched by the day being cut — its answer comes off the stored half alone.
 TEST_F(CutReadFix, AKeyWithNoMovementsInTheGrainReadsItsStoredRows) {
 	Fill();
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	EXPECT_DOUBLE_EQ(Balance(BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, true), wxT("bar")), 40.0);
+	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, true), wxT("bar")), 40.0);
 }
 
 // A filter narrows both halves and must not lose the key it names.
 TEST_F(CutReadFix, AFilterOnTheKeyKeepsThatKeyWhole) {
 	Fill();
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	ibMaterializeReadSpec r = BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, true);
-	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
+	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
 
 	EXPECT_DOUBLE_EQ(Balance(r, wxT("kitchen")), 100.0);
 	EXPECT_DOUBLE_EQ(Balance(r, wxT("bar")), -1e9);   // filtered out — no row at all
 }
 
-// A key whose movements net to zero is NO ROW (m_dropZeroRows) — through the halves as through the view.
+// ⭐ A FILTER THAT WALKS finds its outer row under the name the rows are read by, in either half. A walk
+// through a reference is a correlated EXISTS; lowered against the dressed view's own name it asked for a
+// relation the statement no longer read, and failed on every engine. Here the other table is a kind of
+// warehouse, and only the kitchen is "hot".
+TEST_F(CutReadFix, AFilterThatWalksFindsItsRowInEitherHalf) {
+	Fill();
+	db->RunQuery(wxT("CREATE TABLE Kinds (wh TEXT NOT NULL, kind TEXT NOT NULL)"));
+	db->RunQuery(wxT("INSERT INTO Kinds VALUES ('kitchen', 'hot'), ('bar', 'cold')"));
+
+	ibDatabaseQueryBuilder kinds;
+	kinds.From(ibScan(wxT("Kinds"), wxT("k"))).Project({ ibQueryProjItem{ ibCol(wxT("k"), wxT("wh")), wxString() } });
+	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("wh")), ibCol(wxT("b_rows"), wxT("wh"))));
+	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("kind")), ibConst(ibValue(wxString(wxT("hot"))))));
+
+	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	for (const bool inside : { true, false }) {   // a cut (two halves) and a reading at the grain (one)
+		ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, inside ? moment : wxDateTime(5, wxDateTime::Mar, 2026), true);
+		if (!inside)
+			r.m_floor = ibValue();
+		r.m_filters = { ibExists(kinds.Build().m_root) };
+
+		EXPECT_DOUBLE_EQ(Balance(r, wxT("kitchen")), inside ? 100.0 : 93.0) << "inside the grain = " << inside;
+		EXPECT_DOUBLE_EQ(Balance(r, wxT("bar")), -1e9) << "inside the grain = " << inside;
+	}
+}
+
+// A key whose movements net to zero is NO ROW (m_dropZeroRows) — off the rows as off the view.
 TEST_F(CutReadFix, AZeroBalanceIsNoRowOnEitherRoad) {
 	Move(wxT("r1"), 1, wxT("2026-03-04 09:00:00"), wxT("kitchen"), true, 10);
 	Move(wxT("w1"), 1, wxT("2026-03-05 10:00:00"), wxT("kitchen"), false, 10);
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
 
-	EXPECT_DOUBLE_EQ(Balance(BalanceRead(wxT("Reg9_Turnovers"), wxString(), moment, false), wxT("kitchen")), -1e9);
-	EXPECT_DOUBLE_EQ(Balance(BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, false), wxT("kitchen")), -1e9);
+	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ false, moment, false), wxT("kitchen")), -1e9);
+	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, false), wxT("kitchen")), -1e9);
 }
 
 // A filter may name a column the reading does not carry. Said around the halves as well as inside them, it
@@ -416,8 +422,8 @@ TEST_F(CutReadFix, AZeroBalanceIsNoRowOnEitherRoad) {
 TEST_F(CutReadFix, AFilterOnAColumnTheReadingDoesNotCarryStillReads) {
 	Fill();
 	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
-	ibMaterializeReadSpec r = BalanceRead(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved"), moment, true);
-	r.m_filters = { ibBinOp(ibQueryBinOp::Ge, ibCol(wxT("Qty_Receipt")), ibConst(ibValue(ibNumber(0)))) };   // every row passes
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
+	r.m_filters = { ibBinOp(ibQueryBinOp::Ge, ibCol(wxT("b_rows"), wxT("Qty_Receipt")), ibConst(ibValue(ibNumber(0)))) };   // every row passes
 
 	EXPECT_DOUBLE_EQ(Balance(r, wxT("kitchen")), 100.0);
 }
@@ -429,8 +435,8 @@ TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 	const wxDateTime from(4, wxDateTime::Mar, 2026);
 	const wxDateTime to(5, wxDateTime::Mar, 2026, 14, 0, 0);
 
-	const auto read = [&](const wxString& view, const wxString& moved) {
-		ibMaterializeReadSpec r = BalanceRead(view, moved, to, /*excluding*/ false);
+	const auto read = [&](bool rows) {
+		ibMaterializeReadSpec r = BalanceRead(rows, to, /*excluding*/ false);
 		r.m_from = ibValue(from);
 		r.m_columns = {
 			{ wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
@@ -440,6 +446,6 @@ TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 	const double hand = ByHand(wxT("kitchen"), wxT("2026-03-05 14:00:00"), false) - ByHand(wxT("kitchen"), wxT("2026-03-04 00:00:00"), true);
 
 	EXPECT_DOUBLE_EQ(hand, 3.0);
-	EXPECT_DOUBLE_EQ(read(wxT("Reg9_Turnovers"), wxString()), hand);
-	EXPECT_DOUBLE_EQ(read(wxT("Reg9_Flow"), wxT("Reg9_FlowMoved")), hand);
+	EXPECT_DOUBLE_EQ(read(/*rows*/ false), hand);
+	EXPECT_DOUBLE_EQ(read(/*rows*/ true), hand);
 }

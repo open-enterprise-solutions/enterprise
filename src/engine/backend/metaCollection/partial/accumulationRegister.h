@@ -257,15 +257,17 @@ public:
 	// are what a queryable points at, so they are API the moment a configuration is applied.
 	wxString GetBalanceViewName() const            { return GetPhysicalTableName() + wxT("_Balance"); }
 	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
-	// The same two arms with nothing computed per row and nothing grouped (ibMaterializeView::m_rawRows) —
-	// what a BALANCE reads, since it folds everything up to a moment and names no calendar unit.
-	wxString GetFlowViewName() const               { return GetPhysicalTableName() + wxT("_Flow"); }
-	// …and its movement half, kept apart so a reading that cuts between the two asks each of its own.
-	wxString GetFlowMovedViewName() const          { return GetPhysicalTableName() + wxT("_FlowMoved"); }
-	// Whether there IS a movement half: asked once, by the schema that declares `_FlowMoved` and by every
-	// reading that names it — a reading that named a view the schema did not declare fails at the first query.
+	// Whether the surface HAS a movement arm — the recorder and the line number a movement is told apart by.
+	// Asked once, by the schema that declares the arm and by every reading that cuts against it.
 	bool HasMovementArm() const { return HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr; }
 	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
+
+	// ⭐⭐ THE ROWS AS THEY STAND — the totals and the movements as two relations, for a reading that folds
+	// them itself (ibMaterializeReadSpec::m_storedRows / m_movedRows). Rendered from the very declaration
+	// ContributeTables makes — the turnovers view's columns over the two tables — so nothing but those two
+	// tables has to exist in the base, and a base built before this reading answers it as it stands.
+	// `moved` is null when there is no movement arm. False when no totals are declared at all.
+	bool GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const;
 
 	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
 	// parameter (the caller asks for daily / weekly / monthly rows, or for none at all and gets the

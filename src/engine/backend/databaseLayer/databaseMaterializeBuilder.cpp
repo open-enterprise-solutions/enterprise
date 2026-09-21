@@ -557,7 +557,7 @@ wxString Fold(const wxString& column, bool collapsing)
 // be worse than its absence.
 void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionary& dialect,
                          std::vector<wxString>& select, std::vector<wxString>& groupBy,
-                         const wxString& periodExpr = wxEmptyString, bool coarserUnits = true)
+                         const wxString& periodExpr = wxEmptyString)
 {
 	if (spec.m_periodColumn.IsEmpty())
 		return;
@@ -570,8 +570,6 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 
 	select.push_back(base + (periodExpr.IsEmpty() ? wxString() : (wxT(" AS ") + spec.m_periodColumn)));
 	groupBy.push_back(base);
-	if (!coarserUnits)
-		return;   // the period alone — see ibMaterializeView::m_rawRows
 	for (const ibTotalsPeriod unit : g_units) {
 		if (unit <= spec.m_periodUnit)
 			continue;
@@ -609,7 +607,7 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 
 	std::vector<wxString> select, unusedGroupBy;
 	if (view.m_withPeriod)
-		AppendPeriodColumns(spec, dialect, select, unusedGroupBy, overRow(spec.m_periodSourceExpr), !view.m_rawRows);
+		AppendPeriodColumns(spec, dialect, select, unusedGroupBy, overRow(spec.m_periodSourceExpr));
 	for (const wxString& k : spec.m_keyColumns)
 		select.push_back(spec.m_source + wxT(".") + k);
 
@@ -630,12 +628,8 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 	// (the trigger saw to that); the movement arm has to apply the condition itself, or the tail
 	// would add rows the totals below it deliberately never counted.
 	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_source;
-	// Both in parentheses: a guard with a top-level OR would otherwise lend only its last term to the AND.
-	wxString where = spec.m_guard.IsEmpty() ? wxString() : overRow(spec.m_guard);
-	if (!view.m_movementWhere.IsEmpty())
-		where = (where.IsEmpty() ? wxString() : (wxT("(") + where + wxT(") AND "))) + wxT("(") + overRow(view.m_movementWhere) + wxT(")");
-	if (!where.IsEmpty())
-		body += wxT(" WHERE ") + FillBinaryLiterals(where, mat);
+	if (!spec.m_guard.IsEmpty())
+		body += wxT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), mat);
 
 	return body;
 }
@@ -660,13 +654,11 @@ wxString RenderView(const ibMaterializeSpec& spec,
 	//   * split totals — one logical key lives across N shard rows;
 	//   * a view without the period — dropping a key column genuinely merges every period into one.
 	// Miss this and a balance view reports whatever single period the engine happened to return.
-	// …and neither applies to a view of the rows as they stand: its reader folds them itself, so the
-	// shards are summed there, once, above a condition the engine was free to push down to an index.
-	const bool collapses = !view.m_rawRows && ((shards > 1) || !view.m_withPeriod);
+	const bool collapses = (shards > 1) || !view.m_withPeriod;
 
 	std::vector<wxString> select, groupBy;
 	if (view.m_withPeriod)
-		AppendPeriodColumns(spec, dialect, select, groupBy, wxEmptyString, !view.m_rawRows);
+		AppendPeriodColumns(spec, dialect, select, groupBy);
 	for (const wxString& k : spec.m_keyColumns) { select.push_back(k); groupBy.push_back(k); }
 
 	// The window every running form is evaluated over: partition by the key, ordered by the period.
@@ -740,10 +732,6 @@ wxString RenderView(const ibMaterializeSpec& spec,
 	// GROUP BY only when something actually merges (see `collapses` above). An unsplit,
 	// period-carrying view already holds one row per key, and grouping it would buy nothing while
 	// costing the engine a sort or a hash on every single read.
-	if (view.m_movementsOnly)
-		return Fill(Fill(mat.m_createViewTemplate, wxT("name"), view.m_name), wxT("body"),
-			RenderMovementArm(spec, view, mat, dialect));
-
 	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_table;
 	if (collapses && !groupBy.empty())
 		body += wxT(" GROUP BY ") + Join(groupBy, wxT(", "));
@@ -1026,6 +1014,94 @@ static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValu
 		ibBinOp(ibQueryBinOp::And, ibBinOp(ibQueryBinOp::Eq, period, edge), inside));
 }
 
+// ============================================================================
+// ⭐⭐ THE ARMS OF A VIEW, AS RELATIONS — the rows as they stand, for a reader that folds them.
+//
+// RenderView spells a view's two arms as text for a CREATE VIEW; these spell the SAME arms of the same
+// declaration as IR, for a reading to put in its own FROM. So the reading needs nothing in the database
+// beyond the two tables themselves — no second view to create, none a base built before it lacks, none a
+// downgrade leaves standing — and it pays for nothing it does not name: no coarser calendar unit is
+// computed and no shard fold groups the stored rows, because the reader groups by the key itself, above a
+// condition the engine was free to push down to an index.
+//
+// The columns and their names are the view's (`view.m_columns`, `view.m_movementColumns`), each figure
+// spelled the way that arm of the view spells it.
+// ============================================================================
+
+ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializeView& view)
+{
+	std::vector<ibQueryProjItem> proj;
+	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty())
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_periodColumn), spec.m_periodColumn });   // as stored: no coarser unit
+	for (const wxString& k : spec.m_keyColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(k), k });
+
+	for (const ibMaterializeViewColumn& c : view.m_columns) {
+		const ibQueryExprPtr a = ibCol(c.m_columnA);
+		const bool difference = c.m_agg != ibMaterializeAgg::Value && !c.m_columnB.IsEmpty();
+		proj.push_back(ibQueryProjItem{ difference ? ibBinOp(ibQueryBinOp::Sub, a, ibCol(c.m_columnB)) : a, c.m_alias });
+	}
+
+	// The movement-only columns, NULL here — TYPED, for the reason the view casts them: a bare NULL in an
+	// arm of a UNION is an expression of no type, and Firebird refuses the statement that holds it.
+	for (const auto& c : view.m_movementColumns)
+		proj.push_back(ibQueryProjItem{ ibCast(ibConst(ibValue()), c.second), c.first });
+
+	ibDatabaseQueryBuilder q;
+	q.From(spec.m_table).Project(proj);
+	return q.Build().m_root;
+}
+
+ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterializeView& view)
+{
+	// Without its read forms the spec cannot say what a movement counts for, nor which movements count at
+	// all — and rows read past the guard would be figures the totals below them never held.
+	if (!spec.m_guard.IsEmpty() && !spec.m_guardIR)
+		return nullptr;
+
+	std::vector<ibQueryProjItem> proj;
+	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty()) {
+		if (!spec.m_periodSourceIR)
+			return nullptr;
+		proj.push_back(ibQueryProjItem{ spec.m_periodSourceIR, spec.m_periodColumn });   // the instant, untruncated
+	}
+	for (const wxString& k : spec.m_keyColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_source, k), k });
+
+	// What a movement contributes to a stored column — looked up, never re-derived, exactly as the view's
+	// movement arm looks it up. A column with no delta contributes nothing.
+	bool unreadable = false;
+	const auto contribution = [&](const wxString& column) -> ibQueryExprPtr {
+		for (const ibMaterializeDelta& d : spec.m_deltas)
+			if (d.m_column == column) {
+				if (!d.m_valueIR)
+					unreadable = true;
+				return d.m_valueIR;
+			}
+		return ibCast(ibConst(ibValue(0.0)), ibTypeNumber(18, 6));
+	};
+	for (const ibMaterializeViewColumn& c : view.m_columns) {
+		const ibQueryExprPtr a = contribution(c.m_columnA);
+		const ibQueryExprPtr figure = c.m_columnB.IsEmpty() ? a
+			: ibBinOp(ibQueryBinOp::Sub, a, contribution(c.m_columnB));
+		proj.push_back(ibQueryProjItem{ figure, c.m_alias });
+	}
+	if (unreadable)
+		return nullptr;
+
+	for (const auto& c : view.m_movementColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_source, c.first), c.first });
+
+	ibDatabaseQueryBuilder q;
+	q.From(spec.m_source).Project(proj);
+	// The SAME guard the trigger accumulates under — the stored rows hold only what was in force.
+	if (spec.m_guardIR)
+		q.Where(spec.m_guardIR);
+	if (spec.m_periodIsDateIR)
+		q.Where(spec.m_periodIsDateIR);
+	return q.Build().m_root;
+}
+
 ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wxString& alias)
 {
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
@@ -1131,8 +1207,14 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 	if (!anyAggregate && !periodised && !spec.m_periodColumn.IsEmpty())
 		proj.insert(proj.begin(), ibQueryProjItem{ ibCol(spec.m_periodColumn), wxString() });
 
+	// The rows as they stand when the reading was handed them (m_storedRows), the named surface otherwise.
+	const wxString rows = spec.m_rowsAlias.IsEmpty() ? alias + wxT("_rows") : spec.m_rowsAlias;
+
 	ibDatabaseQueryBuilder q;
-	q.From(spec.m_view).Project(proj);
+	if (spec.m_storedRows)
+		q.From(ibSubquery(spec.m_storedRows, rows)).Project(proj);
+	else
+		q.From(spec.m_view).Project(proj);
 	bool filtersRideInside = false;   // set where a cut is read half by half (below)
 
 	// The OUTER bound of the scan. Rows past the interval belong to no reported figure, so they are
@@ -1235,12 +1317,19 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			// The conditions above stay where they were; over rows already chosen by them they cost
 			// nothing and keep this a change of ROAD, not of meaning.
 			//
-			// ONLY WHERE THE SURFACE KEEPS THE HALVES APART (m_viewMoved). A reading that names one dressed
-			// relation for both - the accounting register's - would have each half select from that same
+			// ONLY WHERE THE READING HOLDS THE HALVES APART (m_storedRows / m_movedRows). A reading that names one
+			// dressed relation for both - the accounting register's - would have each half select from that same
 			// union view: four arms expanded where there were two, the shard fold of the stored arm evaluated
 			// twice, and nothing gained, since neither half is any nearer an index than the OR was. It keeps
 			// the single selection above, exactly as it was.
-			if (!spec.m_viewMoved.IsEmpty()) {
+			//
+			// 🛑 STORED ROWS WITHOUT THE MOVEMENTS CANNOT BE CUT. The relation above holds no movement at all, so
+			// the partial grain would be read from nowhere — a balance short of today's postings, silently. The
+			// movement rows are null only where the spec could not say what a movement counts for.
+			if (spec.m_storedRows && !spec.m_movedRows)
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+					_("A reading inside the stored grain was handed the stored rows without the movements to complete them"));
+			if (spec.m_movedRows) {
 				std::vector<wxString> carried;
 				const auto carry = [&carried](const wxString& name) {
 					if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
@@ -1260,12 +1349,14 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 				const bool boundStoredBelow = !readsHistory && !headSplit && spec.m_dropZeroRows
 					&& spec.m_from.GetType() == TYPE_DATE;
 
-				const auto half = [&](const ibQueryExprPtr& cut, const wxString& relation) {
+				// Both halves read under ONE name (`rows`): they are separate SELECTs, and the filters were lowered
+				// against it — a walk through a reference finds its outer row under that name in either.
+				const auto half = [&](const ibQueryExprPtr& cut, const ibQueryRelPtr& relation) {
 					std::vector<ibQueryProjItem> columns;
 					for (const wxString& name : carried)
 						columns.push_back(ibQueryProjItem{ ibCol(name), wxString() });
 					ibDatabaseQueryBuilder arm;
-					arm.From(relation).Project(columns);
+					arm.From(ibSubquery(relation, rows)).Project(columns);
 					arm.Where(cut);
 					if (spec.m_to.GetType() == TYPE_DATE)
 						arm.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
@@ -1273,15 +1364,14 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 						if (f) arm.Where(f);
 					return arm.Build().m_root;
 				};
-				// Each half of its OWN relation where the surface keeps them apart (m_viewMoved): asked of
-				// the union, the stored half still made the engine visit the movements to learn they hold
-				// no stored row, and the other way round (measured 2026-09-19: 0.15 s through the union
-				// against 0.05 s off the stored rows alone, for the same rows).
+				// Each half of its OWN relation: asked of a union, the stored half still made the engine visit
+				// the movements to learn they hold no stored row, and the other way round (measured 2026-09-19:
+				// 0.15 s through the union against 0.05 s off the stored rows alone, for the same rows).
 				if (boundStoredBelow)
 					stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
 				filtersRideInside = true;
-				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_view),
-					half(moved, spec.m_viewMoved)), alias + wxT("_cut")));
+				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_storedRows),
+					half(moved, spec.m_movedRows)), alias + wxT("_cut")));
 			}
 		}
 	}

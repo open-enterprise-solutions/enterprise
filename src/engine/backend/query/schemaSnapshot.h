@@ -145,6 +145,12 @@ struct ibSchemaMaterialize
 	// what keeps L2-1 metadata-blind and the dependency pointing downward.
 	ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
 
+	// …AND FOR A READ OF THE ROWS AS THEY STAND (RenderStoredRows / RenderMovementRows): the same spec with
+	// its IR forms filled — the guard, the movement's instant, each contribution — lowered by the source's
+	// own door from the regeneration forms declared below, so a reading counts a movement by the very
+	// expression a rebuild sums it by. Only a reading asks for this; the apply renders text and never pays.
+	ibMaterializeSpec ToReadSpec(const wxString& tableName) const;
+
 	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
 	std::vector<const ibBackendQueryColumn*> m_keys;

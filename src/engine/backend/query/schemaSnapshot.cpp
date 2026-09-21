@@ -10,6 +10,7 @@
 #include "backend/query/queryable.h"                        // ibBackendQueryable::GetQueryName / GetQueryTableName
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"     // L2-2 RenderMaterialization — derived-state triggers + view
 #include "backend/query/derivedStateBuilder.h"              // L3-4 — rebuild derived state after a structure change
+#include "backend/query/dbTableProvider.h"                  // BuildColumnExprIR / BuildPredicateIR — ToReadSpec's IR forms
 #include "appData.h"                                        // db_query — the local channel the seed writes target
 #include "backend/system/value/valueGuid.h"                 // ibValueGuid — the row key bound as the guid it is
 
@@ -56,6 +57,40 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) c
 	for (const ibSchemaDelta& d : m_deltas)
 		out.m_deltas.push_back({ d.m_column != nullptr ? d.m_column->GetPhysicalName() : wxString(), d.m_valueExpr });
 
+	return out;
+}
+
+ibMaterializeSpec ibSchemaMaterialize::ToReadSpec(const wxString& tableName) const
+{
+	ibMaterializeSpec out = ToRenderSpec(tableName);
+	if (m_source == nullptr)
+		return out;
+
+	// Every column qualified by the source table's own name — what RenderMovementRows reads it as.
+	const wxString source = SourceTable();
+
+	// Index for index: ToRenderSpec lays the deltas out in declaration order.
+	for (size_t i = 0; i < m_deltas.size() && i < out.m_deltas.size(); ++i)
+		if (m_deltas[i].m_regenExpr)
+			out.m_deltas[i].m_valueIR = ibDbTableProvider::BuildColumnExprIR(m_source, m_deltas[i].m_regenExpr, source);
+	if (m_guardExpr)
+		out.m_guardIR = ibDbTableProvider::BuildPredicateIR(m_source, m_guardExpr, source);
+
+	// The movement's instant is the period's DATE field. Stored with its type tag, the period also says it
+	// IS a date — the condition that lets a reading's floor ride the movements' period index, which opens
+	// with that tag.
+	if (m_periodSource != nullptr) {
+		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(m_periodSource);
+		for (const ibColumnSlot& slot : slots) {
+			if (slot.m_role == ibColumnRole::Date)
+				out.m_periodSourceIR = ibCol(source, slot.m_name);
+			else if (slot.m_role == ibColumnRole::Discriminator)
+				out.m_periodIsDateIR = ibBinOp(ibQueryBinOp::Eq, ibCol(source, slot.m_name),
+					ibConst(ibValue(ibNumber(ibPersistedTypeTag(ibColumnRole::Date)))));
+		}
+		if (!out.m_periodSourceIR && slots.size() == 1)
+			out.m_periodSourceIR = ibCol(source, slots.front().m_name);   // a period that is its own single field
+	}
 	return out;
 }
 

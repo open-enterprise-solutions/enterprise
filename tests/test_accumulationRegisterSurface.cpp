@@ -21,6 +21,9 @@
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/query/schemaSnapshot.h"
 #include "backend/query/columnLayout.h"
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"   // a dialect to read the rows' SQL in
 
 namespace {
 
@@ -111,56 +114,81 @@ TEST(AccumulationRegisterSurface, ARegisterWithoutDimensionsGetsNoDimensionFirst
 	EXPECT_TRUE(sawTotals);
 }
 
-// The dressed view stays what it was — what a query reads directly — with both halves in it.
-TEST(AccumulationRegisterSurface, TheDressedViewIsUntouched) {
+// The dressed views stay what they were — what a query reads directly, the turnovers with both halves in
+// them — and they are ALL that is declared: the readings that fold take the arms as relations over the two
+// tables (GetTotalsRows), so no second view exists for a base to lack or a downgrade to leave standing.
+TEST(AccumulationRegisterSurface, OnlyTheDressedViewsAreDeclared) {
 	RegisterSurfaceFix f;
 	ASSERT_NE(f.reg, nullptr);
+	ASSERT_NE(f.totals, nullptr);
 	const ibMaterializeView* dressed = f.View(f.reg->GetTurnoverViewName());
 	ASSERT_NE(dressed, nullptr);
-	EXPECT_FALSE(dressed->m_rawRows);
-	EXPECT_FALSE(dressed->m_movementsOnly);
 	EXPECT_TRUE(dressed->m_withMovements);
-	EXPECT_TRUE(dressed->m_movementWhere.IsEmpty());
-
 	EXPECT_NE(f.View(f.reg->GetBalanceViewName()), nullptr);   // and the balance view beside it
+	EXPECT_EQ(f.totals->m_materialize.m_views.size(), 2u);
 }
 
-// ⭐ THE ROWS AS THEY STAND, IN TWO RELATIONS: the stored half with nothing computed and nothing grouped,
-// the movement half on its own — so a reading that cuts between them asks each of its own.
-TEST(AccumulationRegisterSurface, TheFlowIsDeclaredAsTwoHalves) {
+namespace {
+
+wxString SqlOf(const ibQueryRelPtr& rel)
+{
+	return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(ibQueryIR(ibProject(rel))).m_sql;
+}
+
+} // namespace
+
+// ⭐ THE ROWS AS THEY STAND COME FROM THE DECLARATION: the stored half is the totals table itself, the movement
+// half is the movements — neither names a view, and both publish the figures under the dressed view's names, so
+// a reading swaps the relation and not the columns.
+TEST(AccumulationRegisterSurface, TheRowsAsTheyStandReadTheTwoTables) {
 	RegisterSurfaceFix f;
 	ASSERT_NE(f.reg, nullptr);
+	ASSERT_NE(f.totals, nullptr);
 
-	const ibMaterializeView* stored = f.View(f.reg->GetFlowViewName());
-	ASSERT_NE(stored, nullptr);
-	EXPECT_TRUE(stored->m_rawRows);
-	EXPECT_FALSE(stored->m_withMovements);
-	EXPECT_FALSE(stored->m_movementsOnly);
-	EXPECT_FALSE(stored->m_movementColumns.empty()) << "published as typed nulls — one column list for both halves";
+	ibQueryRelPtr stored, moved;
+	ASSERT_TRUE(f.reg->GetTotalsRows(stored, moved));
+	ASSERT_TRUE(stored);
+	ASSERT_TRUE(moved) << "a register with a recorder has a movement arm";
 
-	const ibMaterializeView* moved = f.View(f.reg->GetFlowMovedViewName());
-	ASSERT_NE(moved, nullptr);
-	EXPECT_TRUE(moved->m_rawRows);
-	EXPECT_TRUE(moved->m_movementsOnly);
+	const wxString storedSql = SqlOf(stored);
+	const wxString movedSql  = SqlOf(moved);
+	EXPECT_TRUE(storedSql.Contains(f.totals->m_name)) << storedSql;
+	EXPECT_FALSE(storedSql.Contains(wxT("GROUP BY"))) << storedSql;
+	EXPECT_TRUE(movedSql.Contains(f.totals->m_materialize.SourceTable())) << movedSql;
+	EXPECT_FALSE(movedSql.Contains(f.totals->m_name)) << movedSql;
+	for (const wxString& sql : { storedSql, movedSql }) {
+		EXPECT_FALSE(sql.Contains(f.reg->GetTurnoverViewName())) << sql;
+		EXPECT_FALSE(sql.Contains(f.reg->GetBalanceViewName())) << sql;
+	}
 
-	// The same figures under the same names on all three surfaces — a reader swaps the relation, not the columns.
 	const ibMaterializeView* dressed = f.View(f.reg->GetTurnoverViewName());
 	ASSERT_NE(dressed, nullptr);
-	ASSERT_EQ(stored->m_columns.size(), dressed->m_columns.size());
-	ASSERT_EQ(moved->m_columns.size(), dressed->m_columns.size());
-	for (size_t i = 0; i < dressed->m_columns.size(); ++i) {
-		EXPECT_EQ(stored->m_columns[i].m_alias, dressed->m_columns[i].m_alias);
-		EXPECT_EQ(moved->m_columns[i].m_alias, dressed->m_columns[i].m_alias);
+	for (const ibMaterializeViewColumn& c : dressed->m_columns) {
+		EXPECT_TRUE(storedSql.Contains(c.m_alias)) << c.m_alias.ToStdString();
+		EXPECT_TRUE(movedSql.Contains(c.m_alias)) << c.m_alias.ToStdString();
 	}
 }
 
-// The movement half names the period's TYPE TAG: the movements' period index opens with it, the view does
-// not publish it, and without it a reader's `period >= <floor>` walked every movement there is.
-TEST(AccumulationRegisterSurface, TheMovementHalfNamesThePeriodsTypeTag) {
+// The read forms are the declaration's own: every contribution, the guard (an inactive movement counts for
+// nothing, read or accumulated), the movement's instant — and the period's TYPE TAG, which the movements'
+// period index opens with and without which a reader's `period >= <floor>` walked every movement there is.
+TEST(AccumulationRegisterSurface, TheMovementRowsCarryTheReadForms) {
 	RegisterSurfaceFix f;
 	ASSERT_NE(f.reg, nullptr);
-	const ibMaterializeView* moved = f.View(f.reg->GetFlowMovedViewName());
-	ASSERT_NE(moved, nullptr);
+	ASSERT_NE(f.totals, nullptr);
+
+	const ibMaterializeSpec spec = f.totals->m_materialize.ToReadSpec(f.totals->m_name);
+	ASSERT_FALSE(spec.m_deltas.empty());
+	for (const ibMaterializeDelta& d : spec.m_deltas)
+		EXPECT_TRUE(d.m_valueIR) << d.m_column.ToStdString();
+	EXPECT_TRUE(spec.m_guardIR);
+	EXPECT_TRUE(spec.m_periodSourceIR);
+	EXPECT_TRUE(spec.m_periodIsDateIR);
+
+	// …and the apply's spec carries none of it: the maintenance renders text and never pays for a lowering.
+	const ibMaterializeSpec render = f.totals->m_materialize.ToRenderSpec(f.totals->m_name);
+	EXPECT_FALSE(render.m_guardIR);
+	EXPECT_FALSE(render.m_periodIsDateIR);
 
 	wxString tagField;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(f.reg->GetRegisterPeriod()->GetQueryColumn()))
@@ -168,6 +196,8 @@ TEST(AccumulationRegisterSurface, TheMovementHalfNamesThePeriodsTypeTag) {
 			tagField = slot.m_name;
 	ASSERT_FALSE(tagField.IsEmpty());
 
-	EXPECT_EQ(moved->m_movementWhere,
-		wxString::Format(wxT("{row}.%s = %i"), tagField, ibPersistedTypeTag(ibColumnRole::Date)));
+	ibQueryRelPtr stored, moved;
+	ASSERT_TRUE(f.reg->GetTotalsRows(stored, moved));
+	const wxString movedSql = SqlOf(moved);
+	EXPECT_TRUE(movedSql.Contains(tagField)) << movedSql;
 }

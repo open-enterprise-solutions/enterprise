@@ -46,6 +46,13 @@ struct ibMaterializeDelta
 {
 	wxString m_column;      // physical column of the derived table
 	wxString m_valueExpr;   // SQL over {row} — what this movement contributes
+
+	// The same contribution as an IR expression over the SOURCE table (its columns qualified by
+	// m_source) — for a READ of the movements as they stand (RenderMovementRows). Null on a spec made
+	// for the maintenance only: a trigger has no use for it. Lowered from the declaration's
+	// regeneration form (ibSchemaDelta::m_regenExpr), so the reading and the rebuild count a movement
+	// by one expression, and the parity test that holds the rebuild to the trigger holds this too.
+	ibQueryExprPtr m_valueIR;
 };
 
 // How a view column is computed from the stored ones. These are PRIMITIVES, not meanings: L2-2
@@ -83,38 +90,6 @@ struct ibMaterializeView
 	bool     m_withPeriod   = true;    // project the period + every coarser unit as its own column
 	bool     m_dropZeroRows = false;   // HAVING <any column> <> 0 — "no value means no row"
 	std::vector<ibMaterializeViewColumn> m_columns;
-
-	// ⭐⭐ THE ROWS AS THEY STAND — for a reader that folds them anyway.
-	//
-	// The ordinary view is dressed for whoever reads it directly: every coarser calendar unit is
-	// projected as a column of its own, and the shards of a split total are summed back into one row.
-	// Both are paid per ROW, on every read, whether or not the reader wanted either — and a balance
-	// wants neither: it sums everything up to a moment and groups by the key itself, so the units are
-	// never named and the shard fold is done a second time one level up. Measured 2026-09-19 (Firebird,
-	// 193 000 stored rows): one warehouse's balances through the dressed view 1.35 s, through the same
-	// union without the six unit columns 0.35 s — and the shard fold is a GROUP BY the engine will not
-	// push a condition beneath, so with it no index on the dimensions can be used at all.
-	//
-	// Set, the view is the period as stored, the key, the figures — nothing computed per row and
-	// nothing grouped. ⚠ Only for a reading that AGGREGATES: with split totals it yields one row per
-	// shard, which is a wrong answer to anyone who reads it as one row per key.
-	bool m_rawRows = false;
-
-	// AN EXTRA CONDITION ON THE MOVEMENT ARM ALONE (`{row}` = the source table), ANDed to the guard.
-	//
-	// For the one thing a reader cannot say from outside: a column the view does not publish. The
-	// movements' period index opens with the period's TYPE tag, the view publishes only its value, so
-	// a reader's `period >= <floor>` could never ride that index and every sub-day reading walked
-	// every movement there is (measured 2026-09-19: 0.2 s of a 0.26 s balance, against ~0 with the
-	// tag named). ⚠ It must not change what the arm MEANS — only a condition every row the readers
-	// can accept already satisfies belongs here.
-	wxString m_movementWhere;
-
-	// THE MOVEMENT ARM ALONE — no stored rows at all. The other half of a view declared WITHOUT
-	// m_withMovements: a reading that cuts between the two (ibMaterializeReadSpec::m_viewMoved) then
-	// asks each half of its own relation, and the engine never has to discover, row source by row
-	// source, that the half it was sent to holds nothing for this question.
-	bool m_movementsOnly = false;
 
 	// ⭐⭐ THE SECOND ARM — the rows the stored table does not carry YET.
 	//
@@ -184,6 +159,21 @@ struct ibMaterializeSpec
 
 	// Split totals: how many shard rows one logical key spreads across. 1 = not split.
 	unsigned int m_shards = 1;
+
+	// --- the same declaration, for a READ of the rows as they stand (RenderStoredRows / RenderMovementRows)
+	// IR over the source table, columns qualified by m_source; all null on a spec made for the maintenance,
+	// which renders text and never looks at them. ibSchemaMaterialize::ToReadSpec fills them, from the
+	// declaration's regeneration forms — the ones a rebuild already reads the whole source through.
+
+	ibQueryExprPtr m_guardIR;            // the guard: a movement outside it is not counted, read or accumulated
+	ibQueryExprPtr m_periodSourceIR;     // the movement's own instant — the period before any truncation
+
+	// ⚠ A CONDITION EVERY MOVEMENT A READING CAN COUNT ALREADY MEETS, said so the reading's floor can ride the
+	// movements' period index: that index opens with the period's TYPE tag, and `period >= <floor>` on the
+	// value alone could never reach it (measured 2026-09-19 by the author of the rows-as-they-stand reading:
+	// 0.2 s of a 0.26 s balance walked every movement there is, against ~0 with the tag named). It must not
+	// change what the rows MEAN — a period that is not a date passes no floor anyway. Null = nothing to say.
+	ibQueryExprPtr m_periodIsDateIR;
 };
 
 // One rendered statement. A distinct TYPE rather than a bare wxString, so the schema door can
@@ -311,9 +301,29 @@ enum class ibMaterializeGrain
 struct ibMaterializeReadSpec
 {
 	wxString m_view;                       // the relation to read — a view, or the totals table
-	// WHERE THE MOVEMENT HALF OF A CUT IS READ, when the surface keeps it apart (ibMaterializeView::
-	// m_movementsOnly). Empty = both halves live in m_view, as they always did.
-	wxString m_viewMoved;
+
+	// ⭐⭐ THE ROWS AS THEY STAND — the stored rows and the movements as TWO RELATIONS, read in place of
+	// m_view by a reading that folds them itself (a balance, a turnover). Set, m_view is not read at all.
+	//
+	// A dressed view is paid for per ROW on every read: every coarser calendar unit is computed and the
+	// shards of a split total are summed back — a GROUP BY the engine will not push "this warehouse"
+	// beneath, so every balance of one warehouse walked the whole register (measured 2026-09-19 by the
+	// author of this reading: 1.03 s a balance through the dressed view, 0.03 s this way). A folding reader
+	// wants neither. And a cut between the two is read half by half (below), each half's bound in its own
+	// WHERE, which is what lets it reach an index at all.
+	//
+	// Relations, not names: they are rendered from the same declaration the maintenance is
+	// (RenderStoredRows / RenderMovementRows), so nothing has to exist in the database beyond the totals
+	// table and the movements — a base built before this reading answers it as it stands.
+	// m_movedRows null = the surface has no movement arm, and nothing is cut.
+	ibQueryRelPtr m_storedRows;
+	ibQueryRelPtr m_movedRows;
+
+	// What the statement calls either relation of rows — the qualifier m_filters were lowered with. The
+	// two halves are separate SELECTs, so one name serves both, and a filter walking a reference (a
+	// correlated EXISTS) finds its outer row under it in each.
+	wxString m_rowsAlias;
+
 	wxString m_periodColumn;               // empty = this surface carries no period
 
 	// The grain, and the unit it means when Calendar. A periodised read groups by the period
@@ -396,6 +406,19 @@ struct ibMaterializeReadSpec
 // filtering an already-materialised result.
 BACKEND_API ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec,
                                                  const wxString& alias);
+
+// ⭐ THE TWO ARMS OF `view`, AS RELATIONS RATHER THAN A CREATE VIEW — the rows as they stand, for
+// ibMaterializeReadSpec::m_storedRows / m_movedRows. The same columns under the same names the view
+// publishes, and nothing computed per row: the period as stored (no coarser units), no shard fold,
+// no GROUP BY — the reader folds, once, above a condition the engine was free to push to an index.
+//
+// Stored: the derived table itself, each figure spelled as the view spells it, and the movement-only
+// columns as typed nulls so the two halves share one column list.
+// Movements: the source, each figure the movement's contribution (ibMaterializeDelta::m_valueIR),
+// under the guard and m_periodIsDateIR. Null when the spec carries no read forms (ToReadSpec fills
+// them) — a reading has nothing to cut with then, and says so rather than counting without the guard.
+BACKEND_API ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializeView& view);
+BACKEND_API ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterializeView& view);
 
 // ==========================================================================
 // The ONE entry point a floor above uses: hand over a connection and a declaration.

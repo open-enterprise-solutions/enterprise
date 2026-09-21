@@ -819,8 +819,13 @@ namespace {
 // The condition, as what L2-2 applies inside the read of the turnovers surface: the whole tree, found again on
 // the surface's columns and lowered by the door that writes every other WHERE. It took the flat `=` leaves
 // once, and a NOT, an OR or a walk through a reference was left out of the read without a word.
+//
+// 🛑 LOWERED UNDER THE NAME THE ROWS ARE READ BY (`rows`, ibMaterializeReadSpec::m_rowsAlias). A walk through
+// a reference is a correlated EXISTS, and its outer column is qualified — by the view's own name when none was
+// given, which named a relation the reading no longer selects from: `Item.Kind = &K` asked for
+// `<register>_Turnovers.fld…` inside a statement that reads the rows as they stand, and failed on every engine.
 std::vector<ibQueryExprPtr> ReadFilters(
-	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter)
+	const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter, const wxString& rows)
 {
 	std::vector<ibQueryExprPtr> out;
 	if (reg == nullptr || !filter)
@@ -828,9 +833,23 @@ std::vector<ibQueryExprPtr> ReadFilters(
 	const ibBackendQueryable* view = reg->GetViewQueryable(reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 	if (const ibQueryPredicatePtr condition = ibRegConditionOn(view, filter, ibRegSelectsByDimensions(reg)))
-		if (const ibQueryExprPtr lowered = ibDbTableProvider::BuildPredicateIR(view, condition))
+		if (const ibQueryExprPtr lowered = ibDbTableProvider::BuildPredicateIR(view, condition, rows))
 			out.push_back(lowered);
 	return out;
+}
+
+// ⭐ THE ROWS AS THEY STAND, handed to a reading that folds them (all three below): the totals and the
+// movements as relations rendered from the register's own declaration (GetTotalsRows), the filters lowered
+// under the one name both are read by. False when the register declares no totals — the reading then has no
+// surface to be composed over, and answers as the live road does.
+bool ReadRowsAsTheyStand(const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter,
+                         const wxString& alias, ibMaterializeReadSpec& r)
+{
+	if (!reg->GetTotalsRows(r.m_storedRows, r.m_movedRows))
+		return false;
+	r.m_rowsAlias = alias + wxT("_rows");
+	r.m_filters   = ReadFilters(reg, filter, r.m_rowsAlias);
+	return true;
 }
 
 // Every dimension's physical fields — the key of any read over the surface.
@@ -875,16 +894,13 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 	const ibRegBound bound = ibReadRegisterBound(m_period);
 
 	ibMaterializeReadSpec r;
-	// The rows as they stand (`_Flow`): this read sums everything up to a moment and groups by the key,
-	// so the dressed view's calendar units are never named and its shard fold is repeated right here —
-	// while costing every read a pass over the whole table (accumulationRegisterMetadataSchema.cpp).
-	r.m_view          = m_reg->GetFlowViewName();
-	if (m_reg->HasMovementArm())
-		r.m_viewMoved = m_reg->GetFlowMovedViewName();
+	// The rows as they stand: this read sums everything up to a moment and groups by the key, so the
+	// dressed view's calendar units are never named and its shard fold would only be repeated here.
+	if (!ReadRowsAsTheyStand(m_reg, m_filter, alias, r))
+		return nullptr;
 	r.m_periodColumn  = ibRegValueField(m_reg->GetRegisterPeriod());
 	r.m_to            = bound.m_date;
 	r.m_keyColumns    = ReadKeys(m_reg);
-	r.m_filters       = ReadFilters(m_reg, m_filter);
 	r.m_dropZeroRows  = true;   // no stock means NO ROW, matching the live path
 	ibRegFillArmCut(r, m_reg, bound);
 
@@ -916,12 +932,11 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	// so does the accounting register's own turnover reading. This is the third of three, saying it
 	// the same way.
 	ibMaterializeReadSpec r;
-	// The rows as they stand, the two halves apart (see ibBalanceQueryable above): this reading sums and
-	// groups by the key — and by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed
-	// view computes per row is ever named here.
-	r.m_view         = m_reg->GetFlowViewName();
-	if (m_reg->HasMovementArm())
-		r.m_viewMoved = m_reg->GetFlowMovedViewName();
+	// The rows as they stand (see ibBalanceQueryable above): this reading sums and groups by the key — and
+	// by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed view computes per row is
+	// ever named here.
+	if (!ReadRowsAsTheyStand(m_reg, m_filter, alias, r))
+		return nullptr;
 	// ⭐⭐ A REVERSAL LEAVES NOTHING TO REPORT. `+10` then `-10` on the same key folds every figure to
 	// zero, and a row of zeros is not a turnover — it is a movement that undid itself. The figure IS
 	// affected (that is what a reversal is for); what a reader must not get is a line claiming
@@ -940,7 +955,6 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	r.m_from         = ibReadRegisterBound(m_begin).m_date;
 	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
-	r.m_filters      = ReadFilters(m_reg, m_filter);
 
 	// ⭐ THE GRAIN — what one row of the answer is, and the only thing a periodicity changes here.
 	// The period joins the keys in the GROUP BY, truncated when a calendar unit was named and as it
@@ -993,17 +1007,15 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	// conditions over the same scan — which is why an UNPERIODISED reading needs no join and no
 	// window, and why a register with an opening balance but no movements still reports.
 	ibMaterializeReadSpec r;
-	// The rows as they stand, the two halves apart (see ibBalanceQueryable above): this reading sums and
-	// groups by the key — and by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed
-	// view computes per row is ever named here.
-	r.m_view         = m_reg->GetFlowViewName();
-	if (m_reg->HasMovementArm())
-		r.m_viewMoved = m_reg->GetFlowMovedViewName();
+	// The rows as they stand (see ibBalanceQueryable above): this reading sums and groups by the key — and
+	// by the period it truncates ITSELF (ibPeriodTrunc) — so nothing the dressed view computes per row is
+	// ever named here.
+	if (!ReadRowsAsTheyStand(m_reg, m_filter, alias, r))
+		return nullptr;
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
 	r.m_from         = ibReadRegisterBound(m_begin).m_date;
 	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
-	r.m_filters      = ReadFilters(m_reg, m_filter);
 
 	// ⭐⭐ PER PERIOD IS A DIFFERENT COMPUTATION, and this is where it now happens instead of in RAM.
 	//
