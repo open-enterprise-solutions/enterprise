@@ -45,6 +45,11 @@ private:
 		// "one return type": a table describes its columns ONCE instead of hashing every column name
 		// into every row, and it says what it holds (`Columns`) instead of being guessed at.
 		enUnloadColumn,
+		// The column-and-row verbs that code ported from a table-of-values language leans on (card MIG-61,
+		// issue #201): the total of a column, and the rows that match a filter. Appended, never inserted:
+		// the numbers are positions in the member table (FillMembers), which is listed in this order.
+		enTotal,
+		enFindRows,
 	};
 	//attributes:
 	enum Prop {
@@ -361,6 +366,17 @@ public:
 	void DeleteValue(const ibDataViewItem& row) { DeleteRow(row); }
 	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
 	void SortValue(const ibDataViewColumnItem& column, bool ascending);
+
+	// ⭐ THE TOTAL OF A COLUMN: its numbers added exactly (ibNumber, not a double), an empty cell adding nothing.
+	// A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
+	// and so does a cell holding something that is not a number, naming the row. An empty table totals zero.
+	ibValue TotalOf(const wxString& column) const;
+
+	// ⭐ THE ROWS THAT MATCH A FILTER, as an array of the table's own rows (change one and the table changes),
+	// in table order. The filter is a Structure of `column = value`; a row matches when EVERY term does, and an
+	// empty filter matches every row. A column the filter names that is not there raises rather than
+	// matching nothing: a typo in a filter would otherwise read as "no such rows".
+	ibValue FindRows(const ibValueContainer& filter);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
