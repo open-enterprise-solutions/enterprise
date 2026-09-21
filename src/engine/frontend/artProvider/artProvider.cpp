@@ -39,6 +39,23 @@
 
 #include "artProvider/service/property.xpm"
 
+// The debugger's pictures, as VECTORS: each drawn in debugger/<name>.svg, the .svg.h beside it is that same
+// document as a string — sharp at whatever scale the display asks for, a toolbar at 2x or a menu alike.
+// (Not `debug/`: the repository ignores every folder of that name, the build output's.)
+#include "artProvider/debugger/start.svg.h"
+#include "artProvider/debugger/startWithoutDebugging.svg.h"
+#include "artProvider/debugger/attach.svg.h"
+#include "artProvider/debugger/continue.svg.h"
+#include "artProvider/debugger/pause.svg.h"
+#include "artProvider/debugger/stepInto.svg.h"
+#include "artProvider/debugger/stepOver.svg.h"
+#include "artProvider/debugger/stepOut.svg.h"
+#include "artProvider/debugger/stopDebugging.svg.h"
+#include "artProvider/debugger/stopProgram.svg.h"
+#include "artProvider/debugger/removeAllBreakpoints.svg.h"
+
+#include <wx/bmpbndl.h>
+
 // ----------------------------------------------------------------------------
 // wxOESArtProvider class
 // ----------------------------------------------------------------------------
@@ -127,6 +144,28 @@ protected:
 				continue;
 
 			return wxIcon(entry.data.m_data);
+		}
+
+		// The vector pictures: an SVG document, drawn at the size asked for (16x16 when none is).
+		static const struct { wxArtClient client; wxArtID id; const char* svg; } s_allVectors[] =
+		{
+			// ******* wxART_DEBUG *******
+			{ wxART_DEBUG, wxART_DEBUG_START, s_start_svg },
+			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_svg },
+			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_svg },
+			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_svg },
+			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_svg }
+		};
+
+		for (const auto& entry : s_allVectors) {
+			if (entry.client == client && entry.id == id)
+				return wxBitmapBundle::FromSVG(entry.svg, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		if (client == wxART_FRONTEND) {
