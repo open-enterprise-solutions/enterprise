@@ -177,12 +177,12 @@ bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const wxStri
 // whose class was removed or renamed says so at load instead of pointing at nothing.
 TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 {
-	const std::string table = std::to_string(value_to_clsid("VL_TABL"));
+	const std::string tableId = std::to_string(value_to_clsid("VL_TABL"));
 	const wxString root = WriteHelpBucket(
 		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
-		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + table + R"( },)"
+		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + tableId + R"( },)"
 		R"({ "id": "cls.Nothing",  "name_local": "Nothing", "name_en": "Nothing", "kind": "collection", "class_id": 12345 },)"
-		R"({ "id": "cls.Misnamed", "name_local": "Array",   "name_en": "Array",   "kind": "collection", "class_id": )" + table + R"( },)"
+		R"({ "id": "cls.Misnamed", "name_local": "Array",   "name_en": "Array",   "kind": "collection", "class_id": )" + tableId + R"( },)"
 		R"({ "id": "cls.Text",     "name_local": "Text",    "name_en": "Text",    "kind": "collection", "class_id": "VL_TABL" },)"
 		R"({ "id": "kw.Plain",     "name_local": "Plain",   "name_en": "Plain",   "kind": "keyword" })"
 		R"(] })");
