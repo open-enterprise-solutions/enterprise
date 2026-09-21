@@ -6,6 +6,7 @@
 #include <wx/statline.h>
 #include <wx/tglbtn.h>
 #include <wx/hyperlink.h>
+#include <wx/dcbuffer.h>
 
 // Interior-design palette (see luna_dockart.cpp). Subsystem chrome
 // uses the same powder-blue + dusty-border tones as the rest of the
@@ -58,8 +59,16 @@ class ibSubSystemWindow : public wxWindow {
 
 			m_popupWindow = wnd;
 
-			if (!wnd)
+			if (!wnd) {
 				m_mainWindow->m_activeButton = nullptr;
+
+				// A press outside the open panel closes it (the transient window does that on the way
+				// down), and the release that ends the same press then arrives at whatever is under the
+				// pointer. When that is this button the panel would be shut and opened again in the same
+				// click, so a person could never put a section away by clicking its button.
+				if (wxGetMouseState().LeftIsDown())
+					m_closedByPressAt = wxGetLocalTimeMillis();
+			}
 
 			ibSubSystemButton::Refresh();
 			ibSubSystemButton::Update();
@@ -99,13 +108,22 @@ class ibSubSystemWindow : public wxWindow {
 
 			SetCursor(wxCURSOR_HAND);
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
+			EnableVisibleFocus(false);   // AcceptsFocus() alone does not stop the native view drawing its ring
 		}
 
 		virtual wxWindow* GetMainWindowOfCompositeControl() override { return m_mainWindow; }
 
+		// The section is shown by its own painting (bold, lighter fill when open); a focus ring on top of
+		// that is macOS drawing the blue ring around a button that was clicked.
+		bool AcceptsFocus() const override { return false; }
+
 	protected:
 
 		void OnLeftUp(wxMouseEvent& event) {
+			const bool endsClosingPress = m_closedByPressAt != 0 && (wxGetLocalTimeMillis() - m_closedByPressAt) < 1500;
+			m_closedByPressAt = 0;
+			if (endsClosingPress)
+				return;
 
 			// Clicking the open section closes it. That click used to be the one case this
 			// handler skipped, and the transient window does not dismiss itself here either,
@@ -376,6 +394,7 @@ class ibSubSystemWindow : public wxWindow {
 
 		const ibValueMetaObjectSection* m_metaObject;
 		wxPopupTransientWindow* m_popupWindow;
+		wxLongLong m_closedByPressAt = 0;
 
 		wxAuiToolBarItem item;
 
@@ -396,6 +415,177 @@ class ibSubSystemWindow : public wxWindow {
 		wxEventType   m_eventType;
 
 		wxDECLARE_EVENT_TABLE();
+	};
+
+	// ⭐ A COMMAND ON A SECTION'S PAGE — an icon and a caption, left-aligned, with no button around it.
+	//
+	// It was a wxButton with wxBORDER_NONE | wxBU_LEFT and an underlined font. On macOS a native button
+	// centres its caption whatever wxBU_LEFT says, paints the system's grey over the colour it was given,
+	// and a white background was set on it besides — so the page read as a column of centred, underlined,
+	// grey words on white strips over a cream page. This draws the row itself: icon and caption from the
+	// left edge, the page's own colour behind it, and the underline only while the pointer is over the
+	// words (the underline that says "this is a link" is shown at the moment it is useful).
+	//
+	// It answers a click the way the button did — a wxEVT_BUTTON from this window, carrying its id — so
+	// the handlers that were bound to the buttons are bound to this unchanged.
+	class ibCommandLink : public wxControl {
+	public:
+
+		ibCommandLink(wxWindow* parent, wxWindowID id, const wxString& caption, const wxIcon& icon)
+			: m_caption(caption), m_icon(icon)
+		{
+			wxControl::Create(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+
+			SetBackgroundStyle(wxBG_STYLE_PAINT);
+			SetForegroundColour(wxDefaultStypeFGColour);
+			EnableVisibleFocus(false);
+
+			// The caption is four points larger than the system's normal text: it is what a person came to
+			// read, and it sits under a heading that is bold.
+			wxFont font = *wxNORMAL_FONT;
+			font.SetPointSize(font.GetPointSize() + 4);
+			font.SetUnderlined(false);
+			SetFont(font);
+
+			Bind(wxEVT_PAINT,        &ibCommandLink::OnPaint,        this);
+			Bind(wxEVT_MOTION,       &ibCommandLink::OnMotion,       this);
+			Bind(wxEVT_LEAVE_WINDOW, &ibCommandLink::OnLeave,        this);
+			Bind(wxEVT_LEFT_UP,      &ibCommandLink::OnLeftUp,       this);
+			Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&) {});   // painted in full in OnPaint
+
+			// The section page lives in a wxPopupTransientWindow, which holds the mouse while it is open;
+			// on macOS that leaves the rows without motion and leave events. So the pointer is also looked
+			// at from a timer, and the underline follows it even when nothing is delivered to the row.
+			m_hoverTimer.SetOwner(this);
+			Bind(wxEVT_TIMER, &ibCommandLink::OnHoverTick, this);
+			m_hoverTimer.Start(50);
+
+			SetInitialSize(DoGetBestSize());
+		}
+
+		// A row does not take the focus. It lives in a wxPopupTransientWindow, which closes itself when the
+		// focus leaves it; a press on a row that took the focus closed the page before the release could
+		// activate the row, and the release then went to the button that had the focus before.
+		bool AcceptsFocus() const override { return false; }
+
+	protected:
+
+		wxSize DoGetBestSize() const override
+		{
+			wxClientDC dc(const_cast<ibCommandLink*>(this));
+			dc.SetFont(GetFont());
+			const wxSize text = dc.GetTextExtent(m_caption);
+			const int iconW = m_icon.IsOk() ? m_icon.GetWidth() : 0;
+			const int iconH = m_icon.IsOk() ? m_icon.GetHeight() : 0;
+			const int gap = iconW > 0 ? Gap() : 0;
+			return wxSize(iconW + gap + text.x + 2 * Pad(), wxMax(iconH, text.y) + 2 * Pad());
+		}
+
+	private:
+
+		int Gap() const { return FromDIP(8); }
+		int Pad() const { return FromDIP(2); }
+
+		// The part of the row that is the command: the icon and the words, not the empty stretch to the
+		// right of them that the sizer gave the control.
+		wxRect ContentRect() const
+		{
+			const wxSize best = DoGetBestSize();
+			return wxRect(0, 0, wxMin(best.x, GetClientSize().x), GetClientSize().y);
+		}
+
+		void SetHovered(bool hovered)
+		{
+			if (m_hovered == hovered)
+				return;
+			m_hovered = hovered;
+
+			wxFont font = GetFont();
+			font.SetUnderlined(hovered);
+			SetFont(font);
+			ApplyCursor();
+			Refresh();
+		}
+
+		// The pointer shape comes from the window that holds the mouse, which in the section page is the
+		// popup and not this row, so it is set on both.
+		void ApplyCursor()
+		{
+			const wxCursor cursor = m_hovered ? wxCursor(wxCURSOR_HAND) : wxNullCursor;
+			SetCursor(cursor);
+			for (wxWindow* parent = GetParent(); parent != nullptr; parent = parent->GetParent()) {
+				parent->SetCursor(cursor);
+				if (dynamic_cast<wxPopupTransientWindow*>(parent) != nullptr)
+					break;
+			}
+		}
+
+		void OnMotion(wxMouseEvent& event)
+		{
+			SetHovered(ContentRect().Contains(event.GetPosition()));
+			event.Skip();
+		}
+
+		void OnLeave(wxMouseEvent& event)
+		{
+			SetHovered(false);
+			event.Skip();
+		}
+
+		void OnHoverTick(wxTimerEvent&)
+		{
+			if (!IsShownOnScreen()) {
+				SetHovered(false);
+				return;
+			}
+			const wxPoint pointer = ScreenToClient(wxGetMousePosition());
+			SetHovered(ContentRect().Contains(pointer));
+			if (m_hovered)
+				ApplyCursor();   // the system puts the arrow back whenever the pointer moves
+		}
+
+		void Activate()
+		{
+			wxCommandEvent click(wxEVT_BUTTON, GetId());
+			click.SetEventObject(this);
+			ProcessWindowEvent(click);
+		}
+
+		void OnLeftUp(wxMouseEvent& event)
+		{
+			if (ContentRect().Contains(event.GetPosition()))
+				Activate();
+			event.Skip();
+		}
+
+		void OnPaint(wxPaintEvent&)
+		{
+			wxAutoBufferedPaintDC dc(this);
+
+			// Behind the row is whatever the page behind it is — no colour of its own.
+			const wxWindow* page = GetParent();
+			dc.SetBackground(wxBrush(page != nullptr ? page->GetBackgroundColour() : GetBackgroundColour()));
+			dc.Clear();
+
+			dc.SetFont(GetFont());
+			dc.SetTextForeground(GetForegroundColour());
+
+			const wxSize client = GetClientSize();
+			int x = 0;
+
+			if (m_icon.IsOk()) {
+				dc.DrawIcon(m_icon, x, (client.y - m_icon.GetHeight()) / 2);
+				x += m_icon.GetWidth() + Gap();
+			}
+
+			const wxSize text = dc.GetTextExtent(m_caption);
+			dc.DrawText(m_caption, x, (client.y - text.y) / 2);
+		}
+
+		wxString m_caption;
+		wxIcon   m_icon;
+		bool     m_hovered = false;
+		wxTimer  m_hoverTimer;
 	};
 
 	class ibPopupSubWindow : public wxPopupTransientWindow {
@@ -430,15 +620,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							wxButton* df = new wxButton(this, object->GetMetaID(), object->GetSynonym(),
-								wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-							df->SetBitmap(object->GetIcon());
-							df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-							df->SetBackgroundColour(*wxWHITE);
-							df->SetForegroundColour(wxDefaultStypeFGColour);
-
-							df->SetCursor(wxCURSOR_HAND);
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -461,7 +643,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerSubsystem = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st = new wxStaticText(this, wxID_ANY, child->GetSynonym());
 
-						st->SetBackgroundColour(*wxWHITE);
 						st->SetForegroundColour(wxDefaultStypeFGColour);
 						st->Wrap(-1);
 						st->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -484,15 +665,7 @@ class ibSubSystemWindow : public wxWindow {
 
 										for (const auto object : subArray) {
 
-											wxButton* df = new wxButton(wnd, object->GetMetaID(), object->GetSynonym(),
-												wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-											df->SetBitmap(object->GetIcon());
-											df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-
-											df->SetBackgroundColour(*wxWHITE);
-											df->SetForegroundColour(wxDefaultStypeFGColour);
-											df->SetCursor(wxCURSOR_HAND);
+											ibCommandLink* df = new ibCommandLink(wnd, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 											df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 											df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, wnd);
 
@@ -509,15 +682,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							wxButton* df = new wxButton(this, object->GetMetaID(), object->GetSynonym(),
-								wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-							df->SetBitmap(object->GetIcon());
-							df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-
-							df->SetBackgroundColour(*wxWHITE);
-							df->SetForegroundColour(wxDefaultStypeFGColour);
-							df->SetCursor(wxCURSOR_HAND);
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -546,7 +711,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerCreate = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_create = new wxStaticText(this, wxID_ANY, _("Create"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_create->SetBackgroundColour(*wxWHITE);
 						st_create->SetForegroundColour(wxDefaultStypeFGColour);
 						st_create->Wrap(-1);
 						st_create->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -560,15 +724,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							wxButton* df = new wxButton(this, object->GetMetaID(), object->GetSynonym(),
-								wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-							df->SetBitmap(object->GetIcon());
-							df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-
-							df->SetBackgroundColour(*wxWHITE);
-							df->SetForegroundColour(wxDefaultStypeFGColour);
-							df->SetCursor(wxCURSOR_HAND);
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Create));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
@@ -590,7 +746,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerReport = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_report = new wxStaticText(this, wxID_ANY, _("Report"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_report->SetBackgroundColour(*wxWHITE);
 						st_report->SetForegroundColour(wxDefaultStypeFGColour);
 						st_report->Wrap(-1);
 						st_report->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -604,15 +759,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							wxButton* df = new wxButton(this, object->GetMetaID(), object->GetSynonym(),
-								wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-							df->SetBitmap(object->GetIcon());
-							df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-
-							df->SetBackgroundColour(*wxWHITE);
-							df->SetForegroundColour(wxDefaultStypeFGColour);
-							df->SetCursor(wxCURSOR_HAND);
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Report));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
@@ -634,7 +781,6 @@ class ibSubSystemWindow : public wxWindow {
 						wxBoxSizer* sizerService = new wxBoxSizer(wxVERTICAL);
 						wxStaticText* st_service = new wxStaticText(this, wxID_ANY, _("Service"), wxDefaultPosition, wxDefaultSize, 0);
 
-						st_service->SetBackgroundColour(*wxWHITE);
 						st_service->SetForegroundColour(wxDefaultStypeFGColour);
 						st_service->Wrap(-1);
 						st_service->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
@@ -647,15 +793,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							wxButton* df = new wxButton(this, object->GetMetaID(), object->GetSynonym(),
-								wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxBU_LEFT);
-
-							df->SetBitmap(object->GetIcon());
-							df->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, true, wxEmptyString));
-
-							df->SetBackgroundColour(*wxWHITE);
-							df->SetForegroundColour(wxDefaultStypeFGColour);
-							df->SetCursor(wxCURSOR_HAND);
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Service));
 
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
@@ -704,8 +842,8 @@ class ibSubSystemWindow : public wxWindow {
 				ibBackendCommandItem* cmdItem =
 					dynamic_cast<ibBackendCommandItem*>(activeMetaData->FindAnyObjectByFilter(event.GetId()));
 
-				if (cmdItem != nullptr &&
-					cmdItem->Execute(GetCommandType(section))) {
+				const bool executed = cmdItem != nullptr && cmdItem->Execute(GetCommandType(section));
+				if (executed) {
 					// A click inside wxPopupTransientWindow doesn't dismiss it on
 					// every platform. Close it explicitly once the command has
 					// successfully opened its form.
