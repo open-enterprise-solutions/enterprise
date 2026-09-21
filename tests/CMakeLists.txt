@@ -121,6 +121,7 @@ add_executable(oes_tests
     test_valueContainer.cpp
     test_valueStructure.cpp
     test_valueGeometry.cpp
+    test_valueTextFile.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp
     test_rowValues.cpp
