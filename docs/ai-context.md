@@ -418,7 +418,7 @@ value per side in a correspondence register: `<Field>Dr` / `<Field>Cr` (`Currenc
 | `Turnovers` | Begin, End, Periodicity, AccountCondition, AccountDimensions, Condition, CorrAccountCondition, CorrAccountDimensions | as `Balance` (the two `Corr…` arguments exist in correspondence only and filter; there is no corresponding-account column yet) |
 | `BalanceAndTurnovers` | Begin, End, Periodicity, FillMethod, AccountCondition, AccountDimensions, Condition | as `Balance` |
 | `DrCrTurnovers` (correspondence only) | Begin, End, Periodicity, AccountConditionDr, AccountDimensionsDr, AccountConditionCr, AccountDimensionsCr, Condition | `AccountDr` / `AccountCr`, `AccountDimensionDr<i>` / `…Cr<i>`, `CurrencyDr` / `CurrencyCr` — the row is a pair |
-| `RecordsWithAccountDimensions` | Begin, End, Condition, Order, Top | as the line |
+| `RecordsWithAccountDimensions` | Begin, End, Condition | as the line — order and cap the lines in the query around it (`ORDER BY` / `TOP`, or `orderby … take` in LINQ), not in arguments |
 
 Figures are `<Resource>` + the figure word: `AmountTurnoverDr`, `AmountBalance` (one signed number),
 `AmountBalanceDr` / `…Cr` (folded by the account's type), `AmountOpeningBalanceDr`,

@@ -105,8 +105,6 @@ struct ibAcctArgs
 	int m_kindsDr      = -1;   // the requested breakdown: one kind or an ARRAY of them, in the caller's order
 	int m_kindsCr      = -1;
 	int m_condition    = -1;
-	int m_order        = -1;   // Records — how the lines come out
-	int m_top          = -1;   // Records — how many
 	int m_count        = 0;
 
 	// ⭐⭐ THE ORDER IS GROUPED BY SIDE, NOT BY KIND OF ARGUMENT — and that is the whole correction.
@@ -185,13 +183,11 @@ struct ibAcctArgs
 		if (conditionLast)
 			a.m_condition = slot++;
 
-		// A LISTING is the one reading that answers with lines rather than figures, so it is also the
-		// only one that can be asked for an ORDER and a COUNT — a fold has no line to order and
-		// answers with every group it found.
-		if (shape == ibAcctShape::Records) {
-			a.m_order = slot++;
-			a.m_top   = slot++;
-		}
+		// 🛑 A LISTING TAKES NO ORDER AND NO COUNT (Max, 2026-09-21). It had both - a string of fields
+		// with directions, parsed here, and a Top meaning "the first N of that order" - which made it a
+		// small query language inside two arguments. How the lines are ordered and how many are taken
+		// is what a query says over the reading: `from r in <the reading> orderby r.Period descending
+		// take 10`, and on a data source that order reaches the server.
 
 		a.m_count = slot;
 		return a;
@@ -219,11 +215,6 @@ struct ibAcctCallArgs
 	// credit pass the credit ones. So that half is built per pass, where the side is known.
 	ibValue              m_condition;
 	ibRegFold            m_fold;
-
-	// A LISTING answers with lines, so it is the one reading that can be ordered and capped. Empty /
-	// zero mean "as they come" and "all of them" — the same answers the arguments' absence gives.
-	ibValue              m_order;
-	long                 m_top = 0;
 };
 
 // The requested breakdown as a list: one kind, an ARRAY of them in the caller's order, or nothing at
@@ -527,8 +518,7 @@ public:
 	                         const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr) const;
 	ibQueryRamTable ComputeRecords(const ibRegBound& begin, const ibRegBound& end,
 	                               const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-	                               const ibQueryPredicatePtr& filter, const ibValue& condition = ibValue(),
-	                               const ibValue& order = ibValue(), long top = 0) const;
+	                               const ibQueryPredicatePtr& filter, const ibValue& condition = ibValue()) const;
 
 	// ⭐⭐ THE CORRESPONDENCE READING, BUILT ONCE AND ENDED TWICE.
 	//
@@ -552,8 +542,7 @@ public:
 	// lowers it through the read path and not the GROUP BY one.
 	ibQueryRelPtr BuildRecordsRelation(const ibRegBound& begin, const ibRegBound& end,
 	                                   const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-	                                   const ibQueryPredicatePtr& filter, const ibValue& condition = ibValue(),
-	                                   const ibValue& order = ibValue(), long top = 0) const;
+	                                   const ibQueryPredicatePtr& filter, const ibValue& condition = ibValue()) const;
 
 
 	// ⭐⭐ THE SHAPE OF A VIRTUAL TABLE — metadata plus the CALL'S ARGUMENTS, and no database.
@@ -1341,10 +1330,9 @@ public:
 	ibAcctRecordsQueryable(const ibValueMetaObjectAccountingRegister* reg,
 	                       const ibRegBound& begin = ibRegBound(), const ibRegBound& end = ibRegBound(),
 	                       const std::vector<ibValue>& kindsDr = {}, const std::vector<ibValue>& kindsCr = {},
-	                       const ibQueryPredicatePtr& filter = nullptr, const ibValue& condition = ibValue(),
-	                       const ibValue& order = ibValue(), long top = 0)
+	                       const ibQueryPredicatePtr& filter = nullptr, const ibValue& condition = ibValue())
 		: ibAcctTotalsQueryable(reg, ibAcctShape::Records, kindsDr, kindsCr, condition),
-		  m_begin(begin), m_end(end), m_filter(filter), m_order(order), m_top(top) {}
+		  m_begin(begin), m_end(end), m_filter(filter) {}
 
 	// A row here IS a movement line, so it carries the period, the document and the line within it —
 	// which is exactly what the Record granularity names. Nothing is folded, so nothing is dropped.
@@ -1387,8 +1375,6 @@ public:
 private:
 	ibRegBound          m_begin, m_end;
 	ibQueryPredicatePtr m_filter;
-	ibValue             m_order;      // field names, in the order they sort; empty = as they come
-	long                m_top = 0;    // 0 = all of them
 };
 
 //********************************************************************************************

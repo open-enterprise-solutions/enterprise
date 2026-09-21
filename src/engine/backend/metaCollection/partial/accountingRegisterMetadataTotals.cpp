@@ -509,66 +509,6 @@ ibQueryHierarchyScope ScopeFromAccountCondition(const ibBackendQueryable* source
 	return ibQueryHierarchyScope(source, accountCol, named, unfold);
 }
 
-// ⭐⭐ HOW A LISTING COMES OUT — the order, and how many.
-//
-// Only a listing can be asked this: a fold answers with every group it found, and a group has no
-// line to put before another. What the author writes is field names, one per element of an array or
-// separated by commas in one string, each optionally followed by a direction.
-//
-// ⚠ THE NAME IS RESOLVED AGAINST THE SOURCE, and a name it does not know is an ERROR rather than a
-// sort quietly left out. An ignored ORDER BY is the kind of wrong nobody notices: the rows come back,
-// in some order, and the order they came back in looks like an answer.
-// The listing's order as the columns it names, each with its direction (true = ascending).
-std::vector<std::pair<const ibBackendQueryColumn*, bool>> RecordsOrder(const ibBackendQueryable* source, const ibValue& order)
-{
-	std::vector<std::pair<const ibBackendQueryColumn*, bool>> out;
-	if (source == nullptr || order.IsEmpty())
-		return out;
-
-	// One value or a list of them — the same shape every argument of this register takes.
-	std::vector<wxString> items;
-	for (const ibValue& element : ibQueryHierarchyNamedValues(order)) {
-		wxString text = element.GetString();
-		while (!text.IsEmpty()) {
-			const int comma = text.Find(wxT(','));
-			wxString one = comma == wxNOT_FOUND ? text : text.Left(comma);
-			text = comma == wxNOT_FOUND ? wxString() : text.Mid(comma + 1);
-			one.Trim(true).Trim(false);
-			if (!one.IsEmpty())
-				items.push_back(one);
-		}
-	}
-
-	for (const wxString& item : items) {
-		wxString name = item;
-		bool ascending = true;
-
-		// `<field> DESC` — the direction is a word AFTER the name, which is where every language this
-		// one resembles puts it.
-		const int space = name.Find(wxT(' '));
-		if (space != wxNOT_FOUND) {
-			const wxString direction = name.Mid(space + 1).Trim(true).Trim(false);
-			name = name.Left(space).Trim(true);
-			if (stringUtils::CompareString(direction, wxT("DESC")) || stringUtils::CompareString(direction, wxT("Descending")))
-				ascending = false;
-			else if (!stringUtils::CompareString(direction, wxT("ASC")) && !stringUtils::CompareString(direction, wxT("Ascending")))
-				ibBackendCoreException::Error(_("unknown sort direction '%s' - expected ASC or DESC"), direction);
-		}
-
-		const ibBackendQueryColumn* column = source->ResolveColumnByName(name);
-		if (column == nullptr)
-			ibBackendCoreException::Error(_("cannot order by '%s': this reading has no such field"), name);
-		out.push_back({ column, ascending });
-	}
-	return out;
-}
-
-void OrderRecords(ibDataQueryBuilder& b, const ibBackendQueryable* source, const ibValue& order)
-{
-	for (const auto& item : RecordsOrder(source, order))
-		b.OrderBy(item.first, item.second);
-}
-
 // ⭐⭐ AND THE OTHER HALF OF A CONDITION: A FILTER OVER THE BREAKDOWN.
 //
 // A condition may name a DIMENSION (an ordinary column of the register) or an ACCOUNT DIMENSION — and
@@ -3968,8 +3908,7 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 	const ibRegBound& begin, const ibRegBound& end,
 	const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-	const ibQueryPredicatePtr& filter, const ibValue& condition,
-	const ibValue& order, long top) const
+	const ibQueryPredicatePtr& filter, const ibValue& condition) const
 {
 	ibQueryRamTable retTable;
 	// A row here IS a movement line, so it carries the period, the document and the line within it.
@@ -4030,13 +3969,6 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 	for (const auto resource : GetResourceArrayObject())
 		carry(resource);
 
-	// HOW THEY COME OUT, and how many — the two arguments only a listing can be asked. Both are part
-	// of the QUESTION rather than of paging: `Top` here means "the first N lines of this order", which
-	// is why it rides the query instead of being a page the caller turns.
-	OrderRecords(b, movements, order);
-	if (top > 0)
-		b.Top(top);
-
 	ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
 	while (sel.Next()) {
 		const long row = retTable.AppendRow();
@@ -4065,8 +3997,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 	const ibRegBound& begin, const ibRegBound& end,
 	const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-	const ibQueryPredicatePtr& filter, const ibValue& condition,
-	const ibValue& order, long top) const
+	const ibQueryPredicatePtr& filter, const ibValue& condition) const
 {
 	const ibBackendQueryable* movements = GetQueryable();
 	if (movements == nullptr)
@@ -4083,14 +4014,6 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 			IsCorrespondence() ? AccountDimensionCondition(this, movements, /*creditSide*/ true, condition)
 			                   : ibQueryPredicatePtr()))
 		b.Where(slots);
-
-	// ⚠ THE ORDER AND THE COUNT RIDE HERE TOO, and that is the difference between them and PAGING.
-	// The page was left off this relation deliberately (a LIMIT of the composer's is the composer's);
-	// `Top` is not that — it is part of what was ASKED, "the first N of this order", and a relation
-	// that dropped it would answer a different question than the same call answers through rows.
-	OrderRecords(b, movements, order);
-	if (top > 0)
-		b.Top(top);
 
 	const ibQueryRelPtr lines = b.BuildRelation();
 	ibRegFold recordFold;
@@ -4145,13 +4068,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildRecordsRelation(
 		}
 	}
 
-	ibQueryRelPtr rel = ibProject(ibSubquery(lines, a), std::move(projection));
-	// …and in the order asked for: the order of a derived table is not a promise its reader keeps.
-	std::vector<ibQuerySortKey> keys;
-	for (const auto& item : RecordsOrder(movements, order))
-		for (const wxString& field : ColumnFieldNames(item.first))
-			keys.push_back({ ibCol(a, field), item.second ? ibQuerySortDir::Asc : ibQuerySortDir::Desc });
-	return keys.empty() ? rel : ibSort(rel, std::move(keys));
+	return ibProject(ibSubquery(lines, a), std::move(projection));
 }
 
 // ============================================================================
@@ -5632,13 +5549,13 @@ ibQueryRelPtr ibAcctRecordsQueryable::GetSourceRelation(const wxString& alias) c
 	// the provider does it; the road a dot-walk takes does not — it joins the target tables onto what comes
 	// back and qualifies by the alias, so `R.Account.Code` rendered `FROM AccountingRegister1408 LEFT JOIN …
 	// ON (AccountingRegister1408_T_4.fld1414_RRRef = …)` and Firebird refused the alias (-206, 2026-09-16).
-	const ibQueryRelPtr rel = m_reg->BuildRecordsRelation(m_begin, m_end, m_kindsDr, m_kindsCr, m_filter, m_condition, m_order, m_top);
+	const ibQueryRelPtr rel = m_reg->BuildRecordsRelation(m_begin, m_end, m_kindsDr, m_kindsCr, m_filter, m_condition);
 	return rel != nullptr ? ibSubquery(rel, alias) : nullptr;
 }
 
 ibQueryRamTable ibAcctRecordsQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
 {
-	return m_reg->ComputeRecords(m_begin, m_end, m_kindsDr, m_kindsCr, m_filter, m_condition, m_order, m_top);
+	return m_reg->ComputeRecords(m_begin, m_end, m_kindsDr, m_kindsCr, m_filter, m_condition);
 }
 
 // ============================================================================
@@ -5831,15 +5748,6 @@ ibAcctCallArgs ibAcctParseCall(const ibValueMetaObjectAccountingRegister* reg, i
 	// the call, but the owner's rule made its two words one answer (2026-09-16): every period of the
 	// interval where a balance stands or something moved is a row, whichever is named. So it is not read,
 	// and nothing downstream carries a flag that changes nothing.
-	call.m_order = ibRegArg(paParams, lSizeArray, layout.m_order);
-
-	const ibValue top = ibRegArg(paParams, lSizeArray, layout.m_top);
-	if (!top.IsEmpty()) {
-		// A count that is not a number, or is negative, is not a smaller answer — it is a question
-		// nobody asked. Zero and absent mean the same thing: all of them.
-		const long asked = static_cast<long>(top.GetInteger());
-		call.m_top = asked > 0 ? asked : 0;
-	}
 	return call;
 }
 
@@ -5985,8 +5893,7 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 			call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_fold, call.m_condition);
 	case ibAcctShape::Records:
 		return MakeCompanionFor<ibAcctRecordsQueryable>(consumed, paParams, lSizeArray, m_reg,
-			call.m_begin, call.m_end, call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_condition,
-			call.m_order, call.m_top);
+			call.m_begin, call.m_end, call.m_kindsDr, call.m_kindsCr, call.m_filter, call.m_condition);
 	}
 	return nullptr;
 }
@@ -6135,21 +6042,6 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 
 	if (layout.m_condition >= 0 && symmetricSides)
 		ibAppendRegisterConditionParameter(out);
-
-	// A LISTING answers with lines, so it is the one reading that can be asked for an order and a
-	// count. A fold has no line to order and answers with every group it found.
-	// ⚠ ORDER IS NOT A PREDICATE — it is a list of fields with directions, so it is an ordinary
-	// expression slot. Declaring it as a condition would put the wrong editor in front of the author
-	// and, worse, would let the lowering route it into the WHERE.
-	if (layout.m_order >= 0)
-		push(wxT("Order"), ibTypeDescription(),
-			_("How the LINES are ordered - a list of fields with directions, not a condition. Only a "
-			  "listing takes one: a fold has no line to order and answers with every group it "
-			  "found."));
-	if (layout.m_top >= 0)
-		push(wxT("Top"), ibTypeDescription(),
-			_("How many lines at most, taken AFTER the order - so it means the first N of that "
-			  "order, not an arbitrary N of the whole."));
 }
 
 // A READING IS FILTERED BY ITS DIMENSIONS AND ITS BREAKDOWN, never by a resource. A resource is what
