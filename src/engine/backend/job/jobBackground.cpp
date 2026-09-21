@@ -8,6 +8,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/moduleManager/moduleManager.h"   // root module manager -> GetProcUnit
+#include "backend/metaData.h"                      // ibMetaData::FindAnyObjectByFilter — a common module by its name
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
@@ -211,17 +212,20 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& p
 			// for — `RunBackground("StockManagement.RecalculateTotals", …)` — answered "common module not
 			// found" for every common module there is (measured 2026-09-19; no test called it by name).
 			// The root's own export of that name still wins, which keeps whatever relied on it.
+			//
+			// Asked as the scheduled job asks it (metaScheduledJobObject.cpp): the COMMON MODULE by its name in
+			// this session's own configuration, then its unit from the session — FindCommonModule, the one door
+			// that answers "which unit runs this module here". A name compared along the list of units would be
+			// a second answer to it, and that list holds every object's manager module too.
 			ibValue moduleValue;
 			if (!unit->GetPropVal(moduleName, moduleValue) || moduleValue.IsEmpty()) {
-				for (const auto& commonModule : mm->GetCommonModules())
-					// A COMMON module, not a manager module: both live in this list (the manager modules of every
-					// object, all called "ManagerModule"), and the first name match would otherwise win.
-					if (commonModule && commonModule->GetObjectModule() != nullptr
-					    && commonModule->GetObjectModule()->GetClassType() == g_metaCommonModuleCLSID
-					    && stringUtils::CompareString(moduleName, commonModule->GetModuleName())) {
-						moduleValue = commonModule;   // an ibValuePtr IS a value holding the unit
-						break;
-					}
+				const ibMetaData* const metaData = mm->GetMetaManager() != nullptr ? mm->GetMetaManager()->GetMetaData() : nullptr;
+				const ibValueMetaObjectCommonModule* const commonModule = metaData != nullptr
+					? metaData->FindAnyObjectByFilter<ibValueMetaObjectCommonModule>(moduleName, g_metaCommonModuleCLSID)
+					: nullptr;
+				if (commonModule != nullptr)
+					if (ibValueModuleManager::ibValueModuleUnit* const found = mm->FindCommonModule(commonModule))
+						moduleValue = ibValue(found);
 			}
 			if (moduleValue.IsEmpty())
 				ibBackendCoreException::Error(_("Background job: common module '%s' not found"), moduleName);
