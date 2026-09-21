@@ -30,7 +30,7 @@
 // serve all three triggers: insert applies +value over NEW, delete applies the NEGATED value over
 // OLD, update does both.
 //
-// (docs/register-totals-strategy.md §4)
+// (docs/private/register-totals-strategy.md §4)
 
 #include "backend/backend.h"
 #include "databaseLayer.h"          // ibMaterializationDialect / ibDialectDictionary / ibTotalsPeriod
@@ -443,7 +443,7 @@ BACKEND_API bool ibMaterializationEquivalent(ibDatabaseLayer& conn, const ibMate
 // noise: it hides the one line that matters in a list of lines that do not.
 // What the apply DID — and only that. There is no failing member: a bundle that cannot be installed
 // raises ibBackendQueryException (Kind::TranslationFailure), because a refusal is an exception and a
-// returned one is a refusal nobody reads (docs/exceptions.md §5a). So both members mean success, and
+// returned one is a refusal nobody reads (docs/private/exceptions.md §5a). So both members mean success, and
 // they differ only in whether there was work to do.
 enum class ibMaterializeApply { Unchanged, Rebuilt };
 

@@ -25,7 +25,7 @@
 // Platform: this is the MSVC debug heap (_CrtSetAllocHook) and dbghelp, so it is Windows-Debug
 // only and compiles to nothing everywhere else. The equivalent on Linux / macOS is not ours to
 // write — LeakSanitizer already reports leaks with stacks, and the CMake build exposes it as
-// -DOES_SANITIZE=address. The procedure in docs/engineering-playbook/25-memory-leaks.md is the
+// -DOES_SANITIZE=address. The procedure in docs/private/engineering-playbook/25-memory-leaks.md is the
 // same either way; only the instrument differs.
 
 #if defined(DEBUG) && defined(__WXMSW__)

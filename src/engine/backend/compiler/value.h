@@ -83,7 +83,7 @@ public:
 // What remains is real and stands on the other side of the boundary: a query COLUMN carries its own
 // control block (ibBackendQueryColumn : enable_shared_from_this), so nobody needs to invent a second
 // owner for one, and a runtime value travels by ibValuePtr, which counts rather than deletes. The
-// rule itself lives in docs/ownership-authority.md; on this side it is a rule people keep, not one
+// rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
 // the compiler keeps for them.
 
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
@@ -973,7 +973,7 @@ public:
 	// keep, not one the compiler keeps for them: release with DecrRef, travel by ibValuePtr, and
 	// never hand a runtime value to another owner. The QUERY side is a different matter and is
 	// closed by construction — a column carries its own control block, so no second owner is ever
-	// needed (query/queryColumn.h). (docs/ownership-authority.md)
+	// needed (query/queryColumn.h). (docs/private/ownership-authority.md)
 
 	//operators:
 	void operator = (const ibValue& cParam);
@@ -1774,7 +1774,7 @@ private:
 	// NOTE: this sits at the END of the class, so under MSVC's declaration-order
 	// layout it occupies the TAIL word — the intended repack next to the two
 	// 1-byte scalars (to fill the hole before the 8-aligned union) never
-	// happened, and that hole is still padding. See docs/value-audit.md.
+	// happened, and that hole is still padding. See docs/private/value-audit.md.
 	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory
 	// model; part of the incremental wxBase→std migration. Never copied /
 	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only

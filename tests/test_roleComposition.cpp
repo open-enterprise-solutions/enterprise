@@ -14,7 +14,7 @@
 //
 // 🛑 WHY THIS FILE EXISTS. The fold shipped with "compiles and starts, but the
 // fold itself is unverified — no test over the two buckets, not yet run under a
-// live role" (docs/ROADMAP.md §2, access-policy-rls row) and stayed that way for
+// live role" (docs/private/ROADMAP.md §2, access-policy-rls row) and stayed that way for
 // a month. Every case below is a sentence from that design, turned into a
 // question the code has to answer out loud.
 //

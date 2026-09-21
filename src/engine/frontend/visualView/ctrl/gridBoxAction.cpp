@@ -104,7 +104,7 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 					// 🛑 SAID WHERE IT IS SEEN. A refusal routed to the log ends up in a panel that
 					// may not be open, and a report that simply never appears reads as "the button
 					// does nothing" (Max, 2026-08-20). The description is DATA, never a format
-					// string (docs/exceptions.md).
+					// string (docs/private/exceptions.md).
 					wxMessageBox(failure, _("Compose"), wxOK | wxICON_ERROR);
 					return;
 				}

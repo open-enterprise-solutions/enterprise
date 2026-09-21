@@ -358,7 +358,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	// conflict (each constant has its own table); concurrent writes to THIS constant serialize on the
 	// RECORD_KEY='6' row via the dialect's row-lock clause (FOR UPDATE / WITH LOCK). The L2 door runs
 	// it on the session's bound conn — the SAME TX as the scope above — via q(session holder).
-	// See docs/record-locks.md.
+	// See docs/private/record-locks.md.
 	{
 		ibDatabaseQueryBuilder q(ibSession::Current()->Holder());
 		ibQueryIR ir(ibProject(

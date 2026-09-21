@@ -109,7 +109,7 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	//
 	// The saving is real and the way to it is not a reset list that has to stay complete forever —
 	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
-	// is (docs/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
+	// is (docs/private/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
 	std::shared_ptr<ibRunContext> spHeapCtx;
 	// The stack frame leases its slots; the heap-promoted one cannot, because it is
 	// the case that OUTLIVES the call — a lambda captured it. procUnitState.h, ibRunStack.
@@ -480,7 +480,7 @@ private:
 //
 // Both indexes were std::map: a tree asks the comparator ~log2(n) times per
 // lookup where a bucket asks about once, and comparing an ibValue is the
-// expensive part (docs/runtime-perf.md §9). Neither is a sorted structure by
+// expensive part (docs/private/runtime-perf.md §9). Neither is a sorted structure by
 // intent — group-by keeps its emission order in a separate vector (m_groups),
 // join has no order at all — so the tree was buying ordering nobody read.
 
@@ -1944,7 +1944,7 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 //
 // Helper strings are English short descriptions surfaced in IntelliSense
 // tooltips. Concrete enough that the user understands what the op does
-// without opening docs/linq.md; one line each. Localisation is a
+// without opening docs/private/linq.md; one line each. Localisation is a
 // future concern (would join the existing wxString runtime-message
 // localisation path).
 const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {

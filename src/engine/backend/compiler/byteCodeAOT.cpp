@@ -1,5 +1,5 @@
 // Ahead-Of-Time (AOT) bytecode persistence — Step 1 of the AOT cache
-// (docs/next-session-aot.md). Writes a compiled ibByteCode into a flat
+// (docs/private/next-session-aot.md). Writes a compiled ibByteCode into a flat
 // memory blob (later persisted as sys_bytecode_cache.blob) and reads
 // it back. Cold sessions then skip recompilation by Deserialize-ing
 // the blob whose source-hash + metadata-version + compiler-version

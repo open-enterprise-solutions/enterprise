@@ -13,7 +13,7 @@
 ibValueMetaObjectCommand::ibValueMetaObjectCommand(const wxString& name, const wxString& synonym, const wxString& comment)
 	: ibValueMetaObject(name, synonym, comment)
 {
-	// One handler shape for object and general commands (docs/command-arc.md §6):
+	// One handler shape for object and general commands (docs/private/command-arc.md §6):
 	//   Procedure CommandProcessing(CommandParameter, ExecuteParameters)
 	(*m_propertyCommandModule)->SetDefaultProcedure(wxT("CommandProcessing"), ibContentHelper::eProcedureHelper,
 		{ wxT("CommandParameter"), wxT("ExecuteParameters") });

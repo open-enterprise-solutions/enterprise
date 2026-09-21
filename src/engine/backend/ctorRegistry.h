@@ -34,7 +34,7 @@
 // ~180 registered types and stringUtils::CompareString taking ToStdWstring() of
 // BOTH sides per comparison, a single `New Structure` was paying ~360 heap
 // allocations — measured at 18.5 us per New (tests/bench_runtime.cpp,
-// DISABLED_RecordParts). See docs/runtime-perf.md §5.9.
+// DISABLED_RecordParts). See docs/private/runtime-perf.md §5.9.
 //
 // First user: the ibValue factory (valueFactory.cpp). The per-metadata factories
 // (ibMetaDataDataProcessor / ibMetaDataReport — today raw std::find_if over their

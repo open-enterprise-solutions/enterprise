@@ -14,7 +14,7 @@
 //	                * ibDataQueryBuilder::NewPageCache.
 //	              The BIG DB provider (real-table read/write engine + ibMetaIRBuilder
 //	              lowering + Get/SetValueAttribute) lives in dbTableProvider.cpp.
-//	              See docs/query-language-arc.md §18, §22.
+//	              See docs/private/query-language-arc.md §18, §22.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryProvider.h"                                            // ibBackendQueryProvider / ibComputedProvider (+ dataQueryBuilder.h, queryable.h)
@@ -873,7 +873,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 // delegates to that leaf's provider (today's path). A Join / Union over leaves is the
 // next arc (co-locate into one SQL where all leaves are SQL-able on one connection,
 // else push down per leaf + materialise the rest + stitch); guarded until built, since
-// no caller composes a multi-source tree yet. (docs/query-language-arc.md §22.1)
+// no caller composes a multi-source tree yet. (docs/private/query-language-arc.md §22.1)
 // ==========================================================================
 namespace {
 bool IsSingleSource(const ibDataQuerySpec& spec)
@@ -923,7 +923,7 @@ std::vector<ibQueryCondition> LeafConditionsByName(const ibDataQuerySpec& spec, 
 	return out;
 }
 
-// --- planner decision at the materialisation seam (temp-db foundation, docs/temp-db.md §7) ----
+// --- planner decision at the materialisation seam (temp-db foundation, docs/private/temp-db.md §7) ----
 // The temp decision splits in two, each owned where its inputs live:
 //   SHOULD — the size lever, HERE (WorthDbTemp): below the threshold a DB temp is not worth its
 //            CREATE+INSERT round-trips; a small intermediate stays in RAM regardless of capability.
@@ -939,7 +939,7 @@ bool WorthDbTemp(long rowCount) { return rowCount >= kTempTableMinRows; }
 // even when almost none of them can join. Once ONE side of a join is materialised its join-key values
 // are KNOWN — pushing them into the other side as `key IN (…)` makes that read fetch only rows that
 // can possibly join. It is a pure reduction: a row the filter removes could not have appeared in the
-// result, so the answer is identical and only the read shrinks (docs/query-language-arc.md).
+// result, so the answer is identical and only the read shrinks (docs/private/query-language-arc.md).
 //
 // The cap is the whole cost model. Beyond it the IN list itself (bind parameters, a long rendered
 // predicate, the DBMS's own list handling) costs more than the read it saves — and a key set that
@@ -988,7 +988,7 @@ void AppendSemiJoinCondition(const ibBackendQueryColumn* col, std::vector<ibValu
 
 // Materialisation SEAM — read a leaf through its OWN provider (single-source, its
 // conditions pushed down) and collect the needed columns into a RAM table, keyed by
-// GetColumnId. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
+// GetColumnId. (docs/private/query-language-arc.md §22.1a, docs/private/temp-db.md)
 ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                      const std::vector<ibQueryCondition>& conds,
                                      const std::vector<const ibBackendQueryColumn*>& cols)
@@ -1122,7 +1122,7 @@ private:
 // PromoteUnionBranches, which gate on WorthDbTemp with the REAL row count and own the
 // temp manager (its Materialise carries the CAN-gate + the runtime fallback). A leaf
 // that reaches here is being stitched in RAM, where a DB temp gains nothing
-// (docs/temp-db.md §8). A new promotable RAM-stitch shape extends the promote family,
+// (docs/private/temp-db.md §8). A new promotable RAM-stitch shape extends the promote family,
 // not this function.
 ibQueryRamTable MaterialiseLeaf(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                 const std::vector<ibQueryCondition>& conds,
@@ -1260,7 +1260,7 @@ ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBac
 // column. `present` accumulates every column now in `rows` (the source's own + each brought-in leaf) so the
 // caller's DISTINCT / sort / limit rebuilds keep them. Sibling paths sharing a ref prefix reuse ONE join
 // (joined). A COMPOSITE reference hop fans out into every table it may point at (WalkedLeafOfTargets) and
-// brings the leaf of the whole remaining walk. (docs/query-language-arc.md §22 computed dot-walk)
+// brings the leaf of the whole remaining walk. (docs/private/query-language-arc.md §22 computed dot-walk)
 ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQueryable* primary,
                                         const ibDataQuerySpec& spec,
                                         std::vector<const ibBackendQueryColumn*>& present)
@@ -2943,7 +2943,7 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 // CellKey is GONE. Hierarchy linking keys by the VALUE itself now (ibValueHash / ibValueEqual,
 // value.h): a REFERENCE compares by its _RRRef there — a row's own data-reference and a parent-ref
 // pointing AT it are the same value, which is what the link needs — and no cell is rendered to text
-// to say so. (docs/query-language-arc.md §22.1b)
+// to say so. (docs/private/query-language-arc.md §22.1b)
 
 // Context for the recursive hierarchy fold (invariant across the recursion).
 // ---------------------------------------------------------------------------
@@ -3208,7 +3208,7 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 // sorts / select list / join key). Emits the rebuilt query state into the caller's buffers (which must
 // outlive the spec2 use) and returns the manager (keeps the temp table alive across the read); null =
 // not this shape / no temp capability / a runtime failure / an unresolved remap -> the caller stays on
-// the RAM composer. (docs/temp-db.md §8 — the server-side push-down)
+// the RAM composer. (docs/private/temp-db.md §8 — the server-side push-down)
 std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	const ibDataQuerySpec& spec,
 	std::shared_ptr<ibQueryNode>& outRoot,
@@ -3336,7 +3336,7 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 // remap is needed — only the branch's queryable is swapped for its temp. Returns the managers (keep
 // the temps alive) + the rebuilt union root in `outRoot`; an EMPTY vector means "not promoted" (no
 // computed branch, an unsupported shape, a small set, or no temp capability) -> the caller stays on
-// RamUnion. (docs/temp-db.md)
+// RamUnion. (docs/private/temp-db.md)
 std::vector<std::unique_ptr<ibTempTableManager>> PromoteUnionBranches(const ibDataQuerySpec& spec,
                                                                       std::shared_ptr<ibQueryNode>& outRoot)
 {
@@ -3388,7 +3388,7 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	// Fast path: a 2-leaf inner join of two real DB tables on scalar keys, scalar outputs — run
 	// the WHOLE join + cross-table filter in ONE server-side SELECT (the DBMS does the work, only
 	// the projected scalars transit). Anything outside this shape falls through to the RAM compose
-	// below (materialise each leaf, stitch in C++). (docs/query-language-arc.md §22.1a)
+	// below (materialise each leaf, stitch in C++). (docs/private/query-language-arc.md §22.1a)
 	if (ibDbTableProvider::CanColocateJoin(spec)) {
 		ibJournalInfo(wxT("query.road"), wxT("SERVER: join co-located into one SELECT"));
 		return ibDbTableProvider::ExecuteColocatedJoin(spec, page);
@@ -3397,7 +3397,7 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	// (computed ⋈ DB): materialise the computed leaf into a DB temp table, remap its columns onto the
 	// temp, and run the now-DB⋈DB join SERVER-SIDE. The buffers + manager live for this block, so the
 	// temp table is alive across ExecuteColocatedJoin (whose result is RAM-backed); on any miss the
-	// manager drops and we fall through to the RAM compose. (docs/temp-db.md §8)
+	// manager drops and we fall through to the RAM compose. (docs/private/temp-db.md §8)
 	{
 		std::shared_ptr<ibQueryNode>  pRoot;
 		std::vector<ibQueryCondition> pConds;
@@ -3474,7 +3474,7 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 // owns) maps to the temp, the deeper segments stay on their target catalogs, and the temp — a real DB source
 // — auto-joins them SERVER-SIDE through the ordinary dot-walk join chain (ibRefJoinChain). Null = not computed
 // / no connection / not worth a temp / no temp capability / an unresolved remap -> the caller stays on the RAM
-// fold. The out-buffers outlive the spec2 use; the manager keeps the temp alive across the read. (docs/temp-db.md)
+// fold. The out-buffers outlive the spec2 use; the manager keeps the temp alive across the read. (docs/private/temp-db.md)
 std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 	const ibDataQuerySpec& spec,
 	std::vector<ibQueryCondition>& outConds,
@@ -3680,7 +3680,7 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 
 	// Fast path: a 2-leaf inner join of two real DB tables, scalar group keys / aggregate inputs —
 	// run the JOIN + GROUP BY + aggregates in ONE server-side SELECT instead of materialising both
-	// leaves to RAM and folding in C++ below. (docs/query-language-arc.md §22.1a)
+	// leaves to RAM and folding in C++ below. (docs/private/query-language-arc.md §22.1a)
 	if (ibDbTableProvider::CanColocateAggregate(spec))
 		return ibDbTableProvider::ExecuteColocatedAggregate(spec);
 
@@ -5719,7 +5719,7 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 // totals (hierarchical totals): fold the detail rows into a subtotal TREE. The group
 // columns are the LEVELS (in order); the aggregates the sums folded at every level + the
 // grand total. Input = the single source materialised, or the composed multi-source
-// result. The tree lives in L3's own ibQueryRamTable. (docs/query-language-arc.md §22.1b)
+// result. The tree lives in L3's own ibQueryRamTable. (docs/private/query-language-arc.md §22.1b)
 // ⭐ CAN THE DBMS FOLD THIS TOTALS ITSELF, and if so — fold it. The same two push-downs
 // ExecuteTotals takes when it can, asked as a QUESTION so a caller that must otherwise read detail
 // rows (the query lowering) can take the cheap road when it exists and its own road when it does

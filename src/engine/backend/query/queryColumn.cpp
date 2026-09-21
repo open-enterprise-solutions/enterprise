@@ -176,7 +176,7 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 
 	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people actually
 	// filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job row
-	// (docs/scheduled-jobs.md § 5b).
+	// (docs/private/scheduled-jobs.md § 5b).
 	if (td.ContainType(g_valueScheduleCLSID))
 		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), wxString(), false));
 

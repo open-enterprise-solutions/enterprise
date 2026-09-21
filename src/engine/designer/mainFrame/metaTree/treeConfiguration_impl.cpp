@@ -1503,7 +1503,7 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, co
 
 // A REPORT is a data processor plus the thing that makes it a report: its COMPOSERS. They are its
 // own children, like its forms — the default one is what the generated form is built from, so a
-// report that declares one needs no form at all (docs/report-engine.md §4b).
+// report that declares one needs no form at all (docs/private/report-engine.md §4b).
 void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	AddDataProcessorItem(metaObject, hParentID);   // same shape, down to the RAM tabular sections

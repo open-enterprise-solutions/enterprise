@@ -47,7 +47,7 @@ bool ibValueRecordSetObject::LockByKeys()
 	// = {recorder} for AR/AcR, {period, dim...} for non-recorder IR), each decomposed inside L3.
 	// The pessimistic row lock rides as page.m_lockForUpdate: the dialect appends its row-lock
 	// clause (FB "WITH LOCK", PG "FOR UPDATE"; SQLite no-op — whole-DB TX lock). Draining
-	// the selection holds the lock. No statement, no SetValueAttribute. (docs/record-locks.md)
+	// the selection holds the lock. No statement, no SetValueAttribute. (docs/private/record-locks.md)
 	try {
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr);   // a row LOCK is a physical concurrency op, NOT a user read: it must see
@@ -386,7 +386,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	// (No totals write here. Derived state is maintained by the DATABASE trigger the schema
 	//  installs on this table, inside this same transaction — so it cannot be bypassed by any
 	//  other writer and cannot drift. Updating it from here would restore exactly the
-	//  managed-code pattern the trigger replaced. See docs/register-totals-strategy.md.)
+	//  managed-code pattern the trigger replaced. See docs/private/register-totals-strategy.md.)
 
 	if (!hasError) {
 		// m_selected drives IsEmpty()/IsNewObject(); it must reflect the persisted

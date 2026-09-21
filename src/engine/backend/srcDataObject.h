@@ -302,7 +302,7 @@ public:
 	// Storage lives on the base (m_formLockHandle below) — overrides
 	// reuse the same field for RAII release on source dtor.
 	//
-	// See docs/record-locks.md "Planned upgrade path" / Phase B.3.
+	// See docs/private/record-locks.md "Planned upgrade path" / Phase B.3.
 	virtual bool TryAcquireFormLock(ibLockMode /*mode*/ = ibLockMode::Exclusive) { return true; }
 	virtual void ReleaseFormLock() { m_formLockHandle.Release(); }
 

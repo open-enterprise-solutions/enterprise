@@ -46,7 +46,7 @@ inline wxString ibPhysicalFieldName(int metaId)
 // form binding walks to (ibBackendTypeSourceFactory::WalkSource returns exactly this) and what the
 // composer's own metaobject already models the same way. What it no longer IS is a QUERY column.
 //
-// The reason is ownership, and it is written down once in docs/ownership-authority.md: this object
+// The reason is ownership, and it is written down once in docs/private/ownership-authority.md: this object
 // lives under the runtime's own reference count (ibValueMetaObject -> ibValue, whose DecrRef does
 // `delete this` at zero), while the query tier holds columns by std::shared_ptr, whose count lives
 // in a control block outside the object. Neither count can see the other and BOTH delete. Fused by

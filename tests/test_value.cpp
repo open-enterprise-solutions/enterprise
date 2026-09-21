@@ -17,7 +17,7 @@
 // Footprint probe — reports the real sizeof on this build/platform.
 // Not an assertion (the number is informational); run the suite and read
 // the printed line. Used to measure the ibValue memory-reduction arc
-// (Phase 0 baseline → after each phase). See docs/value-audit.md.
+// (Phase 0 baseline → after each phase). See docs/private/value-audit.md.
 // ===========================================================================
 
 TEST(ValueTest, SizeofReport) {
@@ -266,7 +266,7 @@ TEST(ValueTest, SetTypeChangesType) {
 // from GetMetaObject()) silently bound to operator=(bool) — const ptr -> bool —
 // and turned the object into a Boolean. The new operator=(const ibValue*) stores
 // it as TYPE_CONST_REFFER: weak (no ref-count, Reset never deletes), read-only,
-// but read paths delegate to the object. See docs/value-const-reffer.md.
+// but read paths delegate to the object. See docs/private/value-const-reffer.md.
 // ===========================================================================
 
 namespace {

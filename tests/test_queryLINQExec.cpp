@@ -19,7 +19,7 @@
 // activeMetaData), so a metadata-free TestQueryable drives it — exactly what
 // test_queryComposer proves a queryable may be. (L4-1 text Execute() resolves names
 // against activeMetaData and is NOT reachable here — L4-2 is where the executable-parity
-// test lives. See docs/query-engine-layers.md §L4, docs/query-language-arc.md §23.5.)
+// test lives. See docs/private/query-engine-layers.md §L4, docs/private/query-language-arc.md §23.5.)
 // =============================================================================
 
 #include <gtest/gtest.h>

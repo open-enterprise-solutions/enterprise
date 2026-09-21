@@ -19,7 +19,7 @@
 // Lives in backend/query/ — the dedicated L3 home (the L4 text parser + the L4-2
 // LINQ fold both lower into this entry; the runtime invokes it).
 //
-// PERFORMANCE (docs/query-language-arc.md §19) — under every scroll tick:
+// PERFORMANCE (docs/private/query-language-arc.md §19) — under every scroll tick:
 //   * cacheable, no connection: the metadata resolution (the model/buffer holds
 //     an ibDataQueryBuilder across ticks; rebuilds only on filter/sort change);
 //   * per-fetch, borrow→run→release: FetchPage builds the page IR (cheap), runs
@@ -317,7 +317,7 @@ public:
 	// walk it per the mode — flat / hierarchy / hierarchy-only — polymorphically; the caller sees one
 	// interface, never which. Configure the fold on the returned Selector (ByParentRef / ByGroups /
 	// Aggregating). Consumes the result (the cursor is drained). Defined where ibSelector is complete.
-	// (docs/query-language-arc.md §22.1b)
+	// (docs/private/query-language-arc.md §22.1b)
 	ibSelector Select(ibSelectKind kind = ibSelectKind::ibSelectKind_Direct);
 	// ⭐ …AND ONE BRANCH OF THE FOLD — where the totals forked (`SPLIT … ONTO <name>`), the walk that
 	// hands out only that branch. One READ, several branches: this is how a composition gives each
@@ -348,7 +348,7 @@ public:
 
 	// The door also stamps the totals config — the TotalBy dimension levels (in order) + the common
 	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
-	// the Selector). (docs/query-language-arc.md §22.1b)
+	// the Selector). (docs/private/query-language-arc.md §22.1b)
 	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
 		bool overall = false);
 
@@ -369,7 +369,7 @@ public:
 
 	// The door also stamps the SOURCE (holder + queryable + select list + filter) so the Selector can
 	// run LAZY sub-selections (selection.Select() re-Executes a node's children) and resolve a
-	// reference-dimension's catalog hierarchy. (docs/query-language-arc.md §22.1b)
+	// reference-dimension's catalog hierarchy. (docs/private/query-language-arc.md §22.1b)
 	// ⭐⭐ THE SOURCE COMES WITH ITS OWNERSHIP — `owned` is the skeleton, not a second bookkeeping list.
 	//
 	// A subquery / UNION branch is wrapped in an ibSubqueryQueryable that owns the columns it
@@ -533,7 +533,7 @@ struct ibJoinOn {
 // the composer realizes the tree over those per-leaf providers (co-locate into one
 // SQL where possible, else materialise + stitch). Union-ready by shape — that is
 // the whole point (FROM catalog, FROM temp table, then UNION).
-// (docs/query-language-arc.md §22.1)
+// (docs/private/query-language-arc.md §22.1)
 // ==========================================================================
 struct ibQueryNode
 {
@@ -674,7 +674,7 @@ public:
 	// left, right) joins on explicit columns (temp / RAM / arbitrary). Union(b) stacks
 	// b vertically (same projection). The door builds an ibQueryNode TREE; the composer
 	// realizes it over each leaf's provider — co-located into one SQL where possible,
-	// else materialised + stitched. (docs/query-language-arc.md §22.1)
+	// else materialised + stitched. (docs/private/query-language-arc.md §22.1)
 	// ⛔ NO KEYLESS OVERLOAD. `Join(b)` used to mean "work the link out from a reference" — removed
 	// with the derivation behind it. A join carries its ON; a product is CrossJoin, and in the
 	// language it is written with a comma.
@@ -751,7 +751,7 @@ public:
 	ibDataQueryBuilder& WhereIn(const ibBackendQueryColumn* col, const std::vector<ibValue>& values);
 	// Full boolean WHERE — a predicate TREE (OR / NOT / IS NULL beyond the flat AND-fold of the
 	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
-	// with any verb conditions / row-key filters. (docs/query-language-arc.md §23 — door Where via L2.)
+	// with any verb conditions / row-key filters. (docs/private/query-language-arc.md §23 — door Where via L2.)
 	ibDataQueryBuilder& Where(const ibQueryPredicatePtr& predicate);
 	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). A single DB
 	// source lowers it server-side via BuildColumnExpr; a COMPUTED source / RAM-filterable predicate
@@ -813,7 +813,7 @@ public:
 	// Paths sharing a prefix reuse one join. Any target carrying a self-reference join
 	// key qualifies (SelfReferenceField — catalogs, documents, charts of characteristic
 	// types / accounts); a target without one is rejected, not silently dropped.
-	// (docs/query-language-arc.md §22 dot-walk)
+	// (docs/private/query-language-arc.md §22 dot-walk)
 	ibDataQueryBuilder& SelectPath(const std::vector<const ibBackendQueryColumn*>& path,
 	                               const wxString& alias);
 
@@ -889,7 +889,7 @@ public:
 	// --- totals structure: two aggregate CONTEXTS + dimension levels ----------
 	// Group()  switches subsequent .Sum/.Count… into the GROUPBY common aggregate set;
 	// Totals() switches them into the TOTALBY common aggregate set. Each set is COMMON across its
-	// levels — a level has no own aggregates. (docs/query-language-arc.md §22.1b)
+	// levels — a level has no own aggregates. (docs/private/query-language-arc.md §22.1b)
 	ibDataQueryBuilder& Group()  { m_aggInTotals = false; return *this; }
 	ibDataQueryBuilder& Totals() { m_aggInTotals = true;  return *this; }
 
@@ -974,7 +974,7 @@ public:
 	// back by GetColumn(alias). Single-source reads need no select-list (consumers loop
 	// attributes via GetValue); a JOIN/UNION composes columns from several leaves, so the
 	// output is the select-list — each value pulled from the leaf that owns the column,
-	// projected under `alias` (caller-unique). (docs/query-language-arc.md §22.1b)
+	// projected under `alias` (caller-unique). (docs/private/query-language-arc.md §22.1b)
 	ibDataQueryBuilder& Select(const ibBackendQueryColumn* col, const wxString& alias);
 
 	// Row-identity (guidName) lookups — by the row's OWN key, not an attribute.
@@ -1199,7 +1199,7 @@ private:
 
 	// The read lowering (IR build + anchor binds) lives in the DB provider now
 	// (ibDbTableProvider in the .cpp), built from this state per Select. The
-	// querybuilder holds only the metadata query; see docs/query-language-arc.md §22.
+	// querybuilder holds only the metadata query; see docs/private/query-language-arc.md §22.
 	ibDatabaseConnectionHolder*  m_holder;          // threaded down — L2 borrows it per fetch
 	const ibAccessPolicy*        m_policy = nullptr; // RLS — pulled from the session in the default ctor; null = no enforcement
 	const ibBackendQueryable*    m_queryable = nullptr;  // .From() — the PRIMARY source (single-source fast path)
@@ -1293,7 +1293,7 @@ BACKEND_API [[nodiscard]] ibDataQueryResult ibMakeEmptyQueryResult(const ibBacke
 // columns / queryable, builds this, and hands it to the provider it pulls from the
 // queryable (ibBackendQueryable::GetProvider()). The provider owns ALL the L2 and the
 // metadata->physical lowering. A view of refs into the door, valid for the single
-// terminal call that built it. (docs/query-language-arc.md §22.2)
+// terminal call that built it. (docs/private/query-language-arc.md §22.2)
 // ==========================================================================
 struct ibDataQuerySpec
 {

@@ -72,7 +72,7 @@ public:
 	}
 
 	// (⛔ `SetVisibleTest` STOOD HERE — "which of these fields this node may use at all", the narrowing
-	//  the AVAILABLE set existed to apply. The set is gone (docs/data-composer.md), and with it the
+	//  the AVAILABLE set existed to apply. The set is gone (docs/private/data-composer.md), and with it the
 	//  only caller; what was left was a `std::function` threaded through seven call sites and two
 	//  guards that could never be true.)
 

@@ -154,7 +154,7 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 // a value follow with an unreachable dummy return — the codebase's Error();return idiom).
 //
 // ⭐ THE TIER RAISES ITS OWN VARIETY. A query that does not hold up is not "an error with no
-// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/exceptions.md §3).
+// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/private/exceptions.md §3).
 // Typed as Core it could only be caught by catching everything, which is the same as not being able
 // to catch it at all: a script's Try/Except around a query, a tool that wants to show the author
 // where the query is wrong, and a caller that must let real faults through were all indistinguishable.
@@ -6879,7 +6879,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// FROM — single source, a JOIN chain, or a UNION stack. In every case the flat read
 	// (b.Execute -> ExecuteRead) realizes the source (server-side or RAM-composed), the TotalBy config is
 	// stamped on the result, and the runtime folds the ONE snapshot — no separate totals terminal. The
-	// dimension / aggregate resolution below reads through `sources`. (docs/query-language-arc.md §22.1b)
+	// dimension / aggregate resolution below reads through `sources`. (docs/private/query-language-arc.md §22.1b)
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
 	// Conditions written INSIDE a virtual table's call — collected here so the totals read applies

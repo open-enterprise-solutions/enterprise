@@ -12,7 +12,7 @@
 //   │   └─ Pear  = 3
 //   └─ South = 7
 //       └─ Apple = 7
-// (docs/query-language-arc.md §22.1b)
+// (docs/private/query-language-arc.md §22.1b)
 
 #include <gtest/gtest.h>
 

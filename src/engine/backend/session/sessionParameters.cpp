@@ -13,7 +13,7 @@
 //
 // The declaration side (the metatype, the manager and the unit) lives with the
 // metadata: metaCollection/metaSessionParameterObject.h. See
-// docs/session-parameters.md for why the pieces sit where they do.
+// docs/private/session-parameters.md for why the pieces sit where they do.
 //
 ////////////////////////////////////////////////////////////////////////////
 

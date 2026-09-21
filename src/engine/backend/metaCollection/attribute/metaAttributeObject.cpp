@@ -23,7 +23,7 @@
 // from. It answers with a shared empty description instead of a dangling one: a column that outlived
 // its attribute has no type, which is a fact, and saying it costs nothing. (Nothing may write through
 // a type description a column hands out — that is already true of every one of them.)
-// See docs/ownership-authority.md for why the facade exists at all.
+// See docs/private/ownership-authority.md for why the facade exists at all.
 static ibTypeDescription& ibDetachedColumnTypeDesc()
 {
 	static ibTypeDescription s_none;

@@ -18,10 +18,10 @@
 // IS NULL / NOT, predicate tree), JOIN / subquery sources / UNION, register virtual
 // tables with source args, dot-walk across projection / WHERE / ORDER / aggregates,
 // flat GROUP BY + HAVING, hierarchical TOTALS, TOP, and the optimizer rewrite pass.
-// The realized state lives in docs/query-language-arc.md §23.4 / §23.8 / §23.9 —
+// The realized state lives in docs/private/query-language-arc.md §23.4 / §23.8 / §23.9 —
 // grow that doc, not this list.
 //
-// See docs/query-language-arc.md §14 / §22 / §23.
+// See docs/private/query-language-arc.md §14 / §22 / §23.
 
 #include "queryAST.h"
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibDataQueryBuilder
@@ -235,7 +235,7 @@ public:
 	                                       const std::map<wxString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema);
 
-	// === A PACKAGE — several statements as ONE trip (docs/query-constructor.md §5) ===
+	// === A PACKAGE — several statements as ONE trip (docs/private/query-constructor.md §5) ===
 	//
 	// One entry per statement, IN WRITTEN ORDER, and the array is deliberately
 	// HETEROGENEOUS by position, because the statements are:

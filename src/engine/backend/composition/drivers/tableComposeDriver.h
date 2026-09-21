@@ -32,7 +32,7 @@
 //
 // Neither driver computes anything. The composer has already folded, filtered and ordered; a driver
 // is the passive sink of its walk, and one doing arithmetic of its own would be a second road
-// obliged to agree with the first (docs/query-language-arc.md § 31.4 is the day that cost).
+// obliged to agree with the first (docs/private/query-language-arc.md § 31.4 is the day that cost).
 //
 //   ibGroupingComposeDriver g; ibCrossComposeDriver x;
 //   for (ibDataComposer::Output& o : composer.Outputs())

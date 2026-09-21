@@ -130,7 +130,7 @@ public:
 		//
 		// Every surface this platform draws is painted from a fixed LIGHT palette, in code:
 		// #FAF7F0 for the metadata tree, #B8C9D4 for the panels around it, and so on through
-		// docs/ui-palette.md. What is NOT set anywhere is the text colour — no SetForegroundColour
+		// docs/private/ui-palette.md. What is NOT set anywhere is the text colour — no SetForegroundColour
 		// accompanies those backgrounds — so glyphs come from the system.
 		//
 		// Under a dark system appearance the system duly hands back white. White on #FAF7F0 is

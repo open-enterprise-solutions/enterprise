@@ -617,7 +617,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 		//
 		// There is no "last statement" to read when the statements are related: what the composition
 		// stands on is the FINAL query, whose sources ARE the named selections
-		// (docs/query-language-arc.md § 24.4b). So the fields are the union of theirs, written the
+		// (docs/private/query-language-arc.md § 24.4b). So the fields are the union of theirs, written the
 		// way a path over two selections has to be written — `Sales.Qty` — which is the very job
 		// `ONTO` exists for: settling a clash of names, nothing else.
 		//

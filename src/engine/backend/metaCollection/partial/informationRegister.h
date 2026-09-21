@@ -301,7 +301,7 @@ private:
 // register; the only degree of freedom is the period bound (last = MAX / "<=", first =
 // MIN / ">="), fixed by the two derived types. The compute itself is the register's own
 // ComputeSlice. A slice does NOT persist on the register — it lives for the one call
-// that built it. See docs/query-language-arc.md §22.4d.
+// that built it. See docs/private/query-language-arc.md §22.4d.
 
 // base — shared slice logic; abstract (the period bound is the derived's job). The
 // RAM-virtual-table plumbing + the register-forwarding navigation live in the shared

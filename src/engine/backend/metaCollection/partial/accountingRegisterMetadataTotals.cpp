@@ -178,7 +178,7 @@ const ibBackendQueryColumn* ColumnOn(const ibBackendQueryable* source, const ibV
 		return nullptr;
 	const ibBackendQueryColumn* here = source->ResolveColumnByName(attribute->GetName());
 	// …and the attribute's own face when this source does not name it — an attribute HOLDS a query
-	// column rather than being one (docs/ownership-authority.md).
+	// column rather than being one (docs/private/ownership-authority.md).
 	return here != nullptr ? here : attribute->GetQueryColumn();
 }
 

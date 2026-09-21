@@ -515,7 +515,7 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 // that ever puts it there is this batch — which on Firebird runs DEFERRED, past the DDL commit. A failure
 // in that second phase loses rows the diff can never mention again: both configurations agree the value
 // exists, so every later apply computes "nothing changed" and the row stays missing for good. That is the
-// data half of the hole docs/schema-authority.md § 4.3 patches for structure with a TableExists guard —
+// data half of the hole docs/private/schema-authority.md § 4.3 patches for structure with a TableExists guard —
 // and data needs no guard, because an upsert is idempotent: repeating it IS the repair, and it decides
 // nothing from what the database happens to hold, so the diff remains the sole authority.
 // The declared rows are a handful per table (enum values, predefined items), so re-asserting them costs
@@ -728,7 +728,7 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHo
 	if (!schema.RunOrDefer(sourceTable, t.m_name, [spec, was, hasOld, holder]() {
 			ibSchemaBuilder deferred(holder);
 			ibApplyMaterialization(deferred.Connection(), spec, hasOld ? &was : nullptr);
-			return true;   // a refusal RAISES from L2-2 (docs/exceptions.md §5a)
+			return true;   // a refusal RAISES from L2-2 (docs/private/exceptions.md §5a)
 		}))
 		ibBackendCoreException::Error(
 			_("Failed to install the totals maintenance for %s - the restructuring was rolled back"),

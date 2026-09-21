@@ -14,7 +14,7 @@
 // collide with the script language's keywords, and the query parser is not
 // subject to the script's CES-vs-VES keyword gate.
 //
-// See docs/query-language-arc.md §14 / §23.
+// See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/backend.h"     // BACKEND_API
 #include <wx/string.h>

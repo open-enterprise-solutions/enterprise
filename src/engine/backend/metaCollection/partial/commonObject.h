@@ -449,7 +449,7 @@ public:
 	explicit ibRecordQueryable(const TMeta* meta) : m_meta(meta) {}
 
 	// The attribute by name, answered with ITS QUERY FACE. An attribute is not a query column: it
-	// HOLDS one, because the two live under different ownerships (docs/ownership-authority.md). The
+	// HOLDS one, because the two live under different ownerships (docs/private/ownership-authority.md). The
 	// L3 surface is unchanged — it still receives an ibBackendQueryColumn and still names no
 	// attribute on its contract.
 	// ⭐ THE OBJECT'S OWN FIND ANSWERS IT. This carried a clsid list of its own — a second answer to a
@@ -479,7 +479,7 @@ public:
 	// GetRowKeyColumn / IsReferenceAttribute / GetIdentitySort — all of them derived from this one
 	// authority, and the last was retired for pretending to be a second: it answered with a SORT whose
 	// tail happened to be the key, so a source sorting by something else first handed a number to
-	// everyone who wanted identity. (docs/query-language-arc.md §22.1)
+	// everyone who wanted identity. (docs/private/query-language-arc.md §22.1)
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
 		const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
 		if (refAttr == nullptr)
@@ -2442,7 +2442,7 @@ protected:
 
 	// Optimistic-concurrency Write protection.
 	//
-	// Two-layer defence (see docs/record-locks.md):
+	// Two-layer defence (see docs/private/record-locks.md):
 	//   Layer 1 — issues `SELECT DataVersion FROM <tbl> WHERE uuid = ?
 	//             <FOR UPDATE>` inside the current TX (m_lockForUpdate; the dialect renders the
 	//             clause from m_rowLockSuffix). The driver-side
@@ -2537,7 +2537,7 @@ protected:
 
 	// Captured at successful ReadData; compared against the row's
 	// current DataVersion at Write/Delete time. Empty for new objects.
-	// See LockAndCheckDataVersion + docs/record-locks.md.
+	// See LockAndCheckDataVersion + docs/private/record-locks.md.
 	wxString m_loadedDataVersion;
 
 public:
@@ -3157,7 +3157,7 @@ protected:
 	//
 	// Must be called inside an active TX (the SafeBeginTransaction
 	// scope on the WriteRecordSet / DeleteRecordSet hot path).
-	// See docs/record-locks.md "Registers — keyed by recorder Document".
+	// See docs/private/record-locks.md "Registers — keyed by recorder Document".
 	bool LockByKeys();
 
 	// Phase A scaffold helpers — register-side counterparts of the

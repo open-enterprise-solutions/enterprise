@@ -19,7 +19,7 @@
 // TEXT (`Orders.Ref = Products.Ref`) and read back by the engine's parser — the same door the
 // condition rows go through, so the diagram has no private idea of what a join is either.
 //
-// See docs/query-constructor.md §5 step 4.
+// See docs/private/query-constructor.md §5 step 4.
 //
 ////////////////////////////////////////////////////////////////////////////
 

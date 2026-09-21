@@ -17,7 +17,7 @@
 // mixin. Implementers list it as a SECOND base (after the ibValue-deriving
 // metaobject base) so ibValue stays at offset 0 (see the first-base PMF rule).
 //
-// See docs/query-language-arc.md §18 (name substitution) / §20 (this interface).
+// See docs/private/query-language-arc.md §18 (name substitution) / §20 (this interface).
 
 #include "backend/tabularModelView.h"   // ibMetaID (via backend.h) — NOT tabularModel.h, so that one can hold
                                         // ibDataDBComposer BY VALUE (breaks the dataComposer→queryLowering→queryable→
@@ -155,7 +155,7 @@ BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
 // attribute behind it fits the same shape. L3-native filter operators beyond the
 // list layer's Equal / NotEqual. Kept here (not L2-1's ibQueryBinOp) so the metadata
 // side carries no L2-1 dependency — the query builder translates these to physical IR
-// operators. (L3 doesn't pull L2-1 includes; see docs/query-language-arc.md §20, §22.4b.)
+// operators. (L3 doesn't pull L2-1 includes; see docs/private/query-language-arc.md §20, §22.4b.)
 // The L3 comparison/filter operator — ONE L3-native enum covering equality AND the ordered/LIKE ops, so the
 // crippled 2-value ibComparisonType (Eq/Ne, a leftover from the legacy ibFilterRow) is GONE from the query
 // path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "why do you
@@ -351,7 +351,7 @@ struct ibQueryPredicate
 // per row — never a multiplying JOIN). The inner is a FULL query: its own WHERE / dot-walk / captured
 // runtime Params ride along via m_where (lowered vs m_inner). The outer+inner key columns + op form the
 // correlation. Held on the builder (parallel to the flat conditions) and appended to the WHERE by the
-// provider, so it goes SERVER-SIDE in the one main statement. (docs/access-policy-rls.md — semi-join.)
+// provider, so it goes SERVER-SIDE in the one main statement. (docs/private/access-policy-rls.md — semi-join.)
 struct ibSemiJoinExists
 {
 	const ibBackendQueryable*   m_inner    = nullptr;   // the permission source (a real register / table)
@@ -382,7 +382,7 @@ struct ibSemiJoinExists
 // PostgreSQL, SQLite 3.25+), while ROLLUP is PostgreSQL alone.
 //
 // Inside its area the value is CONSTANT, which is what makes it usable on a heading: the node folds
-// it with MIN and gets the value itself back. (docs/query-language-arc.md §27)
+// it with MIN and gets the value itself back. (docs/private/query-language-arc.md §27)
 // ⭐⭐ `OutputRef` — A COLUMN OF THE FINISHED RESULT, READ BY THE NAME IT WAS PUBLISHED UNDER.
 //
 // Every other kind here reads a SOURCE row. This one reads an OUTPUT: the figure an aggregate left
@@ -684,7 +684,7 @@ public:
 	// lowering. The DB families share one default (a stateless static DB provider);
 	// computed queryables (slice / balance / turnover) OVERRIDE this to vend their own
 	// (a static computed provider). The default impl lives in queryProvider.cpp where
-	// the concrete provider is complete. (docs/query-language-arc.md §22.4)
+	// the concrete provider is complete. (docs/private/query-language-arc.md §22.4)
 	virtual ibBackendQueryProvider& GetProvider() const;
 
 	// --- name resolution (COLUMNS — L3-clean) ---------------------------
@@ -692,7 +692,7 @@ public:
 	// attribute type belongs to ibBackendRowReader (the DB materialisation contract), not to
 	// this L3 interface. The L4 text parser feeds a NAME; ResolveColumnByName yields the
 	// source's own column object. Attribute-level resolution (the DB field machinery) is
-	// reached, when needed, via AsRowReader(). (docs/query-language-arc.md §22.4b)
+	// reached, when needed, via AsRowReader(). (docs/private/query-language-arc.md §22.4b)
 
 	// Does THIS source own the column? — column->leaf routing for multi-source composition
 	// (which leaf a Where / join-key / output column belongs to). Default: the column
@@ -719,7 +719,7 @@ public:
 	// Default EMPTY, which is the honest answer for a metadata-backed source: its columns are the
 	// configuration's and outlive every query, so there is nothing to keep. Only the sources built
 	// FOR one query — a nested subquery, a named query (`WITH`) — mint columns of their own and
-	// answer here. (docs/query-language-arc.md §22 / §24.4)
+	// answer here. (docs/private/query-language-arc.md §22 / §24.4)
 	virtual std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* /*col*/) const {
 		return nullptr;
 	}
@@ -780,7 +780,7 @@ public:
 	// attribute: a reference column rebuilds its ibValueReferenceDataObject from (clsid, blob) via
 	// metaData->GetTypeCtor, an enum its variant via metaData->Create*. A metaobject-backed source
 	// returns its own metadata; a temp / subquery / computed source has none (column-based reads
-	// over them are raw / primitive, no reference reconstruction). (docs/query-language-arc.md §22.4b)
+	// over them are raw / primitive, no reference reconstruction). (docs/private/query-language-arc.md §22.4b)
 	virtual const ibMetaData* GetMetaData() const { return nullptr; }
 
 	// The metaobject BEHIND this queryable (a catalog / document / register …) — a metadata-backed queryable holds
@@ -809,7 +809,7 @@ public:
 	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
 	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.
 	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
-	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/query-language-arc.md §22.1b)
+	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/private/query-language-arc.md §22.1b)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
 
 	// ⭐⭐ THE ARRANGEMENT ITSELF — one value, four states (`ibHierarchyType`, backend_core.h), and
@@ -835,7 +835,7 @@ public:
 	// ResolveReferenceTarget is the other source) on one side, matched to the other side's
 	// SELF-REFERENCE column (the front of its GetPrimaryKeyColumns — its data-reference, own
 	// _RRRef). A non-reference source exposes no key, so a Join over it needs explicit keys.
-	// (docs/query-language-arc.md §22.1)
+	// (docs/private/query-language-arc.md §22.1)
 
 	// --- DB-row materialisation: NOT here ---------------------------------
 	// Materialising a value from a physical DB row needs the metaobject attribute + the L1
@@ -859,12 +859,12 @@ public:
 	// the caller (ibComputedProvider) applies them over the result regardless, so
 	// ignoring them costs speed, never correctness. It is no longer "empty for
 	// now": the semi-join key reduction pushes an `In` filter through it.
-	// Default: physical. (docs/query-language-arc.md §22.4d, §22.6 — RAM-set.)
+	// Default: physical. (docs/private/query-language-arc.md §22.4d, §22.6 — RAM-set.)
 	virtual bool IsComputedInRam() const { return false; }
 	
 	// Produces the computed rows as L3's OWN table (ibQueryRamTable) — NOT a runtime
 	// ibValueModelTable. The register's Compute* builds it directly; a runtime-sourced temp
-	// table converts its model into one at this boundary. (docs/query-language-arc.md §22.6)
+	// table converts its model into one at this boundary. (docs/private/query-language-arc.md §22.6)
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return ibQueryRamTable(); }
 	// (The cell-UPSERT write path was removed: a RAM list now edits its LIVE storage rows directly — the node
 	// IS the storage row — so there is no display-copy to write back through the queryable. See ibDataRamComposer.)
@@ -889,7 +889,7 @@ public:
 // constants AND tabular sections all implement it (a metaobject HAS-A queryable;
 // it no longer IS one). L4 and the door reach a metaobject's data uniformly through
 // holder->GetQueryable(), without knowing the concrete metaclass — null when the
-// metaobject has no queryable. (docs/query-language-arc.md §22.4e — decouple)
+// metaobject has no queryable. (docs/private/query-language-arc.md §22.4e — decouple)
 // ==========================================================================
 class BACKEND_API ibBackendQueryableHolder
 {
@@ -905,7 +905,7 @@ public:
 	// its key by hand. That reading is gone: the main table is ALWAYS there and the query lives over
 	// it, so the key is the main table's PK by construction and there is no second case to ask about.
 	// The arbitrary query itself lives on the LIST, as its own properties, which is where the thing
-	// the user edits belongs. See docs/query-constructor.md §7c.)
+	// the user edits belongs. See docs/private/query-constructor.md §7c.)
 };
 
 // ==========================================================================
@@ -918,7 +918,7 @@ public:
 // AsRowReader() stays null). Columns = the inner explicit Select(col, alias) list, or — for
 // SELECT * — the inner PRIMARY source's full column set (GetColumns). The bodies that touch
 // ibDataQueryBuilder live out-of-line (queryProvider.cpp), so this header forward-declares
-// the inner door only. (docs/query-language-arc.md §22 nested subquery)
+// the inner door only. (docs/private/query-language-arc.md §22 nested subquery)
 // ==========================================================================
 class BACKEND_API ibSubqueryQueryable : public ibBackendQueryable
 {
@@ -1190,7 +1190,7 @@ inline const ibBackendQueryColumn* ibOriginColumn(const ibBackendQueryable* q, c
 // ibValueMetaObjectAccumulationRegister — both vend GetQueryable(). It is a template over an
 // unknown TReg, so it lives in this header alongside the interface; GetProvider() vends the
 // shared computed provider through ibComputedProviderInstance() (so this header still names no
-// concrete provider / L2-1 type). (docs/query-language-arc.md §22.4)
+// concrete provider / L2-1 type). (docs/private/query-language-arc.md §22.4)
 // ==========================================================================
 template <typename TReg>
 class ibComputedRegisterQueryable : public ibBackendQueryable

@@ -14,7 +14,7 @@
 // The registrations are written as a recorder's set, so the set and the key are here as they are for
 // any register; the two verbs of a sequence are the border's. `GetBorder` / `SetBorder` are declared
 // here and answered in the step that builds the borders table — until then they refuse rather than
-// answer a border nothing keeps (docs/sequence-arc.md, steps 2 and 5).
+// answer a border nothing keeps (docs/private/sequence-arc.md, steps 2 and 5).
 enum {
 	eCreateRecordSet,
 	eCreateRecordKey,

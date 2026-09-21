@@ -16,7 +16,7 @@
 // ask it, because there is only one function under them now: if a test here goes red, the field
 // tree and the resolver go wrong together, which is at least honest.
 //
-// (docs/register-totals-strategy.md, docs/query-constructor.md §5g)
+// (docs/private/register-totals-strategy.md, docs/private/query-constructor.md §5g)
 // =============================================================================
 
 #include <gtest/gtest.h>

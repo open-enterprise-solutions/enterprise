@@ -6,7 +6,7 @@
 // These used to live in databaseLayer/databaseLayerException.h, beside the DBMS varieties, which put
 // a floor's exceptions in another floor's header and invited exactly the confusion the types exist to
 // prevent: "the database refused" and "we could not build a query" are different events with
-// different audiences, and telling them apart is the entire point (docs/exceptions.md §3).
+// different audiences, and telling them apart is the entire point (docs/private/exceptions.md §3).
 //
 // The division of labour, top to bottom:
 //

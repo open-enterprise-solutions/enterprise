@@ -23,7 +23,7 @@
 // Indexes are built once in the constructor. All read paths are
 // concurrent-safe by virtue of immutability.
 //
-// See docs/syntax-helper-design.md §3 for the full contract.
+// See docs/private/syntax-helper-design.md §3 for the full contract.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_CORPUS_H_

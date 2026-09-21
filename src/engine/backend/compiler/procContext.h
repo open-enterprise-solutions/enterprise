@@ -27,7 +27,7 @@ class BACKEND_API ibProcUnitEvaluate;
 // by constructing only the declared slots. Then in SPACE: 1 200 bytes per frame on
 // x64 for a reserve that fitted NEITHER kind of frame — argument frames never need
 // more than five slots, local-variable frames need sixteen to ninety and reached
-// `new ibValue[]` on every call anyway. docs/runtime-perf.md §10.
+// `new ibValue[]` on every call anyway. docs/private/runtime-perf.md §10.
 //
 // ⚠ And it was hiding a defect, not merely costing: an index past the end of a
 // frame read into that spare capacity — empty, plausible ibValue — instead of
@@ -205,7 +205,7 @@ struct ibRunContext : ibRunContextSmall, std::enable_shared_from_this<ibRunConte
 	// Measured, not assumed (xperf, DISABLED_LinqOneLambda): `~ibRunContext` was
 	// 15.7% of the run, `operator new` 96% called from CallLambdaWithArgs,
 	// `_free_base` 93% from ~ibRunContext, and a `_Tree_val::_Erase_tree` in the
-	// destructor named the container. See docs/runtime-perf.md §1h.
+	// destructor named the container. See docs/private/runtime-perf.md §1h.
 	//
 	// It was never used as a map either: the only lookup is a linear `find_if`
 	// with a case-insensitive compare, and the only write happens when that scan

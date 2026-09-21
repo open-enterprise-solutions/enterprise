@@ -6,7 +6,7 @@
 // primitive type, collection, form event, operator. One ibHelpEntry per
 // locale per id; ids are canonical and locale-independent.
 //
-// See docs/syntax-helper-design.md §2 for the binding contract:
+// See docs/private/syntax-helper-design.md §2 for the binding contract:
 // - Id grammar  ……………………… §2.2  (e.g. "fn.Message", "attr.Document.Invoice.Code")
 // - JSON schema  ……………………… §2.3
 // - Category dictionary  ……… §2.4  (locale-stable category_keys + per-locale display)

@@ -992,7 +992,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column - for a multi-hop key restrict with Where(x => x.Ref.Field = ...) instead"));
 
-		// DISPATCH by inner kind (docs/access-policy-rls.md — semi-join):
+		// DISPATCH by inner kind (docs/private/access-policy-rls.md — semi-join):
 		if (innerQ != nullptr && innerQ->IsSingleSource()) {
 			// A REAL, SINGLE-source source (a permission REGISTER / catalog) → a correlated EXISTS (semi-join):
 			// the outer row passes iff a permitting row EXISTS in the inner. FILTERS once/zero per row — never
@@ -1018,7 +1018,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			// them; a value table has none) — and semi-join over the temp: the EXISTS then runs SERVER-SIDE in the
 			// one statement, exactly like the register-direct path. On Firebird (no temp dialect) Materialise
 			// returns null and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap until the
-			// pure-SQL-subquery-EXISTS lands; docs/access-policy-rls.md).
+			// pure-SQL-subquery-EXISTS lands; docs/private/access-policy-rls.md).
 			// …and CAN is asked BEFORE the rows are computed: without temp tables the RAM join below computes
 			// the inner again, so rows taken first would be read twice (ibTempTableManager::CanMaterialise).
 			std::shared_ptr<ibTempTableManager> mgr;

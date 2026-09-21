@@ -34,7 +34,7 @@
 // nodes within the same millisecond resolve by node-id tiebreak,
 // not by causal relationship. That's the "eventual consistency
 // with deterministic resolution" trade-off documented in
-// docs/firebird-mesh-driver.md §"HLC clock for conflict resolution".
+// docs/private/firebird-mesh-driver.md §"HLC clock for conflict resolution".
 
 #include "backend/backend.h"
 

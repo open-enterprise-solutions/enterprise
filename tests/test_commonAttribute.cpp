@@ -2,7 +2,7 @@
 // OES Enterprise — common attributes: one declaration, many objects
 //
 // A common attribute is declared under Common and then exists as a REAL attribute
-// inside every object checked into its composition (docs/common-attributes.md).
+// inside every object checked into its composition (docs/private/common-attributes.md).
 // What is pinned here is what broke during the arc, each case for a reason:
 //
 //   * the copy is created by checking in, and only ONE per object exists —

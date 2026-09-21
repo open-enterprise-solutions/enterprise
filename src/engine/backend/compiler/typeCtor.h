@@ -66,7 +66,7 @@ public:
 	// Default = typeid(void) for ctors that carry no concrete C++ type
 	// (meta/control ctors that derive this base directly); their objects
 	// override GetClassType() and never reach the typeid resolution path.
-	// See docs/value-audit.md Phase 3.
+	// See docs/private/value-audit.md Phase 3.
 	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 

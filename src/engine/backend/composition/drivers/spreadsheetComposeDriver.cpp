@@ -29,7 +29,7 @@ constexpr int kMaxColWidth   = 420;
 // rather than announces itself. The deeper the level, the paler the tint, so nesting is visible
 // without a second mechanism.
 //
-// They belong in the palette (docs/ui-palette.md) rather than in a driver, and they are here
+// They belong in the palette (docs/private/ui-palette.md) rather than in a driver, and they are here
 // only until the report gets its own palette roles — a report that prints must eventually take
 // these from the theme, not from a constant.
 const wxColour kHeaderFill(0xD4, 0xE4, 0xD4);

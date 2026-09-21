@@ -1,4 +1,4 @@
-// L2 query layer — comprehensive golden tests (docs/query-language-arc.md §5–§8, §18).
+// L2 query layer — comprehensive golden tests (docs/private/query-language-arc.md §5–§8, §18).
 //
 // PURE: no database, no connection. The whole L2 IR vocabulary the L3 push-down generates
 // (JOIN / Aggregate / Subquery / UNION / the expression set), plus the two L2 features the

@@ -75,7 +75,7 @@ ibValueForm::~ibValueForm()
 	// such ref; scripts holding the value contribute others). While
 	// any holder is alive the source is still "in use" by someone, so
 	// keeping the lock matches user-visible semantics. See
-	// docs/record-locks.md Phase B.3.
+	// docs/private/record-locks.md Phase B.3.
 }
 
 void ibValueForm::Update(wxObject* wxobject, ibVisualHost* visualHost)

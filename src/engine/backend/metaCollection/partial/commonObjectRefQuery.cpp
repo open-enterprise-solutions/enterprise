@@ -71,7 +71,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	// LockAndCheckDataVersion compares this against the row's current
 	// version to detect concurrent updates. New objects (no row yet)
 	// leave m_loadedDataVersion empty so the check is skipped on first
-	// Save. See docs/record-locks.md.
+	// Save. See docs/private/record-locks.md.
 	if (succes && !m_newObject)
 		CaptureLoadedDataVersion();
 	return succes;
@@ -118,7 +118,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		// from its physical fields. DataVersion is NOT a single column: its SQL field name is the
 		// COMPOSITE "<fld>_TYPE,<fld>_S" (type tag + string data), so the former raw
 		// GetResultString(that) failed "field not found" — the provider's attribute assembly is the
-		// only correct read. (docs/record-locks.md)
+		// only correct read. (docs/private/record-locks.md)
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr)   // row LOCK + version read is a physical concurrency op, not a user read:
 		 .From(m_metaObject->GetQueryable())   // lock the RAW row regardless of RLS visibility (RLS is enforced by
@@ -248,7 +248,7 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
 	// DataVersion attribute before SaveData). This is the ONLY place the
 	// marker moves forward, so a failed/rolled-back write leaves it matching
 	// the unchanged DB row and the next Save retries cleanly instead of
-	// demanding a form reopen. See docs/record-locks.md.
+	// demanding a form reopen. See docs/private/record-locks.md.
 	CaptureLoadedDataVersion();
 
 	// Audit AFTER SafeCommitTransaction — the row is durable. If the

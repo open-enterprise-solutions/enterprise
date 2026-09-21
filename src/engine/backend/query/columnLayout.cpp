@@ -649,7 +649,7 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY
 		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
 		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
-		// (docs/query-language-arc.md §22.4b — typed-empty dot-walk)
+		// (docs/private/query-language-arc.md §22.4b — typed-empty dot-walk)
 		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return true;
 	}

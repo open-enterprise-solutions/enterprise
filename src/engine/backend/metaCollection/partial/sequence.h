@@ -6,7 +6,7 @@
 
 ////////////////////////////////////////////////////////////////////////////
 //	Description : a sequence — up to which point the documents of a key
-//	              have been posted in order (docs/sequence-arc.md)
+//	              have been posted in order (docs/private/sequence-arc.md)
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐⭐ WHAT IT ANSWERS: a document posted out of turn, or changed after later documents were already

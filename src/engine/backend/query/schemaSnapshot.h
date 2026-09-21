@@ -11,7 +11,7 @@
 // metadata of the two in-memory configurations), never owned — valid only for the duration of a save.
 //
 // Identity, not name, is the match key: a table is its metaID, a column its model id. So a renamed /
-// retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/query-language-arc.md)
+// retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/private/query-language-arc.md)
 
 #include "backend/backend.h"
 #include "backend/query/queryColumn.h"   // ibBackendColumnRawDB (the snapshot OWNS its scaffold raw columns)
@@ -92,7 +92,7 @@ struct ibSchemaSeedRow
 
 // ==========================================================================
 // DERIVED-STATE declaration — a table whose rows are a FUNCTION of another table's rows, kept
-// current by a database trigger. Today: a register's totals. (docs/register-totals-strategy.md)
+// current by a database trigger. Today: a register's totals. (docs/private/register-totals-strategy.md)
 //
 // The metaobject declares INTENT here — which table feeds this one, what the key is, what each
 // resource accumulates, at what period grain. It never renders SQL and never names an engine:
@@ -190,7 +190,7 @@ struct ibSchemaMaterialize
 	// schedule the read pays O(N) shards on every row forever, so splitting is for registers PROFILED
 	// hot on write. Once ibDerivedState::Collapse runs regularly the tax shrinks to the OPEN period
 	// alone — closed ones fold back to one row per key — and a wider default becomes defensible;
-	// docs/register-totals-strategy.md §6a). The view absorbs the split — it sums the shards — so nothing above L3 can
+	// docs/private/register-totals-strategy.md §6a). The view absorbs the split — it sums the shards — so nothing above L3 can
 	// tell a split register from a plain one. Engines without ibMaterializationDialect::
 	// m_connectionIdExpr (SQLite) collapse to 1: single-writer engines have no contention to split.
 	unsigned int m_shards = 1;

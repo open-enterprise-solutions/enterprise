@@ -17,7 +17,7 @@
 // existing `DataVersion String(12)` predefined attribute declared on
 // ibValueMetaObjectRecordDataMutableRef (commonObject.h:729).
 //
-// See docs/record-locks.md for the full design.
+// See docs/private/record-locks.md for the full design.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_DATA_VERSION_H_

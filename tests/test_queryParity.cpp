@@ -16,7 +16,7 @@
 // keep it — is FIXED: the RAM evaluator adopted SQL NULL semantics (three-valued / Kleene), so
 // NotEq_NullThreeValuedLogic and the IS NULL / AND / LIKE / aggregate cases all assert parity.
 // A SQL NULL is modelled as ibValue(TYPE_NULL) (what the driver yields), NOT an unset/Undefined
-// (TYPE_EMPTY) cell. See docs/query-language-arc.md and the form-attribute-binding / DynamicList
+// (TYPE_EMPTY) cell. See docs/private/query-language-arc.md and the form-attribute-binding / DynamicList
 // note: the same settings feed both paths, so DB≡RAM parity is load-bearing for lists AND reports.
 //
 // Pure + self-contained: SQLite is always embedded; no appData session bring-up.

@@ -67,7 +67,7 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 	}
 
 	// The INTERSECTION pass — restricting roles SUBTRACT from whatever the union granted, which is
-	// the object-level twin of the RLS fold (docs/access-policy-rls.md, § Multi-role). An explicit
+	// the object-level twin of the RLS fold (docs/private/access-policy-rls.md, § Multi-role). An explicit
 	// True here means "I do not object", never "I allow": only an explicit False is an answer that
 	// changes anything, and silence stays neutral — otherwise a separator role would strip every
 	// right in the configuration the moment it was created.

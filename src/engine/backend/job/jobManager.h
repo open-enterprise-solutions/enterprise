@@ -36,7 +36,7 @@
 // that is the UI thread. Register() pays it once, up front; Tick() stays cheap enough
 // to call every second.
 //
-// See docs/job-manager.md for the whole picture (the three job kinds, the
+// See docs/private/job-manager.md for the whole picture (the three job kinds, the
 // cross-session value gate, identity, and what is deliberately not built yet).
 
 #include "backend/backend.h"

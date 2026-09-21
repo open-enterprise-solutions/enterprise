@@ -23,7 +23,7 @@
 // consults the store BEFORE the metaobject factory, and a temp table is a BARE name because it has
 // no metaclass to prefix it with.
 //
-// See docs/query-constructor.md §5c.
+// See docs/private/query-constructor.md §5c.
 //
 ////////////////////////////////////////////////////////////////////////////
 

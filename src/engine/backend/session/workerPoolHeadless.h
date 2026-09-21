@@ -16,7 +16,7 @@
 //
 // Used by wenterprise-server.exe (replaces today's per-session worker
 // thread in ibWebApplication) and the future oes-server.exe compute
-// server. See docs/compute-server-tiering.md Phase 2 for the bigger
+// server. See docs/private/compute-server-tiering.md Phase 2 for the bigger
 // picture.
 
 #include "workerPool.h"

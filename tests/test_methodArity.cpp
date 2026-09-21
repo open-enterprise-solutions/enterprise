@@ -11,7 +11,7 @@
 // the arity), which cost ~145 ns on every method call; it is now the arity
 // itself. These tests pin the property the change relies on: calling a method
 // with FEWER arguments than it declares must not crash, and must either work or
-// raise — never read past the frame. See docs/runtime-perf.md §5.7.
+// raise — never read past the frame. See docs/private/runtime-perf.md §5.7.
 
 #include <gtest/gtest.h>
 

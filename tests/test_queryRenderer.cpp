@@ -1,4 +1,4 @@
-// Golden tests for the L2 query renderer (docs/query-language-arc.md §6, §16).
+// Golden tests for the L2 query renderer (docs/private/query-language-arc.md §6, §16).
 //
 // Pure: no database, no connection. One IR rendered through three dictionaries
 // must yield three dialect-correct SQL strings + an identical bind plan. This

@@ -4,7 +4,7 @@
 // that can be wrong SILENTLY — which sources a statement may select from, and where the fields of
 // a source come from. The tabs above it are a view; these are the answers they draw.
 //
-// The two properties worth a test each, both stated in docs/query-constructor.md §5b:
+// The two properties worth a test each, both stated in docs/private/query-constructor.md §5b:
 //
 //   * a temp table becomes a source for the statements AFTER the one that made it — and for no
 //     others, because a package is read top to bottom;

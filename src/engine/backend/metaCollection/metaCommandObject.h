@@ -10,7 +10,7 @@
 #include "backend/propertyManager/property/propertyEnum.h"   // ibPropertyEnum — the area dropdown (declare once, all surfaces)
 
 // The interface-area enum as a runtime value — one declaration gives the script value, the inspector dropdown and
-// a serialisable property (see docs/enumerations.md). Members mirror ibInterfaceCommandSection (Combined excluded —
+// a serialisable property (see docs/private/enumerations.md). Members mirror ibInterfaceCommandSection (Combined excluded —
 // it is a list object's own dual mode, not a place a command is put).
 class ibValueEnumInterfaceCommandSection : public ibValueEnumeration<ibInterfaceCommandSection> {
 public:

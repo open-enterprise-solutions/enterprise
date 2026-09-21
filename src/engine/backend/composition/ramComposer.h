@@ -11,7 +11,7 @@
 // RAM analog of a queryable: a flat/tree table that OWNS the live nodes. The composer reads the storage's nodes
 // DIRECTLY (no query text, no parser, no lowering, no ibRamTableQueryable / ComputeRows copy) and materialises
 // the view. The composer NEVER references the model — only the DATA (the storage); mutations + notify are the
-// model's job. See docs/ram-composer-decoupling.md.
+// model's job. See docs/private/ram-composer-decoupling.md.
 //
 // ComputeOrder is defined out-of-line in ramComposer.cpp (it reads the storage's node API).
 

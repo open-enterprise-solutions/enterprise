@@ -942,7 +942,7 @@ public:
 	// (ibValueModelStorage) holds an ibDataRamComposer (filters + sorts its LIVE rows in place — it holds the model /
 	// node directly, no queryable). Each subclass OVERRIDES this to return its own concrete composer. The
 	// const accessor hands out a MUTABLE ref (the composer is a scratch utility the model drives on the const
-	// fetch path, NOT logical const-state — the subclass member is `mutable`). See docs/ram-composer-decoupling.md.
+	// fetch path, NOT logical const-state — the subclass member is `mutable`). See docs/private/ram-composer-decoupling.md.
 	//
 	virtual ibDataComposer& GetModelComposer() const = 0;
 

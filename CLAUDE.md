@@ -183,7 +183,7 @@ dynamic type for `dynamic_cast` and downstream re-catches.
 
 Since it derives, **handler order is required, not preferred**: `ibBackendException`
 before `std::exception`, always. And the description is DATA — `wxLogError(wxT("%s"), …)`,
-never as the format string. Full rules: [docs/exceptions.md](docs/exceptions.md).
+never as the format string. Full rules: [docs/private/exceptions.md](docs/private/exceptions.md).
 
 ```cpp
 // throw (usually through a static Error() helper that formats the message)
@@ -214,7 +214,7 @@ Every class in the metadata and value system is identified by an `ibClassID` (`u
 - **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
 - `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (config-compare umbrellas, tool ids).
 
-CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 21 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, 19 for a parameter default losing its type name, 20 for the session-parameter context member, 21 for two function-record flags: `m_needsHeapFrame`, which was never written at all, and `m_valueCached`, see `docs/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
+CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 21 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, 19 for a parameter default losing its type name, 20 for the session-parameter context member, 21 for two function-record flags: `m_needsHeapFrame`, which was never written at all, and `m_valueCached`, see `docs/private/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
 
 ### 7. Metadata open/close — `ibMetaImage`
 
@@ -428,21 +428,21 @@ A **`CommonAttribute`** is declared once under Common and then exists as a real 
 every object checked into its **composition** — its own metaID, its own column, its own place in
 restructuring. The copy (`CommonAttributeColumn`) delegates its type to the declaration and cannot
 be edited where it sits. Membership rides `ibCompositionObject` (`backend/compositionHelper.h`) — a
-mechanism of its own, deliberately not the section one ([docs/common-attributes.md](docs/common-attributes.md)).
+mechanism of its own, deliberately not the section one ([docs/private/common-attributes.md](docs/private/common-attributes.md)).
 
 One further metatype is neither a business object nor stored anywhere: **`SessionParameter`** — an
 `ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Common
 beside the jobs, set once per session by the **session module** (a second module property on the
 configuration root, `SetSessionParameters`), and writable nowhere else — a write outside that module
 raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
-([docs/session-parameters.md](docs/session-parameters.md)).
+([docs/private/session-parameters.md](docs/private/session-parameters.md)).
 
 Six further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
 `ExternalReport`, `Composer` (2026-08-20, `MD_CMPS` — a **data composer declared inside a report**,
 beside its forms and templates: what to read and how to fold it. The report names one of them
 `DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
 bound to that composer. Embedded and external reports both have them, being the same metaobject.
-See [docs/report-engine.md](docs/report-engine.md) §4f),
+See [docs/private/report-engine.md](docs/private/report-engine.md) §4f),
 `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
 *subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
 characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
@@ -493,7 +493,7 @@ A value packs itself into an **`ibDataNode`** — the same tree metadata is writ
 - **Failure raises** (`ibBackendCoreException`): a type nobody has, a value that cannot be created or read, a value with no packed form. Never a quiet empty — that is indistinguishable from a legitimately empty value.
 - Bytes are the provider's choice at the callsite (`ibBinaryProvider` / `ibJsonProvider`), not a second pair of methods.
 
-See `docs/serialization-io.md` §4a.
+See `docs/private/serialization-io.md` §4a.
 
 ---
 
@@ -503,7 +503,7 @@ See `docs/serialization-io.md` §4a.
 - **Keywords:** 63, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), the memoisation modifier (`Cached` — a SECOND axis that combines with an access one, legal on a Function only), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
 - **Built-in globals:** 94 functions + 6 procedures = 100 as of 2026-09-04, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
-- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture landed 2026-05-11..12** (per-frame heap promotion): the compiler marks the enclosing function `m_needsHeapFrame` and emits `OPER_CALL_CLOSURE`; at runtime the lambda holds `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames` and outer-function locals resolve at depth ≥ 1. See `docs/lambda.md`, `docs/closure-capture.md`.
+- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture landed 2026-05-11..12** (per-frame heap promotion): the compiler marks the enclosing function `m_needsHeapFrame` and emits `OPER_CALL_CLOSURE`; at runtime the lambda holds `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames` and outer-function locals resolve at depth ≥ 1. See `docs/private/lambda.md`, `docs/private/closure-capture.md`.
 - **Debugger port:** 1650 (`defaultDebuggerPort` in `src/engine/backend/debugger/debugDefs.h`)
 
 ### Bytecode resolver (kind-driven, AOT-ready)
@@ -518,12 +518,12 @@ See `docs/serialization-io.md` §4a.
 - Eval / watch expressions use `ibCompileEval` (in `procUnit.cpp`); `ibCompileCode::IsExpressionOnly()` and `GetEvalHostFunction()` are virtual hooks the eval class overrides.
 - Descriptors expose `ExportNamesToHelper(helper, alias)` on `ibRuntimeModuleDataObject` to populate a value's helper from the bc's export entries.
 
-See `docs/eval-scope-refactor.md` for the full architecture.
+See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ### Runtime infrastructure (landed)
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`** — the configuration's own digest (`ibMetaData::GetConfigMD5()`), so a save makes every row written under the previous configuration unreachable and `Invalidate()` is hygiene rather than correctness. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/compiler-pipeline.md](docs/compiler-pipeline.md) §4a.
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`** — the configuration's own digest (`ibMetaData::GetConfigMD5()`), so a save makes every row written under the previous configuration unreachable and `Invalidate()` is hygiene rather than correctness. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
 - **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
@@ -553,7 +553,7 @@ See `docs/eval-scope-refactor.md` for the full architecture.
   bytes. Every container, even an empty one, allocates a proxy, so a node full of empty containers
   pays for each. On a hot path: look values up by position (`ibRowValues::find_value`), keep a row in
   one `ibRowMetaValues` rather than a `std::map`, and move or swap what a stitch hands on. The payroll
-  sheet at 40 000 employees ([docs/payroll-arc.md § 11.9](docs/payroll-arc.md)) is the worked example.
+  sheet at 40 000 employees ([docs/private/payroll-arc.md § 11.9](docs/private/payroll-arc.md)) is the worked example.
 
 ---
 

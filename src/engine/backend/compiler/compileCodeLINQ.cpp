@@ -29,7 +29,7 @@
 //     loop it was written for rather than a frame of its own.
 //
 // The tree those roads build is a SECTION OF THE BYTECODE (byteCodeLINQ.h) and outlives every scope
-// that reads it — see docs/linq.md §0.2h-ter.
+// that reads it — see docs/private/linq.md §0.2h-ter.
 //
 ////////////////////////////////////////////////////////////////////////////
 

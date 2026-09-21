@@ -780,7 +780,7 @@ private:
 
 			// ⭐⭐ AND THEN THE SAME QUESTION THE RUNTIME ASKS, asked of the sample instead of a real
 			// row: does this row NAME its columns? A projection does and a group does, and then the
-			// answer is a TABLE carrying those names — the one exit every query has (docs/linq.md
+			// answer is a TABLE carrying those names — the one exit every query has (docs/private/linq.md
 			// §0.2h-quater). A plain value does not, and then the answer is an Array, which is what
 			// `ToArray` over such rows means.
 			//

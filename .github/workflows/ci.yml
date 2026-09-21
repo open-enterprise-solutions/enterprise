@@ -506,7 +506,7 @@ jobs:
   #
   # READ IT AS AN ORDER OF MAGNITUDE. A GitHub runner is a shared VM: locally, on
   # a quiet desktop, host->script alone swung 228 -> 468 ns inside ONE series
-  # (docs/runtime-perf.md §5.8). So this catches a catastrophic regression - a
+  # (docs/private/runtime-perf.md §5.8). So this catches a catastrophic regression - a
   # figure that doubles and stays doubled across runs - and nothing finer. Do not
   # quote these numbers as the platform's performance; measure on real hardware
   # for that.

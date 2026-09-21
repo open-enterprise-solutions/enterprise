@@ -1229,7 +1229,7 @@ namespace {
 //   everything else (ibBackendCoreException etc.) → {error:"script_exception", message:"..."}
 //     UX: generic error toast carrying the actual text — never lose info
 //
-// See docs/record-locks.md for the lock-specific shape.
+// See docs/private/record-locks.md for the lock-specific shape.
 std::string ExceptionToJson(const ibBackendException& e)
 {
 	nlohmann::json j;

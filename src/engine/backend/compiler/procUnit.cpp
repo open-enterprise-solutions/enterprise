@@ -400,7 +400,7 @@ void ibProcUnit::BorrowScopeFrom(ibProcUnit* donor)
 // EndByteCode) for an answer that cannot change while a call is running.
 //
 // A profile of a thin pipeline lambda put GetPUState + Current at 9.13% of the
-// run, against 14.83% for the interpreter itself. See docs/runtime-perf.md §1i.
+// run, against 14.83% for the interpreter itself. See docs/private/runtime-perf.md §1i.
 //
 // Passing it in is also the more CORRECT shape: entering and leaving a call
 // through two independently-resolved states would be a bug, not a feature.
@@ -1161,7 +1161,7 @@ start_label:
 				// PAST THE BOUND, not equal to it — and the difference is two defects.
 				//
 				// `==` meant the body ran for [from, to) while the language reference
-				// says the range is INCLUSIVE (docs/script-language.md §"for (i = 1 To
+				// says the range is INCLUSIVE (docs/private/script-language.md §"for (i = 1 To
 				// 10) — numeric range, inclusive") and the syntax helper shows the same
 				// shape. Every counted loop in every configuration silently dropped its
 				// last iteration: a probe function summing 0.01 a thousand times
@@ -1370,7 +1370,7 @@ start_label:
 				//
 				// This used to be std::max(array3, MAX_STATIC_VAR) — 25 slots for
 				// every method call, whatever its arity, which is what made the
-				// frame work land nowhere on this path (docs/runtime-perf.md §5.6).
+				// frame work land nowhere on this path (docs/private/runtime-perf.md §5.6).
 				// The method's own arity is the honest bound, and it is already
 				// being fetched for the check. wxNOT_FOUND means "arity unknown",
 				// and there a blanket width is the only safe answer — a width chosen
@@ -1596,7 +1596,7 @@ start_label:
 				// honest bound but the whole cost. This used to be
 				// std::max(argCount, MAX_STATIC_VAR) — the last survivor of the
 				// blanket sizing that OPER_CALL_METHOD shed above (§5.6 of
-				// docs/runtime-perf.md) — so every LINQ step built ten ibValue on
+				// docs/private/runtime-perf.md) — so every LINQ step built ten ibValue on
 				// x86 and TWENTY-FIVE on x64 to hold the nought-to-two a pipeline
 				// operator takes. On the path where a pipeline runs an operator
 				// PER ELEMENT.

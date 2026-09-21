@@ -3,7 +3,7 @@
 
 // THE SESSION'S OWN REFUSALS — who may work in this base right now, and on whose connection.
 //
-// Same division as the query engine's (query/queryException.h, docs/exceptions.md §3): the TYPE says
+// Same division as the query engine's (query/queryException.h, docs/private/exceptions.md §3): the TYPE says
 // WHO refused, the Kind says what about it. A session refusal is not a database fault and not a
 // query fault — nothing malfunctioned. Somebody else holds the base, or nobody holds it at all, and
 // the caller can usually act on that: wait, ask the other user to leave, open a session first.

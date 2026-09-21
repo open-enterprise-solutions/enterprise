@@ -13,7 +13,7 @@
 // What it shows: the cost of filling a block of cells is QUADRATIC, because
 // ibSpreadsheetDescription::GetOrCreateCell does a linear std::find_if over the
 // whole cell vector for every single write. A report is exactly the workload that
-// hits it — see docs/spreadsheet-document.md § 2.
+// hits it — see docs/private/spreadsheet-document.md § 2.
 TEST(SpreadsheetDocumentBench, DISABLED_FillCost)
 {
 	printf("sizeof(ibSpreadsheetCellDescription) = %d bytes\n",
@@ -50,7 +50,7 @@ TEST(SheetFormatBench, DISABLED_ReadWrite)
 	// ⚠ SILENCE THE LOG, OR THE MEASUREMENT DROWNS IN IT. Every cell description carries a
 	// wxFont, and in a console process without a GUI toolkit CreateFont refuses — one line per
 	// cell, which at half a million cells is ~100 MB of identical text and dwarfs what is being
-	// measured. The refusal is real and belongs in docs/spreadsheet-document.md § 8a (a cell
+	// measured. The refusal is real and belongs in docs/private/spreadsheet-document.md § 8a (a cell
 	// costs a font), not in the middle of a timing run.
 	wxLogNull noLog;
 

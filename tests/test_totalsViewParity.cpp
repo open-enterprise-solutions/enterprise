@@ -17,7 +17,7 @@
 // The value half — same movements in, same figures out — needs a live engine and
 // belongs in the SQLite integration target alongside test_queryParity.
 //
-// (docs/register-totals-strategy.md)
+// (docs/private/register-totals-strategy.md)
 // =============================================================================
 
 #include <gtest/gtest.h>

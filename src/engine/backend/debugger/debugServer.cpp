@@ -292,7 +292,7 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// caller's `byteCode` fields; the LeaveLoop packet below is built AFTER
 	// the CV park, by which point the byteCode owner may have been freed
 	// (startup-form rebuild) — using the references there would dangle
-	// (Face B of the 0xdd debugger UAF, see docs/debugger-per-session.md).
+	// (Face B of the 0xdd debugger UAF, see docs/private/debugger-per-session.md).
 	// Local copies survive a free during the park.
 	const wxString docPath    = strDocPath;
 	const wxString moduleName = strModuleName;

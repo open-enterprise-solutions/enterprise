@@ -1081,7 +1081,7 @@ private:
 	// Per-session interpreter state (currentRunModule, runContext stack,
 	// errorPlace, recCount). Today the interpreter still reads/writes its
 	// thread_local mirrors in procUnit.cpp; this slot is the staging
-	// ground for the worker pool refactor (docs/worker-pool-tls-audit.md).
+	// ground for the worker pool refactor (docs/private/worker-pool-tls-audit.md).
 	// Step 1 of that refactor only allocates the slot — the swap helpers
 	// at the worker boundary land in step 2. Default-constructed empty;
 	// no reads from here yet.

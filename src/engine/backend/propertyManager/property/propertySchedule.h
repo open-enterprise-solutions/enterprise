@@ -2,7 +2,7 @@
 #define __PROPERTY_SCHEDULE_H__
 
 // A schedule as a property — WHEN a scheduled job is due, declared once and reachable from every
-// surface (docs/property-system.md § 1).
+// surface (docs/private/property-system.md § 1).
 //
 // It owns NO serialisation of its own: the engine's schedule already has a storage door
 // (ibJobScheduleDescriptionMemory, jobSchedule.h) shaped like every other description in the tree,
