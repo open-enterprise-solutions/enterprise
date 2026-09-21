@@ -205,9 +205,7 @@ class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRe
 	// Hook overrides for Document-specific posting semantics. See
 	// ibValueRecordDataObjectRecorderRef in commonObject.h.
 	virtual bool IsPosted() const override;
-	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode wm) const override;
-	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode wm) override;
-	virtual void FillDefaultDateForNew() override;
+	virtual void SetPosted(bool posted) override;
 	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const override;
 
 	//****************************************************************************

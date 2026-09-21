@@ -2884,6 +2884,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 {
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
+	ibWriteScope objectScope(*this);   // a refusal below leaves the object as it was (commonObject.h)
 
 	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
 	// A server has none, and that is not a reason for a write to fail.
@@ -2891,46 +2892,38 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	const bool newObject = IsNewObject();
 
 	// Stage-named failures — same rule as the recorder path: the message says which stage
-	// stopped the write and on which object, and a script cancel reads as a cancel.
+	// stopped the write and on which object, and a script cancel reads as a cancel. A refusal is the
+	// exception and nothing else: the connection scope rolls back, the object scope puts the object back.
+	const auto refuse = [this](const wxString& stage) -> bool {
+		ibBackendCoreException::Error(stage, GetSourceCaption());
+		return false;
+	};
+
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
 	}
 
-	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
-			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
-	if (!SaveData()) {
-		if (generateUniqueIdentifier) ResetUniqueIdentifier();
-		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
-		return false;
-	}
+	if (!SaveData())
+		return refuse(_("%s: failed to save the object data"));
 
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("OnWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
 
-	CommitWriteScope(scope, valueForm, newObject);
+	CommitWriteScope(scope, objectScope, valueForm, newObject);
 	return true;
 }
 
@@ -3228,11 +3221,10 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjec
 
 bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
 {
-	// Posting pre-guard: leaf-specific check (Document's DeletionMark
-	// blocks posting). Default hook returns true (ok to proceed).
+	// Posting pre-guard: a recorder marked for deletion is not posted.
 	if (!appData->DesignerMode()
 	    && writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
-	    && !CheckDeletionMarkOnPosting(writeMode))
+	    && GetValueByMetaID(*GetMetaObject()->GetDataDeletionMark()).GetBoolean())
 	{
 		ibBackendCoreException::Error(_("%s cannot be posted: it is marked for deletion"),
 			GetSourceCaption());
@@ -3240,56 +3232,64 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	}
 
 	// Scaffold via Phase A Begin/CommitWriteScope. Per-recorder middle:
-	// BeforeWrite(wm, pm) + ApplyPostedAttributeOnWrite hook + SetNew
-	// Number codegen + FillDefaultDateForNew hook + SaveData +
+	// BeforeWrite(wm, pm) + the posted mark (SetPosted) + SetNew
+	// Number codegen + the date of a new one + SaveData +
 	// register cascade (CreateRecordSet for new, Posting/UndoPosting
 	// scripts + WriteRecordSet/DeleteRecordSet) + OnWrite.
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
+	ibWriteScope objectScope(*this);   // a refusal below leaves the recorder as it was, posted mark included (commonObject.h)
 
 	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
 	// A server has none, and that is not a reason for a write to fail.
 	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 	const bool newObject = IsNewObject();
-	// Asked before the write marks it posted (ApplyPostedAttributeOnWrite below): is this a posting AGAIN.
+	// Asked before the write marks it posted (SetPosted below): is this a posting AGAIN.
 	const bool reposting = !newObject && IsPosted();
 
 	// Every failure below says WHICH STAGE refused and on WHICH OBJECT. A posting run walks a long
 	// chain — handler, row, movements per register, handler again — and "failed to write object in
 	// db!" for all of them tells the user nothing about where to look. A cancel raised by script is
 	// also reported as a cancel, not as a database failure: nothing went wrong in the DB there.
+	//
+	// A refusal is the exception and nothing else: the connection scope rolls the transaction back as it
+	// unwinds, and the object scope puts the object back. (Each branch used to reset the number and roll back by hand
+	// before raising - twelve copies, and every road that left by an exception of its own missed both.)
+	const auto refuse = [this](const wxString& stage) -> bool {
+		ibBackendCoreException::Error(stage, GetSourceCaption());
+		return false;
+	};
+
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentWriteMode>(writeMode),
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode)
 		);
-		if (cancel.GetBoolean()) {
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
-		ApplyPostedAttributeOnWrite(writeMode);
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
+		// A plain Write leaves the mark as it is; posting and undoing it set it.
+		if (writeMode != ibDocumentWriteMode::ibDocumentWriteMode_Write)
+			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
-	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
-			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
-	if (newObject)
-		FillDefaultDateForNew();
-
-	if (!SaveData()) {
-		if (generateUniqueIdentifier) ResetUniqueIdentifier();
-		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
-		return false;
+	// A new recorder written without a date is dated by the write. The date is the recorder's own
+	// (its metaobject declares it beside the number), so no leaf is asked.
+	if (newObject) {
+		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
+		if (GetValueByMetaID(*date).IsEmpty())
+			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
+
+	if (!SaveData())
+		return refuse(_("%s: failed to save the object data"));
 
 	if (newObject) {
 		m_registerRecords->CreateRecordSet();
@@ -3310,86 +3310,43 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// movements from nothing. A register the handler leaves alone therefore keeps none — its movements
 		// are what its handler writes. (A set somebody filled before the write is left to replace its own; and whether
 		// they are cleared at all is the document's to say — ibRecorderRegister::DeleteRecordSet asks it.)
-		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the movements of the previous posting"),
-				GetSourceCaption());
-			return false;
-		}
+		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the movements of the previous posting"));
 		// …and the registrations of the previous posting, by the same rule and in the same transaction.
-		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the registrations of the previous posting"),
-				GetSourceCaption());
-			return false;
-		}
+		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the registrations of the previous posting"));
+
 		ibValue cancel = false;
 		ExecAsProc(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: posting cancelled by the Posting handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: posting cancelled by the Posting handler"));
+
 		// The cascade names the failing register itself (and lets its own exception through);
 		// this only covers a silent false from the fan-out.
-		if (!m_registerRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to write the register movements"),
-				GetSourceCaption());
-			return false;
-		}
+		if (!m_registerRecords->WriteRecordSet())
+			return refuse(_("%s: failed to write the register movements"));
 		// …and the registrations the handler filled — written here, where each set moves its own
 		// sequence's border (ibValueRecordSetObjectSequence::WriteRecordSet).
-		if (!m_sequenceRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to write the sequence registrations"),
-				GetSourceCaption());
-			return false;
-		}
+		if (!m_sequenceRecords->WriteRecordSet())
+			return refuse(_("%s: failed to write the sequence registrations"));
 	}
 	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
 		ibValue cancel = false;
 		ExecAsProc(wxT("UndoPosting"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: undo posting cancelled by the UndoPosting handler"),
-				GetSourceCaption());
-			return false;
-		}
-		if (!m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
-				GetSourceCaption());
-			return false;
-		}
-		if (!m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the sequence registrations"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: undo posting cancelled by the UndoPosting handler"));
+		if (!m_registerRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the register movements"));
+		if (!m_sequenceRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the sequence registrations"));
 	}
 
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("OnWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
 
 	// Posting / UndoPosting audit. Layered on top of the generic
@@ -3409,10 +3366,16 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
 	}
 
-	CommitWriteScope(scope, valueForm, newObject);
+	CommitWriteScope(scope, objectScope, valueForm, newObject);
 	m_registerRecords->RefreshRecordSet();
 	m_sequenceRecords->RefreshRecordSet();
 	return true;
+}
+
+ibValueRecordDataObjectRecorderRef::ibWriteScope::~ibWriteScope()
+{
+	if (!IsCommitted())
+		m_recorder.SetPosted(m_wasPosted);   // the posting never became durable, and its mark goes with it
 }
 
 void ibValueRecordDataObjectRecorderRef::SetDeletionMark(bool deletionMark)
@@ -3421,7 +3384,7 @@ void ibValueRecordDataObjectRecorderRef::SetDeletionMark(bool deletionMark)
 	// catalog/charts path (set the flag + SaveModify) but with an
 	// up-front un-post so the row's movements clear before the mark
 	// lands. UndoPosting is a no-op for non-posted recorders via the
-	// IsPosted / ApplyPostedAttributeOnWrite hooks.
+	// IsPosted / SetPosted hooks.
 	if (m_newObject)
 		return;
 	WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting,

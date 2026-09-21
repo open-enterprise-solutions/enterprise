@@ -2485,13 +2485,14 @@ protected:
 	//   bool ibValueRecordDataObjectCatalog::WriteObject() {
 	//     ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	//     if (!BeginWriteScope(scope)) return true;          // designer / eval
+	//     ibWriteScope objectScope(*this);                   // put back if never durable
 	//
 	//     ibBackendValueForm* const valueForm = GetForm();
 	//     const bool newObject = IsNewObject();
 	//
 	//     /* === middle: BeforeWrite + codegen + SaveData + OnWrite === */
 	//
-	//     CommitWriteScope(scope, valueForm, newObject);
+	//     CommitWriteScope(scope, objectScope, valueForm, newObject);
 	//     return true;
 	//   }
 	//
@@ -2508,9 +2509,42 @@ protected:
 	// machine were PROMOTED onto ibValueRecordDataObjectRecorderRef, built on
 	// these same Begin/Commit helpers (bodies in commonObject.cpp).
 	// Constants stay inline (single use, single file).
+	// ⭐⭐ WHAT A WRITE CHANGES ON THE OBJECT BEFORE IT IS DURABLE, PUT BACK IF IT NEVER BECOMES SO.
+	//
+	// The database rolls a refused write back; the OBJECT did not. SaveData marks it written (m_newObject =
+	// false) straight after the INSERT - it has to, the posting and OnWrite handlers read its reference
+	// through that flag - and a refusal after that (a posting that failed, an OnWrite cancel, a refused
+	// commit) left it believing it was in the database. The next Write took the UPDATE road for a row
+	// that did not exist: "'Payroll': the row to rewrite was not found by its key" (2026-09-21). A number
+	// generated for the attempt stayed in the object too, while its sequence step was rolled back.
+	//
+	// The OBJECT's half of the write scope, beside the connection's (ibConnectionScope): opened right after
+	// BeginWriteScope, committed by CommitWriteScope the moment the transaction commits, and on any other
+	// way out - every refusal leaves by an exception - its destructor puts both back, as the connection
+	// scope rolls the transaction back. The same arrangement the version marker already has
+	// (CaptureLoadedDataVersion).
+	class ibWriteScope {
+	public:
+		// What it will put back is asked of the object as the write opens: was it new, did it have a number.
+		explicit ibWriteScope(ibValueRecordDataObjectRef& object)
+			: m_object(object), m_wasNew(object.m_newObject), m_hadNumber(object.IsSetUniqueIdentifier()) {}
+		~ibWriteScope();
+		ibWriteScope(const ibWriteScope&) = delete;
+		ibWriteScope& operator=(const ibWriteScope&) = delete;
+
+		void Commit() { m_committed = true; }   // durable: the object stays as written
+	protected:
+		bool IsCommitted() const { return m_committed; }   // a recorder's scope puts its own stamp back on the same answer
+	private:
+		ibValueRecordDataObjectRef& m_object;
+		const bool m_wasNew;
+		const bool m_hadNumber;
+		bool       m_committed = false;
+	};
+
 	bool BeginWriteScope (ibConnectionScope& scope);
 	bool BeginDeleteScope(ibConnectionScope& scope);
-	void CommitWriteScope (ibConnectionScope& scope,
+	void CommitWriteScope (ibConnectionScope& scope, ibWriteScope& objectScope,
 	                        ibBackendValueForm* valueForm, bool newObject);
 	void CommitDeleteScope(ibConnectionScope& scope,
 	                        ibBackendValueForm* valueForm);
@@ -2749,10 +2783,25 @@ public:
 	// Hooks for leaf-specific Document state. Defaults are no-op so a
 	// future plain "recorder" type without these Document concepts
 	// (e.g. a bare business-process recorder) doesn't need to override.
-	virtual bool IsPosted() const                                          { return false; }
-	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode /*wm*/) const { return true; }   // true = ok to proceed
-	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode /*wm*/)   {}
-	virtual void FillDefaultDateForNew()                                   {}
+	virtual bool IsPosted() const           { return false; }
+	virtual void SetPosted(bool /*posted*/) {}   // the write's own stamp: into the slot, past Modify
+
+protected:
+	// THE RECORDER'S HALF ON TOP OF THE OBJECT'S. A posting marks the recorder posted before its
+	// movements are written (SetPosted in WriteObject), and a posting refused after that left it
+	// marked: the next plain Write stored "posted" over no movements at all (2026-09-21). Declared
+	// under the same name, so WriteObject opens this one exactly as a catalog opens the object's.
+	class ibWriteScope : public ibValueRecordDataObjectRef::ibWriteScope {
+	public:
+		explicit ibWriteScope(ibValueRecordDataObjectRecorderRef& recorder)
+			: ibValueRecordDataObjectRef::ibWriteScope(recorder), m_recorder(recorder), m_wasPosted(recorder.IsPosted()) {}
+		~ibWriteScope();
+	private:
+		ibValueRecordDataObjectRecorderRef& m_recorder;
+		const bool m_wasPosted;
+	};
+
+public:
 
 	// WHAT THIS RECORDER WRITES INTO, by list (ibRecorderWrites): the registers it posts movements to,
 	// or the sequences it registers in. Returns null for a kind that declares nothing of that list —

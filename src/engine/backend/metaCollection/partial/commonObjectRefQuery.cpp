@@ -161,7 +161,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	// consistent because the first Write's commit syncs the marker before
 	// the second Write's check runs.
 	//
-	// Into the slot, past Modify — the write's own stamp, as Posted is (ApplyPostedAttributeOnWrite): the
+	// Into the slot, past Modify — the write's own stamp, as Posted is (SetPosted): the
 	// object's flag says whether anybody CHANGED it, and SaveData asks exactly that before writing its lines.
 	if (bump) {
 		const wxString newStamp = ibDataVersion::NewStamp();
@@ -237,11 +237,22 @@ bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 	return true;
 }
 
-void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
+// A write that never became durable leaves the object as it found it - see ibWriteScope (commonObject.h).
+ibValueRecordDataObjectRef::ibWriteScope::~ibWriteScope()
+{
+	if (m_committed)
+		return;
+	m_object.m_newObject = m_wasNew;          // not in the database after all: the next write INSERTs
+	if (!m_hadNumber)
+		m_object.ResetUniqueIdentifier();     // a number this write gave it: its sequence step was rolled back
+}
+
+void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope, ibWriteScope& objectScope,
                                                    ibBackendValueForm* valueForm,
                                                    bool newObject)
 {
 	scope.SafeCommitTransaction();
+	objectScope.Commit();   // the row is durable: whatever follows, the object stays as written
 
 	// The row is durable — NOW advance the in-memory version marker to the
 	// stamp we just committed (LockAndCheckDataVersion wrote it into the
