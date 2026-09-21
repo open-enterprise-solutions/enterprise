@@ -453,8 +453,8 @@ class ibSubSystemWindow : public wxWindow {
 				for (const auto child : metaObject->GetInterfaceArrayObject()) {
 
 					// Each command ONCE: a catalog answers both the Default and the Create area (see
-					// GetInterfaceItemsOfAllAreas), and four calls into one array listed it twice.
-					const std::vector<ibValueMetaObject*> array = child->GetInterfaceItemsOfAllAreas();
+					// GetInterfaceItemArrayObject), and four calls into one array listed it twice.
+					const std::vector<ibValueMetaObject*> array = child->GetInterfaceItemArrayObject();
 
 					if (array.size() > 0) {
 
@@ -478,7 +478,7 @@ class ibSubSystemWindow : public wxWindow {
 
 								for (const auto child : parent->GetInterfaceArrayObject()) {
 
-									const std::vector<ibValueMetaObject*> subArray = child->GetInterfaceItemsOfAllAreas();
+									const std::vector<ibValueMetaObject*> subArray = child->GetInterfaceItemArrayObject();
 
 									if (subArray.size() > 0) {
 

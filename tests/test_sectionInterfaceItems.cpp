@@ -7,7 +7,8 @@
 // can lay out each area by itself. A page that asked the four areas one after another into ONE array
 // therefore held every catalog twice: the same words, twice, leading to the same list.
 //
-// GetInterfaceItemsOfAllAreas is that page's question, answered once per object.
+// GetInterfaceItemArrayObject() — the same question without an area — is that page's question, answered
+// once per object.
 //
 // DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile, objects created with runObject=false and
 // included into the section with SetInterface — the same call section_include makes.
@@ -94,7 +95,7 @@ TEST(SectionInterfaceItems, EveryArea_ListsACatalogOnce)
 	ibValueMetaObject* catalog = f.Include(g_metaCatalogCLSID, wxT("Firms"));
 	ASSERT_NE(nullptr, catalog);
 
-	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemsOfAllAreas();
+	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemArrayObject();
 	EXPECT_EQ(1u, Occurrences(shown, catalog));
 	EXPECT_EQ(1u, shown.size());
 }
@@ -108,7 +109,7 @@ TEST(SectionInterfaceItems, SeveralObjects_EachOnce_InTheOrderTheyAreFirstMet)
 	ibValueMetaObject* documents = f.Include(g_metaDocumentCLSID, wxT("Orders"));
 	ASSERT_NE(nullptr, documents);
 
-	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemsOfAllAreas();
+	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemArrayObject();
 
 	EXPECT_EQ(1u, Occurrences(shown, firms));
 	EXPECT_EQ(1u, Occurrences(shown, staff));
@@ -129,7 +130,7 @@ TEST(SectionInterfaceItems, AnObjectNotIncludedInTheSection_IsNotShown)
 	ibValueMetaObject* elsewhere = f.Include(g_metaCatalogCLSID, wxT("Staff"), /*inSection*/ false);
 	ASSERT_NE(nullptr, elsewhere);
 
-	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemsOfAllAreas();
+	const std::vector<ibValueMetaObject*> shown = f.section->GetInterfaceItemArrayObject();
 	EXPECT_EQ(1u, Occurrences(shown, included));
 	EXPECT_EQ(0u, Occurrences(shown, elsewhere));
 }
@@ -138,5 +139,5 @@ TEST(SectionInterfaceItems, AnEmptySection_ShowsNothing)
 {
 	SectionFix f;
 	ASSERT_NE(nullptr, f.section);
-	EXPECT_TRUE(f.section->GetInterfaceItemsOfAllAreas().empty());
+	EXPECT_TRUE(f.section->GetInterfaceItemArrayObject().empty());
 }

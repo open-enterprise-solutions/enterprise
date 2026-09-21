@@ -1,5 +1,5 @@
 #include "metaSectionObject.h"
-#include <algorithm>   // std::find — GetInterfaceItemsOfAllAreas lists an object once
+#include <algorithm>   // std::find — GetInterfaceItemArrayObject() lists an object once
 #include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
@@ -36,7 +36,7 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(ibInterfaceCommandSec
 	return array.size() > 0;
 }
 
-std::vector<ibValueMetaObject*> ibValueMetaObjectSection::GetInterfaceItemsOfAllAreas() const
+std::vector<ibValueMetaObject*> ibValueMetaObjectSection::GetInterfaceItemArrayObject() const
 {
 	std::vector<ibValueMetaObject*> every;
 	for (const ibInterfaceCommandSection area : {
