@@ -44,7 +44,7 @@
       "kind": "method",
       "category_keys": ["value_types", "collections", "value_table"],
       "signature": "Columns.AddColumn(name : string, type : TypeDescription = String, caption : string = name, width : number)",
-      "description": "Declares a column and answers with its description. The TYPE decides how the column's cells compare, sort and total — and a column added without one is a STRING column: `AddColumn(\"N\")` followed by `Row.N = 5` holds text, and \"5\" sorts after \"100\". Pass the type whenever the column is not text: `New TypeDescription(\"Number\")`.",
+      "description": "Declares a column and answers with its description. The TYPE decides how the column's cells compare, sort and total — and a column added without one is a STRING column: `AddColumn(\"N\")` followed by `Row.N = 5` holds text, and \"5\" sorts after \"100\". Pass the type whenever the column is not text: `New TypeDescription(\"Number\")` holds a number as it is, and `New TypeDescription(\"Number\", New QualifierNumber(15, 2))` keeps two digits after the point. A type named without a qualifier limits nothing: a string of any length, a date with its time.",
       "syntax_block": "Table.Columns.AddColumn(name, type, caption, width)",
       "parameters": "name — the column's name, as rows read it (`Row.<name>`).\ntype — a TypeDescription; left out, the column holds strings.\ncaption — the header shown in a form; left out, the name.\nwidth — the width in a form.",
       "return_descr": "The column's description (Name, Types, Caption, Width, Indexing).",

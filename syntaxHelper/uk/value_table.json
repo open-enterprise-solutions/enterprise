@@ -44,7 +44,7 @@
       "kind": "method",
       "category_keys": ["value_types", "collections", "value_table"],
       "signature": "Columns.AddColumn(name : string, type : TypeDescription = String, caption : string = name, width : number)",
-      "description": "Оголошує колонку й повертає її опис. ТИП вирішує, як комірки колонки порівнюються, сортуються й підсумовуються, — і колонка, додана без типу, РЯДКОВА: після `AddColumn(\"N\")` і `Row.N = 5` у ній лежить текст, і \"5\" сортується після \"100\". Якщо колонка не текстова, передавайте тип: `New TypeDescription(\"Number\")`.",
+      "description": "Оголошує колонку й повертає її опис. ТИП вирішує, як комірки колонки порівнюються, сортуються й підсумовуються, — і колонка, додана без типу, РЯДКОВА: після `AddColumn(\"N\")` і `Row.N = 5` у ній лежить текст, і \"5\" сортується після \"100\". Якщо колонка не текстова, передавайте тип: `New TypeDescription(\"Number\")` зберігає число як є, а `New TypeDescription(\"Number\", New QualifierNumber(15, 2))` — два знаки після крапки. Тип без кваліфікатора нічого не обмежує: рядок будь-якої довжини, дата з часом.",
       "syntax_block": "Table.Columns.AddColumn(name, type, caption, width)",
       "parameters": "name — ім'я колонки, за яким її читають рядки (`Row.<name>`).\ntype — TypeDescription; якщо не вказано, колонка зберігає рядки.\ncaption — заголовок на формі; якщо не вказано — ім'я.\nwidth — ширина на формі.",
       "return_descr": "Опис колонки (Name, Types, Caption, Width, Indexing).",

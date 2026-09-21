@@ -315,3 +315,22 @@ TEST_F(ValueTableVerbs, TheTable_ExposesTheNewVerbs)
     EXPECT_GE(m_table->FindMethod(wxT("FindRows")), 0);
     EXPECT_GE(m_table->FindMethod(wxT("Sort")), 0);
 }
+
+// A column added with no type holds a string of ANY length: it carried the designer's default of ten
+// characters, and a cell kept the first ten of whatever was written into it (2026-09-21).
+TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
+{
+    ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
+    const long add = columns->FindMethod(wxT("AddColumn"));
+    ASSERT_GE(add, 0);
+    ibValue name = Text(wxT("Note")), made;
+    ibValue* args[] = { &name };
+    ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
+
+    ibValue row = Call(wxT("Add"), {});
+    const long prop = row.FindProp(wxT("Note"));
+    ASSERT_GE(prop, 0);
+    const wxString text = wxT("abcdefghijklmnopqrstuvwxyz");
+    row.SetPropVal(prop, Text(text));
+    EXPECT_EQ(Cell(row, wxT("Note")), text);
+}

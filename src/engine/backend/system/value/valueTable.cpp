@@ -401,7 +401,13 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 			// Left as it is on purpose: changing the default would change what every existing table
 			// holds. Say it in the signature instead, so the caller passes a type when they mean a
 			// number — `AddColumn("N", New TypeDescription("Number"))` compares as a number.
-			pvarRetValue = AddColumn(paParams[0]->GetString(), ibTypeDescription(g_valueStringCLSID), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
+			//
+			// ⚠ AND A STRING OF ANY LENGTH (Unqualified). The bare string type carried the designer's
+			// default of ten characters, so a cell kept the first ten of whatever was written into it
+			// (measured 2026-09-21).
+			pvarRetValue = AddColumn(paParams[0]->GetString(),
+				ibTypeDescription(g_valueStringCLSID, ibValueTypeDescription::Unqualified()),
+				paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		return true;
 	}
 	}

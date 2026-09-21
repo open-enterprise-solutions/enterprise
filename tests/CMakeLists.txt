@@ -124,6 +124,7 @@ add_executable(oes_tests
     test_valueTableIndex.cpp
     test_valueTableWalk.cpp
     test_valueTableVerbs.cpp
+    test_typeQualifiers.cpp
     test_valueContainer.cpp
     test_valueStructure.cpp
     test_valueGeometry.cpp
