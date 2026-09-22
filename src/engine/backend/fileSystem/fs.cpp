@@ -84,15 +84,9 @@ void	ibWriter::w_printf(const char* format, ...)
 // memory
 ibWriterMemory::~ibWriterMemory()
 {
-	// 🛑 FREED THE WAY IT WAS ALLOCATED. The buffer below comes from malloc / realloc, and this
-	// was `wxDELETE(m_data)` — `delete` over a malloc'd block, which is undefined behaviour and
-	// only survives on MSVC because both roads end in one heap. AddressSanitizer answered
-	// alloc-dealloc-mismatch on it 37 times on 2026-09-22, and this is the serialisation writer:
-	// every packed value passes through here.
-	if (m_data != nullptr) {
-		free(m_data);
-		m_data = nullptr;
-	}
+	// ONE ROAD OUT: the release lives in ibWriterMemory::free (fs.h), which says why it is not
+	// `delete`. Repeating it here is how the buffer came to have two ways of being let go.
+	free();
 }
 
 void ibWriterMemory::w(const void* ptr, u32 count)
