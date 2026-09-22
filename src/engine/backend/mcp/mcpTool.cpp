@@ -1365,9 +1365,15 @@ void ibMcpPictureIdAsNumber(ibDataValue& shape)
 	if (id == nullptr || id->Kind() != ibDataKind::String)
 		return;
 
-	u64 asked = 0;
-	id->AsString().ToULongLong(&asked);
-	node->SetField(wxT("ClassId"), ibDataValue::UInt(asked));
+	// Parsed into wx's own type first: ToULongLong writes through an `unsigned long long*` and u64 is
+	// uint64_t — the same WIDTH but a different TYPE on LP64, so its address does not fit the
+	// parameter (MSVC takes it, GCC refuses; valueSerialization.cpp says the same in ibReadNodeType).
+	// And the field is replaced only when the text really was a number: writing 0 over an unparseable
+	// id would hand on a picture id that names nothing, in the shape of one that does.
+	unsigned long long parsed = 0;
+	if (!id->AsString().ToULongLong(&parsed))
+		return;
+	node->SetField(wxT("ClassId"), ibDataValue::UInt(static_cast<u64>(parsed)));
 }
 
 wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size_t maxLines)
