@@ -217,3 +217,54 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	ASSERT_NE(plain, nullptr);
 	EXPECT_EQ(plain->classId, 0u) << "an article about no class carries none";
 }
+
+// THE VOCABULARY, PINNED FROM THE CORPUS'S SIDE. The shipped corpus writes kind words the loader did
+// not know - property, method, procedure, system_procedure - and an unknown word fell through to
+// kKeyword in silence, so 37 English articles (and 74 more across the other two locales) described a
+// member of a class and answered `help_read` with "keyword". Nothing failed, which is why it lasted.
+// Two rules here, and the second is what makes the first stay true: a word the corpus uses arrives as
+// its own kind, and a word NOBODY knows is said out loud instead of passing for a keyword.
+TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
+{
+	const wxString root = WriteHelpBucket(
+		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
+		R"({ "id": "cls.Table.Columns",      "name_local": "Columns", "name_en": "Columns", "kind": "property" },)"
+		R"({ "id": "cls.Table.Find",         "name_local": "Find",    "name_en": "Find",    "kind": "method" },)"
+		R"({ "id": "cls.Table.Clear",        "name_local": "Clear",   "name_en": "Clear",   "kind": "procedure" },)"
+		R"({ "id": "fn.Message",             "name_local": "Message", "name_en": "Message", "kind": "system_procedure" },)"
+		R"({ "id": "enum.TextEncoding",      "name_local": "TextEncoding", "name_en": "TextEncoding", "kind": "enum_type" },)"
+		R"({ "id": "enum.TextEncoding.Utf8", "name_local": "Utf8",    "name_en": "Utf8",    "kind": "system_enum" },)"
+		R"({ "id": "kw.Invented",            "name_local": "Invented","name_en": "Invented","kind": "nonesuch" },)"
+		R"({ "id": "kw.Silent",              "name_local": "Silent",  "name_en": "Silent" })"
+		R"(] })");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+	const std::vector<ibHelpLoadError>& said = loaded.corpus->LoadErrors();
+
+	// kOperator stands for "no article at all" here: none of the entries above claims it, so a
+	// missing article cannot be mistaken for a kind that was read.
+	auto kindOf = [&loaded](const wxChar* id) {
+		const ibHelpEntry* e = loaded.corpus->FindById(wxString(id));
+		return e != nullptr ? e->kind : ibHelpKind::kOperator;
+	};
+
+	EXPECT_EQ(kindOf(wxT("cls.Table.Columns")), ibHelpKind::kProperty);
+	EXPECT_EQ(kindOf(wxT("cls.Table.Find")), ibHelpKind::kMethod);
+	EXPECT_EQ(kindOf(wxT("cls.Table.Clear")), ibHelpKind::kProcedure);
+	EXPECT_EQ(kindOf(wxT("fn.Message")), ibHelpKind::kSystemProcedure);
+	EXPECT_EQ(kindOf(wxT("enum.TextEncoding")), ibHelpKind::kEnumType)
+		<< "the head of an enum family is not a collection";
+	EXPECT_EQ(kindOf(wxT("enum.TextEncoding.Utf8")), ibHelpKind::kSystemEnum);
+
+	EXPECT_EQ(kindOf(wxT("kw.Invented")), ibHelpKind::kKeyword)
+		<< "an unknown word still loads the prose";
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("kw.Invented")))
+		<< "...and says which article it could not classify";
+
+	EXPECT_EQ(kindOf(wxT("kw.Silent")), ibHelpKind::kKeyword);
+	EXPECT_FALSE(SaysSomethingAbout(said, wxT("kw.Silent")))
+		<< "a MISSING kind is the documented default, not a mistake to report";
+}

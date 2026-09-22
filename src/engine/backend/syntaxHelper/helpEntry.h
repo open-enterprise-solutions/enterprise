@@ -2,7 +2,8 @@
 // Single help-corpus topic.
 //
 // Backing record for one identifier in the syntax helper: keyword,
-// built-in function, system enum, metadata class / attribute / method,
+// built-in function or procedure, system enum (its type and its values),
+// metadata class / attribute / method, a platform class and its members,
 // primitive type, collection, form event, operator. One ibHelpEntry per
 // locale per id; ids are canonical and locale-independent.
 //
@@ -37,6 +38,23 @@ enum class ibHelpKind {
 	kCollection,         // "cls.<Name>"         — ValueList, Map, Array, …
 	kEvent,              // "ev.<Scope>.<Name>"  — form / object events
 	kOperator,           // "op.<Symbol>"        — language operators
+
+	// Appended 2026-09-22. The four member/global kinds below were ALREADY IN USE by the corpus and
+	// by nothing else: the loader knew eleven words, the corpus wrote fourteen, and the four it did
+	// not know fell through to kKeyword without a sound — 37 articles in English and 74 more in the
+	// other two locales, every one of them answering `help_read` with "keyword" where it meant
+	// "property". A word a corpus can write and a reader cannot read is not forward compatibility,
+	// it is a silent wrong answer; unknown words are a WARNING at load now (helpLoader.cpp).
+	kProperty,           // "cls.<Class>.<Member>" — a value read (and often written) on a class
+	kMethod,             // "cls.<Class>.<Member>" — a callable member that answers with a value
+	kProcedure,          // "cls.<Class>.<Member>" — a callable member that answers with nothing
+	kSystemProcedure,    // "fn.<Name>"          — a global procedure (Message, Alert, …)
+
+	// The HEAD of an enum family, beside its values' kSystemEnum. It carries the class_id, so the
+	// loader can check it against the registry the way it checks a collection's — an enum type is
+	// registered like any other type (ENUM_TYPE_REGISTER → the same ctor registry), and the values
+	// are not classes and carry no id of their own.
+	kEnumType,           // "enum.<Type>"        — HTTPMethod, TextEncoding, SortDirection, …
 };
 
 // One help topic in a single locale. Locales are stored in side-by-side

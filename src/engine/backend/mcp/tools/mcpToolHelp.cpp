@@ -54,6 +54,16 @@ wxString KindWord(ibHelpKind kind)
 	case ibHelpKind::kCollection:          return wxT("collection");
 	case ibHelpKind::kEvent:               return wxT("event");
 	case ibHelpKind::kOperator:            return wxT("operator");
+	// The member kinds, and the two globals beside them. Until 2026-09-22 the loader had no word
+	// for any of these and handed them over as kKeyword, so every property and method of every
+	// class answered `help_read` with "keyword" — the one classification that is never true of a
+	// member. The words differ from the metaobject ones on purpose: "attribute" and "method"
+	// there are about a CONFIGURATION's object, these are about a platform class.
+	case ibHelpKind::kProperty:            return wxT("property");
+	case ibHelpKind::kMethod:              return wxT("classMethod");
+	case ibHelpKind::kProcedure:           return wxT("classProcedure");
+	case ibHelpKind::kSystemProcedure:     return wxT("procedure");
+	case ibHelpKind::kEnumType:            return wxT("enumType");
 	}
 
 	return wxT("unknown");
