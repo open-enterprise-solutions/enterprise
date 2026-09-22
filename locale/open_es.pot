@@ -5102,10 +5102,18 @@ msgstr ""
 msgid "Command groups"
 msgstr ""
 
-#: src/engine/frontend/docView/printPreview.cpp:43
+#: src/engine/frontend/docView/print/printPreview.cpp:46
 msgid "Fit to page width"
 msgstr ""
 
-#: src/engine/frontend/docView/printPreview.cpp:45
+#: src/engine/frontend/docView/print/printPreview.cpp:48
 msgid "Shrink a table wider than the page so that it is printed on one page across"
+msgstr ""
+
+#: src/engine/frontend/docView/docView.cpp:1271
+msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
+msgstr ""
+
+#: src/engine/frontend/docView/docView.cpp:1272
+msgid "Print"
 msgstr ""

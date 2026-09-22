@@ -37,6 +37,8 @@ private:
 
 	void OnMenuEvent(wxCommandEvent& event);
 
+protected:
+
 	ibGridEditor* m_gridEditor;
 
 	wxDECLARE_EVENT_TABLE();
@@ -132,6 +134,46 @@ private:
 
 	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetEditDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditDocument);
+};
+
+// ----------------------------------------------------------------------------
+// The document and view a form's grid box holds (docview-fork.md, "the form is a facade")
+// ----------------------------------------------------------------------------
+
+// A spreadsheet file document — it holds the sheet the box shows and saves it as every format the registry
+// writes — in no manager's list and no tab of its own.
+class FRONTEND_API ibSpreadsheetGridBoxDocument : public ibSpreadsheetFileDocument {
+public:
+
+	ibSpreadsheetGridBoxDocument();
+
+	// The one door a sheet is shown through: held here, and loaded into the editor while there is one.
+	void SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument);
+
+	// The box holds this document, not its views — none of them going takes it along.
+	virtual void OnChangedViewList() override {}
+
+private:
+
+	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetGridBoxDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetGridBoxDocument);
+};
+
+// Its view, for as long as the box lives. The box's Create creates it in the box's parent — its OnCreate makes
+// the editor the box returns; the box's Cleanup closes it and it stays empty: the editor is destroyed by the
+// visual host, the document is the box's. Its frame is that parent, not a frame of its own, so there is no
+// title to mark.
+class FRONTEND_API ibSpreadsheetGridBoxView : public ibSpreadsheetEditView {
+public:
+
+	ibSpreadsheetGridBoxView() : ibSpreadsheetEditView() {}
+
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
+	virtual bool OnClose(bool deleteWindow = true) override;
+	virtual void OnChangeFilename() override {}
+
+private:
+	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetGridBoxView);
 };
 
 #endif

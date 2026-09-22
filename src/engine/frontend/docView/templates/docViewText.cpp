@@ -143,3 +143,46 @@ bool ibTextFileDocument::DoOpenDocument(const wxString& filename)
 	Modify(false);
 	return true;
 }
+
+// ----------------------------------------------------------------------------
+// ibTextBoxDocument / View: the document a form's text box holds, and its view
+// ----------------------------------------------------------------------------
+
+#include "frontend/docView/docManager.h"   // full ibDocTemplate type
+
+wxIMPLEMENT_DYNAMIC_CLASS(ibTextBoxDocument, ibTextFileDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibTextBoxView, ibTextEditView);
+
+ibTextBoxDocument::ibTextBoxDocument() : ibTextFileDocument()
+{
+	// The text document's template: Save as reads the format from it.
+	if (docManager != nullptr)
+		SetDocumentTemplate(docManager->FindTemplateByDocClassInfo(CLASSINFO(ibTextFileDocument)));
+	SetTitle(_("Text document"));
+}
+
+bool ibTextBoxView::OnCreate(ibDocument* doc, long flags)
+{
+	if (!ibTextEditView::OnCreate(doc, flags))
+		return false;
+
+	// The document's undo drives this editor, so it is made with it — as the manager makes a document's —
+	// and dropped in OnClose.
+	delete doc->GetCommandProcessor();
+	doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
+
+	return true;
+}
+
+bool ibTextBoxView::OnClose(bool WXUNUSED(deleteWindow))
+{
+	// Not the base's close — see ibSpreadsheetGridBoxView::OnClose.
+	if (ibDocument* const doc = GetDocument()) {
+		delete doc->GetCommandProcessor();
+		doc->SetCommandProcessor(nullptr);
+	}
+
+	m_textEditor = nullptr;
+	SetFrame(nullptr);
+	return true;
+}

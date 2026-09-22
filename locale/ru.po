@@ -6240,10 +6240,18 @@ msgstr "Где показывается команда. Группа стран�
 msgid "Command groups"
 msgstr "Группы команд"
 
-#: src/engine/frontend/docView/printPreview.cpp:43
+#: src/engine/frontend/docView/print/printPreview.cpp:46
 msgid "Fit to page width"
 msgstr "По ширине страницы"
 
-#: src/engine/frontend/docView/printPreview.cpp:45
+#: src/engine/frontend/docView/print/printPreview.cpp:48
 msgid "Shrink a table wider than the page so that it is printed on one page across"
 msgstr "Уменьшить таблицу шире листа, чтобы по ширине она поместилась на одну страницу"
+
+#: src/engine/frontend/docView/docView.cpp:1271
+msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
+msgstr "Здесь нечего печатать. Если в форме несколько таблиц, поставьте курсор в ту, которую нужно напечатать."
+
+#: src/engine/frontend/docView/docView.cpp:1272
+msgid "Print"
+msgstr "Печать"

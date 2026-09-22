@@ -6090,10 +6090,18 @@ msgstr "Де показується команда. Група сторінки 
 msgid "Command groups"
 msgstr "Групи команд"
 
-#: src/engine/frontend/docView/printPreview.cpp:43
+#: src/engine/frontend/docView/print/printPreview.cpp:46
 msgid "Fit to page width"
 msgstr "За шириною сторінки"
 
-#: src/engine/frontend/docView/printPreview.cpp:45
+#: src/engine/frontend/docView/print/printPreview.cpp:48
 msgid "Shrink a table wider than the page so that it is printed on one page across"
 msgstr "Зменшити таблицю, ширшу за аркуш, щоб завширшки вона вмістилася на одну сторінку"
+
+#: src/engine/frontend/docView/docView.cpp:1271
+msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
+msgstr "Тут нічого друкувати. Якщо у формі кілька таблиць, поставте курсор у ту, яку потрібно надрукувати."
+
+#: src/engine/frontend/docView/docView.cpp:1272
+msgid "Print"
+msgstr "Друк"

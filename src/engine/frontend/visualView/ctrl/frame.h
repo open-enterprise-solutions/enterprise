@@ -374,8 +374,12 @@ public:
 	ibFrontendVisualEditorNotebook* FindVisualEditor() const;
 #endif
 
-	//support printing 
-	virtual wxPrintout* CreatePrintout() const { return nullptr; }
+	// ⭐ A CONTROL THAT IS A DOCUMENT OF ITS OWN HANDS OVER ITS VIEW (Max, 2026-09-22: "the form is the same
+	// doc/view, redirecting to the active element… the form's doc is only a facade"). The grid box and the
+	// text box hold a document and its view; while the control is the active element, the form's view
+	// (ibFormVisualEditView) is a facade over this one: menu, toolbar, commands, PRINTING — there is no
+	// printout of a control's own any more, the view prints it — and saving. Everything else answers nothing.
+	virtual ibView* GetControlView() const { return nullptr; }
 
 public:
 
