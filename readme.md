@@ -99,7 +99,7 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
    ```cmd
    git clone https://github.com/open-enterprise-solutions/enterprise.git
    cd enterprise
-   git submodule update --init --recursive src/3rdparty/wxWidgets
+   git submodule update --init --recursive
    ```
 3. Open `enterprise.sln` in Visual Studio.
 4. Select configuration `Debug|Win32` or `Release|x64`.
@@ -119,7 +119,7 @@ brew install cmake wxwidgets firebird-client postgresql
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 
 # Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -139,7 +139,7 @@ sudo apt install -y build-essential cmake libwxgtk3.2-dev \
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 
 # Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -177,7 +177,7 @@ The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 wxWidgets 3.3.2 lives at `src/3rdparty/wxWidgets` as a git submodule. After cloning:
 
 ```bash
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 ```
 
 ---

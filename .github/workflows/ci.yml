@@ -73,8 +73,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       # libgtk-3-dev: the CMake build defines __WXGTK__ and pkg-checks gtk+-3.0, so wx
@@ -165,8 +166,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - uses: ilammy/msvc-dev-cmd@v1
@@ -248,8 +250,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       # libpq-dev on top of the usual set: the driver loads libpq at run time, so
@@ -457,8 +460,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies
@@ -619,8 +623,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       # cmake ships on the runner image; ninja does not. No GTK, no uuid-dev —
@@ -710,8 +715,9 @@ jobs:
 
       # ⚠ NOT `submodules: recursive`. docs/private/ is a PRIVATE submodule, and the workflow token cannot
       # read it — a recursive checkout would fail before anything is built. Nothing here needs the
-      # documentation; the build needs wxWidgets, so that one is initialised by name.
-      - run: bash .github/fetch-wxwidgets.sh
+      # documentation, and it takes itself out with `update = none` - so the script below names no
+      # submodule at all, and needs no editing when one is added to the tree.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies

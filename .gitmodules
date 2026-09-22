@@ -6,3 +6,4 @@
 	path = docs/private
 	url = https://github.com/open-enterprise-solutions/enterprise-docs.git
 	branch = main
+	update = none

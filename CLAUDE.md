@@ -64,7 +64,7 @@ enterprise/
 │   └── private/              # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs):
 │       │                     # design docs, arcs, plans. It resolves for members of the organisation
 │       │                     # and is simply EMPTY for everyone else — the build never needs it, and
-│       │                     # CI initialises only the wxWidgets submodule. The map below is inside it.
+│       │                     # CI fetches every submodule .gitmodules names but this one. The map below is inside it.
 │       ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
 │       ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
 │       ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)

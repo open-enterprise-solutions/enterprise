@@ -23,7 +23,7 @@ Design documents, arcs and plans live in a private submodule at `docs/private/`.
 members of the Open Enterprise Solutions organisation:
 
 ```
-git submodule update --init docs/private
+git submodule update --init --checkout docs/private
 ```
 
 For everyone else the directory stays empty, and links into it from code and from the documents

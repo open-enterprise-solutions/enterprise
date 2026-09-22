@@ -85,21 +85,28 @@ git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
 
 # Initialise wxWidgets (located at src/3rdparty/wxWidgets, pinned to the 3.2 branch)
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 ```
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
-**Initialise wxWidgets by name, not the whole set.** Since 2026-08-23 `docs/` is a second
-submodule and a **private** repository (`enterprise-docs`): a bare `--init --recursive` fails for
-anyone outside the organisation, before a single file is compiled. Nothing in the build reads
-`docs/`, and CI checks out with `submodules: false` and then initialises wxWidgets by path for the
-same reason. Members who want the documentation as well run `git submodule update --init docs`.
-
-To update the wxWidgets submodule to the pinned commit after a `git pull`:
+**Take them all; the private one takes itself out.** `docs/private` is a **private** repository
+(`enterprise-docs`) that nothing in the build reads, and a bare `--init --recursive` used to fail on
+it for anyone outside the organisation, before a single file was compiled. It now carries
+`update = none` in `.gitmodules`, which a fetch naming no path obeys, so the line above takes
+every submodule this tree names and leaves that one alone. CI runs exactly the same line, which
+is why nothing has to be added here when a submodule is. Members who want the documentation ask for
+it by hand, and `--checkout` is what overrides the line:
 
 ```bash
-git submodule update --recursive src/3rdparty/wxWidgets
+git submodule update --init --checkout docs/private
+```
+
+To move the submodules to the commits this tree pins, after a `git pull` - `--init` because a pull can
+bring a submodule that was not there before:
+
+```bash
+git submodule update --init --recursive
 ```
 
 ---
@@ -225,7 +232,7 @@ CMake cross-platform build is available. wxWidgets 3.3.2 is built from the in-tr
 cd /path/to/enterprise
 
 # Ensure the wxWidgets submodule is initialised
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 
 # Configure (Debug)
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -299,7 +306,7 @@ MSBuild solution only; they are not yet wired into the CMake build.
 ```bash
 cd /path/to/enterprise
 
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 
 # Configure
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -524,7 +531,7 @@ only from the workflow file on `master`; what it builds is `develop`. The workfl
 
 **Symptom:** `fatal error: wx/wx.h: No such file or directory`
 
-**Fix:** Run `git submodule update --init --recursive src/3rdparty/wxWidgets`. On Windows, verify the wxWidgets pre-built binaries are in `src\3rdparty\wxWidgets\`.
+**Fix:** Run `git submodule update --init --recursive`. On Windows, verify the wxWidgets pre-built binaries are in `src\3rdparty\wxWidgets\`.
 
 ### Firebird embedded not found at runtime
 
@@ -550,7 +557,7 @@ General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 
 **Symptom:** `Could not find wxWidgets`
 
-**Fix:** Run `git submodule update --init --recursive src/3rdparty/wxWidgets`. The CMake build uses the in-tree submodule automatically.
+**Fix:** Run `git submodule update --init --recursive`. The CMake build uses the in-tree submodule automatically.
 
 ### Out of memory during build (macOS/Linux)
 
@@ -565,7 +572,7 @@ General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 **Fix:**
 ```bash
 rm -rf src/3rdparty/wxWidgets
-git submodule update --init --recursive src/3rdparty/wxWidgets
+git submodule update --init --recursive
 ```
 
 ### Build of another OES process is running
