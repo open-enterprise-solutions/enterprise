@@ -9,6 +9,7 @@
 #include <wx/textfile.h>
 
 #include "gridEditor.h"
+#include "frontend/docView/print/printPreview.h"   // ibFitToPageWidthPrintout — what the preview's box asks of it
 
 #define wxGP_SHOW_NONE		0x0000 //never show row or column labels
 #define wxGP_SHOW_CL		0x0001 //show column labels on first page/s
@@ -17,7 +18,7 @@
 #define wxGP_SHOW_RL_ALWAYS 0x0008 //show row labels on all pages
 #define wxGP_DEFAULT		0x0010 //default, shows all labels on all the pages.
 
-class FRONTEND_API ibGridEditorPrintout : public wxPrintout {
+class FRONTEND_API ibGridEditorPrintout : public wxPrintout, public ibFitToPageWidthPrintout {
 public:
 
 	ibGridEditorPrintout(const wxString& title = wxT("ibGridEditorPrintout"));
@@ -26,6 +27,12 @@ public:
 	void SetStyle(int style);
 	int GetStyle() const;
 	void SetUserScale(float scale);
+
+	// FIT TO THE PAGE'S WIDTH: a table wider than the page is shrunk until it goes across in one page;
+	// a narrower one is left at its size. Rows follow the same scale, so more of them fit on a page.
+	virtual void SetFitToPageWidth(bool fit) override { m_fitToPageWidth = fit; }
+	virtual bool IsFitToPageWidth() const override { return m_fitToPageWidth; }
+	virtual wxPrintout* Clone() const override;
 
 	bool HasColValue(int col) const {
 		for (int row = 0; row < m_doc->GetNumberRows(); row++) {
@@ -52,6 +59,15 @@ protected:
 
 	virtual void OnPreparePrinting();
 	void CalculateScale(wxDC* dc); //calculates the scale so that the printout represents the screen
+
+	// The page as this DC has it: the scale (the screen's, the user's, the fitting's), the margin and the
+	// room between the margins. Asked by BOTH the pagination and the drawing, so the two cannot disagree -
+	// the preview's DC and the printer's are different sizes, and each is laid out against its own.
+	void ArrangePage(wxDC* dc);
+
+	// How wide the content is, in the units the sheet is measured in - the row labels when they are
+	// printed, and every column of the sheet, the last one included.
+	int ContentWidth() const;
 
 protected:
 
@@ -86,6 +102,10 @@ private:
 	float m_userScale;
 	float m_overallScale;
 
+	bool m_fitToPageWidth = false;
+	float m_fitScale = 1.0f;      // below 1 only while fitting a table wider than the page
+
+	// In the sheet's units (a screen pixel); ArrangePage scales them to the printer, never by the fitting.
 	int m_topMargin;
 	int m_bottomMargin;
 	int m_leftMargin;

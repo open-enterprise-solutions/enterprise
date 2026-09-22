@@ -6203,3 +6203,47 @@ msgstr "Колонка '%s' читает '%s' построчно, а запро�
 #: src/engine/backend/compiler/blockSyntaxLINQ.cpp
 msgid "The query orders or cuts its rows before grouping them, which the constructor does not build yet."
 msgstr "Запрос упорядочивает или обрезает строки до группировки, этого конструктор пока не строит."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:23
+msgid "Navigation panel"
+msgstr "Панель навигации"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:24
+msgid "Actions panel"
+msgstr "Панель действий"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:25
+msgid "Form command bar"
+msgstr "Командная панель формы"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:96
+msgid "Command group"
+msgstr "Группа команд"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:98
+msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."
+msgstr "Где показывается группа: на панели навигации раздела, рядом с Важным и Обычным; на его панели действий, рядом с Создать, Отчётами и Сервисом; или на командной панели формы - одной кнопкой, которая открывает подменю команд группы: собственных команд объекта и общих команд, типизированных под этот объект."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:101
+msgid "The icon beside the group's caption: at its heading on a section page, and on its button on a form command bar. Empty: caption only."
+msgstr "Значок рядом с заголовком группы: у её заголовка на странице раздела и на её кнопке на командной панели формы. Пусто: только заголовок."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:103
+msgid "The hint shown when the pointer rests on the group's heading or on its button, one text per language. Empty: the synonym is shown."
+msgstr "Подсказка, которая показывается при наведении указателя на заголовок группы или на её кнопку, свой текст на каждом языке. Пусто: показывается синоним."
+
+#: src/engine/backend/metaCollection/metaCommandObject.h:153
+msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the configuration declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a common command. Normal by default."
+msgstr "Где показывается команда. Группа страницы раздела - одна из платформенных (Важное, Обычное, Создать, Отчёты, Сервис) или группа команд, объявленная конфигурацией для раздела, - когда раздел включает команду; или группа команд командной панели формы, которая помещает её в подменю этой группы на формах её объекта: владельца для команды объекта, того, что указан в типе параметра, для общей команды. По умолчанию - Обычное."
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:27
+msgid "Command groups"
+msgstr "Группы команд"
+
+#: src/engine/frontend/docView/printPreview.cpp:43
+msgid "Fit to page width"
+msgstr "По ширине страницы"
+
+#: src/engine/frontend/docView/printPreview.cpp:45
+msgid "Shrink a table wider than the page so that it is printed on one page across"
+msgstr "Уменьшить таблицу шире листа, чтобы по ширине она поместилась на одну страницу"

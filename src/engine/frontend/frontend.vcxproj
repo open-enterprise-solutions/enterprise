@@ -22,6 +22,7 @@
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
+    <ClCompile Include="docView\print\printPreview.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
     <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
@@ -500,6 +501,7 @@
     <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\print\printPreview.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
     <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />

@@ -1253,6 +1253,10 @@ void ibDocManager::OnMRUFileNotExist(unsigned n, const wxString& filename)
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
+#ifndef OES_USE_WEB
+#include "frontend/docView/print/printPreview.h"   // ibPrintPreviewFrame — the preview with "Fit to page width"
+#endif
+
 void ibDocManager::OnPrint(wxCommandEvent& WXUNUSED(event))
 {
     ibView *view = GetAnyUsableView();
@@ -1260,6 +1264,11 @@ void ibDocManager::OnPrint(wxCommandEvent& WXUNUSED(event))
         return;
 
     wxPrintout *printout = view->OnCreatePrintout();
+#ifndef OES_USE_WEB
+    // The page as the preview was last left - fitted to its width or not (Max, 2026-09-22: printing from
+    // the menu keeps the choice made in the preview).
+    ibPrintPreviewFrame::ApplyFitToPageWidth(printout);
+#endif
     if (printout)
     {
         wxPrintDialogData printDialogData(m_pageSetupDialogData.GetPrintData());
@@ -1288,7 +1297,13 @@ wxPreviewFrame* ibDocManager::CreatePreviewFrame(wxPrintPreviewBase* preview,
                                                  wxWindow *parent,
                                                  const wxString& title)
 {
+#ifndef OES_USE_WEB
+    // The platform's own preview window - wx's, with "Fit to page width" for a printout that can be
+    // fitted (printPreview.h).
+    return new ibPrintPreviewFrame(preview, parent, title);
+#else
     return new wxPreviewFrame(preview, parent, title);
+#endif
 }
 
 void ibDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))

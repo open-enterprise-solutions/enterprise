@@ -6053,3 +6053,47 @@ msgstr "Колонка '%s' читає '%s' порядково, а запит г
 #: src/engine/backend/compiler/blockSyntaxLINQ.cpp
 msgid "The query orders or cuts its rows before grouping them, which the constructor does not build yet."
 msgstr "Запит впорядковує або обрізає рядки до групування, цього конструктор поки не будує."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:23
+msgid "Navigation panel"
+msgstr "Панель навігації"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:24
+msgid "Actions panel"
+msgstr "Панель дій"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:25
+msgid "Form command bar"
+msgstr "Командна панель форми"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:96
+msgid "Command group"
+msgstr "Група команд"
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:98
+msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."
+msgstr "Де показується група: на панелі навігації розділу, поруч із Важливим і Звичайним; на його панелі дій, поруч зі Створити, Звітами й Сервісом; або на командній панелі форми - однією кнопкою, що відкриває підменю команд групи: власних команд об'єкта і загальних команд, типізованих під цей об'єкт."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:101
+msgid "The icon beside the group's caption: at its heading on a section page, and on its button on a form command bar. Empty: caption only."
+msgstr "Значок біля заголовка групи: біля її заголовка на сторінці розділу і на її кнопці на командній панелі форми. Порожньо: лише заголовок."
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:103
+msgid "The hint shown when the pointer rests on the group's heading or on its button, one text per language. Empty: the synonym is shown."
+msgstr "Підказка, що показується, коли вказівник затримується на заголовку групи або на її кнопці, свій текст для кожної мови. Порожньо: показується синонім."
+
+#: src/engine/backend/metaCollection/metaCommandObject.h:153
+msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the configuration declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a common command. Normal by default."
+msgstr "Де показується команда. Група сторінки розділу - одна з платформних (Важливе, Звичайне, Створити, Звіти, Сервіс) або група команд, оголошена конфігурацією для розділу, - коли розділ включає команду; або група команд командної панелі форми, яка поміщає її в підменю цієї групи на формах її об'єкта: власника для команди об'єкта, того, що вказаний у типі параметра, для загальної команди. За замовчуванням - Звичайне."
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:27
+msgid "Command groups"
+msgstr "Групи команд"
+
+#: src/engine/frontend/docView/printPreview.cpp:43
+msgid "Fit to page width"
+msgstr "За шириною сторінки"
+
+#: src/engine/frontend/docView/printPreview.cpp:45
+msgid "Shrink a table wider than the page so that it is printed on one page across"
+msgstr "Зменшити таблицю, ширшу за аркуш, щоб завширшки вона вмістилася на одну сторінку"

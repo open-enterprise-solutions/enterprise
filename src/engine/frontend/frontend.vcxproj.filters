@@ -142,6 +142,9 @@
     <ClCompile Include="docView\docManager.cpp">
       <Filter>docView</Filter>
     </ClCompile>
+    <ClCompile Include="docView\print\printPreview.cpp">
+      <Filter>docView\print</Filter>
+    </ClCompile>
     <ClCompile Include="win\ctrls\checktree.cpp">
       <Filter>win\ctrls</Filter>
     </ClCompile>
@@ -1950,6 +1953,9 @@
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
     </ClInclude>
+    <ClInclude Include="docView\print\printPreview.h">
+      <Filter>docView\print</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="mcp">
@@ -1993,6 +1999,9 @@
     </Filter>
     <Filter Include="docView\templates">
       <UniqueIdentifier>{de8c1ef4-820a-4c8f-ab29-c012e37d6b0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\print">
+      <UniqueIdentifier>{137d4b26-af8f-4d63-83d4-f0e5713840ca}</UniqueIdentifier>
     </Filter>
     <Filter Include="visualView">
       <UniqueIdentifier>{15ab1d55-40d6-4e89-96f1-2b9b0bfdc779}</UniqueIdentifier>

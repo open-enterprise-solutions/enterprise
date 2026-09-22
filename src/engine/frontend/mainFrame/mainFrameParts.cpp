@@ -276,6 +276,10 @@ bool ibFrontendMainFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBacke
 {
 	wxScopedPtr<ibGridEditorPrintout> printout(new ibGridEditorPrintout(doc));
 
+	// The page as the preview was last left, the same as File -> Print: a sheet a script prints comes out
+	// the way the person chose to see sheets printed (Max, 2026-09-22).
+	ibPrintPreviewFrame::ApplyFitToPageWidth(printout.get());
+
 	const wxPageSetupDialogData& pageSetupDialogData =
 		docManager->GetPageSetupDialogData();
 
