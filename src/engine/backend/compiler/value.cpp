@@ -48,14 +48,23 @@ static inline void DebugValueEmit(const char* tag, unsigned int count) {
 // OFF unless OES_TRACE_VALUES says otherwise — see utils/debugTrace.h. The counter itself keeps
 // running either way: it costs one atomic, and it is what makes a later "how many are alive?"
 // answerable without a rebuild. Only the ~18000 lines per run are conditional.
-static const bool s_traceValues = ibDebugTraceEnabled("OES_TRACE_VALUES");
+//
+// ⚠ HELD BY A FUNCTION, NOT AT FILE SCOPE, the way that header asks and the way valueFactory.cpp
+// now does: a value is created and destroyed during the STATIC INITIALISATION of other translation
+// units, so a file-scope flag here would be read before its own initialiser had run. Its twin in
+// valueFactory.cpp was doing exactly that, and ASan named it on 2026-09-22.
+static bool TraceValues()
+{
+	static const bool s_traceValues = ibDebugTraceEnabled("OES_TRACE_VALUES");
+	return s_traceValues;
+}
 
 #define DEBUG_VALUE_CREATE() \
 	{ const unsigned int alive = s_nCreateCount.fetch_add(1) + 1; \
-	  if (s_traceValues) DebugValueEmit("Create", alive); }
+	  if (TraceValues()) DebugValueEmit("Create", alive); }
 #define DEBUG_VALUE_DELETE() \
 	{ const unsigned int alive = s_nCreateCount.fetch_sub(1) - 1; \
-	  if (s_traceValues) DebugValueEmit("Delete", alive); }
+	  if (TraceValues()) DebugValueEmit("Delete", alive); }
 #else
 #define DEBUG_VALUE_CREATE()
 #define DEBUG_VALUE_DELETE()

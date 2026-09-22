@@ -393,6 +393,16 @@ jobs:
           oes_temp_db_sqlite_test oes_job_tenancy_test
 
       # Twice the timeout of tests-linux: ASan costs about 2x.
+      #
+      # ⭐ check_initialization_order EARNED ITS PLACE ON THE FIRST RUN (2026-09-22): 2076 failed of
+      # 2092, and every one of them the SAME report - initialization-order-fiasco on `s_traceTypes`,
+      # a file-scope flag in compiler/valueFactory.cpp read from the static initialisation of a
+      # registrar one translation unit away. One defect at startup, and since ASan cannot recover
+      # from it (not without -fsanitize-recover=address, so halt_on_error would change nothing), it
+      # wore the whole suite's output: no leak, no overflow and no undefined behaviour underneath it
+      # was ever reached. Both flags are function-local statics now, which is what utils/debugTrace.h
+      # asks of its callers and names those two files for; the check stays ON so the next one is
+      # caught the same way rather than silently allowed.
       - name: Run
         working-directory: build/linux-debug
         env:

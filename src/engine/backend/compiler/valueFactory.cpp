@@ -11,7 +11,20 @@
 
 #ifdef DEBUG
 // OFF unless OES_TRACE_TYPES says otherwise — see utils/debugTrace.h.
-static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+//
+// ⚠ HELD BY A FUNCTION, NOT AT FILE SCOPE, which is what that header asks of its callers and names
+// this file for. Both readers below run from the STATIC INITIALISATION of OTHER translation units —
+// a registrar is a file-scope object in its own file, and registering is the first thing it does —
+// so a file-scope flag here was read before its own initialiser had run, and answered with whatever
+// the memory held. ASan said it on the first sanitised run (2026-09-22): initialization-order-fiasco
+// on `s_traceTypes`, read in RegisterCtor from enumFactory.cpp's registrar, reported by 2076 of the
+// 2092 tests — one defect wearing the suite's whole output. A function-local static is built by its
+// first caller, whenever that is; metaObject.cpp and reference.cpp already hold their flags so.
+static bool TraceTypes()
+{
+	static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+	return s_traceTypes;
+}
 #endif
 
 // Single owner of the registered value-ctors + the clsid / type_info / name
@@ -101,7 +114,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		}
 
 #ifdef DEBUG
-		if (s_traceTypes && wxTheApp != NULL)
+		if (TraceTypes() && wxTheApp != NULL)
 			ibJournalInfo(wxT("compiler"),wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
@@ -123,7 +136,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		// The wxTheApp guard is NOT about noise: this also runs from static teardown, where a log
 		// call would ask wx to build a log target nobody can then delete (see OnExit's
 		// wxLog::DontCreateOnDemand note).
-		if (s_traceTypes && wxTheApp != NULL)
+		if (TraceTypes() && wxTheApp != NULL)
 			ibJournalInfo(wxT("compiler"),wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
