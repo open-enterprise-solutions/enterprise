@@ -17,7 +17,7 @@
       "return_descr": "SpreadsheetDocument.",
       "example": "Template = GetCommonTemplate(\"InvoiceKO1\");\nSheet = New SpreadsheetDocument();\nSheet.Put(Template.GetArea(\"Header\"));\nSheet.Show(\"Invoice\");",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.GetCommonTemplate", "sd.GetArea", "sd.Put", "sd.Join"],
+      "see_also": ["fn.GetCommonTemplate", "cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.Join"],
       "reviewed": true
     },
     {
@@ -33,11 +33,11 @@
       "return_descr": "SpreadsheetDocument — макет. У пакетному друці беріть його заново на кожен документ: вивід областей може змінювати ширини колонок самого макета.",
       "example": "Template = GetCommonTemplate(\"InvoiceKO1_2018\");",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["cls.SpreadsheetDocument", "sd.GetArea"],
+      "see_also": ["cls.SpreadsheetDocument", "cls.SpreadsheetDocument.GetArea"],
       "reviewed": true
     },
     {
-      "id": "sd.GetArea",
+      "id": "cls.SpreadsheetDocument.GetArea",
       "name_local": "GetArea",
       "name_en": "GetArea",
       "kind": "method",
@@ -49,11 +49,11 @@
       "return_descr": "SpreadsheetDocument — копія, готова до заповнення.",
       "example": "Row = Template.GetArea(\"Row|Goods\");\nRow.Parameters.Goods = Selection.Goods;\nSheet.Join(Row);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Put", "sd.Join", "sd.Parameters", "sd.Areas"],
+      "see_also": ["cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.Join", "cls.SpreadsheetDocument.Parameters", "cls.SpreadsheetDocument.Areas"],
       "reviewed": true
     },
     {
-      "id": "sd.Put",
+      "id": "cls.SpreadsheetDocument.Put",
       "name_local": "Put",
       "name_en": "Put",
       "kind": "procedure",
@@ -65,11 +65,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.Put(Template.GetArea(\"Header\"));\nFor Each Line In Goods Do\n    Sheet.Put(Template.GetArea(\"Row|Number\"));\n    Sheet.Join(Template.GetArea(\"Row|Goods\"));\nEndDo;",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Join", "sd.GetArea", "sd.BeginRowGroup"],
+      "see_also": ["cls.SpreadsheetDocument.Join", "cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.BeginRowGroup"],
       "reviewed": true
     },
     {
-      "id": "sd.Join",
+      "id": "cls.SpreadsheetDocument.Join",
       "name_local": "Join",
       "name_en": "Join",
       "kind": "procedure",
@@ -81,11 +81,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.Put(Template.GetArea(\"Total|Number\"));\nIf ShowCodes Then\n    Sheet.Join(Template.GetArea(\"Total|Code\"));\nEndIf;\nSheet.Join(Template.GetArea(\"Total|Amount\"));",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Put", "sd.GetArea"],
+      "see_also": ["cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.GetArea"],
       "reviewed": true
     },
     {
-      "id": "sd.Parameters",
+      "id": "cls.SpreadsheetDocument.Parameters",
       "name_local": "Parameters",
       "name_en": "Parameters",
       "kind": "property",
@@ -97,11 +97,11 @@
       "return_descr": "SpreadsheetParameterCollection.",
       "example": "Head = Template.GetArea(\"Header\");\nHead.Parameters.Number = Ref.Number;\nHead.Parameters.TotalAmount = Format(Total, \"NFD=2\");\nSheet.Put(Head);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.GetArea", "sd.Areas"],
+      "see_also": ["cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.Areas"],
       "reviewed": true
     },
     {
-      "id": "sd.Areas",
+      "id": "cls.SpreadsheetDocument.Areas",
       "name_local": "Areas",
       "name_en": "Areas",
       "kind": "property",
@@ -113,11 +113,11 @@
       "return_descr": "SpreadsheetAreaCollection.",
       "example": "// віддати ширину прихованої колонки колонці найменування\nTemplate.Areas.Goods.Width = Template.Areas.Goods.Width + Template.Areas.Code.Width;",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.GetArea", "sd.Area", "sd.Range"],
+      "see_also": ["cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.Area", "cls.SpreadsheetDocument.Range"],
       "reviewed": true
     },
     {
-      "id": "sd.Area",
+      "id": "cls.SpreadsheetDocument.Area",
       "name_local": "Area",
       "name_en": "Area",
       "kind": "method",
@@ -129,11 +129,11 @@
       "return_descr": "Комірка. Порожньо, якщо такої комірки немає, — але колонка ЗА останньою відповідає тією ж останньою, а не порожнечею, тож цикл, що пройшов на одну далі, покаже повтор замість кінця.",
       "example": "Cell = Sheet.Area(0, 0);          // ліва верхня: нуль, не одиниця\nMessage(Cell.Value);              // прочитати назад\nCell.Value = \"Report title\";\nCell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center;\nCell.Font = New Font(\"Arial\", 10, True);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Range", "sd.Areas"],
+      "see_also": ["cls.SpreadsheetDocument.Range", "cls.SpreadsheetDocument.Areas"],
       "reviewed": true
     },
     {
-      "id": "sd.Range",
+      "id": "cls.SpreadsheetDocument.Range",
       "name_local": "Range",
       "name_en": "Range",
       "kind": "method",
@@ -145,11 +145,11 @@
       "return_descr": "SpreadsheetDocument — частина аркуша як документ.",
       "example": "Head = Sheet.Range(1, 3);\nOther.Put(Head);",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Area", "sd.Areas", "sd.Put"],
+      "see_also": ["cls.SpreadsheetDocument.Area", "cls.SpreadsheetDocument.Areas", "cls.SpreadsheetDocument.Put"],
       "reviewed": true
     },
     {
-      "id": "sd.Show",
+      "id": "cls.SpreadsheetDocument.Show",
       "name_local": "Show",
       "name_en": "Show",
       "kind": "procedure",
@@ -161,11 +161,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.Show(\"Waybill \" + Ref.Number);",
       "availability": "Designer, enterprise",
-      "see_also": ["sd.Print", "sd.PrinterName"],
+      "see_also": ["cls.SpreadsheetDocument.Print", "cls.SpreadsheetDocument.PrinterName"],
       "reviewed": true
     },
     {
-      "id": "sd.Print",
+      "id": "cls.SpreadsheetDocument.Print",
       "name_local": "Print",
       "name_en": "Print",
       "kind": "procedure",
@@ -177,11 +177,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.PrinterName = \"Warehouse label printer\";\nSheet.Print(False);",
       "availability": "Designer, enterprise",
-      "see_also": ["sd.Show", "sd.PrinterName", "sd.PutHorizontalPageBreak"],
+      "see_also": ["cls.SpreadsheetDocument.Show", "cls.SpreadsheetDocument.PrinterName", "cls.SpreadsheetDocument.PutHorizontalPageBreak"],
       "reviewed": true
     },
     {
-      "id": "sd.PrinterName",
+      "id": "cls.SpreadsheetDocument.PrinterName",
       "name_local": "PrinterName",
       "name_en": "PrinterName",
       "kind": "property",
@@ -193,11 +193,11 @@
       "return_descr": "Рядок.",
       "example": "Sheet.PrinterName = \"Zebra ZD230\";",
       "availability": "Designer, enterprise",
-      "see_also": ["sd.Print"],
+      "see_also": ["cls.SpreadsheetDocument.Print"],
       "reviewed": true
     },
     {
-      "id": "sd.LanguageCode",
+      "id": "cls.SpreadsheetDocument.LanguageCode",
       "name_local": "LanguageCode",
       "name_en": "LanguageCode",
       "kind": "property",
@@ -209,11 +209,11 @@
       "return_descr": "Рядок — код мови конфігурації.",
       "example": "Template = GetCommonTemplate(\"Waybill\");\nTemplate.LanguageCode = Counterparty.CorrespondenceLanguage;",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.GetCommonTemplate", "sd.GetArea"],
+      "see_also": ["fn.GetCommonTemplate", "cls.SpreadsheetDocument.GetArea"],
       "reviewed": true
     },
     {
-      "id": "sd.PutHorizontalPageBreak",
+      "id": "cls.SpreadsheetDocument.PutHorizontalPageBreak",
       "name_local": "PutHorizontalPageBreak",
       "name_en": "PutHorizontalPageBreak",
       "kind": "procedure",
@@ -225,11 +225,11 @@
       "return_descr": "Нічого.",
       "example": "For Each Ref In Documents Do\n    If Not First Then\n        Sheet.PutHorizontalPageBreak();\n    EndIf;\n    First = False;\n    PrintOne(Sheet, Ref);\nEndDo;",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.PutVerticalPageBreak", "sd.Print"],
+      "see_also": ["cls.SpreadsheetDocument.PutVerticalPageBreak", "cls.SpreadsheetDocument.Print"],
       "reviewed": true
     },
     {
-      "id": "sd.PutVerticalPageBreak",
+      "id": "cls.SpreadsheetDocument.PutVerticalPageBreak",
       "name_local": "PutVerticalPageBreak",
       "name_en": "PutVerticalPageBreak",
       "kind": "procedure",
@@ -241,11 +241,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.PutVerticalPageBreak();",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.PutHorizontalPageBreak"],
+      "see_also": ["cls.SpreadsheetDocument.PutHorizontalPageBreak"],
       "reviewed": true
     },
     {
-      "id": "sd.BeginRowGroup",
+      "id": "cls.SpreadsheetDocument.BeginRowGroup",
       "name_local": "BeginRowGroup",
       "name_en": "BeginRowGroup",
       "kind": "procedure",
@@ -257,11 +257,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.Put(Template.GetArea(\"GroupHeader\"));\nSheet.BeginRowGroup();\nFor Each Line In Rows Do\n    Sheet.Put(Template.GetArea(\"Row\"));\nEndDo;\nSheet.EndRowGroup();",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.Put", "sd.EndRowGroup"],
+      "see_also": ["cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.EndRowGroup"],
       "reviewed": true
     },
     {
-      "id": "sd.EndRowGroup",
+      "id": "cls.SpreadsheetDocument.EndRowGroup",
       "name_local": "EndRowGroup",
       "name_en": "EndRowGroup",
       "kind": "procedure",
@@ -273,11 +273,11 @@
       "return_descr": "Нічого.",
       "example": "Sheet.EndRowGroup();",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
-      "see_also": ["sd.BeginRowGroup"],
+      "see_also": ["cls.SpreadsheetDocument.BeginRowGroup"],
       "reviewed": true
     },
     {
-      "id": "sd.FixedTop",
+      "id": "cls.SpreadsheetDocument.FixedTop",
       "name_local": "FixedTop",
       "name_en": "FixedTop",
       "kind": "property",
@@ -289,11 +289,11 @@
       "return_descr": "Число.",
       "example": "Sheet.FixedTop = 3;\nSheet.Show(\"Turnover\");",
       "availability": "Designer, enterprise",
-      "see_also": ["sd.Show"],
+      "see_also": ["cls.SpreadsheetDocument.Show"],
       "reviewed": true
     },
     {
-      "id": "sd.Clear",
+      "id": "cls.SpreadsheetDocument.Clear",
       "name_local": "Clear",
       "name_en": "Clear",
       "kind": "procedure",
