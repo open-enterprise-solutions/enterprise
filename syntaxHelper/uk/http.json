@@ -14,14 +14,15 @@
         "http"
       ],
       "signature": "New HTTPConnection(host : string [, port : number = 80 [, user : string, password : string [, timeout : number = 30]]])",
-      "description": "Лінія до ОДНІЄЇ машини, що відкривається на першому запиті й зберігається для наступного: хост і порт належать з'єднанню, шлях — кожному запитові. Get, Post, Put, Patch, Delete і Head надсилають нею HTTPRequest; CallMethod надсилає його будь-яким членом HTTPMethod, зокрема Options. Кожен із них повертає HTTPResponse.\n\nВІДПОВІДЬ І ВІДМОВА — ЦЕ РІЗНЕ. 404, 500 і 3xx — це ВІДПОВІДІ: відповідь приходить, StatusCode каже яка, а що з нею робити — вирішує скрипт. Відмова — це коли відповіді НЕМАЄ: ім'я не розв'язується, на порту ніхто не слухає, ніхто не відповів за відведений час, лінія обірвалася на півдорозі, — і тоді ЗБУДЖУЄТЬСЯ ВИНЯТОК, у тексті якого метод, адреса і причина. Ловиться через try / except.\n\nХОСТ — ЦЕ ІМ'Я: \"api.example\", \"10.0.0.5\", \"::1\", — а не адреса. Відхиляються: \"http://api.example\" і все інше зі схемою, скісною рискою, зворотною скісною, '@', '?', '#' чи пробілом; ім'я, що несе порт (\"api.example:8080\" — порт це другий аргумент); IPv6-адреса в дужках (\"[::1]\" — вона дається голою); ім'я не в ASCII-формі punycode (xn--). Порт — від 1 до 65535, і 80, якщо не вказаний; 0 відхиляється, а не читається як «не вказаний». `New HTTPConnection()` зовсім без хоста теж відхиляється: з'єднання в нікуди — не з'єднання.\n\nКористувач і пароль ідуть як Basic-авторизація з КОЖНИМ запитом, якщо сам запит не несе заголовок Authorization. Ім'я користувача не може містити ':' — саме він відділяє його від пароля. Відповідь тримається в пам'яті цілком, до 100 МБ.",
+      "description": "Лінія до ОДНІЄЇ машини, що відкривається на першому запиті й зберігається для наступного: хост і порт належать з'єднанню, шлях — кожному запитові. Get, Post, Put, Patch, Delete і Head надсилають нею HTTPRequest; CallMethod надсилає його будь-яким членом HTTPMethod, зокрема Options. Кожен із них повертає HTTPResponse.\n\nВІДПОВІДЬ І ВІДМОВА — ЦЕ РІЗНЕ. 404, 500 і 3xx — це ВІДПОВІДІ: відповідь приходить, StatusCode каже яка, а що з нею робити — вирішує скрипт. Відмова — це коли відповіді НЕМАЄ: ім'я не розв'язується, на порту ніхто не слухає, ніхто не відповів за відведений час, лінія обірвалася на півдорозі, — і тоді ЗБУДЖУЄТЬСЯ ВИНЯТОК, у тексті якого метод, адреса і причина. Ловиться через try / except.\n\nХОСТ — ЦЕ ІМ'Я: \"api.example\", \"10.0.0.5\", \"::1\", — а не адреса. Відхиляються: \"http://api.example\" і все інше зі схемою, скісною рискою, зворотною скісною, '@', '?', '#' чи пробілом; ім'я, що несе порт (\"api.example:8080\" — порт це другий аргумент); IPv6-адреса в дужках (\"[::1]\" — вона дається голою); ім'я не в ASCII-формі punycode (xn--). Порт — від 1 до 65535, а якщо не вказаний — 80, і 443, щойно задано SecureConnection; 0 відхиляється, а не читається як «не вказаний». `New HTTPConnection()` зовсім без хоста теж відхиляється: з'єднання в нікуди — не з'єднання.\n\nКористувач і пароль ідуть як Basic-авторизація з КОЖНИМ запитом, якщо сам запит не несе заголовок Authorization. Ім'я користувача не може містити ':' — саме він відділяє його від пароля. Відповідь тримається в пам'яті цілком, до 100 МБ.",
       "syntax_block": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\ntry {\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\n} except {\n    Message(ErrorDescription());                 // no answer at all\n}",
       "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
-      "parameters": "host — ім'я машини, ніколи не адреса: \"api.example\", \"10.0.0.5\", \"::1\".\nport — від 1 до 65535; 80, якщо не вказаний.\nuser, password — ідуть як Basic-авторизація з кожним запитом, якщо запит не каже про себе сам.\ntimeout — секунди, від 1 до 86400 (доба); 30, якщо не вказаний.",
+      "parameters": "host — ім'я машини, ніколи не адреса: \"api.example\", \"10.0.0.5\", \"::1\".\nport — від 1 до 65535; якщо не вказаний — 80, а із заданим SecureConnection 443.\nuser, password — ідуть як Basic-авторизація з кожним запитом, якщо запит не каже про себе сам.\ntimeout — секунди, від 1 до 86400 (доба); 30, якщо не вказаний.",
       "return_descr": "HTTPConnection.",
       "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 і 500 — ВІДПОВІДІ, а не відмови\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"відповів \" + Response.StatusCode);\n    }\n} except {\n    Message(\"відповіді немає: \" + ErrorDescription());   // ім'я не розв'язалося, порт закритий або минуло 30 с\n}",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "cls.HTTPConnection.SecureConnection",
         "cls.HTTPRequest",
         "cls.HTTPResponse",
         "cls.HTTPConnection.CallMethod",
@@ -62,11 +63,11 @@
         "http"
       ],
       "signature": "Connection.Port : number",
-      "description": "Порт, з яким з'єднання було створене, — 80, якщо конструкторові його не дали. Лише читання, з тієї самої причини, що й Host.",
+      "description": "Порт, на якому це з'єднання говорить: той, що дали конструкторові, а якщо не дали — 80 для http і 443, щойно задано SecureConnection. Читається у момент запиту, тому встановлення або зняття SecureConnection його змінює. Лише читання, з тієї самої причини, що й Host.",
       "syntax_block": "Connection.Port",
       "parameters": "",
       "return_descr": "Число.",
-      "example": "Message(Connection.Port);   // 80, якщо не вказаний",
+      "example": "Message(Connection.Port);   // 80, якщо не вказаний; 443, коли захищено",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "cls.HTTPConnection",
@@ -548,7 +549,7 @@
       "id": "enum.HTTPMethod",
       "name_local": "HTTPMethod",
       "name_en": "HTTPMethod",
-      "kind": "system_enum",
+      "kind": "enum_type",
       "class_id": 382927474864707642,
       "category_keys": [
         "runtime",

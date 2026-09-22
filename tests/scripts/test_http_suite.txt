@@ -11,7 +11,8 @@
 //   3. A host that is an address, and a time allowed of zero, are refused when the connection is made.
 //   4. A string where an object is expected - headers, a body, a request - is refused with a sentence.
 //   5. The example the help gives compiles.
-//   6. A fragment in an address is refused. (That `New HTTPResponse()` does not compile is the registry's
+//   6. A fragment in an address is refused.
+//   7. A certificate file, a secure connection and what the port becomes with one. (That `New HTTPResponse()` does not compile is the registry's
 //      word, asked in tests/test_valueHttp.cpp: a script that does not compile cannot be in a corpus.)
 // ============================================================================
 
@@ -44,6 +45,13 @@ Procedure TheHelpsExample() {
 
     response = connection.CallMethod(HTTPMethod.Options, order);
     response.GetBodyAsBinaryData().Write("C:\in\answer.bin");     // to a file: the bytes, as they came
+
+    var secure = New SecureConnection();                        // the platform's own trust store, and the check on
+    secure.TrustedCertificates = New CertificateFile("C:\certs\bank-ca.pem");   // ...or this authority alone
+    secure.ClientCertificate = New CertificateFile("C:\certs\client.pem", "key password");
+    var bank = New HTTPConnection("api.bank.example");          // no port given: 443, once it is secure
+    bank.SecureConnection = secure;
+    response = bank.Get(New HTTPRequest("/v1/balance"));
 }
 
 var same = HTTPMethod.Get;
@@ -111,3 +119,47 @@ refused = False;
 try { request.ResourceAddress = "/v1/sales#top"; } except { refused = True; }
 if (Not refused) { Raise("HTTPRequest: a fragment was taken into an address"); }
 Message("HTTPConnection: ok");
+
+// A secure connection: what can be asked without a server. A CertificateFile needs a file that is there, so
+// one is made - what is in it is the library's business, at the first request.
+var pemPath = GetTempFileName();
+var pem = New TextWriter(pemPath, TextEncoding.UTF8);
+pem.WriteLine("-----BEGIN CERTIFICATE-----");
+pem.WriteLine("-----END CERTIFICATE-----");
+pem.Close();
+
+var trust = New CertificateFile(pemPath);
+if (trust.Path <> pemPath) { Raise("CertificateFile: the path does not come back"); }
+
+refused = False;
+try { var missing = New CertificateFile("C:\no\such\file.pem"); } except { refused = True; }
+if (Not refused) { Raise("CertificateFile: a file that is not there was taken"); }
+
+var secure = New SecureConnection();
+if (Not secure.VerifyServerCertificate) { Raise("SecureConnection: the check is on unless said"); }
+if (secure.TrustedCertificates <> Undefined Or secure.ClientCertificate <> Undefined) { Raise("SecureConnection: something is named when nothing was"); }
+secure.TrustedCertificates = trust;
+secure.VerifyServerCertificate = False;
+if (secure.TrustedCertificates.Path <> pemPath) { Raise("SecureConnection: the trusted certificates do not come back"); }
+
+refused = False;
+try { secure.ClientCertificate = "client.pem"; } except { refused = True; }
+if (Not refused) { Raise("SecureConnection: a string was taken for a certificate"); }
+
+refused = False;
+try { secure.VerifyServerCertificate = 1; } except { refused = True; }
+if (Not refused Or secure.VerifyServerCertificate) { Raise("SecureConnection: a number was taken for the switch"); }
+
+var site = New HTTPConnection("api.example");
+if (site.Port <> 80) { Raise("HTTPConnection: a port nobody gave is 80 without a secure connection"); }
+site.SecureConnection = secure;
+if (site.Port <> 443) { Raise("HTTPConnection: a port nobody gave is 443 with one"); }
+site.SecureConnection = Undefined;
+if (site.Port <> 80) { Raise("HTTPConnection: and 80 again when it is taken away"); }
+
+refused = False;
+try { site.SecureConnection = "yes"; } except { refused = True; }
+if (Not refused) { Raise("HTTPConnection: a string was taken for a SecureConnection"); }
+
+FileDelete(pemPath);
+Message("SecureConnection: ok");

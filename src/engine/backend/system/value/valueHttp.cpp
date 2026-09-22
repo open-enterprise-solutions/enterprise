@@ -21,14 +21,31 @@
 
 #include "httplib.h"
 
+// The mutexes Mbed TLS locks with, given to it when this library is loaded. Once per module, and this is the
+// engine's one place (the header says why it cannot wait for the first connection).
+#include "oes_mbedtls_threading.h"
+
+// Plain or secure: both are a ClientImpl, and every setting below is the base's. The SSLClient exists only
+// when a TLS backend is compiled in (CPPHTTPLIB_SSL_ENABLED - Mbed TLS, set for the whole build by the root
+// CMakeLists.txt); a build without one still has the property, and refuses to use it.
 struct ibValueHttpConnection::ibTransport {
-	ibTransport(const std::string& host, int port) : m_client(host, port) {}
-	httplib::Client m_client;
+	explicit ibTransport(httplib::ClientImpl* client) : m_client(client) {}
+	std::unique_ptr<httplib::ClientImpl> m_client;
+
+	// ⚠ WHAT IT WAS BUILT FROM, so that it can be asked whether it still answers the question. A
+	// SecureConnection is a VALUE a script holds: `secure.VerifyServerCertificate = True` after a request
+	// has been made changes the object the connection points at, and a connection that read it once would
+	// go on for the rest of the session with the check it started with - off. Kept alive by keep-alive,
+	// which is to say for as long as the session.
+	bool     m_secure = false;
+	bool     m_verify = true;
+	wxString m_client_certificate, m_client_password, m_trusted;
 };
 
 namespace {
 
 const int kDefaultPort = 80;
+const int kDefaultSecurePort = 443;
 const int kDefaultTimeout = 30;
 const int kMaxTimeout = 24 * 60 * 60;              // a day. Past ~2 147 483 s the library's own int arithmetic
                                                    // goes negative and "never forever" becomes forever.
@@ -376,6 +393,7 @@ void ibValueHttpConnection_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendProp(wxT("Host"), true, false, wxNOT_FOUND);
 	helper.AppendProp(wxT("Port"), true, false, wxNOT_FOUND);
 	helper.AppendProp(wxT("Timeout"), true, true, wxNOT_FOUND);
+	helper.AppendProp(wxT("SecureConnection"), true, true, wxNOT_FOUND);
 
 	helper.AppendFunc(wxT("Get"), 1, wxT("Get(request : HTTPRequest)"));
 	helper.AppendFunc(wxT("Post"), 1, wxT("Post(request : HTTPRequest)"));
@@ -398,19 +416,20 @@ bool ibValueHttpConnection::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
-	const int port = ibHttpGiven(paParams, lSizeArray, 1) ? static_cast<int>(paParams[1]->GetInteger()) : kDefaultPort;
+	const bool portGiven = ibHttpGiven(paParams, lSizeArray, 1);
+	const int port = portGiven ? static_cast<int>(paParams[1]->GetInteger()) : kDefaultPort;
 	const wxString user = lSizeArray > 2 ? paParams[2]->GetString() : wxString();
 	const wxString password = lSizeArray > 3 ? paParams[3]->GetString() : wxString();
 	const int timeout = ibHttpGiven(paParams, lSizeArray, 4) ? static_cast<int>(paParams[4]->GetInteger()) : kDefaultTimeout;
-	Open(paParams[0]->GetString(), port, user, password, timeout);
+	Open(paParams[0]->GetString(), port, user, password, timeout, portGiven);
 	return true;
 }
 
-void ibValueHttpConnection::Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds)
+void ibValueHttpConnection::Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds, bool portGiven)
 {
 	if (host.empty() || host.Contains(wxT("://")) || host.Contains(wxT("/")) || host.Contains(wxT("\\")) || host.Contains(wxT("@"))
 		|| host.Contains(wxT("?")) || host.Contains(wxT("#")) || host.Contains(wxT(" ")) || ibHttpHoldsControl(host))
-		ibBackendCoreException::Error(_("HTTPConnection: the host is a name - 'api.example' - not an address: the path goes into the request's ResourceAddress, and a secure connection is a property this build does not have yet: '%s'"), host);
+		ibBackendCoreException::Error(_("HTTPConnection: the host is a name - 'api.example' - not an address: the path goes into the request's ResourceAddress, and 'https' is the SecureConnection property: '%s'"), host);
 	if (!ibHttpIsAscii(host))
 		ibBackendCoreException::Error(_("HTTPConnection: a host name is given in its ASCII form - an international name as its punycode (xn--...): '%s'"), host);
 	// A ':' is a port unless the host is an IPv6 address, which has at least two; the brackets an address
@@ -425,9 +444,29 @@ void ibValueHttpConnection::Open(const wxString& host, int port, const wxString&
 
 	m_host = host;
 	m_port = port;
+	m_portGiven = portGiven;
 	m_user = user;
 	m_password = password;
 	m_transport.reset();                                       // made on the first request, for this host and port
+}
+
+int ibValueHttpConnection::Port() const
+{
+	return m_portGiven ? m_port : (m_secure != nullptr ? kDefaultSecurePort : kDefaultPort);
+}
+
+void ibValueHttpConnection::SetSecureConnection(const ibValue& value)
+{
+	if (value.GetType() == ibValueTypes::TYPE_EMPTY) {
+		m_secure = nullptr;
+	}
+	else {
+		ibValueSecureConnection* const secure = dynamic_cast<ibValueSecureConnection*>(value.GetRef());
+		if (secure == nullptr)
+			ibBackendCoreException::Error(_("HTTPConnection: SecureConnection is a SecureConnection value, or Undefined for plain http://"));
+		m_secure = secure;
+	}
+	m_transport.reset();                                       // the next request speaks the new way
 }
 
 void ibValueHttpConnection::SetTimeout(int seconds)
@@ -481,9 +520,64 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	if (!authorized && !m_user.empty())
 		message.headers.insert(httplib::make_basic_authentication_header(ibHttpUtf8(m_user), ibHttpUtf8(m_password)));
 
+	const bool secure = m_secure != nullptr;
+
+	// The shape a transport has to have for THIS request. A SecureConnection can be changed in place, and
+	// two connections can hold the same one, so what it says now is asked now rather than remembered.
+	const ibValueCertificateFile* const mine = secure ? m_secure->ClientCertificate() : nullptr;
+	const ibValueCertificateFile* const trusted = secure ? m_secure->TrustedCertificates() : nullptr;
+	const bool verify = secure && m_secure->VerifyServerCertificate();
+	const wxString certificatePath = mine != nullptr ? mine->Path() : wxString();
+	const wxString certificatePassword = mine != nullptr ? mine->Password() : wxString();
+	const wxString trustedPath = trusted != nullptr ? trusted->Path() : wxString();
+
+	if (m_transport && (m_transport->m_secure != secure || m_transport->m_verify != verify
+		|| m_transport->m_client_certificate != certificatePath || m_transport->m_client_password != certificatePassword
+		|| m_transport->m_trusted != trustedPath))
+		m_transport.reset();                                   // it was built to a shape nobody asks for any more
+
 	if (!m_transport) {
-		m_transport.reset(new ibTransport(ibHttpUtf8(m_host), m_port));
-		httplib::Client& client = m_transport->m_client;
+		if (secure) {
+#ifdef CPPHTTPLIB_SSL_ENABLED
+			// The client's certificate and its key are one PEM file (valueSecureConnection.h), so the library is
+			// given the same path twice; the password opens the key. No file - no certificate to show.
+			const std::string certificate = ibHttpUtf8(certificatePath);
+			const std::string password = ibHttpUtf8(certificatePassword);
+			std::unique_ptr<httplib::SSLClient> made(new httplib::SSLClient(ibHttpUtf8(m_host), Port(), certificate, certificate, password));
+			httplib::SSLClient* const ssl = made.get();
+			m_transport.reset(new ibTransport(made.get()));   // the transport owns it from here
+			made.release();
+
+			// ⚠ A CERTIFICATE THE LIBRARY COULD NOT READ IS SAID HERE, BY NAME. It answers such a file by
+			// throwing its whole context away, and every request afterwards comes back as "the handshake
+			// failed" - about a file, with the server blamed. The name is still at hand at this point.
+			if (!ssl->is_valid()) {
+				m_transport.reset();
+				if (mine != nullptr)
+					ibBackendCoreException::Error(_("HTTPConnection: the certificate file '%s' could not be read - not a PEM, or the key's password is wrong"), mine->Path());
+				ibBackendCoreException::Error(_("HTTPConnection: a secure connection could not be prepared"));
+			}
+			// Whom to trust: the file named, else the platform's own store (the library reads it by itself when
+			// no file is given). The check - the chain and the name - is one switch, and it is on unless a script
+			// said otherwise.
+			if (trusted != nullptr)
+				ssl->set_ca_cert_path(ibHttpUtf8(trustedPath));
+			ssl->enable_server_certificate_verification(verify);
+			ssl->enable_server_hostname_verification(verify);
+#else
+			ibBackendCoreException::Error(_("HTTPConnection: this build has no TLS - a secure connection cannot be made"));
+#endif
+		}
+		else {
+			m_transport.reset(new ibTransport(new httplib::ClientImpl(ibHttpUtf8(m_host), Port())));
+		}
+		m_transport->m_secure = secure;
+		m_transport->m_verify = verify;
+		m_transport->m_client_certificate = certificatePath;
+		m_transport->m_client_password = certificatePassword;
+		m_transport->m_trusted = trustedPath;
+
+		httplib::ClientImpl& client = *m_transport->m_client;
 		client.set_connection_timeout(m_timeout, 0);
 		client.set_read_timeout(m_timeout, 0);
 		client.set_write_timeout(m_timeout, 0);
@@ -521,23 +615,33 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	message.start_time_ = started;
 	httplib::Result result(nullptr, httplib::Error::Unknown);
 	try {
-		result = m_transport->m_client.send(message);
+		result = m_transport->m_client->send(message);
 	}
 	catch (const std::exception& failure) {
 		// What the library or the allocator throws is not what a script's `try` catches: it reaches the
-		// interpreter as a crash. Said in the engine's own voice instead.
-		ibBackendCoreException::Error(_("HTTPConnection: %s http://%s:%d%s failed - %s"),
-			wxString::FromAscii(name), m_host, m_port, request.ResourceAddress(), wxString::FromUTF8(failure.what()));
+		// interpreter as a crash. Said in the engine's own voice instead. And the transport goes FIRST: this
+		// is the road where the socket's state is least known - an allocation that failed part-way through an
+		// answer leaves unread bytes on a kept-alive socket, and the next request would read the tail of this
+		// answer as its own headers.
+		m_transport.reset();
+		ibBackendCoreException::Error(_("HTTPConnection: %s %s://%s:%d%s failed - %s"),
+			wxString::FromAscii(name), wxString(secure ? wxT("https") : wxT("http")), m_host, Port(), request.ResourceAddress(), wxString::FromUTF8(failure.what()));
 	}
 	if (!result) {
 		const httplib::Error error = result.error();
 		const double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+		// ⚠ AND THE TRANSPORT GOES. A TLS client loads its trusted certificates once, under a std::call_once
+		// that does not fire again: a file that could not be read is said once and then the client goes on
+		// with an empty chain, refusing every server for a reason the sentence no longer names. Whatever
+		// state the socket is in, the next request starts clean.
+		m_transport.reset();
 
 		// ⚠ WHETHER TIME RAN OUT IS MEASURED, NOT READ OFF THE CODE. A read that outlived its timeout comes back
 		// as plain `Read` ("Failed to read connection") - the same word as a connection the other side dropped -
 		// so the code alone cannot tell a quiet server from a broken one. The clock can.
 		const bool outOfTime = error == httplib::Error::ConnectionTimeout || error == httplib::Error::Timeout
-			|| ((error == httplib::Error::Read || error == httplib::Error::Write) && took >= m_timeout - 0.1);
+			|| ((error == httplib::Error::Read || error == httplib::Error::Write || error == httplib::Error::SSLConnection)
+				&& took >= m_timeout - 0.1);
 
 		wxString why;
 		switch (outOfTime ? httplib::Error::Timeout : error) {
@@ -556,11 +660,32 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 		case httplib::Error::Connection:
 			why = _("the connection could not be made - the name does not resolve, or nothing listens on the port");
 			break;
+		case httplib::Error::SSLServerVerification:
+			why = _("the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate; name the authority's file in TrustedCertificates");
+			break;
+		case httplib::Error::SSLServerHostnameVerification:
+			why = _("the server's certificate is not for this host name");
+			break;
+		case httplib::Error::SSLConnection:
+			why = _("the server on this port does not speak TLS, or the handshake failed");
+			break;
+		case httplib::Error::SSLLoadingCerts:
+			// This is the TRUSTED file: a client certificate that cannot be read is caught where it is given
+			// (is_valid() above), while the trusted one is only opened when the handshake needs it. Naming it
+			// is the whole point - a connection can hold two files, and "a certificate file" names neither.
+			// ...and it is ALWAYS the named one. A platform store that yields nothing is not an error to the
+			// library (load_client_ca_config leaves its answer true and only records a backend error), so it
+			// arrives as a server nobody can vouch for - the case above - rather than here. The other branch
+			// therefore states no cause it cannot know.
+			why = !trustedPath.empty()
+				? wxString::Format(_("the trusted certificates could not be read from the certificate file '%s' - not a PEM"), trustedPath)
+				: wxString::FromAscii(httplib::to_string(error).c_str());
+			break;
 		default:
 			why = wxString::FromAscii(httplib::to_string(error).c_str());   // the library's own word for the rest
 		}
-		ibBackendCoreException::Error(_("HTTPConnection: %s http://%s:%d%s was not answered: %s"),
-			wxString::FromAscii(name), m_host, m_port, request.ResourceAddress(), why);
+		ibBackendCoreException::Error(_("HTTPConnection: %s %s://%s:%d%s was not answered: %s"),
+			wxString::FromAscii(name), wxString(secure ? wxT("https") : wxT("http")), m_host, Port(), request.ResourceAddress(), why);
 	}
 
 	// The headers as a Structure. A name met twice is joined with ", " (RFC 9110, 5.3) - except Set-Cookie,
@@ -588,10 +713,13 @@ bool ibValueHttpConnection::GetPropVal(const long lPropNum, ibValue& pvarPropVal
 		pvarPropVal = m_host;
 		return true;
 	case enPort:
-		pvarPropVal = m_port;
+		pvarPropVal = Port();
 		return true;
 	case enTimeout:
 		pvarPropVal = m_timeout;
+		return true;
+	case enSecureConnection:
+		pvarPropVal = m_secure;
 		return true;
 	}
 	return false;
@@ -599,10 +727,15 @@ bool ibValueHttpConnection::GetPropVal(const long lPropNum, ibValue& pvarPropVal
 
 bool ibValueHttpConnection::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (lPropNum != enTimeout)
-		return false;
-	SetTimeout(static_cast<int>(varPropVal.GetInteger()));
-	return true;
+	switch (lPropNum) {
+	case enTimeout:
+		SetTimeout(static_cast<int>(varPropVal.GetInteger()));
+		return true;
+	case enSecureConnection:
+		SetSecureConnection(varPropVal);
+		return true;
+	}
+	return false;
 }
 
 bool ibValueHttpConnection::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

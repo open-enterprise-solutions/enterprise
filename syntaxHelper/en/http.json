@@ -14,14 +14,15 @@
         "http"
       ],
       "signature": "New HTTPConnection(host : string [, port : number = 80 [, user : string, password : string [, timeout : number = 30]]])",
-      "description": "A line to ONE machine, opened on the first request and kept for the next: the host and the port are the connection's, the path is each request's. Get, Post, Put, Patch, Delete and Head send an HTTPRequest over it; CallMethod sends one with any member of HTTPMethod, Options among them. Every one of them answers with an HTTPResponse.\n\nAN ANSWER AND A FAILURE ARE TWO THINGS. 404, 500 and a 3xx are ANSWERS: a response comes back, StatusCode says which, and what to do about it is the script's decision. A failure is when there is NO answer - the name does not resolve, nothing listens on the port, nobody spoke within the time allowed, the line dropped halfway - and that RAISES, with the method, the address and the reason in the sentence. Catch it with try / except.\n\nTHE HOST IS A NAME - \"api.example\", \"10.0.0.5\", \"::1\" - not an address. Refused: \"http://api.example\" and anything else carrying a scheme, a slash, a backslash, '@', '?', '#' or a space; a name carrying its port (\"api.example:8080\" - the port is the second argument); an IPv6 address in brackets (\"[::1]\" - it is given bare); a name that is not in its ASCII punycode (xn--) form. The port is 1 to 65535 and 80 when it is left out - 0 is refused rather than read as \"left out\". `New HTTPConnection()` with no host at all is refused too: a connection to nowhere is not one.\n\nA user and a password go out as Basic authorization with EVERY request, unless the request carries an Authorization header of its own; a user name cannot hold ':', which is what parts it from the password. An answer is held in memory whole, up to 100 MB.",
+      "description": "A line to ONE machine, opened on the first request and kept for the next: the host and the port are the connection's, the path is each request's. Get, Post, Put, Patch, Delete and Head send an HTTPRequest over it; CallMethod sends one with any member of HTTPMethod, Options among them. Every one of them answers with an HTTPResponse.\n\nAN ANSWER AND A FAILURE ARE TWO THINGS. 404, 500 and a 3xx are ANSWERS: a response comes back, StatusCode says which, and what to do about it is the script's decision. A failure is when there is NO answer - the name does not resolve, nothing listens on the port, nobody spoke within the time allowed, the line dropped halfway - and that RAISES, with the method, the address and the reason in the sentence. Catch it with try / except.\n\nTHE HOST IS A NAME - \"api.example\", \"10.0.0.5\", \"::1\" - not an address. Refused: \"http://api.example\" and anything else carrying a scheme, a slash, a backslash, '@', '?', '#' or a space; a name carrying its port (\"api.example:8080\" - the port is the second argument); an IPv6 address in brackets (\"[::1]\" - it is given bare); a name that is not in its ASCII punycode (xn--) form. The port is 1 to 65535 and, when it is left out, 80 - or 443 once a SecureConnection is set - 0 is refused rather than read as \"left out\". `New HTTPConnection()` with no host at all is refused too: a connection to nowhere is not one.\n\nA user and a password go out as Basic authorization with EVERY request, unless the request carries an Authorization header of its own; a user name cannot hold ':', which is what parts it from the password. An answer is held in memory whole, up to 100 MB.",
       "syntax_block": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\ntry {\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\n} except {\n    Message(ErrorDescription());                 // no answer at all\n}",
       "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
-      "parameters": "host - the machine's name, never an address: \"api.example\", \"10.0.0.5\", \"::1\".\nport - 1 to 65535; 80 when it is left out.\nuser, password - sent as Basic authorization with every request, unless the request says who it is itself.\ntimeout - seconds, 1 to 86400 (a day); 30 when it is left out.",
+      "parameters": "host - the machine's name, never an address: \"api.example\", \"10.0.0.5\", \"::1\".\nport - 1 to 65535; left out it is 80, and 443 once a SecureConnection is set.\nuser, password - sent as Basic authorization with every request, unless the request says who it is itself.\ntimeout - seconds, 1 to 86400 (a day); 30 when it is left out.",
       "return_descr": "HTTPConnection.",
       "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 and 500 are ANSWERS, not failures\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"answered \" + Response.StatusCode);\n    }\n} except {\n    Message(\"no answer: \" + ErrorDescription());   // no resolve, no listener, or 30 s passed\n}",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "cls.HTTPConnection.SecureConnection",
         "cls.HTTPRequest",
         "cls.HTTPResponse",
         "cls.HTTPConnection.CallMethod",
@@ -62,11 +63,11 @@
         "http"
       ],
       "signature": "Connection.Port : number",
-      "description": "The port the connection was made with - 80 when the constructor was not given one. Read-only, for the same reason Host is.",
+      "description": "The port this connection speaks on: the one the constructor was given, or - when it was given none - 80 for http and 443 once a SecureConnection is set. Read at the request, so setting or clearing SecureConnection moves it. Read-only, for the same reason Host is.",
       "syntax_block": "Connection.Port",
       "parameters": "",
       "return_descr": "Number.",
-      "example": "Message(Connection.Port);   // 80 unless said",
+      "example": "Message(Connection.Port);   // 80 unless said, 443 once it is secure",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "cls.HTTPConnection",
@@ -548,7 +549,7 @@
       "id": "enum.HTTPMethod",
       "name_local": "HTTPMethod",
       "name_en": "HTTPMethod",
-      "kind": "system_enum",
+      "kind": "enum_type",
       "class_id": 382927474864707642,
       "category_keys": [
         "runtime",

@@ -4,6 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
 #include "backend/system/value/valueMap.h"
+#include "backend/system/value/valueSecureConnection.h"
 
 #include <cstddef>
 #include <memory>
@@ -29,8 +30,9 @@
 // A REDIRECT IS AN ANSWER: a 3xx comes back with its StatusCode and its Location, and whether to go there -
 // with which method, which headers, to which host - is the script's decision, not made behind its back.
 //
-// The host is a NAME ("api.example"), not an address with a scheme: the path goes into the request, and a
-// secure connection is a property this build does not have yet.
+// The host is a NAME ("api.example"), not an address with a scheme: the path goes into the request, and
+// https:// is the SecureConnection property (valueSecureConnection.h) - with it the port, when none was given,
+// is 443 rather than 80.
 //
 // A body that goes out with no Content-Type said is sent as text/plain - the library's default, and rarely what
 // an API wants: say yours (`request.Headers.Insert("Content-Type", "application/json")`). An answer is held in
@@ -130,6 +132,7 @@ class BACKEND_API ibValueHttpConnection : public ibValueStaticMembers<&ibValueHt
 		enHost,
 		enPort,
 		enTimeout,
+		enSecureConnection,
 	};
 	enum Func {
 		enGet,
@@ -154,18 +157,25 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	// The same door for a caller in C++ (and for the tests). Send raises when there is no answer.
-	void Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds);
+	// The same door for a caller in C++ (and for the tests). Send raises when there is no answer. A port that
+	// was not given (portGiven = false) is 80, or 443 once a secure connection is set.
+	void Open(const wxString& host, int port, const wxString& user, const wxString& password, int timeoutSeconds, bool portGiven = true);
 	void SetTimeout(int seconds);
+	void SetSecureConnection(const ibValue& value);          // a SecureConnection, or Undefined for plain http://; or raises
+	const ibValueSecureConnection* Secure() const { return m_secure; }
+	int Port() const;
 	ibValue Send(ibHttpMethod method, const ibValueHttpRequest& request);
 
 private:
 	struct ibTransport;                                      // the library lives in the .cpp, and only there
 	std::unique_ptr<ibTransport> m_transport;                // made on the first request, dropped on any failure
+	                                                         // and whenever a setting it was built from changes
 
 	wxString m_host, m_user, m_password;
 	int      m_port = 80;
+	bool     m_portGiven = true;
 	int      m_timeout = 30;
+	ibValuePtr<ibValueSecureConnection> m_secure;            // empty: plain http://
 };
 
 #endif // !__VALUE_HTTP_H__

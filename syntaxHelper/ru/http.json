@@ -14,14 +14,15 @@
         "http"
       ],
       "signature": "New HTTPConnection(host : string [, port : number = 80 [, user : string, password : string [, timeout : number = 30]]])",
-      "description": "Линия к ОДНОЙ машине, открываемая на первом запросе и сохраняемая для следующего: хост и порт — соединения, путь — каждого запроса. Get, Post, Put, Patch, Delete и Head отправляют по ней HTTPRequest; CallMethod отправляет его любым членом HTTPMethod, в том числе Options. Каждый из них возвращает HTTPResponse.\n\nОТВЕТ И ОТКАЗ — ЭТО РАЗНОЕ. 404, 500 и 3xx — это ОТВЕТЫ: ответ приходит, StatusCode говорит какой, а что с ним делать — решает скрипт. Отказ — это когда ответа НЕТ: имя не разрешается, на порту никто не слушает, никто не ответил за отведённое время, линия оборвалась на полпути, — и тогда ВОЗБУЖДАЕТСЯ ИСКЛЮЧЕНИЕ, в тексте которого метод, адрес и причина. Ловится через try / except.\n\nХОСТ — ЭТО ИМЯ: \"api.example\", \"10.0.0.5\", \"::1\", — а не адрес. Отвергаются: \"http://api.example\" и всё прочее со схемой, косой чертой, обратной косой, '@', '?', '#' или пробелом; имя, несущее порт (\"api.example:8080\" — порт это второй аргумент); IPv6-адрес в скобках (\"[::1]\" — он даётся голым); имя не в ASCII-форме punycode (xn--). Порт — от 1 до 65535, и 80, если не указан; 0 отвергается, а не читается как «не указан». `New HTTPConnection()` вовсе без хоста тоже отвергается: соединение в никуда — не соединение.\n\nПользователь и пароль уходят как Basic-авторизация с КАЖДЫМ запросом, если сам запрос не несёт заголовок Authorization. Имя пользователя не может содержать ':' — именно он отделяет его от пароля. Ответ держится в памяти целиком, до 100 МБ.",
+      "description": "Линия к ОДНОЙ машине, открываемая на первом запросе и сохраняемая для следующего: хост и порт — соединения, путь — каждого запроса. Get, Post, Put, Patch, Delete и Head отправляют по ней HTTPRequest; CallMethod отправляет его любым членом HTTPMethod, в том числе Options. Каждый из них возвращает HTTPResponse.\n\nОТВЕТ И ОТКАЗ — ЭТО РАЗНОЕ. 404, 500 и 3xx — это ОТВЕТЫ: ответ приходит, StatusCode говорит какой, а что с ним делать — решает скрипт. Отказ — это когда ответа НЕТ: имя не разрешается, на порту никто не слушает, никто не ответил за отведённое время, линия оборвалась на полпути, — и тогда ВОЗБУЖДАЕТСЯ ИСКЛЮЧЕНИЕ, в тексте которого метод, адрес и причина. Ловится через try / except.\n\nХОСТ — ЭТО ИМЯ: \"api.example\", \"10.0.0.5\", \"::1\", — а не адрес. Отвергаются: \"http://api.example\" и всё прочее со схемой, косой чертой, обратной косой, '@', '?', '#' или пробелом; имя, несущее порт (\"api.example:8080\" — порт это второй аргумент); IPv6-адрес в скобках (\"[::1]\" — он даётся голым); имя не в ASCII-форме punycode (xn--). Порт — от 1 до 65535, а если не указан — 80, и 443, как только задано SecureConnection; 0 отвергается, а не читается как «не указан». `New HTTPConnection()` вовсе без хоста тоже отвергается: соединение в никуда — не соединение.\n\nПользователь и пароль уходят как Basic-авторизация с КАЖДЫМ запросом, если сам запрос не несёт заголовок Authorization. Имя пользователя не может содержать ':' — именно он отделяет его от пароля. Ответ держится в памяти целиком, до 100 МБ.",
       "syntax_block": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\ntry {\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\n} except {\n    Message(ErrorDescription());                 // no answer at all\n}",
       "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
-      "parameters": "host — имя машины, никогда не адрес: \"api.example\", \"10.0.0.5\", \"::1\".\nport — от 1 до 65535; 80, если не указан.\nuser, password — уходят как Basic-авторизация с каждым запросом, если запрос не говорит о себе сам.\ntimeout — секунды, от 1 до 86400 (сутки); 30, если не указан.",
+      "parameters": "host — имя машины, никогда не адрес: \"api.example\", \"10.0.0.5\", \"::1\".\nport — от 1 до 65535; если не указан — 80, а с заданным SecureConnection 443.\nuser, password — уходят как Basic-авторизация с каждым запросом, если запрос не говорит о себе сам.\ntimeout — секунды, от 1 до 86400 (сутки); 30, если не указан.",
       "return_descr": "HTTPConnection.",
       "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 и 500 — ОТВЕТЫ, а не отказы\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"ответил \" + Response.StatusCode);\n    }\n} except {\n    Message(\"ответа нет: \" + ErrorDescription());   // имя не разрешилось, порт закрыт или прошло 30 с\n}",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "cls.HTTPConnection.SecureConnection",
         "cls.HTTPRequest",
         "cls.HTTPResponse",
         "cls.HTTPConnection.CallMethod",
@@ -62,11 +63,11 @@
         "http"
       ],
       "signature": "Connection.Port : number",
-      "description": "Порт, с которым соединение было создано, — 80, если конструктору его не дали. Только чтение, по той же причине, что и Host.",
+      "description": "Порт, на котором это соединение говорит: тот, что дали конструктору, а если не дали — 80 для http и 443, как только задано SecureConnection. Читается в момент запроса, поэтому установка или снятие SecureConnection его меняет. Только чтение, по той же причине, что и Host.",
       "syntax_block": "Connection.Port",
       "parameters": "",
       "return_descr": "Число.",
-      "example": "Message(Connection.Port);   // 80, если не указан",
+      "example": "Message(Connection.Port);   // 80, если не указан; 443, когда защищено",
       "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "cls.HTTPConnection",
@@ -548,7 +549,7 @@
       "id": "enum.HTTPMethod",
       "name_local": "HTTPMethod",
       "name_en": "HTTPMethod",
-      "kind": "system_enum",
+      "kind": "enum_type",
       "class_id": 382927474864707642,
       "category_keys": [
         "runtime",
