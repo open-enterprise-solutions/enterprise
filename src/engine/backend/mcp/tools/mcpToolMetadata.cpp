@@ -1031,7 +1031,17 @@ public:
 
 			std::vector<ibDataValue> refused;
 
-			for (const auto& field : wanted->Fields()) {
+			// 🛑 AND THE ONES WRITTEN AS AN OBJECT COUNT TOO: a caption in every language, a picture in
+			// its own shape. A node keeps a child value in its PROPERTY area rather than among its
+			// fields (jsonProvider.cpp puts every one there), so walking the fields alone passed over
+			// them IN SILENCE - `properties: {Synonym: {en: ...}, Picture: {Type: 1, ...}}` made the
+			// object with neither, and the answer carried no refusal to say so, because nothing had
+			// been refused: nothing had been SEEN (2026-09-22, giving a command group its caption and
+			// its printer, then finding both empty).
+			std::vector<std::pair<wxString, ibDataValue>> asked = wanted->Fields();
+			asked.insert(asked.end(), wanted->Properties().begin(), wanted->Properties().end());
+
+			for (const auto& field : asked) {
 
 				ibProperty* property = created->GetProperty(field.first);
 
@@ -1053,11 +1063,31 @@ public:
 					// One entry, in the shape ibMcpSetProperty reads — the same one metadata_set
 					// hands it, so a word from a closed set, a relationship by name and a plain
 					// value all behave here exactly as they do there.
+					//
+					// ⚠ AND A VALUE THAT IS AN OBJECT GOES WHERE THAT DOOR LOOKS FOR IT: a caption in
+					// every language and a picture in its own shape are read with FindChild, which
+					// searches the PROPERTY area, while a scalar is read with FindField. Handed over as
+					// a field, the caption fell through to the plain write and the platform answered
+					// `wrong value kind (expected 4, got 6)` — a type mismatch at a caller who had sent
+					// exactly the shape it was given (2026-09-22).
 					ibDataNode one;
-					one.AddField(wxT("value"), field.second);
+					if (field.second.Kind() == ibDataKind::Child)
+						one.SetProperty(wxT("value"), field.second);
+					else
+						one.AddField(wxT("value"), field.second);
 
+					// ⚠ AND A PROPERTY THAT THROWS IS STILL ONE PROPERTY REFUSED. The platform raises on a
+					// value it cannot take, and let out of here that ends the whole call — with the object
+					// already made and named by the platform, so a create that answered with an error left
+					// `CommandGroup2` standing in the tree (2026-09-22). Said as a refusal instead, beside
+					// the others, which is what the rest of this loop promises.
 					ibDataNode said;
-					ibMcpSetProperty(property, one, said, why);
+					try {
+						ibMcpSetProperty(property, one, said, why);
+					}
+					catch (const ibBackendException& e) {
+						why = e.GetErrorDescription();
+					}
 				}
 
 				if (why.IsEmpty())

@@ -4826,7 +4826,11 @@ msgstr "Виберіть тип документа"
 msgid "Templates:"
 msgstr "Шаблони:"
 
-#: src/engine/frontend/win/dlgs/colHeight.cpp:11
+#: src/engine/frontend/win/dlgs/colHeight.cpp:22
+msgid "Default column width"
+msgstr "Ширина за замовчуванням"
+
+#: src/engine/frontend/win/dlgs/colHeight.cpp:27
 msgid "Maximun column width"
 msgstr "Максимальна ширина колонки"
 
@@ -4916,7 +4920,11 @@ msgstr "Загальна форма"
 msgid "Select generation"
 msgstr "Виберіть генерацію"
 
-#: src/engine/frontend/win/dlgs/rowHeight.cpp:11
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:23
+msgid "Auto row height"
+msgstr "Автовисота рядка"
+
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:28
 msgid "Maximun row height"
 msgstr "Максимальна висота рядка"
 
@@ -4981,6 +4989,10 @@ msgstr "Показати"
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:291
 msgid "Column width..."
 msgstr "Ширина колонки..."
+
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:378
+msgid "Fit width to content"
+msgstr "Підібрати ширину за вмістом"
 
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:301
 msgid "Row height..."

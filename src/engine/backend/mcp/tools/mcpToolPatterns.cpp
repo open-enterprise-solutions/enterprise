@@ -5414,7 +5414,20 @@ const std::vector<ibMcpPattern>& Patterns()
 		"\n"
 		"NOTE: THE PAGE SETUP IS REMEMBERED UNDER A NAME THE SHEET CARRIES, made of the document\n"
 		"and the blank. Two blanks of one document then keep their own margins and orientation,\n"
-		"which is what a person expects after adjusting one of them once.") },
+		"which is what a person expects after adjusting one of them once.\n"
+		"\n"
+		"NOTE: A PAGE BREAK IS DECLARED ONLY WHERE THE PAPER DECIDES. Printing ends a page by\n"
+		"itself the moment the sheet is full, so `sheet_band {what: \"break\"}` is for forcing an\n"
+		"EARLIER one: an act that must begin its own sheet, a blank printed in two copies, a\n"
+		"section nobody wants to start at the foot of a page. Across a row it is horizontal, and\n"
+		"with `columns` vertical - the way a sheet wider than the paper is cut into bands rather\n"
+		"than shrunk to fit. A blank that fits its page declares none.\n"
+		"\n"
+		"KEY: THE LAST BREAK IS WHERE THE SHEET ENDS. It moves down and right as the sheet is\n"
+		"written into, and it is the dotted line the editor draws at the bottom and the right - so\n"
+		"a break of your own goes ABOVE it. One asked for at the last line is the end of the sheet\n"
+		"rather than a page ending early, and `sheet_band` refuses it instead of placing something\n"
+		"that prints as nothing.") },
 
 	{ wxT("batch-printing"),
 	  ibMcpText("Printing fifty documents at once: sets, copies, going straight to the printer."),

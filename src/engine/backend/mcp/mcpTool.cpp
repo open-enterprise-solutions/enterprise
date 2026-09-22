@@ -1178,11 +1178,15 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			entry->SetValue(wxT("kind"), wxString(wxT("picture")));
 
 			ibDataValue described;
-			if (ibPictureDescriptionMemory::WriteNode(described, picture->GetValueAsPictureDesc()))
+			if (ibPictureDescriptionMemory::WriteNode(described, picture->GetValueAsPictureDesc())) {
+				ibMcpPictureIdAsText(described);   // the id crosses this door as digits — see the header
 				entry->AddField(wxT("value"), described);
+			}
 			entry->SetValue(wxT("shape"), ibMcpText(
 				"Send it back in this shape through `value`. Type 1: one of the engine's pictures, `ClassId` as "
-				"picture_list gives it. Type 2: one the configuration declares, by its `Guid`. Type 3: an image of "
+				"picture_list gives it - its DIGITS, as a string, because sixty-four bits do not survive a JSON "
+				"number; a number is read too, and a rounded one is refused rather than drawn blank. "
+				"Type 2: one the configuration declares, by its `Guid`. Type 3: an image of "
 				"its own - `Image` {Name, Buffer, Width, Height}, where Buffer is the PNG file's bytes in base64 "
 				"written \"base64:<...>\", and Width and Height are its size in pixels (0 x 0 is the empty picture). "
 				"To work in SVG instead: picture_to_svg says any picture as SVG, picture_from_svg draws SVG into "
@@ -1335,6 +1339,35 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 	}
 
 	return out;
+}
+
+void ibMcpPictureIdAsText(ibDataValue& shape)
+{
+	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
+	if (!node)
+		return;
+
+	const ibDataValue* id = node->FindField(wxT("ClassId"));
+	if (id == nullptr || id->Kind() != ibDataKind::Number)
+		return;
+
+	node->SetField(wxT("ClassId"), ibDataValue::String(
+		wxString::Format(wxT("%llu"), (unsigned long long)id->AsUInt())));
+}
+
+void ibMcpPictureIdAsNumber(ibDataValue& shape)
+{
+	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
+	if (!node)
+		return;
+
+	const ibDataValue* id = node->FindField(wxT("ClassId"));
+	if (id == nullptr || id->Kind() != ibDataKind::String)
+		return;
+
+	u64 asked = 0;
+	id->AsString().ToULongLong(&asked);
+	node->SetField(wxT("ClassId"), ibDataValue::UInt(asked));
 }
 
 wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size_t maxLines)
@@ -1771,8 +1804,12 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	ibDataValue value;
 	if (const ibDataValue* scalar = params.FindField(ibMcpValueArgument().Name()))
 		value = *scalar;
-	else if (const ibDataNode* composite = params.FindChild(ibMcpValueArgument().Name()))
+	else if (const ibDataNode* composite = params.FindChild(ibMcpValueArgument().Name())) {
 		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
+		// …and a picture's id comes back as the digits this door sent out — turned into a number here,
+		// because the property stores one (mcpTool.h, ibMcpPictureIdAsText).
+		ibMcpPictureIdAsNumber(value);
+	}
 
 	// 🛑⭐⭐ A CAPTION IN ONE LANGUAGE, WHERE THE CONFIGURATION DECLARES SEVERAL, IS REFUSED — every
 	// session meets this door, which is the only way every session knows the rule (Max, 2026-09-10:
@@ -1856,9 +1893,15 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// answering with it hands the caller the format they were spared everywhere else.
 	result.SetValue(wxT("property"), name);
 
-	if (const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property))
+	if (const ibPropertyTString* caption = dynamic_cast<const ibPropertyTString*>(property)) {
 		ibMcpSayCaption(caption, result);
-	else
-		result.AddField(wxT("value"), property->GetNodeValue());
+	}
+	else {
+		// …and a picture's id leaves as digits HERE TOO. Answered as a number, the value a caller had
+		// just sent as text came back in the one shape they cannot send back (2026-09-22).
+		ibDataValue held = property->GetNodeValue();
+		ibMcpPictureIdAsText(held);
+		result.AddField(wxT("value"), held);
+	}
 	return true;
 }

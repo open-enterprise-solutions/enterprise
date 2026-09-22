@@ -127,6 +127,13 @@ int ibGridEditorPrintout::ColBreakAt(int col) const
 	return leftmost;
 }
 
+int ibGridEditorPrintout::RowSize(int row) const
+{
+	if (row >= 0 && row < static_cast<int>(m_rowHeights.size()))
+		return m_rowHeights[row];
+	return m_doc->GetRowSize(row);
+}
+
 bool ibGridEditorPrintout::OnPrintPage(int page)
 {
 	wxDC* dc = GetDC();
@@ -218,10 +225,10 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 		for (int i = m_rowsPerPage.Item(rowIndex); i < toRow; i++) {
 			dc->SetBrush(*wxLIGHT_GREY_BRUSH);
 			wxString str = m_doc->GetRowLabelValue(i);
-			wxRect rct = wxRect(0, countHeight, m_doc->GetRowLabelSize(), m_doc->GetRowSize(i));
+			wxRect rct = wxRect(0, countHeight, m_doc->GetRowLabelSize(), RowSize(i));
 			wxFont fnt = m_doc->GetLabelFont();
 			DrawTextInRectangle(*dc, str, rct, fnt, *wxBLACK, wxALIGN_CENTER, wxALIGN_CENTER);
-			countHeight += m_doc->GetRowSize(i);
+			countHeight += RowSize(i);
 		}
 		cellInitialW = m_doc->GetRowLabelSize();
 	}
@@ -249,7 +256,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 					colSize += m_doc->GetColSize(i);
 
 				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
-					rowSize += m_doc->GetRowSize(i);
+					rowSize += RowSize(i);
 				
 				wxRect rect(countWidth, countHeight, colSize, rowSize);
 				
@@ -271,7 +278,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			}
 			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
 				
-				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), m_doc->GetRowSize(row));
+				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
 				
 				dc->SetBrush(m_doc->GetCellBackgroundColour(row, col));
 				dc->SetPen(*wxTRANSPARENT_PEN);
@@ -293,7 +300,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			countWidth += m_doc->GetColSize(col);
 		}
 
-		countHeight += m_doc->GetRowSize(row);
+		countHeight += RowSize(row);
 	}
 
 	// Draw border content //
@@ -315,7 +322,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 					colSize += m_doc->GetColSize(i);
 
 				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
-					rowSize += m_doc->GetRowSize(i);
+					rowSize += RowSize(i);
 
 				wxRect rect(countWidth, countHeight, colSize, rowSize);
 
@@ -345,7 +352,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			}
 			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
 
-				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), m_doc->GetRowSize(row));
+				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
 
 				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
 				if (borderLeft.m_style != wxPenStyle::wxPENSTYLE_TRANSPARENT) {
@@ -375,7 +382,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 			countWidth += m_doc->GetColSize(col);
 		}
 
-		countHeight += m_doc->GetRowSize(row);
+		countHeight += RowSize(row);
 	}
 
 	////////////////////////////////
@@ -394,6 +401,18 @@ void ibGridEditorPrintout::OnPreparePrinting()
 		return;   // …as OnPrintPage already checks; this dereferenced it regardless
 
 	ArrangePage(dc);
+
+	// ⭐ THE ROWS AT THE HEIGHTS THE SCREEN SHOWS THEM AT, not the default each row without a height of its
+	// own stores: a caption in a larger font or wrapped over several lines got 15 on paper and ran over the
+	// row below. Measured on a screen DC — the printout's unit is a screen pixel (CalculateScale), and a
+	// script prints a sheet no grid has shown (PrintSpreadsheetDocument), so there is no grid to ask.
+	{
+		wxScreenDC screen;
+		const wxString langCode = m_doc->GetLangCode();
+		m_rowHeights.resize(m_doc->GetNumberRows());
+		for (int row = 0; row < m_doc->GetNumberRows(); row++)
+			m_rowHeights[row] = ibSpreadsheetRowHeight(*m_doc, row, screen, langCode);
+	}
 
 	long widthCount = 0, heightCount = 0;
 
@@ -420,9 +439,10 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	//
 	// It stopped there because it could not tell the marker from a break: walking past it broke a page
 	// before the last column of every sheet (2026-08-31: a one-page report printed as four, reverted).
-	// So the walk goes to the end of the sheet and the list's maximum is not taken as a break — it is
-	// the extent. A real break declared AT that column is the one thing that reads the same; giving the
-	// extent a field of its own on ibSpreadsheetDescription would part the two for good.
+	// So the walk goes to the end of the sheet and the list's maximum is not taken as a break — it IS the
+	// end of the sheet, by design (Max, 2026-09-22: *"the last page break is the last row — you do not
+	// need to work out where the content ends"*), which is why a break of one's own belongs above it and
+	// the door that places one keeps it there (sheet_band).
 	const int colExtent = m_doc->GetMaxColBrake();
 	for (int i = 0; i < m_doc->GetNumberCols(); i++) {
 		const int size = m_doc->GetColSize(i);
@@ -466,7 +486,7 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	// Same down the page — see the note on the column pass above: the last row is measured too.
 	const int rowExtent = m_doc->GetMaxRowBrake();
 	for (int i = 0; i < m_doc->GetNumberRows(); i++) {
-		const int size = m_doc->GetRowSize(i);
+		const int size = RowSize(i);
 		const bool overflows = (heightCount + size) > m_maxHeight;
 		const bool asked = m_rowsPerPage.Last() != i && i != rowExtent && m_doc->IsRowBrake(i);
 

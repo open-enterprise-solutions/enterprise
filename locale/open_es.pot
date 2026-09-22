@@ -4817,7 +4817,11 @@ msgstr ""
 msgid "Templates:"
 msgstr ""
 
-#: src/engine/frontend/win/dlgs/colHeight.cpp:11
+#: src/engine/frontend/win/dlgs/colHeight.cpp:22
+msgid "Default column width"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/colHeight.cpp:27
 msgid "Maximun column width"
 msgstr ""
 
@@ -4907,7 +4911,11 @@ msgstr ""
 msgid "Select generation"
 msgstr ""
 
-#: src/engine/frontend/win/dlgs/rowHeight.cpp:11
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:23
+msgid "Auto row height"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:28
 msgid "Maximun row height"
 msgstr ""
 
@@ -4971,6 +4979,10 @@ msgstr ""
 
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:291
 msgid "Column width..."
+msgstr ""
+
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:378
+msgid "Fit width to content"
 msgstr ""
 
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:301

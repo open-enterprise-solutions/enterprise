@@ -377,7 +377,8 @@ public:
 			"here are what `picture_set` takes. A third source needs nothing listed - an image "
 			"handed over as base64, or drawn as SVG - see picture_set and picture_from_svg.\n"
 			"The same entries spell a picture in its own shape, for `value`: an engine picture's `id` is its "
-			"`ClassId` (Type 1), a configuration picture's `guid` is its `Guid` (Type 2).\n"
+			"`ClassId` (Type 1) - digits in a string, because sixty-four bits do not survive a JSON number, "
+			"and the shape takes them back that way - a configuration picture's `guid` is its `Guid` (Type 2).\n"
 			"A configuration picture is a COMMON one - kept once because several things show it - and its "
 			"`comment` says what it depicts and stands for; one without a comment says nothing a reader can "
 			"choose by. pattern_read `form-layout` has the rule.");
@@ -398,7 +399,11 @@ public:
 		for (const ibBackendPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
 			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
 			line->SetValue(wxT("name"), entry.m_name);
-			line->AddField(wxT("id"), ibDataValue::Int((s64)entry.m_id));
+			// ⚠ THE DIGITS, AS TEXT. An engine picture's id fills sixty-four bits, and a JSON number on the
+			// far side is a double: read back, it comes rounded and names no picture (2026-09-22, a `Print`
+			// id that arrived as ...600 for ...564). Sent as a string it survives both ways, and the shape
+			// takes it back in either form (pictureDescription.cpp).
+			line->SetValue(wxT("id"), wxString::Format(wxT("%llu"), (unsigned long long)entry.m_id));
 			engine.push_back(ibDataValue::Child(line));
 		}
 
@@ -628,6 +633,7 @@ public:
 			refusal = ibMcpText("The picture was set, but could not be read back to confirm it.");
 			return false;
 		}
+		ibMcpPictureIdAsText(described);   // the id crosses this door as digits — see mcpTool.h
 		result.AddField(wxT("picture"), described);
 		result.AddField(wxT("empty"), ibDataValue::Bool(stored.IsEmptyPicture()));
 
@@ -700,6 +706,7 @@ public:
 			return false;
 		}
 
+		ibMcpPictureIdAsText(shaped);   // …and here too — see mcpTool.h
 		result.AddField(wxT("value"), shaped);
 		result.SetValue(wxT("use"), ibMcpText("Send `value` as it is to metadata_set or form_set, property Picture."));
 		return true;
@@ -761,6 +768,7 @@ public:
 			description = ibPictureDescription(held);
 		}
 		else if (read) {
+			ibMcpPictureIdAsNumber(given);   // the digits this door sends out come back as digits — mcpTool.h
 			read = ibPictureDescriptionMemory::ReadNode(given, description);
 		}
 

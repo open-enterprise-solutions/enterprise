@@ -40,8 +40,10 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 			}
 		}
 
+		// A height only where the row has one — a row without keeps its automatic height (HasRowSize).
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
@@ -72,7 +74,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		}
 
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
@@ -93,7 +96,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		}
 
 		for (int row = 0; row <= lastRow; row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
@@ -136,8 +140,10 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 			}
 		}
 
+		// A height only where the row has one — see GetArea.
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
@@ -156,7 +162,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		}
 
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
@@ -178,7 +185,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		}
 
 		for (int row = 0; row <= lastRow; row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
@@ -230,8 +238,10 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 		}
 	}
 
+	// A height only where the area's row has one — a row without keeps its automatic height (HasRowSize).
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(col, doc->GetColSize(col));
@@ -280,8 +290,10 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 		}
 	}
 
+	// a height only where the area's row has one — see PutArea
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(maxColBrake + col, doc->GetColSize(col));

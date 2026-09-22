@@ -44,6 +44,10 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 	ibPictureDescription read;
 	read.m_type = (ibPictureType)root->GetValue<s32>(wxT("Type"));
 	if (read.m_type == ibPictureType::eFromBackend) {
+		// A NUMBER, both ways. Sixty-four bits do not survive a JSON number, so the MCP door hands the id
+		// over as digits in a string and takes it back the same way (mcpTool.h, ibMcpPictureIdAsText /
+		// AsNumber) — the door's difficulty, kept at the door: this is the shape a picture is SAVED in,
+		// and a transport has no business in it.
 		if (const ibDataValue* id = root->FindField(wxT("ClassId")))
 			read.m_class_identifier = (ibPictureID)id->AsUInt();
 

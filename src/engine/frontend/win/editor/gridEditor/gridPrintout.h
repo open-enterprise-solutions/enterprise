@@ -84,9 +84,15 @@ protected:
 	int RowBreakAt(int row) const;
 	int ColBreakAt(int col) const;
 
+	// THE HEIGHT A ROW PRINTS AT — the one the screen shows it at (ibSpreadsheetRowHeight): its own, or its
+	// automatic height. Worked out once per printing (OnPreparePrinting), for the pagination and the drawing.
+	int RowSize(int row) const;
+
 private:
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> m_doc;
+
+	std::vector<int> m_rowHeights;
 
 	int m_style;
 

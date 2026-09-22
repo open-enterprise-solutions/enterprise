@@ -395,7 +395,7 @@ bool ibSpreadsheetFileDocument::OnCreate(const wxString& path, long flags)
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 
-	return GetGridCtrl()->AssociatibDocument(m_spreadSheetDocument);
+	return GetGridCtrl()->AssociateDocument(m_spreadSheetDocument);
 }
 
 // Since text windows have their own method for saving to/loading from files,
@@ -515,7 +515,7 @@ bool ibSpreadsheetEditDocument::SaveAs()
 bool ibSpreadsheetEditDocument::DoSaveDocument(const wxString& filename)
 {
 	wxObjectDataPtr<ibBackendSpreadsheetObject>spreadSheetDocument;
-	if (!GetGridCtrl()->GetActivibDocument(spreadSheetDocument))
+	if (!GetGridCtrl()->GetActiveDocument(spreadSheetDocument))
 		return false;
 	return spreadSheetDocument->SaveToFile(filename);
 }

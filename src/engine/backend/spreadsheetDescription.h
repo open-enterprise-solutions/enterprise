@@ -624,6 +624,38 @@ struct ibSpreadsheetDescription {
 		return s_defaultRowHeight;
 	}
 
+	// ⭐⭐ A ROW WITHOUT A HEIGHT OF ITS OWN HAS AUTOMATIC HEIGHT (Max, 2026-09-22): it is shown at the default,
+	// and taller wherever what is written in it does not fit — a larger font, a caption wrapped onto more
+	// lines. Whoever SHOWS the sheet works that height out (the grid and the printout, through one function
+	// in the frontend: measuring text needs a screen, and the backend has none). Setting a height by hand is
+	// what switches it off, and ResetRowSize is what gives it back.
+	//
+	// ⚠ SO A COPY TAKES A HEIGHT ONLY WHERE THERE IS ONE. GetRowSize answers the default for a row that has
+	// none, and writing that answer down gives the row a height of its own — which is how every line of a
+	// composed report, and of every area put into a document, used to come out fixed at 15.
+	bool HasRowSize(int row) const {
+		return row >= 0 && m_rowSizeIndex.find(static_cast<unsigned int>(row)) != m_rowSizeIndex.end();
+	}
+
+	void ResetRowSize(int row) {
+		if (row < 0)
+			return;
+
+		const auto iterator = m_rowSizeIndex.find(static_cast<unsigned int>(row));
+		if (iterator == m_rowSizeIndex.end())
+			return;
+
+		// The vector keeps the entries in the order they were made (the serializer reads it by
+		// position), so the index of every entry after the removed one moves down by one.
+		const size_t at = iterator->second;
+		m_rowHeightAt.erase(m_rowHeightAt.begin() + at);
+		m_rowSizeIndex.erase(iterator);
+		for (auto& entry : m_rowSizeIndex) {
+			if (entry.second > at)
+				entry.second--;
+		}
+	}
+
 	bool IsRowShown(int row) const { return GetRowSize(row) != 0; }
 
 	int GetColSize(int col) const {
@@ -635,6 +667,31 @@ struct ibSpreadsheetDescription {
 			return m_colWidthAt[iterator->second].m_width;
 
 		return s_defaultColWidth;
+	}
+
+	// A column has no automatic width — text that does not fit is clipped, wrapped or let out over the
+	// neighbour, which is the cell's own placement to say. So these two mean one thing only: whether the
+	// column carries a width of its own, and how it gives it up and goes back to the default.
+	bool HasColSize(int col) const {
+		return col >= 0 && m_colSizeIndex.find(static_cast<unsigned int>(col)) != m_colSizeIndex.end();
+	}
+
+	void ResetColSize(int col) {
+		if (col < 0)
+			return;
+
+		const auto iterator = m_colSizeIndex.find(static_cast<unsigned int>(col));
+		if (iterator == m_colSizeIndex.end())
+			return;
+
+		// The vector keeps the entries in the order they were made — see ResetRowSize.
+		const size_t at = iterator->second;
+		m_colWidthAt.erase(m_colWidthAt.begin() + at);
+		m_colSizeIndex.erase(iterator);
+		for (auto& entry : m_colSizeIndex) {
+			if (entry.second > at)
+				entry.second--;
+		}
 	}
 
 	bool IsColShown(int col) const { return GetColSize(col) != 0; }

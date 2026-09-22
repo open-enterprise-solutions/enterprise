@@ -8565,11 +8565,17 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 
 	int x = 0,
 		y = 0;
+	// ⭐ NO MARGIN ABOVE OR BELOW THE TEXT, only at the sides. A row is one line of its font plus the grid
+	// line, and nothing else: spent on a margin as well, that pixel left the last line one short of fitting
+	// - drawn, it was cut by a pixel; whole lines only, it was dropped altogether (2026-09-22, a wrapped
+	// paragraph losing its last line). A sheet has no padding inside a cell - the gap between two blocks is
+	// an empty ROW - so the margin has nothing to do here. Text on its side keeps it: there it is a margin
+	// at the SIDE, which is the one this leaves standing.
 	switch (vertAlign)
 	{
 	case wxALIGN_BOTTOM:
 		if (textOrientation == wxHORIZONTAL)
-			y = rect.y + (rect.height - textHeight - GRID_TEXT_MARGIN);
+			y = rect.y + (rect.height - textHeight);
 		else
 			x = rect.x + (rect.width - textWidth - GRID_TEXT_MARGIN);
 		break;
@@ -8584,7 +8590,7 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	case wxALIGN_TOP:
 	default:
 		if (textOrientation == wxHORIZONTAL)
-			y = rect.y + GRID_TEXT_MARGIN;
+			y = rect.y;
 		else
 			x = rect.x + GRID_TEXT_MARGIN;
 		break;
@@ -8595,6 +8601,21 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	for (size_t l = 0; l < nLines; l++)
 	{
 		const wxString& line = lines[l];
+
+		// ⭐ WHOLE LINES ONLY, AFTER THE FIRST. A row with a height of its own keeps it — a band of a blank
+		// is a fixed piece of paper — so what does not fit is cut, and cutting THROUGH a line reads as
+		// damage rather than as "this row was given less height than its text asks for" (Max, 2026-09-22,
+		// looking at a printed 14 pt line in a row of 18). Every line after the first is drawn only where it
+		// fits whole; the FIRST one is drawn whatever happens, because a cell that silently prints nothing
+		// loses the text instead of showing it short.
+		if (l > 0) {
+			const wxCoord advance = arrCol.Item(l);
+			const bool fits = textOrientation == wxHORIZONTAL
+				? y + advance <= rect.y + rect.height
+				: x + advance <= rect.x + rect.width;
+			if (!fits)
+				break;
+		}
 
 		if (line.empty())
 		{
@@ -8660,9 +8681,10 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	// word in half, and both are wrong on a printed form. Measured over 186 templates it is the
 	// majority placement by a wide margin (2026-09-05).
 	//
-	// ⚠ THE CELL'S HEIGHT IS NOT TOUCHED. A blank sets its row heights deliberately - a band is a
-	// fixed piece of paper - so wrapping fills the height that is there and no more. Growing the row
-	// to fit would move every band below it and change the page the totals land on.
+	// ⚠ THE CELL'S HEIGHT IS NOT TOUCHED HERE. A blank sets its row heights deliberately - a band is a
+	// fixed piece of paper - so wrapping fills the height that is there and no more. A row that has NO
+	// height of its own is another matter: it has automatic height, and the editor sizes it to its text
+	// beforehand (ibSpreadsheetRowHeight, gridEditorDoc.cpp) - drawing still only fills what is there.
 	if (attr.GetFitMode().IsWrap()) {
 
 		wxArrayString natural;
@@ -8832,7 +8854,11 @@ void ibGrid::GetTextBoxSize(const wxDC& dc,
 			w = wxMax(w, lineW);
 			h += lineH;
 
-			if (arrRow) arrRow->Add(w);
+			// ⚠ THE LINE'S OWN WIDTH, not the widest so far. `arrRow` is what DrawTextRectangle places each
+			// line by, and given the running maximum every line after the widest one was laid out as if it
+			// were that wide: centred and right-aligned multi-line cells had their short lines pushed left
+			// (a column heading "Quantity / shipped" — the second word off centre under the first).
+			if (arrRow) arrRow->Add(lineW);
 			if (arrCol) arrCol->Add(lineH);
 		}
 	}
