@@ -7,3 +7,6 @@
 	url = https://github.com/open-enterprise-solutions/enterprise-docs.git
 	branch = main
 	update = none
+[submodule "src/3rdparty/cpp-httplib"]
+	path = src/3rdparty/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git

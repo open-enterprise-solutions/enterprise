@@ -184,6 +184,14 @@ set(OES_SRC_DIR      "${CMAKE_SOURCE_DIR}/src")
 set(OES_ENGINE_DIR   "${OES_SRC_DIR}/engine")
 set(OES_3RDPARTY_DIR "${OES_SRC_DIR}/3rdparty")
 
+# A submodule that was not fetched is said here rather than three hundred lines later, as a header that
+# cannot be opened. The same is done for wxWidgets below and for Mbed TLS where it is added.
+if(NOT EXISTS "${OES_3RDPARTY_DIR}/cpp-httplib/httplib.h")
+    message(FATAL_ERROR
+        "cpp-httplib submodule not found at ${OES_3RDPARTY_DIR}/cpp-httplib.\n"
+        "Run: git submodule update --init --recursive"
+    )
+endif()
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
 # ---------------------------------------------------------------------------
