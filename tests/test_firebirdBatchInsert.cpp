@@ -17,8 +17,9 @@
 // because they are what rules out the cheaper spellings. The last test is the
 // one that guards the fix: the REAL renderer's output, executed for real.
 //
-// SKIPS when no Firebird client can be loaded — CI runners have none (see
-// docs/portability.md), which is exactly why the defect reached a user.
+// SKIPS when no Firebird client can be loaded — the general CI jobs have none (see
+// docs/portability.md), which is exactly why the defect reached a user. CI's
+// Firebird job lays the kit out beside the binary and runs these, and fails on a skip.
 // =============================================================================
 
 #include <gtest/gtest.h>

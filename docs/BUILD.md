@@ -376,13 +376,15 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 ## Continuous integration
 
 `.github/workflows/ci.yml` (added 2026-08-02) runs on pushes to `develop` / `master`, on PRs into
-`develop`, and on demand (`workflow_dispatch`). Six jobs:
+`develop`, and on demand (`workflow_dispatch`). Eight jobs:
 
 | Job | Runner | What it proves |
 |---|---|---|
 | **Tests (Linux, Debug)** | ubuntu-22.04 | The backend suite (`oes_tests`) passes. The primary signal. |
 | **Build (Windows, x64 Debug)** | windows-2022 | The shipping platform still compiles under MSVC, and the suite passes there too. |
 | **Dialect (PostgreSQL, Debug)** | ubuntu-22.04 | A second DBMS actually executes, against a `postgres:16` service container. The connection arrives through the environment and the target skips itself when `OES_PG_USER` is unset — which is what lets the same binary be a no-op on a developer machine. |
+| **Firebird (Linux, Debug)** | ubuntu-22.04 | Firebird actually executes. The pinned Firebird 5 kit (`.github/firebird-kit-linux.sh`, the one the nightly package ships) is laid out as `_fb/` beside `oes_tests`, and the `Firebird*` tests run through the embedded engine — no server. The tests skip where no client loads; here a skip FAILS the job, since a kit that stopped loading would otherwise leave it green. Added 2026-09-22. |
+| **Tests (Linux, ASan + UBSan)** | ubuntu-22.04 | The suite of *Tests (Linux, Debug)* built with `-DOES_SANITIZE=address,undefined`: no use after free, no overflow, no undefined behaviour, and — LeakSanitizer rides in with ASan on Linux — no leak at exit. Leak detection is off while BUILDING, because `gtest_discover_tests` runs each binary then. **Not blocking yet** (`continue-on-error`): the first runs are a harvest; the job becomes blocking once it is fixed. Added 2026-09-22. |
 | **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp. Separate job: its failure mode (a modal on an assert, or a process that passes every test and then does not exit) is unlike a backend test's. Xvfb is started by the step itself rather than through `xvfb-run`, so `$!` is the process under test — see the § below on what the wrapper cost. |
 | **Tests (macOS 14, arm64, Debug)** | macos-14 | The third toolchain, and a different CPU with it: AArch64 (unsigned `char`, a weaker memory model, its own alignment), Apple libc++ rather than libstdc++, and wx against Cocoa instead of GTK — including the `APPLE` branch of `guid.cpp` (CFUUID) that nothing else compiles. Added 2026-08-03. |
 | **Benchmarks (Linux, Release) — record only** | ubuntu-22.04 | The only job that builds Release. It runs on `develop` and `master` (and on demand), never on a PR, and **gates nothing** — `|| true`, no threshold: a benchmark that fails CI on a shared runner becomes a flaky test nobody trusts. A performance figure is worth what it is worth next to the commit it belongs to, so develop pays the ~16 minutes of building wx from scratch. |
