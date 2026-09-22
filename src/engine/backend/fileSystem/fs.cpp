@@ -84,11 +84,26 @@ void	ibWriter::w_printf(const char* format, ...)
 // memory
 ibWriterMemory::~ibWriterMemory()
 {
-	wxDELETE(m_data);
+	// 🛑 FREED THE WAY IT WAS ALLOCATED. The buffer below comes from malloc / realloc, and this
+	// was `wxDELETE(m_data)` — `delete` over a malloc'd block, which is undefined behaviour and
+	// only survives on MSVC because both roads end in one heap. AddressSanitizer answered
+	// alloc-dealloc-mismatch on it 37 times on 2026-09-22, and this is the serialisation writer:
+	// every packed value passes through here.
+	if (m_data != nullptr) {
+		free(m_data);
+		m_data = nullptr;
+	}
 }
 
 void ibWriterMemory::w(const void* ptr, u32 count)
 {
+	// A WRITE OF NOTHING IS NOT A WRITE. memcpy forbids a null source even for zero bytes, and
+	// the writers above do hand one over for an empty payload (an empty string, a zero-length
+	// chunk) - UBSan: "null pointer passed as argument 2, which is declared to never be null".
+	// Leaving early also spares the buffer a growth it does not need.
+	if (count == 0 || ptr == nullptr)
+		return;
+
 	if (m_pos + count > m_mem_size) {
 		// reallocate
 		if (m_mem_size == 0)	

@@ -193,6 +193,12 @@ public:
 
 	~ibBackendPictureAutoLoader()
 	{
+		// WHAT THIS OBJECT CREATED, IT LETS GO OF. `wxInitAllImageHandlers` puts one handler per
+		// format on wx's own list, and in an application wxApp takes them down at exit - but a test
+		// binary has no wxApp, so they stayed, and LeakSanitizer reported them on every process
+		// exit (2026-09-22). The empty body was not "nothing to do": it was the half of a pair
+		// that nobody had needed to write while the only host cleaned up after us.
+		wxImage::CleanUpHandlers();
 	}
 };
 
