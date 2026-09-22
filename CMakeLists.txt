@@ -199,6 +199,21 @@ endif()
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
 
+# cpp-httplib, for every translation unit that includes it (the MCP server, the script's HTTP client,
+# the web server, the tests): its inline functions read these, and two units compiled under two values
+# of one macro are one definition too many - so the whole build says it once. ConfigurationDefs.props
+# says the same for the solution.
+#   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
+#   itself: a server that does not speak it (an older proxy, a cash register's firmware) answers a second
+#   late or not at all, and a script has no header it may set to stop that.
+#   SEND_FLAGS=MSG_NOSIGNAL - off Windows a write to a peer that hung up raises SIGPIPE, whose default
+#   ends the process; the flag keeps it an error the caller sees. macOS has no such flag and sets
+#   SO_NOSIGPIPE on the socket instead (backend/system/value/valueHttp.cpp).
+add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
+if(NOT WIN32 AND NOT APPLE)
+    add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
+endif()
+
 if(WIN32)
     add_compile_definitions(
         WIN32

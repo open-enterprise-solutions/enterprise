@@ -11,35 +11,38 @@
        (caught by CI on 2026-08-02, the Windows job with PostgreSQL off). -->
   <PropertyGroup>
     <OesDriverDefines>OES_USE_FIREBIRD;OES_USE_POSTGRESQL;OES_USE_ODBC;</OesDriverDefines>
+    <!-- cpp-httplib, for every project that includes it, as the root CMakeLists.txt says it for every
+         target: the client does not add `Expect: 100-continue` to a large body by itself. -->
+    <OesHttpDefines>CPPHTTPLIB_EXPECT_100_THRESHOLD=0;</OesHttpDefines>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
 </Project>

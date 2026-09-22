@@ -16,6 +16,8 @@
     "value_types": "Типи значень",
     "collections": "Колекції",
     "value_table": "Таблиця значень (Table)",
+    "http": "HTTP — запити до іншої системи",
+    "runtime": "Рантайм",
     "guide": "Довідка"
   }
 }
