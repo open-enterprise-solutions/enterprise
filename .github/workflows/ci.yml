@@ -413,6 +413,10 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          # THE LEAKS THAT ARE NOT OURS, and only those — each line of the file says whose they are
+          # and why nobody frees them. Without it every test process ends red on fontconfig and the
+          # GTK singletons, and a run where everything is red says nothing about anything.
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/lsan-suppressions.txt
         run: ctest --output-on-failure --timeout 600 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
 
       - name: Journal on failure
