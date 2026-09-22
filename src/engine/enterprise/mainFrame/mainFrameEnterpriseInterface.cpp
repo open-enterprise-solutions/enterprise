@@ -99,13 +99,15 @@ class ibSubSystemWindow : public wxWindow {
 			m_selectedFont.SetWeight(wxFONTWEIGHT_BOLD);
 			m_measuringFont = m_selectedFont;
 
-			wxColor baseColour = THEME_COLOUR_BORDER;
-
-			m_activeColour = baseColour;
-			m_baseColour = baseColour.ChangeLightness(75);
+			// ⭐ NOT GREY (an accountant's review, 2026-09-22 — "too grey"; Max: "the selected one must be white, and a
+			// section is not grey by default either", "whiter"). A section at rest is all but white with dark text,
+			// lighter than the panel under it so it still reads as a button; the OPEN one is white and bold. It was
+			// the dusty border colour darkened to 75 %, with white text — a slab of mid-grey down the window's side.
+			m_activeColour = *wxWHITE;
+			m_baseColour = wxColour(0xEE, 0xF3, 0xF6);   // #EEF3F6 all but white, a breath of blue
 
 			m_borderPen = wxPen(THEME_COLOUR_MAIN);
-			m_baseColourPen = wxPen(THEME_COLOUR_MAIN);
+			m_baseColourPen = wxPen(m_activeColour);
 			m_baseColourBrush = wxBrush(THEME_COLOUR_MAIN);
 
 			SetCursor(wxCURSOR_HAND);
@@ -242,7 +244,7 @@ class ibSubSystemWindow : public wxWindow {
 				dc.DrawRectangle(r.x, r.y, r.width, r.height);
 
 				// this white helps fill out the gradient at the top of the tab
-				wxColor gradient = THEME_COLOUR_MAIN;
+				wxColor gradient = m_activeColour;
 
 				if (m_flags & wxAUI_NB_BOTTOM) {
 
@@ -350,9 +352,9 @@ class ibSubSystemWindow : public wxWindow {
 				caption,
 				tab_width - (text_offset - tab_x));
 
-			// draw tab text
+			// draw tab text — dark on both: white text was for the dark slab the section used to be
 			if (!active) {
-				dc.SetTextForeground(*wxWHITE);
+				dc.SetTextForeground(wxColour(0x34, 0x3A, 0x40));   // #343a40
 			}
 			else {
 				dc.SetTextForeground(*wxBLACK);
