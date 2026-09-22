@@ -4,6 +4,7 @@
 #include <wx/renderer.h>
 #include <wx/popupwin.h>
 #include <wx/statline.h>
+#include <wx/statbmp.h>   // wxStaticBitmap — a declared command group's picture beside its heading
 #include <wx/tglbtn.h>
 #include <wx/hyperlink.h>
 #include <wx/dcbuffer.h>
@@ -17,6 +18,7 @@
 
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaSectionObject.h"
+#include "backend/metaCollection/metaCommandGroupObject.h"   // the platform's groups + the declared ones, in order
 
 #include "frontend/visualView/ctrl/frame.h"
 
@@ -610,8 +612,15 @@ class ibSubSystemWindow : public wxWindow {
 				wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
 				const ibValueMetaObjectSection* metaObject = m_popupWindow->GetMetaObject();
+				// The groups the configuration declares, each drawn in the column of its panel below.
+				const std::vector<ibValueMetaObjectCommandGroup*> declaredGroups = metaObject != nullptr && metaObject->GetMetaData() != nullptr
+					? metaObject->GetMetaData()->GetAnyArrayObject<ibValueMetaObjectCommandGroup>(g_metaCommandGroupCLSID)
+					: std::vector<ibValueMetaObjectCommandGroup*>();
 				if (metaObject != nullptr) {
 					std::vector<ibValueMetaObject*> array;
+					// IMPORTANT FIRST, IN THE SAME BLOCK — "shown at the top with the main items" (interfaceHelper.h). This
+					// page never asked for it, so a command marked Important was on no page at all.
+					metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Important, array);
 					if (metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, array)) {
 
 						wxBoxSizer* sizerSubCommonSpacer = new wxBoxSizer(wxHORIZONTAL);
@@ -629,6 +638,16 @@ class ibSubSystemWindow : public wxWindow {
 
 						sizerSubCommonSpacer->Add(sizerSubCommonItem, 1, wxEXPAND, FromDIP(5));
 						sizerLeft->Add(sizerSubCommonSpacer, 0, wxEXPAND, FromDIP(5));
+					}
+
+					// The navigation panel's declared groups, after the platform's own.
+					for (const ibValueMetaObjectCommandGroup* group : declaredGroups) {
+						if (group == nullptr || group->IsDeleted() || group->GetCategory() != ibCommandGroupCategory_Navigation)
+							continue;
+						std::vector<ibValueMetaObject*> inGroup;
+						if (metaObject->GetInterfaceItemArrayObject(group, inGroup))
+							sizerLeft->Add(CreateCaptionedBlock(group->GetSynonym(), inGroup, ibInterfaceCommandSection_Default,
+								group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap(), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
 					}
 				}
 
@@ -703,107 +722,24 @@ class ibSubSystemWindow : public wxWindow {
 
 				wxBoxSizer* sizerRight = new wxBoxSizer(wxVERTICAL);
 
+				// THE ACTIONS PANEL — the platform's groups (Create, Reports, Service), then the declared ones. One
+				// block builder for all of them: these were three copies of the same twenty lines, and a group the
+				// configuration adds would have been the fourth.
 				if (metaObject != nullptr) {
-
-					std::vector<ibValueMetaObject*> array;
-					if (metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Create, array)) {
-
-						wxBoxSizer* sizerCreate = new wxBoxSizer(wxVERTICAL);
-						wxStaticText* st_create = new wxStaticText(this, wxID_ANY, _("Create"), wxDefaultPosition, wxDefaultSize, 0);
-
-						st_create->SetForegroundColour(wxDefaultStypeFGColour);
-						st_create->Wrap(-1);
-						st_create->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
-
-						sizerCreate->Add(st_create, 0, wxALL | wxEXPAND, FromDIP(5));
-
-						wxBoxSizer* sizerCreateSpacer = new wxBoxSizer(wxHORIZONTAL);
-						sizerCreateSpacer->Add(20, 0, 0, wxEXPAND, FromDIP(5));
-
-						wxBoxSizer* sizerCreateItem = new wxBoxSizer(wxVERTICAL);
-
-						for (const auto object : array) {
-
-							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
-							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Create));
-
-							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
-
-							sizerCreateItem->Add(df, 0, wxEXPAND, FromDIP(5));
-						}
-
-						sizerCreateSpacer->Add(sizerCreateItem, 1, wxEXPAND, FromDIP(5));
-						sizerCreate->Add(sizerCreateSpacer, 1, wxEXPAND, FromDIP(5));
-						sizerRight->Add(sizerCreate, 0, wxEXPAND, FromDIP(5));
+					for (const ibInterfaceCommandSection area : g_platformCommandGroups) {
+						if (ibCommandGroupCategoryOf(area) != ibCommandGroupCategory_Actions)
+							continue;
+						std::vector<ibValueMetaObject*> array;
+						if (metaObject->GetInterfaceItemArrayObject(area, array))
+							sizerRight->Add(CreateCaptionedBlock(ibCommandGroupCaption(area), array, area), 0, wxEXPAND, FromDIP(5));
 					}
-				}
-
-				if (metaObject != nullptr) {
-
-					std::vector<ibValueMetaObject*> array;
-					if (metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Report, array)) {
-
-						wxBoxSizer* sizerReport = new wxBoxSizer(wxVERTICAL);
-						wxStaticText* st_report = new wxStaticText(this, wxID_ANY, _("Report"), wxDefaultPosition, wxDefaultSize, 0);
-
-						st_report->SetForegroundColour(wxDefaultStypeFGColour);
-						st_report->Wrap(-1);
-						st_report->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
-
-						sizerReport->Add(st_report, 0, wxALL | wxEXPAND, FromDIP(5));
-
-						wxBoxSizer* sizerReportSpacer = new wxBoxSizer(wxHORIZONTAL);
-						sizerReportSpacer->Add(20, 0, 0, wxEXPAND, FromDIP(5));
-
-						wxBoxSizer* sizerReportItem = new wxBoxSizer(wxVERTICAL);
-
-						for (const auto object : array) {
-
-							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
-							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Report));
-
-							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
-
-							sizerReportItem->Add(df, 0, wxEXPAND, FromDIP(5));
-						}
-
-						sizerReportSpacer->Add(sizerReportItem, 1, wxEXPAND, FromDIP(5));
-						sizerReport->Add(sizerReportSpacer, 1, wxEXPAND, FromDIP(5));
-
-						sizerRight->Add(sizerReport, 0, wxEXPAND, FromDIP(5));
-					}
-				}
-
-				if (metaObject != nullptr) {
-					std::vector<ibValueMetaObject*> array;
-					if (metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Service, array)) {
-
-						wxBoxSizer* sizerService = new wxBoxSizer(wxVERTICAL);
-						wxStaticText* st_service = new wxStaticText(this, wxID_ANY, _("Service"), wxDefaultPosition, wxDefaultSize, 0);
-
-						st_service->SetForegroundColour(wxDefaultStypeFGColour);
-						st_service->Wrap(-1);
-						st_service->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
-
-						sizerService->Add(st_service, 0, wxALL | wxEXPAND, FromDIP(5));
-
-						wxBoxSizer* sizerServiceSpacer = new wxBoxSizer(wxHORIZONTAL);
-						sizerServiceSpacer->Add(20, 0, 0, wxEXPAND, 1);
-						wxBoxSizer* sizerServiceItem = new wxBoxSizer(wxVERTICAL);
-
-						for (const auto object : array) {
-
-							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
-							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Service));
-
-							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
-
-							sizerServiceItem->Add(df, 0, wxEXPAND, FromDIP(5));
-						}
-
-						sizerServiceSpacer->Add(sizerServiceItem, 1, wxEXPAND, FromDIP(5));
-						sizerService->Add(sizerServiceSpacer, 1, wxEXPAND, FromDIP(5));
-						sizerRight->Add(sizerService, 0, wxEXPAND, FromDIP(5));
+					for (const ibValueMetaObjectCommandGroup* group : declaredGroups) {
+						if (group == nullptr || group->IsDeleted() || group->GetCategory() != ibCommandGroupCategory_Actions)
+							continue;
+						std::vector<ibValueMetaObject*> inGroup;
+						if (metaObject->GetInterfaceItemArrayObject(group, inGroup))
+							sizerRight->Add(CreateCaptionedBlock(group->GetSynonym(), inGroup, ibInterfaceCommandSection_Default,
+								group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap(), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
 					}
 				}
 
@@ -817,6 +753,54 @@ class ibSubSystemWindow : public wxWindow {
 			}
 
 		private:
+
+			// ONE CAPTIONED BLOCK of the page — a heading and the items under it, each item a link that remembers the
+			// group it was drawn in (the click opens a Create-group object as a new item, anything else as its list).
+			// A declared group brings its picture (beside the heading) and its tooltip (on it); the platform's have
+			// neither.
+			wxBoxSizer* CreateCaptionedBlock(const wxString& caption, const std::vector<ibValueMetaObject*>& items,
+				ibInterfaceCommandSection area, const wxBitmap& picture = wxNullBitmap, const wxString& tooltip = wxEmptyString) {
+
+				wxBoxSizer* sizerBlock = new wxBoxSizer(wxVERTICAL);
+				wxStaticText* st = new wxStaticText(this, wxID_ANY, caption, wxDefaultPosition, wxDefaultSize, 0);
+
+				st->SetForegroundColour(wxDefaultStypeFGColour);
+				st->Wrap(-1);
+				st->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
+				if (!tooltip.IsEmpty())
+					st->SetToolTip(tooltip);
+
+				if (picture.IsOk()) {
+					wxBoxSizer* sizerHeading = new wxBoxSizer(wxHORIZONTAL);
+					wxStaticBitmap* sb = new wxStaticBitmap(this, wxID_ANY, picture);
+					if (!tooltip.IsEmpty())
+						sb->SetToolTip(tooltip);
+					sizerHeading->Add(sb, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(5));
+					sizerHeading->Add(st, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(5));
+					sizerBlock->Add(sizerHeading, 0, wxEXPAND, 0);
+				}
+				else
+					sizerBlock->Add(st, 0, wxALL | wxEXPAND, FromDIP(5));
+
+				wxBoxSizer* sizerSpacer = new wxBoxSizer(wxHORIZONTAL);
+				sizerSpacer->Add(20, 0, 0, wxEXPAND, FromDIP(5));
+
+				wxBoxSizer* sizerItem = new wxBoxSizer(wxVERTICAL);
+
+				for (const auto object : items) {
+
+					ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
+					df->SetClientObject(new ibScrolledSubWindowSectionRefData(area));
+
+					df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
+
+					sizerItem->Add(df, 0, wxEXPAND, FromDIP(5));
+				}
+
+				sizerSpacer->Add(sizerItem, 1, wxEXPAND, FromDIP(5));
+				sizerBlock->Add(sizerSpacer, 1, wxEXPAND, FromDIP(5));
+				return sizerBlock;
+			}
 
 			ibInterfaceCommandType GetCommandType(const ibInterfaceCommandSection section) const {
 

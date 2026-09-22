@@ -1609,6 +1609,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaCommonModuleCLSID,     0, ibMetaRow::Item    },
 	{ g_metaCommonFormCLSID,       0, ibMetaRow::Item    },
 	{ g_metaCommonCommandCLSID,    0, ibMetaRow::Command },
+	{ g_metaCommandGroupCLSID,     0, ibMetaRow::Item    },
 	{ g_metaCommonTemplateCLSID,   0, ibMetaRow::Item    },
 
 	// SCHEDULED JOBS: one branch, two kinds inside it. The branch itself holds the PARAMETERIZED jobs

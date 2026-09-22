@@ -1,4 +1,5 @@
 #include "pictureDescription.h"
+#include "backend_picture.h"                 // ibBackendPicture::IsRegisterPicture — whether the engine has it
 #include "backend/fileSystem/fs.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue — node form
 
@@ -37,17 +38,34 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 	const std::shared_ptr<ibDataNode>& root = value.AsChild();
 	if (!root)
 		return false;
-	pictureDesc.m_type = (ibPictureType)root->GetValue<s32>(wxT("Type"));
-	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
+
+	// READ WHOLE, THEN TAKEN — a refusal below leaves the description it was reading into as it was,
+	// rather than with a new Type over the old id.
+	ibPictureDescription read;
+	read.m_type = (ibPictureType)root->GetValue<s32>(wxT("Type"));
+	if (read.m_type == ibPictureType::eFromBackend) {
 		if (const ibDataValue* id = root->FindField(wxT("ClassId")))
-			pictureDesc.m_class_identifier = (ibPictureID)id->AsUInt();
+			read.m_class_identifier = (ibPictureID)id->AsUInt();
+
+		// 🛑 A PICTURE THE ENGINE HAS, ASKED OF THE PICTURE FACTORY — 0 is the empty picture and is one.
+		// Any other id nobody registered was taken without a word and drew nothing (measured 2026-09-22: a
+		// rounded Print id, sent back through `value`). On loading it refuses only what could not be drawn
+		// here anyway: the pictures register when the DLLs load, before any configuration is read, and a
+		// process without the front's controls (the daemon) never writes a configuration back.
+		if (read.m_class_identifier != 0 && !ibBackendPicture::IsRegisterPicture(read.m_class_identifier))
+			return false;
 	}
-	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration) {
-		pictureDesc.m_meta_guid = root->GetValue<ibGuid>(wxT("Guid"));
+	else if (read.m_type == ibPictureType::eFromConfiguration) {
+		read.m_meta_guid = root->GetValue<ibGuid>(wxT("Guid"));
 	}
-	else if (pictureDesc.m_type == ibPictureType::eFromFile) {
-		ibExternalPictureDescriptionMemory::ReadNode(root->GetProperty(wxT("Image")), pictureDesc.m_img_data);
+	else if (read.m_type == ibPictureType::eFromFile) {
+		ibExternalPictureDescriptionMemory::ReadNode(root->GetProperty(wxT("Image")), read.m_img_data);
 	}
+	else {
+		return false;   // a Type the description does not have
+	}
+
+	pictureDesc = read;
 	return true;
 }
 

@@ -29,6 +29,7 @@
 #include "backend/mcp/mcpClipboard.h"   // the caller's own board — not the one the keyboard uses
 
 #include "backend/metaCollection/genericData.h"   // the owner builds the source a form binds to
+#include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordData::GetObjectForm — the form an object opens with
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metadataConfiguration.h"
@@ -60,6 +61,16 @@ const ibArg& ArgForm()
 {
 	static const ibArg s_a(wxT("form"), ibArg::Kind::Whole,
 		ibMcpText("The form's NodeId."), /*required*/ true);
+	return s_a;
+}
+
+// The READING verb's form argument — the same name, one more thing it may be. An edit verb keeps ArgForm: it
+// stores what it changed into the form's metaobject, and a generated form has none to store into.
+const ibArg& ArgFormOrObject()
+{
+	static const ibArg s_a(wxT("form"), ibArg::Kind::Whole,
+		ibMcpText("The form's NodeId - or an OBJECT's (a document, a catalog...), for the object form it opens "
+			  "with: its default one, or the one the platform GENERATES when it declares none."), /*required*/ true);
 	return s_a;
 }
 
@@ -101,10 +112,13 @@ const ibArg& ArgProperty()
 
 const ibArg& ArgValue()
 {
-	static const ibArg s_a(wxT("value"), ibArg::Kind::Text,
-		ibMcpText("The value. For a closed set, the word. For an event, the NAME of the procedure "
-			  "in the form's module that handles it - the answer says which arguments it "
-			  "receives."));
+	// Kind::Any, like metadata_set's `value` — ibMcpSetProperty reads the scalar AND the composite, and a
+	// composite property (a picture) is sent back in the shape form_control read it in. Declared as text
+	// it was refused at the gate before the property could judge it.
+	static const ibArg s_a(wxT("value"), ibArg::Kind::Any,
+		ibMcpText("The value, IN ITS OWN TYPE. For a closed set, the word. For an event, the NAME of the "
+			  "procedure in the form's module that handles it - the answer says which arguments it "
+			  "receives. For a composite one - a picture - the same shape form_control shows it in."));
 	return s_a;
 }
 
@@ -202,6 +216,38 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	return form;
 }
 
+// …OR THE FORM AN OBJECT OPENS WITH, when the id is the object's own: its default object form, or the one the
+// platform GENERATES when it declares none — built by the object itself (GetObjectForm), the very call the running
+// application opens it with. A configuration built from command groups and commands needs no form of its own for
+// its commands to stand on the bar, so the form worth reading is often one nobody created.
+//
+// Answers nullptr with NO refusal when the id is not such an object — OpenForm then answers for it.
+ibValueForm* OpenObjectForm(const ibDataNode& params, wxString& refusal, bool& generated)
+{
+	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+		return nullptr;
+
+	const s32 id = (s32)ArgFormOrObject().Whole(params);
+	ibValueMetaObject* object = id > 0 ? ibFindMetaObjectById(activeMetaData, (ibMetaID)id) : nullptr;
+	const ibValueMetaObjectRecordData* record =
+		object != nullptr ? object->ConvertToType<ibValueMetaObjectRecordData>() : nullptr;
+	if (record == nullptr)
+		return nullptr;
+
+	ibValueForm* form = dynamic_cast<ibValueForm*>(record->GetObjectForm());
+	if (form == nullptr) {
+		refusal = wxString::Format(
+			ibMcpText("The object form of '%s' could not be opened. Its module may have refused - messages_read "
+			  "has what the platform said."), object->GetName());
+		return nullptr;
+	}
+
+	const ibValueMetaObjectFormBase* creator = form->GetFormMetaObject();
+	generated = creator == nullptr || creator->GetFormData().IsEmpty();
+	form->IncrRef();
+	return form;
+}
+
 // ⭐ THE ONE PLACE THAT SAYS A CONTROL — the twin of ibMcpSayObject for the other tree with
 // properties on it. The tree walk said it one way and the three verbs that answer about a single
 // control each said it their own: `controlId` here and nowhere else, `class` without `kind`, a
@@ -287,19 +333,25 @@ public:
 	{
 		return ibMcpText("A form's three branches: its CONTROLS as a tree, its ATTRIBUTES (one of them "
 			"the main one, through which every binding starts), and its COMMANDS with what "
-			"each runs. The ids are what every other form verb addresses a part by.");
+			"each runs. The ids are what every other form verb addresses a part by.\n"
+			"And its COMMAND BAR as a person will see it (`commandBar`): the standard actions, the "
+			"object's own commands, and each CommandGroup of the category FormCommandBar as ONE entry "
+			"with its `submenu` - the object's commands filed under it and the common commands typed "
+			"for the object this form shows.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgFormOrObject() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
 		bool generated = false;
-		ibValueForm* form = OpenForm(params, refusal, &generated);
+		ibValueForm* form = OpenObjectForm(params, refusal, generated);
+		if (form == nullptr && refusal.IsEmpty())
+			form = OpenForm(params, refusal, &generated);
 		if (form == nullptr)
 			return false;
 
@@ -360,6 +412,41 @@ public:
 		}
 
 		result.AddField(wxT("commands"), ibDataValue::Array(commands));
+
+		// ⭐ THE COMMAND BAR AS IT WILL STAND — built by the bar itself (BuildCommands, the very call the toolbar is
+		// filled from), so what is read here is what a person will see: the standard actions, the object's own
+		// commands, and a COMMAND GROUP of the form command bar as ONE entry carrying its submenu. Each submenu
+		// line is resolved through the bar's door, the same resolve the menu is drawn with.
+		if (ibValueCommandBar* bar = form->GetCommandBar()) {
+			std::vector<ibDataValue> entries;
+			for (const ibCommandEntry& entry : bar->BuildCommands()) {
+				if (entry.id == wxNOT_FOUND)
+					continue;   // a separator
+
+				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+				node->SetValue(wxT("caption"), entry.caption);
+				node->SetValue(wxT("kind"), wxString(entry.kind == ibCommandEntryKind_Group ? wxT("group")
+					: entry.kind == ibCommandEntryKind_QuickFilter ? wxT("quickFilter") : wxT("command")));
+				if (!entry.enabled)
+					node->AddField(wxT("enabled"), ibDataValue::Bool(false));
+
+				if (entry.kind == ibCommandEntryKind_Group) {
+					node->AddField(wxT("picture"), ibDataValue::Bool(entry.bitmap.IsOk()));
+					if (!entry.tooltip.IsEmpty())
+						node->SetValue(wxT("tooltip"), entry.tooltip);
+					std::vector<ibDataValue> submenu;
+					for (const ibValueCommandBarItem* member : entry.members) {
+						wxString caption; wxBitmap icon;
+						if (member != nullptr && bar->ResolveCommand(member->GetBindingDesc(), caption, icon))
+							submenu.push_back(ibDataValue::String(caption));
+					}
+					node->AddField(wxT("submenu"), ibDataValue::Array(submenu));
+				}
+
+				entries.push_back(ibDataValue::Child(node));
+			}
+			result.AddField(wxT("commandBar"), ibDataValue::Array(entries));
+		}
 
 		// WHICH OF THE TWO THIS IS, asked of the metaobject rather than guessed
 		// from the shape. A generated layout is what the platform makes from the
@@ -616,7 +703,11 @@ public:
 		return ibMcpText("Set one property of one control - its caption, its width, what it is BOUND "
 			"to - or one EVENT, whose value is the name of a procedure in the form's module. "
 			"form_control lists both and what each holds now; a property whose values are a "
-			"closed set is set by its word.");
+			"closed set is set by its word.\n"
+			"A PICTURE goes in `value` in its own shape, the one form_control reads it in: {Type: 1, ClassId} "
+			"for an engine picture (picture_list -> engine `id`), {Type: 2, Guid} for one the configuration "
+			"declares (picture_list -> configuration `guid`), {Type: 3, Image: {Name, Buffer, Width, Height}} "
+			"for an image of its own - Buffer is the PNG file's bytes in base64 written \"base64:<...>\".");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

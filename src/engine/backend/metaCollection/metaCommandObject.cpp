@@ -1,4 +1,5 @@
 #include "metaCommandObject.h"
+#include "metaCommandGroupObject.h"                 // ibValueMetaObjectCommandGroup — the declared groups Group offers
 
 #include "backend/metaData.h"                       // ibMetaData::GetAnyArrayObject
 #include "backend/session/session.h"                // ibSession::EditModuleManagerFor
@@ -155,6 +156,59 @@ bool ibValueMetaObjectCommand::GetCommandByHop(const ibCommandHop& hop, ibValue&
 }
 
 //***********************************************************************
+//*          the group — where a section shows the command              *
+//***********************************************************************
+
+// ⭐ ONE NUMBER SAYS WHICH GROUP, AND IT IS A NUMBER THE GROUP ALREADY HAS. A platform group's is its area
+// (ibInterfaceCommandSection, 100 to 153); a declared group's is its metaID. The configuration root takes
+// defaultMetaID (1000) and every other object is numbered after it, so the two ranges cannot meet — and
+// ibPropertyChoiceList defines a choice's id as exactly these two kinds of number. Nothing is minted for it.
+//
+// The value is read RAW here, not through GetValueAsInteger: that one refills the whole list to check the
+// number is still in it, and a section asks this of every command it includes.
+const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup() const
+{
+	if (m_metaData == nullptr)
+		return nullptr;
+	const long key = m_propertyGroup->GetValue();
+	// A platform group — the usual case — is answered without looking anything up.
+	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
+		if (key == area)
+			return nullptr;
+	const ibValueMetaObjectCommandGroup* group =
+		m_metaData->FindAnyObjectByFilter<ibValueMetaObjectCommandGroup>(static_cast<ibMetaID>(key), g_metaCommandGroupCLSID);
+	return group != nullptr && !group->IsDeleted() ? group : nullptr;
+}
+
+ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
+{
+	const long key = m_propertyGroup->GetValue();
+	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
+		if (key == area)
+			return area;
+	return ibInterfaceCommandSection_Default;   // a declared group, or one that is gone — see the header
+}
+
+// THE CHOICES OF «Group», in the order a section shows them: the platform's groups first, then the declared
+// ones, each labelled «panel.group» — the way a person reads where the command will stand.
+bool ibValueMetaObjectCommand::FillGroupList(ibPropertyList* prop)
+{
+	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
+		prop->AppendItem(ibCommandGroupCaption(area), ibCommandGroupLabel(area), area, ibCommandGroupPicture(area));
+
+	if (m_metaData == nullptr)
+		return true;
+	for (ibValueMetaObjectCommandGroup* group : m_metaData->GetAnyArrayObject<ibValueMetaObjectCommandGroup>(g_metaCommandGroupCLSID)) {
+		if (group == nullptr || group->IsDeleted())
+			continue;
+		// The group's own picture when it has one — the one it will stand with; otherwise the kind's.
+		prop->AppendItem(group->GetName(), group->GetLabel(), group->GetMetaID(),
+			group->IsEmptyPicture() ? wxBitmap(group->GetIcon()) : group->GetPictureAsBitmap(), group);
+	}
+	return true;
+}
+
+//***********************************************************************
 //*                          load & save from DB                        *
 //***********************************************************************
 
@@ -164,7 +218,10 @@ bool ibValueMetaObjectCommand::ReadData(const ibDataNode& node)
 		return false;
 
 	m_propertyCommandModule->SetNodeValue(node.GetProperty(m_propertyCommandModule->GetName()));
-	m_propertyInterfaceArea->SetNodeValue(node.GetProperty(m_propertyInterfaceArea->GetName()));
+	// A configuration written before command groups keeps the platform area under "InterfaceArea" — the same
+	// number Group holds for a platform group, so it is read into Group as it stands.
+	if (!m_propertyGroup->SetNodeValue(node.GetProperty(m_propertyGroup->GetName())))
+		m_propertyGroup->SetNodeValue(node.GetProperty(wxT("InterfaceArea")));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyModifiesData->SetNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
@@ -178,7 +235,7 @@ bool ibValueMetaObjectCommand::WriteData(ibDataNode& node) const
 		return false;
 
 	node.SetProperty(m_propertyCommandModule->GetName(),   m_propertyCommandModule->GetNodeValue());
-	node.SetProperty(m_propertyInterfaceArea->GetName(),   m_propertyInterfaceArea->GetNodeValue());
+	node.SetProperty(m_propertyGroup->GetName(),           m_propertyGroup->GetNodeValue());
 	node.SetProperty(m_propertyPicture->GetName(),         m_propertyPicture->GetNodeValue());
 	node.SetProperty(m_propertyTooltip->GetName(),         m_propertyTooltip->GetNodeValue());
 	node.SetProperty(m_propertyModifiesData->GetName(),    m_propertyModifiesData->GetNodeValue());

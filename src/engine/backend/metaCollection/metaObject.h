@@ -36,6 +36,9 @@ constexpr ibClassID g_metaCommonModuleCLSID = metadata_to_clsid("MD_CMOD");
 constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
 constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
 constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    // COMMON command (config-level, like CommonForm)
+// A COMMAND GROUP — a place in the command interface a command is filed under, beside the platform's own
+// (Important, Normal, Create, Reports, Service). It holds nothing; a command names it (metaCommandGroupObject.h).
+constexpr ibClassID g_metaCommandGroupCLSID = metadata_to_clsid("MD_CMDGR");
 constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/private/scheduled-jobs.md)
 // A SESSION PARAMETER — an attribute whose owner is the session rather than a table. Declared
 // here beside the jobs because that is where it sits in the tree: configuration-level, no data
