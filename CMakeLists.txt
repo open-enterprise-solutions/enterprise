@@ -192,6 +192,7 @@ if(NOT EXISTS "${OES_3RDPARTY_DIR}/cpp-httplib/httplib.h")
         "Run: git submodule update --init --recursive"
     )
 endif()
+
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
 # ---------------------------------------------------------------------------
@@ -213,6 +214,45 @@ add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
 if(NOT WIN32 AND NOT APPLE)
     add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
 endif()
+
+# TLS for cpp-httplib: Mbed TLS, a submodule built here - nothing installed, nothing from the system (the tree
+# holds OpenSSL only as a run-time client of PostgreSQL, without headers). Its tests and programs stay out; the
+# generated files are in the tag, so no Python is needed. One macro for the whole build, for the reason the
+# two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
+# keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
+# backend, which carries them as PUBLIC.
+if(NOT EXISTS "${OES_3RDPARTY_DIR}/mbedtls/CMakeLists.txt")
+    message(FATAL_ERROR
+        "Mbed TLS submodule not found at ${OES_3RDPARTY_DIR}/mbedtls.\n"
+        "Run: git submodule update --init --recursive"
+    )
+endif()
+# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
+# library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
+# PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
+# DIRECTORY variable rather than a target property, because the targets do not exist until the subdirectory
+# below has been read - and there are five of them, not three: mbedcrypto pulls everest and p256m, which go
+# into the same shared library. The old value is put back afterwards so that nothing else in this build
+# changes: wxWidgets and the executables are compiled exactly as they were.
+set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# What this build needs on top of Mbed TLS's own configuration - threads, above all (the file says why). The
+# directory goes on the include path for the whole build because Mbed TLS's OWN sources include
+# threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
+# the mutexes over.
+set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/backend/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
+include_directories("${OES_ENGINE_DIR}/backend/tls")
+set(ENABLE_TESTING OFF CACHE BOOL "Mbed TLS: its own tests" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "Mbed TLS: its sample programs" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Mbed TLS: -Werror" FORCE)
+set(GEN_FILES OFF CACHE BOOL "Mbed TLS: regenerate its generated sources" FORCE)
+# Off Windows the configuration above takes Mbed TLS's own pthread mutexes, and its CMake links pthread only
+# when asked: without this its libraries use the functions and name the library for nobody, resolving by
+# accident through whatever the consumer happens to link (on glibc 2.34 and later pthread is inside libc).
+set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes its mutexes from" FORCE)
+add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
+set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
+add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
 if(WIN32)
     add_compile_definitions(

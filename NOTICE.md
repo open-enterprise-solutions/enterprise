@@ -42,6 +42,7 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 |---|---|---|
 | wxWidgets | `src/3rdparty/wxWidgets` (git submodule) | wxWindows Library Licence |
 | cpp-httplib | `src/3rdparty/cpp-httplib` (submodule) | MIT |
+| Mbed TLS | `src/3rdparty/mbedtls` (submodule) | Apache-2.0 |
 | nlohmann/json | `src/3rdparty/nlohmann` | MIT |
 
 ## wxWidgets-derived sources inside the engine

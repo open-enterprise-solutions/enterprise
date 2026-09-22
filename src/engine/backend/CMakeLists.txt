@@ -131,7 +131,25 @@ target_link_libraries(backend
         wx::propgrid
         wx::aui
         wx::stc
+        # cpp-httplib's TLS (CPPHTTPLIB_MBEDTLS_SUPPORT is set for the whole build in the root CMakeLists.txt):
+        # PUBLIC, because every consumer that includes httplib.h - the web server, the tests - compiles the
+        # same TLS roads and has to link them.
+        mbedtls
+        mbedx509
+        mbedcrypto
 )
+if(WIN32)
+    # The system certificate store, read by the library for a secure connection that names no trusted file.
+    # (ws2_32 and bcrypt come with mbedcrypto itself.)
+    target_link_libraries(backend PUBLIC crypt32)
+endif()
+if(APPLE)
+    # With a TLS backend and Apple's compiler, cpp-httplib reads the keychain for the system's trusted
+    # certificates (CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN, which it defines itself) - and that is
+    # SecTrustSettingsCopyCertificates, in the Security framework. PUBLIC for the reason the mbedtls
+    # libraries are: everything that includes the header compiles the same call.
+    target_link_libraries(backend PUBLIC "-framework Security" "-framework CoreFoundation")
+endif()
 
 # ---------------------------------------------------------------------------
 # Platform libraries

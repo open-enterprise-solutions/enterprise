@@ -37,6 +37,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frontend", "src\engine\fron
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backend", "src\engine\backend\backend.vcxproj", "{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "plugins", "plugins", "{95B54CB1-6B46-46C3-9DC6-059D6E7DD4CB}"
 EndProject
@@ -61,6 +64,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wenterprise-server", "src\e
 	ProjectSection(ProjectDependencies) = postProject
 		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002} = {A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedtls", "src\engine\backend\tls\mbedtls.vcxproj", "{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -118,6 +123,14 @@ Global
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}.Release|x64.Build.0 = Release|x64
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}.Release|x86.ActiveCfg = Release|Win32
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}.Release|x86.Build.0 = Release|Win32
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x64.Build.0 = Debug|x64
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x86.ActiveCfg = Debug|Win32
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x86.Build.0 = Debug|Win32
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Release|x64.ActiveCfg = Release|x64
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Release|x64.Build.0 = Release|x64
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Release|x86.ActiveCfg = Release|Win32
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Release|x86.Build.0 = Release|Win32
 		{4AF26744-6E43-426E-85CF-FB566690A28A}.Debug|x64.ActiveCfg = Debug|x64
 		{4AF26744-6E43-426E-85CF-FB566690A28A}.Debug|x64.Build.0 = Debug|x64
 		{4AF26744-6E43-426E-85CF-FB566690A28A}.Debug|x86.ActiveCfg = Debug|Win32
