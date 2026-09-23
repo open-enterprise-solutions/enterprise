@@ -16,6 +16,8 @@
     "value_types": "Типи значень",
     "collections": "Колекції",
     "value_table": "Таблиця значень (Table)",
+    "json": "JSON — читання і запис",
+    "runtime": "Рантайм",
     "guide": "Довідка"
   }
 }

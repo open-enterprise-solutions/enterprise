@@ -16,6 +16,8 @@
     "value_types": "Value types",
     "collections": "Collections",
     "value_table": "Value table (Table)",
+    "json": "JSON — reading and writing",
+    "runtime": "Runtime",
     "guide": "Guide"
   }
 }

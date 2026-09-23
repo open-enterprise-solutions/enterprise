@@ -1,0 +1,720 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.JSONReader",
+      "name_local": "JSONReader",
+      "name_en": "JSONReader",
+      "kind": "collection",
+      "class_id": 145156802521465377,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONReader([text : string])",
+      "description": "JSON, читаемый скриптом, - обмен с кассой, с маркетплейсом, с банком. Текст передаётся читателю целиком и разбирается сразу, поэтому текст, не являющийся JSON, отвергается ИМЕННО ТАМ - с собственной фразой разборщика, строкой и колонкой, - а не после того, как скрипт уже поработал с его первой половиной.\n\nЗНАЧЕНИЕ ЦЕЛИКОМ, когда документ можно удержать в памяти, - а сообщение обмена именно таково: `ReadValue()`. Объект становится `Structure`, массив - `Array`, `null` - это `Null`, остальное - `String`, `Number` и `Boolean`.\n\n...ИЛИ ПО ТОКЕНАМ, когда нужна только часть: `Read()` делает шаг, `CurrentValueType` говорит, на чём читатель стоит, `CurrentValue` несёт имя или скаляр, `Skip()` перешагивает ненужное, а `ReadValue()` берёт одно значение целиком там, где стоит.\n\nЧИСЛО ЧИТАЕТСЯ ИЗ СВОЕГО ТЕКСТА, А НЕ ЧЕРЕЗ double. `0.1` в сообщении - это одна десятая, а деньги, прошедшие через двоичную дробь, - это деньги, которые больше не сходятся. Каждая цифра приходит такой, какой была написана, - в пределах, которые названы, а не обнаруживаются неожиданно: величина за пределами double (около 1e308), число длиннее тысячи символов или показатель степени больше тысячи ОТВЕРГАЮТСЯ, а не округляются.\n\nКлючи объекта могут быть любыми строками и сохраняют порядок, в котором пришли: `Order.name` - для ключа, который является именем, `Order[\"odd key\"]` - для того, который им не является. Ключ, встреченный дважды, сохраняет ПОСЛЕДНЕЕ значение - так делает всякий другой читатель JSON. ЧЕГО `Structure` НЕ УДЕРЖИТ: двух ключей, различающихся только регистром, - её ключи сворачивают регистр, а у JSON - нет, - поэтому `ReadValue()` ОТКАЗЫВАЕТ такому объекту, называя оба ключа; при обходе через `Read()` он читается как любой другой.\n\nТекст - это строка. Файл - дело того, кто читает файлы: прочитайте его и передайте текст.",
+      "syntax_block": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();\n\nvar Walker = New JSONReader(Text);\nwhile (Walker.Read()) {\n    if (Walker.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Walker.CurrentValue);\n    }\n}",
+      "syntax_block_ves": "Reader = New JSONReader(Text);\nOrder = Reader.ReadValue();\nReader.Close();\n\nWalker = New JSONReader(Text);\nWhile Walker.Read() Do\n    If Walker.CurrentValueType = JSONValueType.PropertyName Then\n        Message(Walker.CurrentValue);\n    Endif;\nEndDo;",
+      "parameters": "text - документ JSON целиком. Если не указан (`New JSONReader()`), у читателя нет текста, пока его не даст `SetString`.",
+      "return_descr": "JSONReader.",
+      "example": "var Text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}]}\";\nvar Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nMessage(Order.number + \": \" + Order.lines.Count());\nforeach (Line In Order.lines) {\n    Message(Line.item + \" x \" + Line.qty);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONWriter",
+        "fn.ReadJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValueType",
+      "name_local": "CurrentValueType",
+      "name_en": "CurrentValueType",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValueType",
+      "description": "На чём стоит читатель - значение `JSONValueType`, только для чтения. Его члены: `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`.\n\nДо первого `Read()` и после того, как `Read()` ответил False, это `JSONValueType.None`.\n\nИменно этим управляется обход: `Read()` - шаг, `CurrentValueType` - вопрос, на что шаг привёл, `CurrentValue` - что этот токен несёт, `ReadValue()` - взять значение целиком, `Skip()` - перешагнуть.\n\n(`JSONValueType.Null` можно написать потому, что после точки лексер читает слово-константу как имя члена; до этого члена с таким именем никто не мог назвать.)",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "parameters": "",
+      "return_descr": "JSONValueType - одно из: None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd.",
+      "example": "var Reader = New JSONReader(\"{\"\"a\"\":1,\"\"b\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);      // a, then b\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValue",
+      "name_local": "CurrentValue",
+      "name_en": "CurrentValue",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValue",
+      "description": "Что НЕСЁТ токен, на котором стоит читатель, - только для чтения: ИМЯ для `PropertyName`, само значение для `String`, `Number` и `Boolean`, и `Null` для `null`.\n\nТокены, которые лишь открывают и закрывают, - `ObjectStart`, `ObjectEnd`, `ArrayStart`, `ArrayEnd` - не несут ничего, как и `None`: там это `Undefined`.\n\nЧисло - это число ровно таким, каким оно было написано: оно прочитано из текста токена, а не через double.",
+      "syntax_block": "Name = Reader.CurrentValue;",
+      "parameters": "",
+      "return_descr": "String, Number, Boolean или Null - и Undefined там, где токен не несёт ничего.",
+      "example": "var Reader = New JSONReader(\"{\"\"qty\"\":0.1}\");\nReader.Read();                             // {\nReader.Read();                             // имя\nMessage(Reader.CurrentValue);              // qty\nReader.Read();                             // число\nMessage(Reader.CurrentValue + 0.2);        // ровно 0.3",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "SetString(text : string)",
+      "description": "Даёт читателю текст вместо того, что он держал: сначала закрывает, затем разбирает ВЕСЬ текст сразу. `New JSONReader(text)` делает ровно это; `SetString` - то, чем тому же читателю передают следующее сообщение.\n\nТЕКСТ, НЕ ЯВЛЯЮЩИЙСЯ JSON, ОТВЕРГАЕТСЯ ЗДЕСЬ - `JSONReader: the text is not JSON: ...`, с собственной фразой разборщика, её строкой и колонкой, - и скрипту не достаётся ни одного его токена. Чтение строгое: весь текст - ОДНО значение, поэтому то, что стоит после этого значения, - не \"лишнее\", а текст, не являющийся JSON. Висячая запятая, одинарные кавычки и голое имя отвергаются так же.\n\nЧисло, которое нельзя удержать точно, тоже отвергается здесь, при разборе текста, а не округляется молча позже.",
+      "syntax_block": "Reader.SetString(Text);",
+      "parameters": "text - документ JSON целиком.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader();\nReader.SetString(Answer);\nvar Result = Reader.ReadValue();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Close",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Read()",
+      "description": "Делает шаг к следующему токену и отвечает, есть ли он. Первый вызов ставит читателя на первый токен документа; когда ничего не осталось, он отвечает False, и читатель стоит за концом, где `CurrentValueType` - это `JSONValueType.None`.\n\nБез текста - у читателя, которому его не давали, или у закрытого - выбрасывается `JSONReader: no text is set`.\n\nТокены - это то, что разборщик уже сделал, когда текст был передан, поэтому обход не стоит разбора: это шаг по списку.",
+      "syntax_block": "while (Reader.Read()) {\n    // Reader.CurrentValueType, Reader.CurrentValue\n}",
+      "parameters": "Нет.",
+      "return_descr": "Boolean - False, когда ничего не осталось.",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                             // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                              // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Skip()",
+      "description": "Перешагивает то, на чём стоит читатель, ЦЕЛИКОМ: контейнер со всем, что внутри, и имя свойства ВМЕСТЕ С его значением. На простом значении перешагивать больше нечего. Следующий `Read()` встанет на то, что идёт за перешагнутым, - поэтому имена внутри пропущенного члена обход никогда не увидит.\n\nПерешагнуть - всё равно что получить: `ReadValue()` после `Skip()` берёт значение, которое идёт СЛЕДОМ.\n\nБез текста выбрасывается `JSONReader: no text is set`.",
+      "syntax_block": "Reader.Skip();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Lines = Undefined;\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        if (Reader.CurrentValue = \"lines\") {\n            Lines = Reader.ReadValue();\n        } elseif (Reader.CurrentValue = \"meta\") {\n            Reader.Skip();                 // the name and its value, in one step\n        }\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.ReadValue",
+      "name_local": "ReadValue",
+      "name_en": "ReadValue",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "ReadValue()",
+      "description": "Значение целиком, НА КОТОРОМ СТОИТ читатель, построенное как значение скрипта: объект становится `Structure`, массив - `Array`, `null` - это `Null`, остальное - `String`, `Number` и `Boolean`.\n\nЕсли он стоит на имени свойства - или до первого токена, или на значении, которое уже отдал, - это значение, идущее СЛЕДОМ. Поэтому весь документ - это `ReadValue()` на свежем читателе, значение члена - `ReadValue()` сразу после его имени, а элементы массива берутся по одному без исключения вместо знака остановки: `Read()` к следующему токену, остановка на `ArrayEnd`, иначе `ReadValue()`.\n\nВСЁ ИЛИ НИЧЕГО: отказ оставляет читателя ровно там, где он стоял, поэтому обход никогда не остаётся посреди значения, которое не удалось построить, а тот же вызов, повторённый, отказывает снова, а не срабатывает со второго раза.\n\nОТКАЗЫВАЕТ: `JSONReader: nothing is left to read`; `JSONReader: what follows is a property name, not a value - Read() it, then ReadValue() takes its value`; `JSONReader: what follows is the end of an object or an array, not a value`; значению, вложенному глубже 256 уровней (`JSONReader: the value nests deeper than 256 levels`); и объекту с двумя ключами, различающимися только регистром (`JSONReader: the object has the keys '...' and '...', which differ only in case - a Structure cannot hold both; walk it with Read() instead`), - потому что `Structure` сворачивает регистр, а JSON нет, и один из двух иначе пропал бы без единого слова.\n\nГлобальная `ReadJSON(reader)` - тот же глагол под именем из справочной системы.",
+      "syntax_block": "Value = Reader.ReadValue();",
+      "parameters": "Нет.",
+      "return_descr": "Structure, Array, String, Number, Boolean или Null.",
+      "example": "var Reader = New JSONReader(\"{\"\"total\"\":0.1,\"\"paid\"\":true,\"\"note\"\":null}\");\nvar Order = Reader.ReadValue();\nMessage(Order.total + 0.2);                // 0.3 exactly\nMessage(Order.paid);\nMessage(Order.note = Null);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Read",
+        "cls.JSONWriter.WriteValue",
+        "fn.ReadJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Отпускает текст и токены, построенные из него, - и память тоже, а не только счётчик. После этого у читателя нет текста: `Read`, `Skip` и `ReadValue` выбрасывают `JSONReader: no text is set`, пока его не даст `SetString`.\n\nЗакрывать читателя ради повторного использования не нужно: `SetString` закрывает сам.\n\nВ отличие от `JSONWriter.Close()`, который отдаёт написанный текст, этот не отвечает НИЧЕМ - одно имя, два разных дела.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();      // сообщение в 30 МБ не держится дольше, чем нужно",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.SetString",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter",
+      "name_local": "JSONWriter",
+      "name_en": "JSONWriter",
+      "kind": "collection",
+      "class_id": 212455710233442230,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONWriter([formatting : JSONFormatting])",
+      "description": "JSON, записываемый скриптом. Писатель САМ держит документ правильным: значению внутри объекта сначала нужно имя, конец закрывает то, что было открыто, документ содержит ОДНО значение, а `Close()` отказывает тексту, в котором что-то осталось открытым, - поэтому то, что он отдаёт, всегда разбирается.\n\nРАСКЛАДКА - это значение `JSONFormatting`, его члены: `Compact` и `Indented`. `Indented` ставит каждый член на отдельную строку с отступами табуляцией; `Compact` - по умолчанию, и именно так пишет писатель, созданный без аргумента, - это одна строка. Всё, что не является членом этого перечисления, отвергается (`JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`), а не принимается молча за компактный — кроме того, что платформа считает пустым значением (`Undefined`, `False`, `0`, `\"\"`): такое читается как «аргумент не дали», и писатель остаётся компактным вид.\n\nЧТО БЕРЁТ `WriteValue`: `String`; `Number`, записанное из собственного текста числа - точно, с точкой в дробной части при любой локали, никогда через double; `Boolean`; `Date` как ISO 8601 (`2026-09-20T21:05:39`), причём ПУСТАЯ дата - это `null`, а не момент в первом году; `Null` и `Undefined` - оба `null`; и `Structure`, `Container` или `Array` из всего перечисленного на любую глубину.\n\nВСЁ ОСТАЛЬНОЕ - ссылка, таблица, член перечисления - не имеет собственной формы в JSON и отвергается ПО ИМЕНИ СВОЕГО ТИПА: что пойдёт вместо него (код, наименование, Guid), решает обмен, а не писатель.\n\n`Close()` отдаёт текст и оставляет писателя пустым, готовым к следующему документу.",
+      "syntax_block": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nforeach (Line In Lines) {\n    Writer.WriteValue(Line);\n}\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nvar Text = Writer.Close();",
+      "syntax_block_ves": "Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nForeach Line In Lines Do\n    Writer.WriteValue(Line);\nEndDo;\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nText = Writer.Close();",
+      "parameters": "formatting - `JSONFormatting.Compact` (по умолчанию) или `JSONFormatting.Indented`.",
+      "return_descr": "JSONWriter - пустой, ничего не записано.",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\nvar Items = New Array();\nItems.Add(Line);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Items);\nMessage(Writer.Close());      // [{\"item\":\"Paper\",\"qty\":1.25}]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONWriter.Close",
+        "cls.JSONReader",
+        "fn.WriteJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartObject",
+      "name_local": "WriteStartObject",
+      "name_en": "WriteStartObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartObject()",
+      "description": "Открывает объект - `{`. Дальше идут члены: имя, затем его значение, - до `WriteEndObject`.\n\nОбъект может стоять всюду, где может стоять значение, - в корне, элементом массива или значением члена, имя которого уже записано. Внутри объекта, где имя не записано, отказ: `JSONWriter: a value inside an object needs its name first - WritePropertyName`; в корне документа, который уже содержит значение, - `JSONWriter: a document holds ONE value, and it is already written`.",
+      "syntax_block": "Writer.WriteStartObject();\nWriter.WritePropertyName(Name);\nWriter.WriteValue(Value);\nWriter.WriteEndObject();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"number\");\nWriter.WriteValue(\"A-17\");\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndObject",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndObject",
+      "name_local": "WriteEndObject",
+      "name_en": "WriteEndObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndObject()",
+      "description": "Закрывает объект, открытый последним, - `}`.\n\nОтказывает, когда открыто не то - не объект (`JSONWriter: WriteEndObject, and the thing open is not an object`; это же он скажет, когда не открыто вообще ничего), и когда имя свойства записано, а его значение - нет (`JSONWriter: a property name is written and its value is not`).",
+      "syntax_block": "Writer.WriteEndObject();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartObject",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartArray",
+      "name_local": "WriteStartArray",
+      "name_en": "WriteStartArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartArray()",
+      "description": "Открывает массив - `[`. Дальше идут его элементы, каждый - значение, - до `WriteEndArray`.\n\nМассив может стоять всюду, где может стоять значение. Его охраняют те же два отказа, что и объект: значению внутри объекта сначала нужно имя, а документ содержит одно значение.\n\n`Array`, уже лежащему в переменной, ничего этого не нужно - `WriteValue` запишет его целиком. Эти глаголы - для массива, который строится по мере записи, элемент за элементом.",
+      "syntax_block": "Writer.WriteStartArray();\nforeach (Item In Items) {\n    Writer.WriteValue(Item);\n}\nWriter.WriteEndArray();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();      // [1,2]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndArray",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndArray",
+      "name_local": "WriteEndArray",
+      "name_en": "WriteEndArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndArray()",
+      "description": "Закрывает массив, открытый последним, - `]`.\n\nОтказывает, когда открыто не то - не массив (`JSONWriter: WriteEndArray, and the thing open is not an array`; это же он скажет, когда не открыто вообще ничего), и когда имя свойства записано, а его значение - нет.",
+      "syntax_block": "Writer.WriteEndArray();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(\"a\");\nWriter.WriteEndArray();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartArray",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WritePropertyName",
+      "name_local": "WritePropertyName",
+      "name_en": "WritePropertyName",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WritePropertyName(name : string)",
+      "description": "Записывает имя члена; значение, которое оно называет, идёт следом.\n\nИмя принадлежит объекту ИЗНУТРИ: вне объекта отказ `JSONWriter: a property name belongs inside an object - WriteStartObject first`, а второе имя до значения первого - `JSONWriter: a property name is written and its value is not`.\n\nИмя пишется так, как JSON пишет строку, - в кавычках, с экранированием того, что его требует, - поэтому именем может быть любой текст. При `JSONFormatting.Indented` после двоеточия ставится пробел.",
+      "syntax_block": "Writer.WritePropertyName(Name);\nWriter.WriteValue(Value);",
+      "parameters": "name - имя члена; любой текст.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"odd name\");\nWriter.WriteValue(1);\nWriter.WriteEndObject();      // {\"odd name\":1}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteValue",
+      "name_local": "WriteValue",
+      "name_en": "WriteValue",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteValue(value : any)",
+      "description": "Записывает одно значение - скаляр или целиком `Structure` / `Container` / `Array` на любую глубину, со всем, что внутри.\n\nБЕРЁТ: `String`; `Number`, записанное из собственного текста числа, точно, никогда через double; `Boolean`; `Date` как ISO 8601 (`2026-09-20T21:05:39`), пустую - как `null`; `Null` и `Undefined` - оба `null`.\n\nОТКАЗЫВАЕТ ПО ИМЕНИ ТИПА тому, что не имеет формы в JSON, - ссылке, таблице, члену перечисления, читателю: `JSONWriter: a value of type '...' has no JSON form - write what stands for it (a code, a description, a Guid)`. Что должно стоять вместо такого значения в чужой системе, решает обмен, а не писатель.\n\nЕЩЁ ОТКАЗЫВАЕТ: `Container`, у которого ключ не строка (`JSONWriter: the names in a JSON object are strings, and this one has a key of type '...'`), потому что имён другого рода в JSON нет; значению, вложенному глубже 256 уровней (`JSONWriter: the value nests deeper than 256 levels`); значению внутри объекта, имя которого ещё не записано; и второму значению в корне документа.\n\nВСЁ ЗНАЧЕНИЕ ИЛИ НИЧЕГО ОТ НЕГО. `Structure` со ссылкой на три уровня вглубь отвергается - и уже записанные уровни забираются обратно, поэтому писатель стоит там, где стоял, а скрипт, поймавший отказ, может записать вместо него что-то другое.\n\nГлобальная `WriteJSON(writer, value)` - тот же глагол под именем из справочной системы.",
+      "syntax_block": "Writer.WriteValue(Value);",
+      "parameters": "value - String, Number, Boolean, Date, Null или Undefined, либо Structure / Container / Array из перечисленного.",
+      "return_descr": "",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Бумага\");\nLine.Insert(\"qty\", 1.25);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Line);\nMessage(Writer.Close());      // {\"item\":\"Бумага\",\"qty\":1.25}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONReader.ReadValue",
+        "fn.WriteJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Отдаёт текст и опустошает писателя - тот же писатель после этого начинает следующий документ.\n\nОтказывает тексту, который не разобрался бы: `JSONWriter: N object(s) or array(s) are still open`, пока что-то открыто, и `JSONWriter: nothing is written - a document holds one value`, когда не записано вообще ничего, - потому что пустой текст тоже не документ, а ветка, забывшая записать, иначе отправила бы его телом запроса.\n\nВ отличие от `JSONReader.Close()`, который не отвечает ничем, этот отвечает ТЕКСТОМ - одно имя, два разных дела.",
+      "syntax_block": "Text = Writer.Close();",
+      "parameters": "Нет.",
+      "return_descr": "String - текст JSON.",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();\nMessage(Writer.Close());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType",
+      "name_local": "JSONValueType",
+      "name_en": "JSONValueType",
+      "kind": "enum_type",
+      "class_id": 422981509789553766,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.<Member>",
+      "description": "НА ЧЁМ СТОИТ JSONReader — сказанное членом перечисления, а не числом: `CurrentValueType` отвечает одним из них. Документ обходится через `Read()`, и каждый шаг приводит на токен: член называет РОД этого токена, а `CurrentValue` несёт то, что токен держит.\n\nЧЛЕНЫ: `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`. Обход `{\"qty\": 2}` встречает четыре из них в таком порядке: `ObjectStart`, `PropertyName`, `Number`, `ObjectEnd`.\n\nПЯТЬ ИЗ НИХ НЕСУТ ЗНАЧЕНИЕ в `CurrentValue` — `String`, `Number`, `Boolean`, `Null` и `PropertyName`, который несёт имя. Четыре скобки не несут ничего: `CurrentValue` там `Undefined`.\n\n`None` — НЕ ТОКЕН. Ни в одном документе его нет: это то, на чём стоит читатель, когда не стоит ни на чём, — до первого `Read()`, после того как `Read()` ответил `False`, и после `Close()`.\n\nЧлен пишется `JSONValueType.<Имя>` и сравнивается через `=` и `<>`. О конце контейнера спрашивают так же: обход останавливается на `ArrayEnd` или `ObjectEnd`, а не считает прочитанное.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName Then\n    Message(Reader.CurrentValue);\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Бумага\"\",\"\"qty\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);          // item, qty\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "enum.JSONFormatting",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.None",
+      "name_local": "None",
+      "name_en": "None",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.None",
+      "description": "ЧИТАТЕЛЬ НЕ СТОИТ НИ НА ЧЁМ — и такого токена нет ни в одном документе. `CurrentValueType` отвечает `None` до первого `Read()`, после того как `Read()` ответил `False`, и после `Close()`; `CurrentValue` там `Undefined`.\n\nОбход, записанный как `while (Reader.Read()) { … }`, его не видит: шаг, которому не на что встать, — это шаг, который отвечает `False`. Спрашивать о нём стоит вне обхода — в процедуре, которой читатель передан и которая не знает, начат ли обход.\n\nЧитатель, которому не дали текста, отвечает так же — `None`; а его `Read()`, `Skip()` и `ReadValue()` вместо ответа возбуждают исключение (`JSONReader: no text is set`).",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.None) {\n    // под читателем ничего нет: обход не начат или уже закончен\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.None Then\n    // под читателем ничего нет: обход не начат или уже закончен\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nMessage(Reader.CurrentValueType = JSONValueType.None);   // True — Read() ещё не вызывали",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Null",
+      "description": "ТОКЕН — ЭТО `null` ИЗ JSON. `CurrentValue` держит `Null` — значение с этим именем, а не `Undefined`: член, пришедший как `null`, пришёл, а члена, которого в сообщении нет вовсе, не было.\n\n`ReadValue()`, стоящий на нём, отвечает `Null` — и именно это держит для такого члена объект, прочитанный целиком.\n\n`JSONValueType.Null` вообще можно написать потому, что после точки лексер читает слово-константу как имя члена (`translateCode.cpp`); до этого правила члена с таким именем никто не мог назвать.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Null) {\n    // член есть, и его значение — null\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Null Then\n    // член есть, и его значение — null\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":null}\");\nReader.Read();                                           // {\nReader.Read();                                           // paid\nReader.Read();                                           // null\nMessage(Reader.CurrentValueType = JSONValueType.Null);   // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Boolean",
+      "description": "ТОКЕН — ЭТО `true` ИЛИ `false`. `CurrentValue` держит `Boolean`, и `ReadValue()`, стоящий на нём, отвечает тем же.\n\nДругого написания истины в JSON нет: `\"true\"` в кавычках — токен `String`, а `1` — токен `Number`. Что чужая система имела в виду под ними, решает обмен, а не читатель.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Boolean) {\n    Paid = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Boolean Then\n    Paid = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":true}\");\nReader.Read();  Reader.Read();  Reader.Read();              // {, paid, true\nMessage(Reader.CurrentValueType = JSONValueType.Boolean);   // True\nMessage(Reader.CurrentValue);                               // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Number",
+      "description": "ТОКЕН — ЭТО ЧИСЛО: целое, дробное или записанное с порядком; все три приходят как `Number`.\n\nЧИТАЕТСЯ ИЗ СВОЕГО ТЕКСТА, А НЕ ЧЕРЕЗ `double`: `0.1` — это одна десятая, и у суммы денег остаются её копейки. То, что нельзя прочитать точно, отвергается тогда, когда ТЕКСТ ДАЮТ, а не округляется здесь: токен длиннее 1000 символов, порядок за пределами ±1000 и величина за пределами того, что принимает сам разборщик (около 1e308).\n\n`CurrentValue` держит это число; `ReadValue()`, стоящий на нём, отвечает тем же.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Number) {\n    Total = Total + Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Number Then\n    Total = Total + Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[0.1,0.2]\");\nReader.Read();                                 // [\nReader.Read();  var First = Reader.CurrentValue;\nReader.Read();  var Second = Reader.CurrentValue;\nMessage(First + Second);                       // 0.3 — точно, а не 0.30000000000000004",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.String",
+      "description": "ТОКЕН — ЭТО СТРОКА В КАВЫЧКАХ, УЖЕ РАЗЭКРАНИРОВАННАЯ: `\\n`, `\\\"`, `\\uXXXX` и остальное разобраны разборщиком, поэтому `CurrentValue` держит тот текст, который имела в виду чужая система, а не то, как она его записала.\n\nИМЯ ЧЛЕНА — НЕ ЭТО. Имя — это `PropertyName`, хотя оно тоже несёт текст: именно так обход отличает `{\"item\":\"Бумага\"}` от `[\"item\",\"Бумага\"]`.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.String) {\n    Item = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.String Then\n    Item = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[\"\"Бумага\"\"]\");\nReader.Read();                                             // [\nReader.Read();                                             // \"Бумага\"\nMessage(Reader.CurrentValueType = JSONValueType.String);   // True\nMessage(Reader.CurrentValue);                              // Бумага",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "enum.JSONValueType.PropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.PropertyName",
+      "name_local": "PropertyName",
+      "name_en": "PropertyName",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.PropertyName",
+      "description": "ИМЯ ЧЛЕНА ВНУТРИ ОБЪЕКТА — `CurrentValue` несёт имя, а ЗНАЧЕНИЕ СЛЕДУЕТ ЗА НИМ. Поэтому значение берут одним из двух способов: ещё раз `Read()`, который на него встаёт, или `ReadValue()` прямо здесь, который берёт его целиком, на какую бы глубину оно ни уходило.\n\n`Skip()`, стоящий на имени, переступает имя ВМЕСТЕ с его значением — так обход проходит мимо того, что ему не нужно.\n\nИМЕННО ЗДЕСЬ ОБХОД СЕБЯ ОПРАВДЫВАЕТ: сообщение любого размера можно прочитать ради одного члена, не собирая всё остальное.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n    Lines = Reader.ReadValue();\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\" Then\n    Lines = Reader.ReadValue();\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n        var Lines = Reader.ReadValue();        // массив целиком, от его имени\n        Message(Lines.Count());                // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectStart",
+      "name_local": "ObjectStart",
+      "name_en": "ObjectStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectStart",
+      "description": "`{`, КОТОРАЯ ОТКРЫВАЕТ ОБЪЕКТ. Она не несёт ничего — `CurrentValue` там `Undefined`, — а дальше идёт `PropertyName` на каждый член и затем `ObjectEnd`.\n\n`ReadValue()`, стоящий на ней, собирает объект целиком как `Structure`, на любую глубину; `Skip()` переступает его целиком. Глубже 256 уровней — отказ, а не сборка.\n\nОбъект, прочитанный целиком, не может держать два ключа, различающихся только регистром: у `Structure` ключи сворачивают регистр, а у JSON — нет, поэтому `ReadValue()` отказывает такому объекту, называя оба имени. По токенам он читается как любой другой.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    Item = Reader.ReadValue();     // объект целиком, как Structure\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ObjectStart Then\n    Item = Reader.ReadValue();     // объект целиком, как Structure\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[{\"\"item\"\":\"\"Бумага\"\"},{\"\"item\"\":\"\"Чернила\"\"}]\");\nReader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    var Row = Reader.ReadValue();\n    Message(Row.item);                            // Бумага, Чернила\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectEnd",
+      "name_local": "ObjectEnd",
+      "name_en": "ObjectEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectEnd",
+      "description": "`}`, КОТОРАЯ ЗАКРЫВАЕТ ОБЪЕКТ. Она не несёт ничего и служит знаком остановки для обхода членов объекта: `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd)` читает член за членом и останавливается на скобке, а не считает их.\n\nУ вложенного объекта своя `ObjectEnd` — скобка, которую встречает обход, закрывает то, что было открыто последним. Обход, которому нужно остаться на одном уровне, переступает значение члена через `Skip()` или берёт его через `ReadValue()`: оба оставляют читателя внутри того же объекта.",
+      "syntax_block": "while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    // читатель стоит на PropertyName: ReadValue() берёт его значение\n}",
+      "syntax_block_ves": "While Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd Do\n    // читатель стоит на PropertyName: ReadValue() берёт его значение\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Бумага\"\",\"\"qty\"\":2}\");\nReader.Read();                                    // {\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    Message(Reader.CurrentValue);                 // item, qty — имена\n    Reader.ReadValue();                           // а их значения — переступаем\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectStart",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayStart",
+      "name_local": "ArrayStart",
+      "name_en": "ArrayStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayStart",
+      "description": "`[`, КОТОРАЯ ОТКРЫВАЕТ МАССИВ. Она не несёт ничего, а дальше идут его элементы — каждый значение любого рода, каждый читается как всякое другое — до `ArrayEnd`.\n\n`ReadValue()`, стоящий на ней, собирает массив целиком как `Array`; `Skip()` переступает его целиком. Массив на сто тысяч строк — тот случай, когда обход дешевле: элемент за элементом, и весь он ни разу не держится в памяти сразу.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n    Lines = Reader.ReadValue();    // массив целиком, как Array\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ArrayStart Then\n    Lines = Reader.ReadValue();    // массив целиком, как Array\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n        var Lines = Reader.ReadValue();\n        Message(Lines.Count());                   // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartArray"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayEnd",
+      "name_local": "ArrayEnd",
+      "name_en": "ArrayEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayEnd",
+      "description": "`]`, КОТОРАЯ ЗАКРЫВАЕТ МАССИВ, — знак остановки для обхода его элементов. Она не несёт ничего.\n\nОБОРОТ: `Read()` встаёт на `[`, а затем `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) { Item = Reader.ReadValue(); }` берёт элементы по одному. `ReadValue()` отвечает тем значением, на котором читатель СТОИТ, поэтому каждый виток такого цикла берёт ровно один элемент, каким бы он ни был — числом, целым объектом, — а скобка цикл заканчивает.",
+      "syntax_block": "Reader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Item = Reader.ReadValue();\n}",
+      "syntax_block_ves": "Reader.Read();                                    // [\nWhile Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd Do\n    Item = Reader.ReadValue();\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                                    // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                                     // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayStart",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting",
+      "name_local": "JSONFormatting",
+      "name_en": "JSONFormatting",
+      "kind": "enum_type",
+      "class_id": 407844533207000529,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.<Member>",
+      "description": "КАК JSONWriter РАСКЛАДЫВАЕТ СВОЙ ТЕКСТ — аргумент, который берёт `New JSONWriter(…)`, и единственное, ради чего это перечисление есть. Два члена: `Compact` и `Indented`. `JSONWriter`, созданный без аргумента, пишет `Compact`.\n\nМЕНЯЕТСЯ ТЕКСТ, А НЕ ДОКУМЕНТ. Пробелы между токенами для JSON — ничто, поэтому обе раскладки разбираются в одно и то же значение, и читатель на той стороне их не различит. Выбор делается ради того, кто текст ЧИТАЕТ, — человека, смотрящего в журнал, сравнения двух сообщений, — и против провода, где каждый перевод строки и каждая табуляция суть отправленные байты.\n\nВСЁ, ЧТО НЕ ЯВЛЯЕТСЯ ЧЛЕНОМ, ОТВЕРГАЕТСЯ — число, строка, которая «значит» член, — фразой `JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`, а не пишется молча компактно.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Бумага\");\nWriter.WriteEndObject();\nMessage(Writer.Close());\n// {\n//     \"item\": \"Бумага\"\n// }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close",
+        "enum.JSONValueType",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Compact",
+      "name_local": "Compact",
+      "name_en": "Compact",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Compact",
+      "description": "ОДНА СТРОКА И НИ ОДНОГО ЛИШНЕГО ПРОБЕЛА: `{\"item\":\"Бумага\",\"qty\":2}`. Двоеточие после имени голое, между запятой и следующим членом не стоит ничего, и ничто не переносится на другую строку.\n\nЭТО УМОЛЧАНИЕ: так пишет `New JSONWriter()` — и так же `New JSONWriter(JSONFormatting.Compact)`. Именно таким должно быть сообщение, отправляемое в чужую систему, — самый короткий текст, говорящий то же самое.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Compact);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter();                    // Compact, не говоря об этом\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Бумага\");\nWriter.WritePropertyName(\"qty\");   Writer.WriteValue(2);\nWriter.WriteEndObject();\nMessage(Writer.Close());                          // {\"item\":\"Бумага\",\"qty\":2}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Indented",
+      "name_local": "Indented",
+      "name_en": "Indented",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Indented",
+      "description": "ПО ЧЛЕНУ НА СТРОКУ, С ОТСТУПОМ ТАБУЛЯЦИЯМИ — по одной на каждый открытый уровень — и с пробелом после двоеточия: `\"item\": \"Бумага\"`. Это раскладка для текста, который будет читать ЧЕЛОВЕК: сообщение, сохранённое в журнале, ответ, положенный рядом с другим.\n\nПУСТОЙ ОБЪЕКТ ИЛИ МАССИВ ОСТАЁТСЯ НА СВОЕЙ СТРОКЕ — `{}` и `[]` пишутся как есть, потому что перевод строки делается перед членом, а члена нет.\n\nДокумент при этом тот же самый: читатель не отличит эту раскладку от `Compact`. Стоит она байтов.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();\nMessage(Writer.Close());\n// [\n//     1,\n//     2\n// ]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    }
+  ]
+}

@@ -1,0 +1,720 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.JSONReader",
+      "name_local": "JSONReader",
+      "name_en": "JSONReader",
+      "kind": "collection",
+      "class_id": 145156802521465377,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONReader([text : string])",
+      "description": "JSON, який читає скрипт, - обмін із касою, з маркетплейсом, із банком. Текст передається читачеві цілком і розбирається одразу, тому текст, що не є JSON, відхиляється САМЕ ТАМ - із власною фразою розбирача, її рядком і колонкою, - а не після того, як скрипт уже попрацював із його першою половиною.\n\nЗНАЧЕННЯ ЦІЛКОМ, коли документ можна втримати в пам'яті, - а повідомлення обміну саме таке: `ReadValue()`. Об'єкт стає `Structure`, масив - `Array`, `null` - це `Null`, решта - `String`, `Number` і `Boolean`.\n\n...АБО ПО ТОКЕНАХ, коли потрібна лише частина: `Read()` робить крок, `CurrentValueType` каже, на чому стоїть читач, `CurrentValue` несе ім'я або скаляр, `Skip()` переступає непотрібне, а `ReadValue()` бере одне значення цілком там, де стоїть.\n\nЧИСЛО ЧИТАЄТЬСЯ ЗІ СВОГО ТЕКСТУ, А НЕ ЧЕРЕЗ double. `0.1` у повідомленні - це одна десята, а гроші, що пройшли через двійковий дріб, - це гроші, які більше не сходяться. Кожна цифра приходить такою, якою була написана, - у межах, які названо, а не виявлено несподівано: величина поза межами double (близько 1e308), число, довше за тисячу символів, або показник степеня більший за тисячу ВІДХИЛЯЮТЬСЯ, а не округлюються.\n\nКлючі об'єкта можуть бути будь-якими рядками і зберігають порядок, у якому прийшли: `Order.name` - для ключа, що є іменем, `Order[\"odd key\"]` - для того, що ним не є. Ключ, зустрінутий двічі, зберігає ОСТАННЄ значення - так робить кожен інший читач JSON. ЧОГО `Structure` НЕ ВТРИМАЄ: двох ключів, що різняться лише регістром, - її ключі згортають регістр, а в JSON - ні, - тому `ReadValue()` ВІДМОВЛЯЄ такому об'єктові, називаючи обидва ключі; при обході через `Read()` він читається як будь-який інший.\n\nТекст - це рядок. Файл - справа того, хто читає файли: прочитайте його і передайте текст.",
+      "syntax_block": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();\n\nvar Walker = New JSONReader(Text);\nwhile (Walker.Read()) {\n    if (Walker.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Walker.CurrentValue);\n    }\n}",
+      "syntax_block_ves": "Reader = New JSONReader(Text);\nOrder = Reader.ReadValue();\nReader.Close();\n\nWalker = New JSONReader(Text);\nWhile Walker.Read() Do\n    If Walker.CurrentValueType = JSONValueType.PropertyName Then\n        Message(Walker.CurrentValue);\n    Endif;\nEndDo;",
+      "parameters": "text - документ JSON цілком. Якщо не вказано (`New JSONReader()`), у читача немає тексту, доки його не дасть `SetString`.",
+      "return_descr": "JSONReader.",
+      "example": "var Text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}]}\";\nvar Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nMessage(Order.number + \": \" + Order.lines.Count());\nforeach (Line In Order.lines) {\n    Message(Line.item + \" x \" + Line.qty);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONWriter",
+        "fn.ReadJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValueType",
+      "name_local": "CurrentValueType",
+      "name_en": "CurrentValueType",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValueType",
+      "description": "На чому стоїть читач - значення `JSONValueType`, лише для читання. Його члени: `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`.\n\nДо першого `Read()` і після того, як `Read()` відповів False, це `JSONValueType.None`.\n\nСаме цим керується обхід: `Read()` - крок, `CurrentValueType` - питання, на що крок привів, `CurrentValue` - що цей токен несе, `ReadValue()` - взяти значення цілком, `Skip()` - переступити.\n\n(`JSONValueType.Null` можна написати тому, що після крапки лексер читає слово-константу як ім'я члена; до того члена з таким іменем ніхто не міг назвати.)",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "parameters": "",
+      "return_descr": "JSONValueType - одне з: None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd.",
+      "example": "var Reader = New JSONReader(\"{\"\"a\"\":1,\"\"b\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);      // a, then b\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValue",
+      "name_local": "CurrentValue",
+      "name_en": "CurrentValue",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValue",
+      "description": "Що НЕСЕ токен, на якому стоїть читач, - лише для читання: ІМ'Я для `PropertyName`, саме значення для `String`, `Number` і `Boolean`, і `Null` для `null`.\n\nТокени, які лише відкривають і закривають, - `ObjectStart`, `ObjectEnd`, `ArrayStart`, `ArrayEnd` - не несуть нічого, як і `None`: там це `Undefined`.\n\nЧисло - це число рівно таке, яким його було написано: воно прочитане з тексту токена, а не через double.",
+      "syntax_block": "Name = Reader.CurrentValue;",
+      "parameters": "",
+      "return_descr": "String, Number, Boolean або Null - і Undefined там, де токен не несе нічого.",
+      "example": "var Reader = New JSONReader(\"{\"\"qty\"\":0.1}\");\nReader.Read();                             // {\nReader.Read();                             // ім'я\nMessage(Reader.CurrentValue);              // qty\nReader.Read();                             // число\nMessage(Reader.CurrentValue + 0.2);        // рівно 0.3",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "SetString(text : string)",
+      "description": "Дає читачеві текст замість того, що він тримав: спершу закриває, потім розбирає ВЕСЬ текст одразу. `New JSONReader(text)` робить саме це; `SetString` - те, чим тому самому читачеві передають наступне повідомлення.\n\nТЕКСТ, ЩО НЕ Є JSON, ВІДХИЛЯЄТЬСЯ ТУТ - `JSONReader: the text is not JSON: ...`, із власною фразою розбирача, її рядком і колонкою, - і скриптові не дістається жодного його токена. Читання суворе: увесь текст - ОДНЕ значення, тому те, що стоїть після цього значення, - не \"зайве\", а текст, що не є JSON. Висяча кома, одинарні лапки й голе ім'я відхиляються так само.\n\nЧисло, яке не можна втримати точно, теж відхиляється тут, під час розбору тексту, а не округлюється мовчки згодом.",
+      "syntax_block": "Reader.SetString(Text);",
+      "parameters": "text - документ JSON цілком.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader();\nReader.SetString(Answer);\nvar Result = Reader.ReadValue();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Close",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Read()",
+      "description": "Робить крок до наступного токена й відповідає, чи є він. Перший виклик ставить читача на перший токен документа; коли нічого не лишилося, він відповідає False, і читач стоїть за кінцем, де `CurrentValueType` - це `JSONValueType.None`.\n\nБез тексту - у читача, якому його не давали, або в закритого - викидається `JSONReader: no text is set`.\n\nТокени - це те, що розбирач уже зробив, коли текст було передано, тому обхід не коштує розбору: це крок по списку.",
+      "syntax_block": "while (Reader.Read()) {\n    // Reader.CurrentValueType, Reader.CurrentValue\n}",
+      "parameters": "Немає.",
+      "return_descr": "Boolean - False, коли нічого не лишилося.",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                             // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                              // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Skip()",
+      "description": "Переступає те, на чому стоїть читач, ЦІЛКОМ: контейнер з усім, що всередині, та ім'я властивості РАЗОМ З його значенням. На простому значенні переступати більше нічого. Наступний `Read()` стане на те, що йде за переступленим, - тому імена всередині пропущеного члена обхід ніколи не побачить.\n\nПереступити - те саме, що отримати: `ReadValue()` після `Skip()` бере значення, яке йде СЛІДОМ.\n\nБез тексту викидається `JSONReader: no text is set`.",
+      "syntax_block": "Reader.Skip();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Lines = Undefined;\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        if (Reader.CurrentValue = \"lines\") {\n            Lines = Reader.ReadValue();\n        } elseif (Reader.CurrentValue = \"meta\") {\n            Reader.Skip();                 // the name and its value, in one step\n        }\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.ReadValue",
+      "name_local": "ReadValue",
+      "name_en": "ReadValue",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "ReadValue()",
+      "description": "Значення цілком, НА ЯКОМУ СТОЇТЬ читач, побудоване як значення скрипта: об'єкт стає `Structure`, масив - `Array`, `null` - це `Null`, решта - `String`, `Number` і `Boolean`.\n\nЯкщо він стоїть на імені властивості - або до першого токена, або на значенні, яке вже віддав, - це значення, що йде СЛІДОМ. Тому весь документ - це `ReadValue()` на свіжому читачеві, значення члена - `ReadValue()` одразу після його імені, а елементи масиву беруться по одному без винятку замість знака зупинки: `Read()` до наступного токена, зупинка на `ArrayEnd`, інакше `ReadValue()`.\n\nУСЕ АБО НІЧОГО: відмова лишає читача рівно там, де він стояв, тому обхід ніколи не лишається посеред значення, яке не вдалося побудувати, а той самий виклик, повторений, відмовляє знову, а не спрацьовує з другого разу.\n\nВІДМОВЛЯЄ: `JSONReader: nothing is left to read`; `JSONReader: what follows is a property name, not a value - Read() it, then ReadValue() takes its value`; `JSONReader: what follows is the end of an object or an array, not a value`; значенню, вкладеному глибше за 256 рівнів (`JSONReader: the value nests deeper than 256 levels`); та об'єктові з двома ключами, що різняться лише регістром (`JSONReader: the object has the keys '...' and '...', which differ only in case - a Structure cannot hold both; walk it with Read() instead`), - бо `Structure` згортає регістр, а JSON ні, і один із двох інакше зник би без жодного слова.\n\nГлобальна `ReadJSON(reader)` - те саме дієслово під іменем із довідкової системи.",
+      "syntax_block": "Value = Reader.ReadValue();",
+      "parameters": "Немає.",
+      "return_descr": "Structure, Array, String, Number, Boolean або Null.",
+      "example": "var Reader = New JSONReader(\"{\"\"total\"\":0.1,\"\"paid\"\":true,\"\"note\"\":null}\");\nvar Order = Reader.ReadValue();\nMessage(Order.total + 0.2);                // 0.3 exactly\nMessage(Order.paid);\nMessage(Order.note = Null);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Read",
+        "cls.JSONWriter.WriteValue",
+        "fn.ReadJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Відпускає текст і токени, побудовані з нього, - і пам'ять теж, а не лише лічильник. Після цього в читача немає тексту: `Read`, `Skip` і `ReadValue` викидають `JSONReader: no text is set`, доки його не дасть `SetString`.\n\nЗакривати читача заради повторного використання не потрібно: `SetString` закриває сам.\n\nНа відміну від `JSONWriter.Close()`, який віддає написаний текст, цей не відповідає НІЧИМ - одне ім'я, дві різні справи.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();      // повідомлення на 30 МБ не тримається довше, ніж треба",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.SetString",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter",
+      "name_local": "JSONWriter",
+      "name_en": "JSONWriter",
+      "kind": "collection",
+      "class_id": 212455710233442230,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONWriter([formatting : JSONFormatting])",
+      "description": "JSON, який записує скрипт. Записувач САМ тримає документ правильним: значенню всередині об'єкта спершу потрібне ім'я, кінець закриває те, що було відкрито, документ містить ОДНЕ значення, а `Close()` відмовляє текстові, у якому щось лишилося відкритим, - тому те, що він віддає, завжди розбирається.\n\nРОЗКЛАДКА - це значення `JSONFormatting`, його члени: `Compact` та `Indented`. `Indented` ставить кожен член в окремий рядок із відступами табуляцією; `Compact` - усталено, і саме так пише записувач, створений без аргументу, - це один рядок. Усе, що не є членом цього переліку, відхиляється (`JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`), а не приймається мовчки за компактний — окрім того, що платформа вважає порожнім значенням (`Undefined`, `False`, `0`, `\"\"`): таке читається як «довід не дали», і записувач лишається компактним вигляд.\n\nЩО БЕРЕ `WriteValue`: `String`; `Number`, записане з власного тексту числа - точно, з крапкою в дробовій частині за будь-якої локалі, ніколи через double; `Boolean`; `Date` як ISO 8601 (`2026-09-20T21:05:39`), причому ПОРОЖНЯ дата - це `null`, а не мить у першому році; `Null` та `Undefined` - обидва `null`; і `Structure`, `Container` або `Array` з усього переліченого на будь-яку глибину.\n\nУСЕ ІНШЕ - посилання, таблиця, член переліку - не має власної форми в JSON і відхиляється ЗА ІМЕНЕМ СВОГО ТИПУ: що піде замість нього (код, найменування, Guid), вирішує обмін, а не записувач.\n\n`Close()` віддає текст і лишає записувача порожнім, готовим до наступного документа.",
+      "syntax_block": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nforeach (Line In Lines) {\n    Writer.WriteValue(Line);\n}\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nvar Text = Writer.Close();",
+      "syntax_block_ves": "Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nForeach Line In Lines Do\n    Writer.WriteValue(Line);\nEndDo;\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nText = Writer.Close();",
+      "parameters": "formatting - `JSONFormatting.Compact` (усталено) або `JSONFormatting.Indented`.",
+      "return_descr": "JSONWriter - порожній, нічого не записано.",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\nvar Items = New Array();\nItems.Add(Line);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Items);\nMessage(Writer.Close());      // [{\"item\":\"Paper\",\"qty\":1.25}]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONWriter.Close",
+        "cls.JSONReader",
+        "fn.WriteJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartObject",
+      "name_local": "WriteStartObject",
+      "name_en": "WriteStartObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartObject()",
+      "description": "Відкриває об'єкт - `{`. Далі йдуть члени: ім'я, потім його значення, - до `WriteEndObject`.\n\nОб'єкт може стояти всюди, де може стояти значення, - у корені, елементом масиву або значенням члена, ім'я якого вже записано. Усередині об'єкта, де ім'я не записано, відмова: `JSONWriter: a value inside an object needs its name first - WritePropertyName`; у корені документа, що вже містить значення, - `JSONWriter: a document holds ONE value, and it is already written`.",
+      "syntax_block": "Writer.WriteStartObject();\nWriter.WritePropertyName(Name);\nWriter.WriteValue(Value);\nWriter.WriteEndObject();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"number\");\nWriter.WriteValue(\"A-17\");\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndObject",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndObject",
+      "name_local": "WriteEndObject",
+      "name_en": "WriteEndObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndObject()",
+      "description": "Закриває об'єкт, відкритий останнім, - `}`.\n\nВідмовляє, коли відкрито не те - не об'єкт (`JSONWriter: WriteEndObject, and the thing open is not an object`; це саме він скаже, коли не відкрито взагалі нічого), і коли ім'я властивості записано, а його значення - ні (`JSONWriter: a property name is written and its value is not`).",
+      "syntax_block": "Writer.WriteEndObject();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartObject",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartArray",
+      "name_local": "WriteStartArray",
+      "name_en": "WriteStartArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartArray()",
+      "description": "Відкриває масив - `[`. Далі йдуть його елементи, кожен - значення, - до `WriteEndArray`.\n\nМасив може стояти всюди, де може стояти значення. Його охороняють ті самі дві відмови, що й об'єкт: значенню всередині об'єкта спершу потрібне ім'я, а документ містить одне значення.\n\n`Array`, що вже лежить у змінній, нічого цього не потребує - `WriteValue` запише його цілком. Ці дієслова - для масиву, який будується в міру запису, елемент за елементом.",
+      "syntax_block": "Writer.WriteStartArray();\nforeach (Item In Items) {\n    Writer.WriteValue(Item);\n}\nWriter.WriteEndArray();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();      // [1,2]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndArray",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndArray",
+      "name_local": "WriteEndArray",
+      "name_en": "WriteEndArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndArray()",
+      "description": "Закриває масив, відкритий останнім, - `]`.\n\nВідмовляє, коли відкрито не те - не масив (`JSONWriter: WriteEndArray, and the thing open is not an array`; це саме він скаже, коли не відкрито взагалі нічого), і коли ім'я властивості записано, а його значення - ні.",
+      "syntax_block": "Writer.WriteEndArray();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(\"a\");\nWriter.WriteEndArray();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartArray",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WritePropertyName",
+      "name_local": "WritePropertyName",
+      "name_en": "WritePropertyName",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WritePropertyName(name : string)",
+      "description": "Записує ім'я члена; значення, яке воно називає, йде слідом.\n\nІм'я належить об'єктові ЗСЕРЕДИНИ: поза об'єктом відмова `JSONWriter: a property name belongs inside an object - WriteStartObject first`, а друге ім'я до значення першого - `JSONWriter: a property name is written and its value is not`.\n\nІм'я пишеться так, як JSON пише рядок, - у лапках, з екрануванням того, що його потребує, - тому іменем може бути будь-який текст. За `JSONFormatting.Indented` після двокрапки ставиться пробіл.",
+      "syntax_block": "Writer.WritePropertyName(Name);\nWriter.WriteValue(Value);",
+      "parameters": "name - ім'я члена; будь-який текст.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"odd name\");\nWriter.WriteValue(1);\nWriter.WriteEndObject();      // {\"odd name\":1}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteValue",
+      "name_local": "WriteValue",
+      "name_en": "WriteValue",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteValue(value : any)",
+      "description": "Записує одне значення - скаляр або цілком `Structure` / `Container` / `Array` на будь-яку глибину, з усім, що всередині.\n\nБЕРЕ: `String`; `Number`, записане з власного тексту числа, точно, ніколи через double; `Boolean`; `Date` як ISO 8601 (`2026-09-20T21:05:39`), порожню - як `null`; `Null` та `Undefined` - обидва `null`.\n\nВІДМОВЛЯЄ ЗА ІМЕНЕМ ТИПУ тому, що не має форми в JSON, - посиланню, таблиці, членові переліку, читачеві: `JSONWriter: a value of type '...' has no JSON form - write what stands for it (a code, a description, a Guid)`. Що має стояти замість такого значення в чужій системі, вирішує обмін, а не записувач.\n\nЩЕ ВІДМОВЛЯЄ: `Container`, у якого ключ не рядок (`JSONWriter: the names in a JSON object are strings, and this one has a key of type '...'`), бо імен іншого роду в JSON немає; значенню, вкладеному глибше за 256 рівнів (`JSONWriter: the value nests deeper than 256 levels`); значенню всередині об'єкта, ім'я якого ще не записано; і другому значенню в корені документа.\n\nУСЕ ЗНАЧЕННЯ АБО НІЧОГО З НЬОГО. `Structure` із посиланням на три рівні вглиб відхиляється - і вже записані рівні забираються назад, тому записувач стоїть там, де стояв, а скрипт, що спіймав відмову, може записати замість нього щось інше.\n\nГлобальна `WriteJSON(writer, value)` - те саме дієслово під іменем із довідкової системи.",
+      "syntax_block": "Writer.WriteValue(Value);",
+      "parameters": "value - String, Number, Boolean, Date, Null або Undefined, або Structure / Container / Array з переліченого.",
+      "return_descr": "",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Папір\");\nLine.Insert(\"qty\", 1.25);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Line);\nMessage(Writer.Close());      // {\"item\":\"Папір\",\"qty\":1.25}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONReader.ReadValue",
+        "fn.WriteJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Віддає текст і спорожнює записувача - той самий записувач після цього починає наступний документ.\n\nВідмовляє текстові, який не розібрався б: `JSONWriter: N object(s) or array(s) are still open`, доки щось відкрито, і `JSONWriter: nothing is written - a document holds one value`, коли не записано взагалі нічого, - бо порожній текст теж не документ, а гілка, що забула записати, інакше надіслала б його тілом запиту.\n\nНа відміну від `JSONReader.Close()`, який не відповідає нічим, цей відповідає ТЕКСТОМ - одне ім'я, дві різні справи.",
+      "syntax_block": "Text = Writer.Close();",
+      "parameters": "Немає.",
+      "return_descr": "String - текст JSON.",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();\nMessage(Writer.Close());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType",
+      "name_local": "JSONValueType",
+      "name_en": "JSONValueType",
+      "kind": "enum_type",
+      "class_id": 422981509789553766,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.<Member>",
+      "description": "НА ЧОМУ СТОЇТЬ JSONReader — сказане членом перелічення, а не числом: `CurrentValueType` відповідає одним із них. Документ обходиться через `Read()`, і кожен крок приводить на токен: член називає РІД цього токена, а `CurrentValue` несе те, що токен тримає.\n\nЧЛЕНИ: `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`. Обхід `{\"qty\": 2}` зустрічає чотири з них у такому порядку: `ObjectStart`, `PropertyName`, `Number`, `ObjectEnd`.\n\nП'ЯТЬ ІЗ НИХ НЕСУТЬ ЗНАЧЕННЯ в `CurrentValue` — `String`, `Number`, `Boolean`, `Null` і `PropertyName`, який несе ім'я. Чотири дужки не несуть нічого: `CurrentValue` там `Undefined`.\n\n`None` — НЕ ТОКЕН. У жодному документі його немає: це те, на чому стоїть читач, коли не стоїть ні на чому, — до першого `Read()`, після того як `Read()` відповів `False`, і після `Close()`.\n\nЧлен пишеться `JSONValueType.<Ім'я>` і порівнюється через `=` та `<>`. Про кінець контейнера питають так само: обхід зупиняється на `ArrayEnd` або `ObjectEnd`, а не рахує прочитане.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName Then\n    Message(Reader.CurrentValue);\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Папір\"\",\"\"qty\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);          // item, qty\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "enum.JSONFormatting",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.None",
+      "name_local": "None",
+      "name_en": "None",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.None",
+      "description": "ЧИТАЧ НЕ СТОЇТЬ НІ НА ЧОМУ — і такого токена немає в жодному документі. `CurrentValueType` відповідає `None` до першого `Read()`, після того як `Read()` відповів `False`, і після `Close()`; `CurrentValue` там `Undefined`.\n\nОбхід, записаний як `while (Reader.Read()) { … }`, його не бачить: крок, якому немає на що стати, — це крок, який відповідає `False`. Питати про нього варто поза обходом — у процедурі, якій читача передали і яка не знає, чи обхід уже почався.\n\nЧитач, якому не дали тексту, відповідає так само — `None`; а його `Read()`, `Skip()` і `ReadValue()` замість відповіді збуджують виняток (`JSONReader: no text is set`).",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.None) {\n    // під читачем нічого немає: обхід не почато або він уже скінчився\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.None Then\n    // під читачем нічого немає: обхід не почато або він уже скінчився\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nMessage(Reader.CurrentValueType = JSONValueType.None);   // True — Read() ще не викликали",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Null",
+      "description": "ТОКЕН — ЦЕ `null` ІЗ JSON. `CurrentValue` тримає `Null` — значення з цим іменем, а не `Undefined`: член, що прийшов як `null`, прийшов, а члена, якого в повідомленні немає взагалі, не було.\n\n`ReadValue()`, що стоїть на ньому, відповідає `Null` — і саме це тримає для такого члена об'єкт, прочитаний цілком.\n\n`JSONValueType.Null` узагалі можна написати тому, що після крапки лексер читає слово-константу як ім'я члена (`translateCode.cpp`); до того правила члена з таким іменем ніхто не міг назвати.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Null) {\n    // член є, і його значення — null\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Null Then\n    // член є, і його значення — null\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":null}\");\nReader.Read();                                           // {\nReader.Read();                                           // paid\nReader.Read();                                           // null\nMessage(Reader.CurrentValueType = JSONValueType.Null);   // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Boolean",
+      "description": "ТОКЕН — ЦЕ `true` АБО `false`. `CurrentValue` тримає `Boolean`, і `ReadValue()`, що стоїть на ньому, відповідає тим самим.\n\nІншого написання істини в JSON немає: `\"true\"` у лапках — токен `String`, а `1` — токен `Number`. Що чужа система мала на увазі під ними, вирішує обмін, а не читач.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Boolean) {\n    Paid = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Boolean Then\n    Paid = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":true}\");\nReader.Read();  Reader.Read();  Reader.Read();              // {, paid, true\nMessage(Reader.CurrentValueType = JSONValueType.Boolean);   // True\nMessage(Reader.CurrentValue);                               // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Number",
+      "description": "ТОКЕН — ЦЕ ЧИСЛО: ціле, дробове або записане з порядком; усі три приходять як `Number`.\n\nЧИТАЄТЬСЯ ЗІ СВОГО ТЕКСТУ, А НЕ ЧЕРЕЗ `double`: `0.1` — це одна десята, і в суми грошей лишаються її копійки. Те, чого не можна прочитати точно, відхиляється тоді, коли ТЕКСТ ДАЮТЬ, а не округлюється тут: токен, довший за 1000 символів, порядок поза межами ±1000 і величина поза межами того, що приймає сам розбирач (близько 1e308).\n\n`CurrentValue` тримає це число; `ReadValue()`, що стоїть на ньому, відповідає тим самим.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Number) {\n    Total = Total + Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Number Then\n    Total = Total + Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[0.1,0.2]\");\nReader.Read();                                 // [\nReader.Read();  var First = Reader.CurrentValue;\nReader.Read();  var Second = Reader.CurrentValue;\nMessage(First + Second);                       // 0.3 — точно, а не 0.30000000000000004",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.String",
+      "description": "ТОКЕН — ЦЕ РЯДОК У ЛАПКАХ, УЖЕ РОЗЕКРАНОВАНИЙ: `\\n`, `\\\"`, `\\uXXXX` та решта розібрані розбирачем, тому `CurrentValue` тримає той текст, який мала на увазі чужа система, а не те, як вона його записала.\n\nІМ'Я ЧЛЕНА — НЕ ЦЕ. Ім'я — це `PropertyName`, хоча воно теж несе текст: саме так обхід відрізняє `{\"item\":\"Папір\"}` від `[\"item\",\"Папір\"]`.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.String) {\n    Item = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.String Then\n    Item = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[\"\"Папір\"\"]\");\nReader.Read();                                             // [\nReader.Read();                                             // \"Папір\"\nMessage(Reader.CurrentValueType = JSONValueType.String);   // True\nMessage(Reader.CurrentValue);                              // Папір",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "enum.JSONValueType.PropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.PropertyName",
+      "name_local": "PropertyName",
+      "name_en": "PropertyName",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.PropertyName",
+      "description": "ІМ'Я ЧЛЕНА ВСЕРЕДИНІ ОБ'ЄКТА — `CurrentValue` несе ім'я, а ЗНАЧЕННЯ ЙДЕ ЗА НИМ. Тому значення беруть одним із двох способів: ще раз `Read()`, який на нього стає, або `ReadValue()` просто тут, який бере його цілком, на яку б глибину воно не йшло.\n\n`Skip()`, що стоїть на імені, переступає ім'я РАЗОМ із його значенням — так обхід минає те, що йому не потрібне.\n\nСАМЕ ТУТ ОБХІД СЕБЕ ВИПРАВДОВУЄ: повідомлення будь-якого розміру можна прочитати заради одного члена, не збираючи всього іншого.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n    Lines = Reader.ReadValue();\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\" Then\n    Lines = Reader.ReadValue();\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n        var Lines = Reader.ReadValue();        // масив цілком, від його імені\n        Message(Lines.Count());                // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectStart",
+      "name_local": "ObjectStart",
+      "name_en": "ObjectStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectStart",
+      "description": "`{`, ЩО ВІДКРИВАЄ ОБ'ЄКТ. Вона не несе нічого — `CurrentValue` там `Undefined`, — а далі йде `PropertyName` на кожен член і потім `ObjectEnd`.\n\n`ReadValue()`, що стоїть на ній, збирає об'єкт цілком як `Structure`, на будь-яку глибину; `Skip()` переступає його цілком. Глибше за 256 рівнів — відмова, а не збирання.\n\nОб'єкт, прочитаний цілком, не може тримати два ключі, що різняться лише регістром: у `Structure` ключі згортають регістр, а в JSON — ні, тому `ReadValue()` відмовляє такому об'єктові, називаючи обидва імені. По токенах він читається як будь-який інший.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    Item = Reader.ReadValue();     // об'єкт цілком, як Structure\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ObjectStart Then\n    Item = Reader.ReadValue();     // об'єкт цілком, як Structure\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[{\"\"item\"\":\"\"Папір\"\"},{\"\"item\"\":\"\"Чорнило\"\"}]\");\nReader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    var Row = Reader.ReadValue();\n    Message(Row.item);                            // Папір, Чорнило\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectEnd",
+      "name_local": "ObjectEnd",
+      "name_en": "ObjectEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectEnd",
+      "description": "`}`, ЩО ЗАКРИВАЄ ОБ'ЄКТ. Вона не несе нічого і є знаком зупинки для обходу членів об'єкта: `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd)` читає член за членом і зупиняється на дужці, а не рахує їх.\n\nУ вкладеного об'єкта своя `ObjectEnd` — дужка, яку зустрічає обхід, закриває те, що було відкрито останнім. Обхід, якому треба лишитися на одному рівні, переступає значення члена через `Skip()` або бере його через `ReadValue()`: обидва лишають читача всередині того самого об'єкта.",
+      "syntax_block": "while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    // читач стоїть на PropertyName: ReadValue() бере його значення\n}",
+      "syntax_block_ves": "While Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd Do\n    // читач стоїть на PropertyName: ReadValue() бере його значення\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Папір\"\",\"\"qty\"\":2}\");\nReader.Read();                                    // {\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    Message(Reader.CurrentValue);                 // item, qty — імена\n    Reader.ReadValue();                           // а їхні значення — переступаємо\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectStart",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayStart",
+      "name_local": "ArrayStart",
+      "name_en": "ArrayStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayStart",
+      "description": "`[`, ЩО ВІДКРИВАЄ МАСИВ. Вона не несе нічого, а далі йдуть його елементи — кожен значення будь-якого роду, кожен читається як усяке інше — аж до `ArrayEnd`.\n\n`ReadValue()`, що стоїть на ній, збирає масив цілком як `Array`; `Skip()` переступає його цілком. Масив на сто тисяч рядків — той випадок, коли обхід дешевший: елемент за елементом, і весь він жодного разу не тримається в пам'яті одразу.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n    Lines = Reader.ReadValue();    // масив цілком, як Array\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ArrayStart Then\n    Lines = Reader.ReadValue();    // масив цілком, як Array\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n        var Lines = Reader.ReadValue();\n        Message(Lines.Count());                   // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartArray"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayEnd",
+      "name_local": "ArrayEnd",
+      "name_en": "ArrayEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayEnd",
+      "description": "`]`, ЩО ЗАКРИВАЄ МАСИВ, — знак зупинки для обходу його елементів. Вона не несе нічого.\n\nЗВОРОТ: `Read()` стає на `[`, а тоді `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) { Item = Reader.ReadValue(); }` бере елементи по одному. `ReadValue()` відповідає тим значенням, на якому читач СТОЇТЬ, тому кожен виток такого циклу бере рівно один елемент, хоч би яким він був — числом, цілим об'єктом, — а дужка цикл закінчує.",
+      "syntax_block": "Reader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Item = Reader.ReadValue();\n}",
+      "syntax_block_ves": "Reader.Read();                                    // [\nWhile Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd Do\n    Item = Reader.ReadValue();\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                                    // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                                     // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayStart",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting",
+      "name_local": "JSONFormatting",
+      "name_en": "JSONFormatting",
+      "kind": "enum_type",
+      "class_id": 407844533207000529,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.<Member>",
+      "description": "ЯК JSONWriter РОЗКЛАДАЄ СВІЙ ТЕКСТ — аргумент, який бере `New JSONWriter(…)`, і єдине, заради чого це перелічення є. Два члени: `Compact` і `Indented`. `JSONWriter`, створений без аргументу, пише `Compact`.\n\nЗМІНЮЄТЬСЯ ТЕКСТ, А НЕ ДОКУМЕНТ. Пропуски між токенами для JSON — ніщо, тому обидві розкладки розбираються в те саме значення, і читач на тому боці їх не розрізнить. Вибір роблять заради того, хто текст ЧИТАЄ, — людини, що дивиться в журнал, порівняння двох повідомлень, — і проти дроту, де кожен перенос рядка й кожна табуляція є надісланими байтами.\n\nУСЕ, ЩО НЕ Є ЧЛЕНОМ, ВІДХИЛЯЄТЬСЯ — число, рядок, який «значить» член, — фразою `JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`, а не пишеться мовчки компактно.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Папір\");\nWriter.WriteEndObject();\nMessage(Writer.Close());\n// {\n//     \"item\": \"Папір\"\n// }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close",
+        "enum.JSONValueType",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Compact",
+      "name_local": "Compact",
+      "name_en": "Compact",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Compact",
+      "description": "ОДИН РЯДОК І ЖОДНОГО ЗАЙВОГО ПРОПУСКУ: `{\"item\":\"Папір\",\"qty\":2}`. Двокрапка після імені гола, між комою та наступним членом не стоїть нічого, і ніщо не переноситься на інший рядок.\n\nЦЕ УСТАЛЕНО: так пише `New JSONWriter()` — і так само `New JSONWriter(JSONFormatting.Compact)`. Саме таким має бути повідомлення, надіслане в чужу систему, — найкоротший текст, що каже те саме.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Compact);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter();                    // Compact, не кажучи про це\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Папір\");\nWriter.WritePropertyName(\"qty\");   Writer.WriteValue(2);\nWriter.WriteEndObject();\nMessage(Writer.Close());                          // {\"item\":\"Папір\",\"qty\":2}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Indented",
+      "name_local": "Indented",
+      "name_en": "Indented",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Indented",
+      "description": "ПО ЧЛЕНУ НА РЯДОК, ІЗ ВІДСТУПОМ ТАБУЛЯЦІЯМИ — по одній на кожен відкритий рівень — і з пропуском після двокрапки: `\"item\": \"Папір\"`. Це розкладка для тексту, який читатиме ЛЮДИНА: повідомлення, збережене в журналі, відповідь, покладена поруч з іншою.\n\nПОРОЖНІЙ ОБ'ЄКТ АБО МАСИВ ЛИШАЄТЬСЯ НА СВОЄМУ РЯДКУ — `{}` і `[]` пишуться як є, бо перенос рядка робиться перед членом, а члена немає.\n\nДокумент при цьому той самий: читач не відрізнить цю розкладку від `Compact`. Коштує вона байтів.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();\nMessage(Writer.Close());\n// [\n//     1,\n//     2\n// ]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    }
+  ]
+}

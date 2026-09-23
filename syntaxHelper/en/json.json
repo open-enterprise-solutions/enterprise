@@ -1,0 +1,720 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.JSONReader",
+      "name_local": "JSONReader",
+      "name_en": "JSONReader",
+      "kind": "collection",
+      "class_id": 145156802521465377,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONReader([text : string])",
+      "description": "JSON read by a script - an exchange with a cash register, a marketplace, a bank. The text is given to the reader whole and is parsed at once, so a text that is not JSON is refused THERE, with the parser's own sentence, its line and its column - not after the script has acted on its first half.\n\nTHE WHOLE VALUE, when the document is small enough to hold - which an exchange message is: `ReadValue()`. An object becomes a `Structure`, an array an `Array`, `null` is `Null`, and the rest are `String`, `Number` and `Boolean`.\n\n...OR TOKEN BY TOKEN, when only a part is wanted: `Read()` steps, `CurrentValueType` says what the reader stands on, `CurrentValue` carries the name or the scalar, `Skip()` steps over what is not wanted, and `ReadValue()` takes one value whole wherever it stands.\n\nA NUMBER IS READ FROM ITS TEXT, NOT THROUGH A double. `0.1` in a message is one tenth, and money that came through a binary fraction is money that no longer adds up. Every digit arrives as it was written - within limits that are said rather than met by surprise: a magnitude past a double's range (about 1e308), a number longer than a thousand characters, or an exponent beyond a thousand, is REFUSED, never rounded.\n\nAn object's keys may be any strings and keep the order they came in: `Order.name` for a key that is a name, `Order[\"odd key\"]` for one that is not. A key met twice keeps its LAST value, as every other reader of JSON does. ONE THING A `Structure` CANNOT HOLD: two keys that differ only in case - its keys fold case and JSON's do not - so `ReadValue()` REFUSES such an object, naming both keys; walked with `Read()` it reads like any other.\n\nThe text is a string. A file is the business of whatever reads files: read it, then hand the text over.",
+      "syntax_block": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();\n\nvar Walker = New JSONReader(Text);\nwhile (Walker.Read()) {\n    if (Walker.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Walker.CurrentValue);\n    }\n}",
+      "syntax_block_ves": "Reader = New JSONReader(Text);\nOrder = Reader.ReadValue();\nReader.Close();\n\nWalker = New JSONReader(Text);\nWhile Walker.Read() Do\n    If Walker.CurrentValueType = JSONValueType.PropertyName Then\n        Message(Walker.CurrentValue);\n    Endif;\nEndDo;",
+      "parameters": "text - the JSON document, whole. Left out (`New JSONReader()`), the reader has no text until `SetString` gives it one.",
+      "return_descr": "JSONReader.",
+      "example": "var Text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}]}\";\nvar Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nMessage(Order.number + \": \" + Order.lines.Count());\nforeach (Line In Order.lines) {\n    Message(Line.item + \" x \" + Line.qty);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONWriter",
+        "fn.ReadJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValueType",
+      "name_local": "CurrentValueType",
+      "name_en": "CurrentValueType",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValueType",
+      "description": "What the reader stands on, as a `JSONValueType` value - read-only. Its members are `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`.\n\nBefore the first `Read()`, and once `Read()` has answered False, it is `JSONValueType.None`.\n\nThis is what a walk is steered by: `Read()` to step, `CurrentValueType` to ask what the step landed on, `CurrentValue` for what that token carries, `ReadValue()` to take a whole value, `Skip()` to step over one.\n\n(`JSONValueType.Null` is spellable because the lexer reads a constant's word after a dot as a member name; before that, a member of this name was one nobody could write.)",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "parameters": "",
+      "return_descr": "JSONValueType - one of None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd.",
+      "example": "var Reader = New JSONReader(\"{\"\"a\"\":1,\"\"b\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);      // a, then b\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.CurrentValue",
+      "name_local": "CurrentValue",
+      "name_en": "CurrentValue",
+      "kind": "property",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONReader.CurrentValue",
+      "description": "What the token the reader stands on CARRIES - read-only: the NAME for `PropertyName`, the value itself for `String`, `Number` and `Boolean`, and `Null` for `null`.\n\nThe tokens that only open and close - `ObjectStart`, `ObjectEnd`, `ArrayStart`, `ArrayEnd` - carry nothing, and neither does `None`: there it is `Undefined`.\n\nA number is the number as it was written, exactly: it was read from the token's text, not through a double.",
+      "syntax_block": "Name = Reader.CurrentValue;",
+      "parameters": "",
+      "return_descr": "String, Number, Boolean or Null - and Undefined where the token carries nothing.",
+      "example": "var Reader = New JSONReader(\"{\"\"qty\"\":0.1}\");\nReader.Read();                             // {\nReader.Read();                             // the name\nMessage(Reader.CurrentValue);              // qty\nReader.Read();                             // the number\nMessage(Reader.CurrentValue + 0.2);        // 0.3 exactly",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.SetString",
+      "name_local": "SetString",
+      "name_en": "SetString",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "SetString(text : string)",
+      "description": "Gives the reader a text in place of whatever it held: it closes first, then parses the WHOLE text at once. `New JSONReader(text)` does exactly this; `SetString` is how the same reader is handed the next message.\n\nA TEXT THAT IS NOT JSON IS REFUSED HERE - `JSONReader: the text is not JSON: ...`, carrying the parser's own sentence with its line and column - and not one token of it is handed to the script. Reading is strict: the whole text is ONE value, so something standing after that value is not \"extra\", it is a text that is not JSON. A trailing comma, single quotes and a bare name are refused the same way.\n\nA number the reader cannot hold exactly is refused here too, when the text is parsed, rather than silently rounded later.",
+      "syntax_block": "Reader.SetString(Text);",
+      "parameters": "text - the JSON document, whole.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader();\nReader.SetString(Answer);\nvar Result = Reader.ReadValue();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Close",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Read()",
+      "description": "Steps to the next token and answers whether there is one. The first call stands on the first token of the document; when nothing is left it answers False, and the reader then stands past the end, where `CurrentValueType` is `JSONValueType.None`.\n\nWithout a text - a reader that was never given one, or one that has been closed - it raises `JSONReader: no text is set`.\n\nThe tokens are what the parser already made when the text was given, so a walk costs no parsing: it is a step along a list.",
+      "syntax_block": "while (Reader.Read()) {\n    // Reader.CurrentValueType, Reader.CurrentValue\n}",
+      "parameters": "None.",
+      "return_descr": "Boolean - False when nothing is left.",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                             // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                              // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Skip",
+      "name_local": "Skip",
+      "name_en": "Skip",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Skip()",
+      "description": "Steps over the thing the reader stands on, WHOLE: a container with everything inside it, and a property name TOGETHER WITH its value. On a plain value there is nothing more to step over. The next `Read()` stands on what follows the thing skipped - so the names inside a member that was skipped are never seen by the walk.\n\nStepped over counts as handed over: a `ReadValue()` after a `Skip()` takes the value that FOLLOWS.\n\nWithout a text it raises `JSONReader: no text is set`.",
+      "syntax_block": "Reader.Skip();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Lines = Undefined;\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        if (Reader.CurrentValue = \"lines\") {\n            Lines = Reader.ReadValue();\n        } elseif (Reader.CurrentValue = \"meta\") {\n            Reader.Skip();                 // the name and its value, in one step\n        }\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.ReadValue",
+      "name_local": "ReadValue",
+      "name_en": "ReadValue",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "ReadValue()",
+      "description": "The whole value the reader STANDS ON, built as a script value: an object becomes a `Structure`, an array an `Array`, `null` is `Null`, and the rest are `String`, `Number` and `Boolean`.\n\nStanding on a property name - or before the first token, or on a value it has already handed over - it is the value that FOLLOWS. So the whole document is `ReadValue()` on a fresh reader, a member's value is `ReadValue()` right after its name, and the elements of an array are taken one at a time with no exception for a stop sign: `Read()` to the next token, stop at `ArrayEnd`, otherwise `ReadValue()`.\n\nALL OR NOTHING: a refusal leaves the reader exactly where it stood, so a walk is never left standing in the middle of a value it could not build, and the same call repeated refuses again instead of succeeding on the second try.\n\nIT REFUSES: `JSONReader: nothing is left to read`; `JSONReader: what follows is a property name, not a value - Read() it, then ReadValue() takes its value`; `JSONReader: what follows is the end of an object or an array, not a value`; a value that nests deeper than 256 levels (`JSONReader: the value nests deeper than 256 levels`); and an object holding two keys that differ only in case (`JSONReader: the object has the keys '...' and '...', which differ only in case - a Structure cannot hold both; walk it with Read() instead`), because a `Structure` folds case where JSON does not and one of the two would otherwise be lost without a word.\n\nThe global `ReadJSON(reader)` is the same verb under the reference system's name.",
+      "syntax_block": "Value = Reader.ReadValue();",
+      "parameters": "None.",
+      "return_descr": "Structure, Array, String, Number, Boolean or Null.",
+      "example": "var Reader = New JSONReader(\"{\"\"total\"\":0.1,\"\"paid\"\":true,\"\"note\"\":null}\");\nvar Order = Reader.ReadValue();\nMessage(Order.total + 0.2);                // 0.3 exactly\nMessage(Order.paid);\nMessage(Order.note = Null);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader",
+        "cls.JSONReader.Read",
+        "cls.JSONWriter.WriteValue",
+        "fn.ReadJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Lets go of the text and of the tokens built from it - the memory too, not only the count. The reader then has no text: `Read`, `Skip` and `ReadValue` raise `JSONReader: no text is set` until `SetString` gives it one.\n\nA reader need not be closed to be reused: `SetString` closes first.\n\nUnlike `JSONWriter.Close()`, which hands over the written text, this one answers with NOTHING - the same name, two different jobs.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(Text);\nvar Order = Reader.ReadValue();\nReader.Close();      // a 30 MB message is not held any longer than it is needed",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.SetString",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter",
+      "name_local": "JSONWriter",
+      "name_en": "JSONWriter",
+      "kind": "collection",
+      "class_id": 212455710233442230,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "New JSONWriter([formatting : JSONFormatting])",
+      "description": "JSON written by a script. The writer keeps the document well-formed BY ITSELF: a value inside an object needs its name first, an end closes what was opened, a document holds ONE value, and `Close()` refuses a text with anything still open - so what it hands over always parses.\n\nLAYOUT is a `JSONFormatting` value, and its members are `Compact` and `Indented`. `Indented` puts each member on a line of its own with tab indents; `Compact` - the default, and what a writer made with no argument uses - is one line. Anything that is not a member of that enumeration is refused (`JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`) rather than quietly taken as compact - except for what the platform calls an empty value (`Undefined`, `False`, `0`, `\"\"`), which is read as \"no argument given\" and leaves the writer compact.\n\nWHAT `WriteValue` TAKES: a `String`; a `Number`, written from the number's own text - exactly, with a point for the fraction whatever the locale, never through a double; a `Boolean`; a `Date` as ISO 8601 (`2026-09-20T21:05:39`), where an EMPTY date is `null` rather than a moment in the year 1; `Null` and `Undefined`, both `null`; and a `Structure`, a `Container` or an `Array` of those to any depth.\n\nANYTHING ELSE - a reference, a table, an enumeration member - has no JSON form of its own and is refused BY THE NAME OF ITS TYPE: what goes out in its place (a code, a description, a Guid) is the exchange's decision, not the writer's.\n\n`Close()` hands over the text and leaves the writer empty, ready for the next document.",
+      "syntax_block": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nforeach (Line In Lines) {\n    Writer.WriteValue(Line);\n}\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nvar Text = Writer.Close();",
+      "syntax_block_ves": "Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"number\");  Writer.WriteValue(\"A-17\");\nWriter.WritePropertyName(\"lines\");\nWriter.WriteStartArray();\nForeach Line In Lines Do\n    Writer.WriteValue(Line);\nEndDo;\nWriter.WriteEndArray();\nWriter.WriteEndObject();\nText = Writer.Close();",
+      "parameters": "formatting - `JSONFormatting.Compact` (the default) or `JSONFormatting.Indented`.",
+      "return_descr": "JSONWriter - empty, with nothing written.",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\nvar Items = New Array();\nItems.Add(Line);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Items);\nMessage(Writer.Close());      // [{\"item\":\"Paper\",\"qty\":1.25}]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONWriter.Close",
+        "cls.JSONReader",
+        "fn.WriteJSON",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartObject",
+      "name_local": "WriteStartObject",
+      "name_en": "WriteStartObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartObject()",
+      "description": "Opens an object - `{`. What follows is members: a name, then its value, until `WriteEndObject`.\n\nAn object may stand wherever a value may - at the root, as an element of an array, or as the value of a member whose name is already written. Inside an object with no name written it refuses `JSONWriter: a value inside an object needs its name first - WritePropertyName`; at the root of a document that already holds a value, `JSONWriter: a document holds ONE value, and it is already written`.",
+      "syntax_block": "Writer.WriteStartObject();\nWriter.WritePropertyName(Name);\nWriter.WriteValue(Value);\nWriter.WriteEndObject();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"number\");\nWriter.WriteValue(\"A-17\");\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndObject",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndObject",
+      "name_local": "WriteEndObject",
+      "name_en": "WriteEndObject",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndObject()",
+      "description": "Closes the object opened last - `}`.\n\nIt refuses when the thing standing open is not an object (`JSONWriter: WriteEndObject, and the thing open is not an object`, which is also what it says when nothing is open at all), and when a property name has been written and its value has not (`JSONWriter: a property name is written and its value is not`).",
+      "syntax_block": "Writer.WriteEndObject();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartObject",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteStartArray",
+      "name_local": "WriteStartArray",
+      "name_en": "WriteStartArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteStartArray()",
+      "description": "Opens an array - `[`. What follows is its elements, each a value, until `WriteEndArray`.\n\nAn array may stand wherever a value may. The same two refusals as an object's guard it: a value inside an object needs its name first, and a document holds one value.\n\nAn `Array` already held in a variable needs none of this - `WriteValue` writes it whole. These verbs are for an array built as it is written, element by element.",
+      "syntax_block": "Writer.WriteStartArray();\nforeach (Item In Items) {\n    Writer.WriteValue(Item);\n}\nWriter.WriteEndArray();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();      // [1,2]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteEndArray",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteEndArray",
+      "name_local": "WriteEndArray",
+      "name_en": "WriteEndArray",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteEndArray()",
+      "description": "Closes the array opened last - `]`.\n\nIt refuses when the thing standing open is not an array (`JSONWriter: WriteEndArray, and the thing open is not an array`, which is also what it says when nothing is open at all), and when a property name has been written and its value has not.",
+      "syntax_block": "Writer.WriteEndArray();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Writer.WriteStartArray();\nWriter.WriteValue(\"a\");\nWriter.WriteEndArray();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteStartArray",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WritePropertyName",
+      "name_local": "WritePropertyName",
+      "name_en": "WritePropertyName",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WritePropertyName(name : string)",
+      "description": "Writes the name of a member; the value it names comes next.\n\nA name belongs INSIDE an object: outside one it refuses `JSONWriter: a property name belongs inside an object - WriteStartObject first`, and a second name before the first one's value refuses `JSONWriter: a property name is written and its value is not`.\n\nThe name is spelled as JSON spells a string - quoted, with whatever needs escaping escaped - so a name may be any text at all. Under `JSONFormatting.Indented` a space follows the colon.",
+      "syntax_block": "Writer.WritePropertyName(Name);\nWriter.WriteValue(Value);",
+      "parameters": "name - the member's name; any text.",
+      "return_descr": "",
+      "example": "Writer.WriteStartObject();\nWriter.WritePropertyName(\"odd name\");\nWriter.WriteValue(1);\nWriter.WriteEndObject();      // {\"odd name\":1}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter.WriteValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.WriteValue",
+      "name_local": "WriteValue",
+      "name_en": "WriteValue",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "WriteValue(value : any)",
+      "description": "Writes one value - a scalar, or a whole `Structure` / `Container` / `Array` to any depth, with everything inside it.\n\nIT TAKES: a `String`; a `Number`, written from the number's own text, exactly, never through a double; a `Boolean`; a `Date` as ISO 8601 (`2026-09-20T21:05:39`), an empty one as `null`; `Null` and `Undefined`, both `null`.\n\nIT REFUSES BY THE NAME OF THE TYPE what has no JSON form - a reference, a table, an enumeration member, a reader: `JSONWriter: a value of type '...' has no JSON form - write what stands for it (a code, a description, a Guid)`. What should stand for such a value in the other system is the exchange's decision, not the writer's.\n\nIT ALSO REFUSES: a `Container` whose key is not a string (`JSONWriter: the names in a JSON object are strings, and this one has a key of type '...'`), because JSON has no other kind of name; a value nesting deeper than 256 levels (`JSONWriter: the value nests deeper than 256 levels`); a value inside an object whose name is not written yet; and a second value at the root of a document.\n\nALL OF A VALUE OR NONE OF IT. A `Structure` with a reference three levels down is refused - and the levels already written are taken back, so the writer stands where it stood and a script that catches the refusal can write something else in its place.\n\nThe global `WriteJSON(writer, value)` is the same verb under the reference system's name.",
+      "syntax_block": "Writer.WriteValue(Value);",
+      "parameters": "value - a String, Number, Boolean, Date, Null or Undefined, or a Structure / Container / Array of those.",
+      "return_descr": "",
+      "example": "var Line = New Structure();\nLine.Insert(\"item\", \"Paper\");\nLine.Insert(\"qty\", 1.25);\n\nvar Writer = New JSONWriter();\nWriter.WriteValue(Line);\nMessage(Writer.Close());      // {\"item\":\"Paper\",\"qty\":1.25}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName",
+        "cls.JSONReader.ReadValue",
+        "fn.WriteJSON"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JSONWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "Close()",
+      "description": "Hands over the text and empties the writer - the same writer then starts the next document.\n\nIt refuses a text that would not parse: `JSONWriter: N object(s) or array(s) are still open` while anything is open, and `JSONWriter: nothing is written - a document holds one value` when nothing was written at all, because an empty text is not a document either and a branch that forgot to write would otherwise send one as a body.\n\nUnlike `JSONReader.Close()`, which answers with nothing, this one answers with the TEXT - the same name, two different jobs.",
+      "syntax_block": "Text = Writer.Close();",
+      "parameters": "None.",
+      "return_descr": "String - the JSON text.",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"ok\");\nWriter.WriteValue(True);\nWriter.WriteEndObject();\nMessage(Writer.Close());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONReader.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType",
+      "name_local": "JSONValueType",
+      "name_en": "JSONValueType",
+      "kind": "enum_type",
+      "class_id": 422981509789553766,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.<Member>",
+      "description": "WHAT A JSONReader STANDS ON, said as a member of an enumeration rather than as a number — `CurrentValueType` answers with one of these. A document is walked with `Read()`, and every step lands on a token: the member names the KIND of that token, and `CurrentValue` carries what the token holds.\n\nTHE MEMBERS: `None, Null, Boolean, Number, String, PropertyName, ObjectStart, ObjectEnd, ArrayStart, ArrayEnd`. A walk over `{\"qty\": 2}` meets four of them in this order: `ObjectStart`, `PropertyName`, `Number`, `ObjectEnd`.\n\nFIVE OF THEM CARRY A VALUE in `CurrentValue` — `String`, `Number`, `Boolean`, `Null`, and `PropertyName`, which carries the name. The four brackets carry nothing: `CurrentValue` is `Undefined` there.\n\n`None` IS NOT A TOKEN. No document holds one — it is where a reader stands when it stands on nothing: before the first `Read()`, once `Read()` has answered `False`, and after `Close()`.\n\nA member is written `JSONValueType.<Name>` and compared with `=` and `<>`. The end of a container is asked about the same way — a walk stops at `ArrayEnd` or `ObjectEnd` instead of counting what it has read.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n    Message(Reader.CurrentValue);\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName Then\n    Message(Reader.CurrentValue);\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName) {\n        Message(Reader.CurrentValue);          // item, qty\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "enum.JSONFormatting",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.None",
+      "name_local": "None",
+      "name_en": "None",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.None",
+      "description": "THE READER STANDS ON NOTHING — and no document contains such a token. `CurrentValueType` answers `None` before the first `Read()`, once `Read()` has answered `False`, and after `Close()`; `CurrentValue` is `Undefined` there.\n\nA walk written `while (Reader.Read()) { … }` never sees it: the step that would land on nothing is the step that answers `False`. It is worth asking about outside a walk — in a procedure handed a reader, which has no way of knowing whether the walk has started.\n\nA reader that has been given no text answers `None` as well; its `Read()`, `Skip()` and `ReadValue()` raise instead (`JSONReader: no text is set`).",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.None) {\n    // nothing is under the reader: the walk has not started, or it is over\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.None Then\n    // nothing is under the reader: the walk has not started, or it is over\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nMessage(Reader.CurrentValueType = JSONValueType.None);   // True — Read() has not been called yet",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValueType",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Null",
+      "name_local": "Null",
+      "name_en": "Null",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Null",
+      "description": "THE TOKEN IS JSON's `null`. `CurrentValue` holds `Null` — the value of that name, and not `Undefined`: a member that came as `null` came, and a member the message does not have at all did not.\n\n`ReadValue()` standing on it answers `Null`, and that is what an object read whole holds for such a member.\n\n`JSONValueType.Null` can be written at all because the lexer reads a constant's word after a dot as a member name (`translateCode.cpp`); before that rule, a member of this name was one nobody could spell.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Null) {\n    // the member is there, and its value is null\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Null Then\n    // the member is there, and its value is null\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":null}\");\nReader.Read();                                           // {\nReader.Read();                                           // paid\nReader.Read();                                           // null\nMessage(Reader.CurrentValueType = JSONValueType.Null);   // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Boolean",
+      "name_local": "Boolean",
+      "name_en": "Boolean",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Boolean",
+      "description": "THE TOKEN IS `true` OR `false`. `CurrentValue` holds a `Boolean`, and `ReadValue()` standing on it answers the same.\n\nJSON has no second spelling of truth: `\"true\"` in quotes is a `String` token and `1` is a `Number` one. What the other system meant by them is the exchange's business, not the reader's.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Boolean) {\n    Paid = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Boolean Then\n    Paid = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"paid\"\":true}\");\nReader.Read();  Reader.Read();  Reader.Read();           // {, paid, true\nMessage(Reader.CurrentValueType = JSONValueType.Boolean);   // True\nMessage(Reader.CurrentValue);                               // True",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.Number",
+      "name_local": "Number",
+      "name_en": "Number",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.Number",
+      "description": "THE TOKEN IS A NUMBER — whole, fractional, or written with an exponent; all three arrive as `Number`.\n\nREAD FROM ITS TEXT, NOT THROUGH A `double`: `0.1` is one tenth, and an amount of money keeps its cents. What cannot be read exactly is refused when the text is GIVEN, not rounded here — a token longer than 1000 characters, an exponent beyond ±1000, and a magnitude past what the parser itself accepts (about 1e308).\n\n`CurrentValue` holds the number; `ReadValue()` standing on it answers the same.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.Number) {\n    Total = Total + Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.Number Then\n    Total = Total + Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[0.1,0.2]\");\nReader.Read();                                 // [\nReader.Read();  var First = Reader.CurrentValue;\nReader.Read();  var Second = Reader.CurrentValue;\nMessage(First + Second);                       // 0.3 — exactly, not 0.30000000000000004",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "cls.JSONWriter.WriteValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.String",
+      "name_local": "String",
+      "name_en": "String",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.String",
+      "description": "THE TOKEN IS A QUOTED STRING, ALREADY UNESCAPED: `\\n`, `\\\"`, `\\uXXXX` and the rest are resolved by the parser, so `CurrentValue` holds the text the other system meant, not the way it spelled it.\n\nA MEMBER'S NAME IS NOT THIS. A name is `PropertyName`, although it carries text too — that is how a walk tells `{\"item\":\"Paper\"}` apart from `[\"item\",\"Paper\"]`.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.String) {\n    Item = Reader.CurrentValue;\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.String Then\n    Item = Reader.CurrentValue;\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[\"\"Paper\"\"]\");\nReader.Read();                                          // [\nReader.Read();                                          // \"Paper\"\nMessage(Reader.CurrentValueType = JSONValueType.String);   // True\nMessage(Reader.CurrentValue);                              // Paper",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.CurrentValue",
+        "enum.JSONValueType.PropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.PropertyName",
+      "name_local": "PropertyName",
+      "name_en": "PropertyName",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.PropertyName",
+      "description": "THE NAME OF A MEMBER INSIDE AN OBJECT — `CurrentValue` carries the name, and the VALUE FOLLOWS. So the value is taken in one of two ways: `Read()` again, which steps onto it, or `ReadValue()` right here, which takes it whole, however deep it goes.\n\n`Skip()` standing on a name steps over the name AND its value together — that is how a walk passes what it does not need.\n\nTHIS IS WHERE A WALK EARNS ITS KEEP: a message of any size can be read for one member without building the rest of it.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n    Lines = Reader.ReadValue();\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\" Then\n    Lines = Reader.ReadValue();\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.PropertyName And Reader.CurrentValue = \"lines\") {\n        var Lines = Reader.ReadValue();        // the whole array, from its name\n        Message(Lines.Count());                // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONReader.Skip",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectStart",
+      "name_local": "ObjectStart",
+      "name_en": "ObjectStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectStart",
+      "description": "THE `{` THAT OPENS AN OBJECT. It carries nothing — `CurrentValue` is `Undefined` — and what follows is a `PropertyName` for each member, then `ObjectEnd`.\n\n`ReadValue()` standing on it builds the whole object as a `Structure`, to any depth; `Skip()` steps over it whole. Deeper than 256 levels is refused rather than built.\n\nAn object read whole cannot hold two keys that differ only in case — a `Structure`'s keys fold case and JSON's do not, so `ReadValue()` refuses such an object by both names. Walked token by token it reads like any other.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    Item = Reader.ReadValue();     // the whole object, as a Structure\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ObjectStart Then\n    Item = Reader.ReadValue();     // the whole object, as a Structure\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[{\"\"item\"\":\"\"Paper\"\"},{\"\"item\"\":\"\"Ink\"\"}]\");\nReader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType = JSONValueType.ObjectStart) {\n    var Row = Reader.ReadValue();\n    Message(Row.item);                            // Paper, Ink\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartObject"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ObjectEnd",
+      "name_local": "ObjectEnd",
+      "name_en": "ObjectEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ObjectEnd",
+      "description": "THE `}` THAT CLOSES AN OBJECT. It carries nothing, and it is the stop sign of a walk over an object's members: `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd)` reads member after member and stops at the brace instead of counting them.\n\nA nested object has an `ObjectEnd` of its own — the brace a walk meets closes whatever was opened last. A walk that must stay at one level steps over a member's value with `Skip()` or takes it with `ReadValue()`, and both leave the reader inside the same object.",
+      "syntax_block": "while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    // the reader stands on a PropertyName: ReadValue() takes its value\n}",
+      "syntax_block_ves": "While Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd Do\n    // the reader stands on a PropertyName: ReadValue() takes its value\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"item\"\":\"\"Paper\"\",\"\"qty\"\":2}\");\nReader.Read();                                    // {\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ObjectEnd) {\n    Message(Reader.CurrentValue);                 // item, qty — the names\n    Reader.ReadValue();                           // and their values, stepped over\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ObjectStart",
+        "cls.JSONReader.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayStart",
+      "name_local": "ArrayStart",
+      "name_en": "ArrayStart",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayStart",
+      "description": "THE `[` THAT OPENS AN ARRAY. It carries nothing, and what follows is its elements — each a value of any kind, each read like any other — until `ArrayEnd`.\n\n`ReadValue()` standing on it builds the whole array as an `Array`; `Skip()` steps over it whole. An array of a hundred thousand rows is where a walk is the cheaper answer: element by element, with the whole of it never held at once.",
+      "syntax_block": "if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n    Lines = Reader.ReadValue();    // the whole array, as an Array\n}",
+      "syntax_block_ves": "If Reader.CurrentValueType = JSONValueType.ArrayStart Then\n    Lines = Reader.ReadValue();    // the whole array, as an Array\nEndif;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"{\"\"lines\"\":[1,2,3]}\");\nwhile (Reader.Read()) {\n    if (Reader.CurrentValueType = JSONValueType.ArrayStart) {\n        var Lines = Reader.ReadValue();\n        Message(Lines.Count());                   // 3\n    }\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayEnd",
+        "cls.JSONReader.ReadValue",
+        "cls.JSONWriter.WriteStartArray"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONValueType.ArrayEnd",
+      "name_local": "ArrayEnd",
+      "name_en": "ArrayEnd",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONValueType.ArrayEnd",
+      "description": "THE `]` THAT CLOSES AN ARRAY — the stop sign of a walk over its elements. It carries nothing.\n\nTHE IDIOM: `Read()` steps onto the `[`, and then `while (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) { Item = Reader.ReadValue(); }` takes the elements one at a time. `ReadValue()` answers with the value the reader STANDS on, so each turn of that loop takes exactly one element, whatever it is — a number, a whole object — and the bracket ends the loop.",
+      "syntax_block": "Reader.Read();                                    // [\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Item = Reader.ReadValue();\n}",
+      "syntax_block_ves": "Reader.Read();                                    // [\nWhile Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd Do\n    Item = Reader.ReadValue();\nEndDo;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Reader = New JSONReader(\"[1,2,3]\");\nReader.Read();                                    // [\nvar Sum = 0;\nwhile (Reader.Read() And Reader.CurrentValueType <> JSONValueType.ArrayEnd) {\n    Sum = Sum + Reader.ReadValue();\n}\nMessage(Sum);                                     // 6",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONValueType",
+        "enum.JSONValueType.ArrayStart",
+        "cls.JSONReader.Read",
+        "cls.JSONReader.ReadValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting",
+      "name_local": "JSONFormatting",
+      "name_en": "JSONFormatting",
+      "kind": "enum_type",
+      "class_id": 407844533207000529,
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.<Member>",
+      "description": "HOW A JSONWriter LAYS ITS TEXT OUT — the argument `New JSONWriter(…)` takes, and the only thing this enumeration is for. Two members: `Compact` and `Indented`. A writer made with no argument writes `Compact`.\n\nIT CHANGES THE TEXT, NEVER THE DOCUMENT. Whitespace between tokens is nothing to JSON, so both layouts parse to the same value and the reader on the other side cannot tell them apart. The choice is made for whoever READS the text — a person looking at a log, a comparison of two messages — and against the wire, where every line break and tab is bytes sent.\n\nANYTHING THAT IS NOT A MEMBER IS REFUSED — a number, a string that \"means\" one — with `JSONWriter: the formatting is a JSONFormatting value - JSONFormatting.Compact or JSONFormatting.Indented`, rather than quietly written compact.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Paper\");\nWriter.WriteEndObject();\nMessage(Writer.Close());\n// {\n//     \"item\": \"Paper\"\n// }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close",
+        "enum.JSONValueType",
+        "guide.json"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Compact",
+      "name_local": "Compact",
+      "name_en": "Compact",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Compact",
+      "description": "ONE LINE, AND NO SPACE THAT IS NOT NEEDED: `{\"item\":\"Paper\",\"qty\":2}`. The colon after a name is bare, nothing stands between a comma and the next member, and nothing is broken across lines.\n\nTHE DEFAULT: `New JSONWriter()` writes this, and so does `New JSONWriter(JSONFormatting.Compact)`. It is what a message sent to another system should be — the shortest text that says the same thing.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Compact);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter();                    // Compact, without saying so\nWriter.WriteStartObject();\nWriter.WritePropertyName(\"item\");  Writer.WriteValue(\"Paper\");\nWriter.WritePropertyName(\"qty\");   Writer.WriteValue(2);\nWriter.WriteEndObject();\nMessage(Writer.Close());                          // {\"item\":\"Paper\",\"qty\":2}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.JSONFormatting.Indented",
+      "name_local": "Indented",
+      "name_en": "Indented",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "json"
+      ],
+      "signature": "JSONFormatting.Indented",
+      "description": "A MEMBER TO A LINE, INDENTED WITH TABS — one tab per open level — and a space after the colon: `\"item\": \"Paper\"`. This is the layout for a text a PERSON will read: a message kept in a log, an answer held next to another one.\n\nAN EMPTY OBJECT OR ARRAY STAYS ON ITS LINE — `{}` and `[]` are written as they are, because a line break is made before a member and there is none.\n\nThe document is the same document: a reader cannot tell this layout from `Compact`. What it costs is bytes.",
+      "syntax_block": "Writer = New JSONWriter(JSONFormatting.Indented);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "var Writer = New JSONWriter(JSONFormatting.Indented);\nWriter.WriteStartArray();\nWriter.WriteValue(1);\nWriter.WriteValue(2);\nWriter.WriteEndArray();\nMessage(Writer.Close());\n// [\n//     1,\n//     2\n// ]",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.JSONFormatting",
+        "cls.JSONWriter",
+        "cls.JSONWriter.WritePropertyName"
+      ],
+      "reviewed": false
+    }
+  ]
+}
