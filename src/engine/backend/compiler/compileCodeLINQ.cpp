@@ -29,7 +29,7 @@
 //     loop it was written for rather than a frame of its own.
 //
 // The tree those roads build is a SECTION OF THE BYTECODE (byteCodeLINQ.h) and outlives every scope
-// that reads it — see docs/linq.md §0.2h-ter.
+// that reads it — see docs/private/linq.md §0.2h-ter.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -265,7 +265,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 		c.m_param1 = data.m_resultArray;
 		c.m_param2 = data.m_resultArray;
 		c.m_param3.m_numIndex = 0;                     // an Array of the rows
-		c.m_param3.m_numArray = data.m_hasOrderBy ? (data.m_orderByDescending ? 1 : 2) : 0;
+		c.m_param3.m_numArray = data.m_hasOrderBy ? 2 : 0;   // by the keys, each its own way (KEEP)
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
@@ -2294,8 +2294,12 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		c.m_numOper = OPER_LINQ_KEEP;
 		c.m_param1  = linqKept;
 		c.m_param2  = current;
-		if (hasOrderKey) c.m_param3 = orderKeyValue;
-		else             c.m_param3.m_numArray = DEF_VAR_SKIP;
+		if (hasOrderKey) {
+			c.m_param3 = orderKeyValue;
+			c.m_param4.m_numArray = orderDesc ? 1 : 0;   // the key's way, as the block's KEEP carries it
+		}
+		else
+			c.m_param3.m_numArray = DEF_VAR_SKIP;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	else {
@@ -2453,8 +2457,9 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// WHAT THE COLLECTION BECOMES: 0 the rows as they are · 1 the first of them. (2 is the
 		// groups, and only the two roads that group emit it.)
 		c.m_param3.m_numIndex = terminalFirst ? 1 : 0;
+		// HOW: 0 as they came · 2 by the key, its way riding the KEEP · 3 simply reversed.
 		c.m_param3.m_numArray = !sortMatters ? 0
-			: (hasReverse && !hasOrderBy) ? 3 : (orderDesc ? 1 : 2);
+			: (hasReverse && !hasOrderBy) ? 3 : 2;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
@@ -2696,6 +2701,12 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				// a refusal. Each key gets its own stable cell (an OPER_LET copies the
 				// per-iteration expression into it) and they are kept in the order written; the
 				// comparison walks them until one differs (procUnitLINQ.cpp, SortByKeys).
+				//
+				// ⭐ AND EACH KEY RUNS ITS OWN WAY (Max, 2026-09-21: `orderby f1, f2 descending, f3`).
+				// `ascending` / `descending` written after a key is THAT key's, and a key that names
+				// none runs ascending. It was one flag for the whole query, read once after the last
+				// key, so `descending` there turned every key round and a key before a comma could not
+				// carry one at all - the only way to run two keys two ways was a second sort in script.
 				do {
 					const ibParamUnit rawKey = GetExpression(context);
 
@@ -2707,7 +2718,15 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 						c.m_param2 = rawKey;
 						m_cByteCode.m_listCode.emplace_back(std::move(c));
 					}
-					data.m_orderByKeySlots.push_back(keySlot);
+
+					bool descending = false;
+					if (IsNextKeyWord(KEY_DESCENDING)) {
+						GETKeyWord(KEY_DESCENDING);
+						descending = true;
+					} else if (IsNextKeyWord(KEY_ASCENDING)) {
+						GETKeyWord(KEY_ASCENDING);
+					}
+					data.m_orderByKeys.push_back({ keySlot, descending });
 
 					if (!IsNextDelimeter(','))
 						break;
@@ -2715,19 +2734,6 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				} while (true);
 
 				data.m_hasOrderBy = true;
-
-				// ⚠ THE DIRECTION IS THE CLAUSE'S, NOT EACH KEY'S. `ascending` / `descending` after
-				// the last key applies to all of them — which is what the runtime can express: the
-				// keys of a row are compared in order and the whole comparison is then read
-				// forwards or backwards (SortByKeys). Per-key direction would need a direction
-				// vector down the same road, and nothing has asked for it yet.
-				if (IsNextKeyWord(KEY_DESCENDING)) {
-					GETKeyWord(KEY_DESCENDING);
-					data.m_orderByDescending = true;
-				} else if (IsNextKeyWord(KEY_ASCENDING)) {
-					GETKeyWord(KEY_ASCENDING);
-					data.m_orderByDescending = false;
-				}
 				continue;
 			}
 
@@ -3115,15 +3121,20 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// against one row, and the instruction has room for one — so the FIRST KEEP carries the
 			// row together with key 0, and each further key rides its own KEEP with the row operand
 			// skipped. No second opcode, no widened operand: the fourth field, unused here until
-			// now, says WHICH key this is (procUnitLINQ.cpp, KeepKey).
-			const size_t keys = data.m_hasOrderBy ? data.m_orderByKeySlots.size() : 0;
+			// now, says WHICH key this is (procUnitLINQ.cpp, KeepKey) - its index - and which WAY
+			// it runs - its array field, 1 for descending.
+			const size_t keys = data.m_hasOrderBy ? data.m_orderByKeys.size() : 0;
 
 			ibByteUnit c; AddLineInfo(c);
 			c.m_numOper = OPER_LINQ_KEEP;
 			c.m_param1 = data.m_resultArray;
 			c.m_param2 = addValue;
-			if (keys > 0) c.m_param3 = data.m_orderByKeySlots[0];
-			else          c.m_param3.m_numArray = DEF_VAR_SKIP;
+			if (keys > 0) {
+				c.m_param3 = data.m_orderByKeys[0].m_slot;
+				c.m_param4.m_numArray = data.m_orderByKeys[0].m_descending ? 1 : 0;
+			}
+			else
+				c.m_param3.m_numArray = DEF_VAR_SKIP;
 			c.m_param4.m_numIndex = 0;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 
@@ -3132,7 +3143,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				more.m_numOper = OPER_LINQ_KEEP;
 				more.m_param1 = data.m_resultArray;
 				more.m_param2.m_numArray = DEF_VAR_SKIP;   // the row is already kept
-				more.m_param3 = data.m_orderByKeySlots[k];
+				more.m_param3 = data.m_orderByKeys[k].m_slot;
+				more.m_param4.m_numArray = data.m_orderByKeys[k].m_descending ? 1 : 0;
 				more.m_param4.m_numIndex = (long)k;
 				m_cByteCode.m_listCode.emplace_back(std::move(more));
 			}

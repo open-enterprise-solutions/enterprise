@@ -33,7 +33,7 @@
 //
 //     ibJournalInfo(wxT("query"), wxT("%s read %d rows"), name, count);
 //
-// See docs/technology-journal.md.
+// See docs/private/technology-journal.md.
 
 // ⚠ backend.h, NOT backend_core.h. The core header includes THIS one at its end so that every file
 // in the engine gets `ibJournal` for free — which makes the pair a cycle, and a cycle resolves

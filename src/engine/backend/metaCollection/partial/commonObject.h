@@ -161,6 +161,7 @@ public:
 	// ROW DATA / presentation
 	ibValue GetSelectValue(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetSelectValue(rowValues); }
 	ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetItemKey(rowValues); }
+	ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetRowPicture(rowValues); }
 	// (FillSourceExplorer is INHERITED from the query descriptor — asking a source what it holds is
 	//  a query question, and a source that is not a list has it too.)
 	// COMMAND INTERFACE
@@ -330,8 +331,11 @@ public:
 
 #pragma endregion 
 
-	//create single object
-	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const = 0;
+	// create single object — BORN OWNED, like every creator of a data object below: the answer holds the
+	// object before InitializeObject runs the module, whose code may take `ThisObject` and let it go again
+	// (issue #154). Empty means nothing was created. Keep the answer in a holder, never in a raw pointer:
+	// the temporary is the only owner.
+	virtual ibValuePtr<ibValueRecordDataObject> CreateRecordDataObjectValue() const = 0;
 
 #pragma region _form_builder_h_
 	//support form 
@@ -403,11 +407,11 @@ class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecor
 	virtual bool OnAfterCloseMetaObject();
 
 	//create associate value
-	ibValueRecordDataObjectExt* CreateObjectValue() const;
-	ibValueRecordDataObjectExt* CreateObjectValue(ibValueRecordDataObjectExt* objSrc) const;
+	ibValuePtr<ibValueRecordDataObjectExt> CreateObjectValue() const;
+	ibValuePtr<ibValueRecordDataObjectExt> CreateObjectValue(ibValueRecordDataObjectExt* objSrc) const;
 
 	//create single object
-	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const;
+	virtual ibValuePtr<ibValueRecordDataObject> CreateRecordDataObjectValue() const;
 
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Service; }
@@ -415,7 +419,7 @@ class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecor
 protected:
 
 	//create empty object
-	virtual ibValueRecordDataObjectExt* CreateObjectExtValue() const = 0;  //create object
+	virtual ibValuePtr<ibValueRecordDataObjectExt> CreateObjectExtValue() const = 0;  //create object — born owned, as its creators are
 
 private:
 #pragma region role
@@ -449,7 +453,7 @@ public:
 	explicit ibRecordQueryable(const TMeta* meta) : m_meta(meta) {}
 
 	// The attribute by name, answered with ITS QUERY FACE. An attribute is not a query column: it
-	// HOLDS one, because the two live under different ownerships (docs/ownership-authority.md). The
+	// HOLDS one, because the two live under different ownerships (docs/private/ownership-authority.md). The
 	// L3 surface is unchanged — it still receives an ibBackendQueryColumn and still names no
 	// attribute on its contract.
 	// ⭐ THE OBJECT'S OWN FIND ANSWERS IT. This carried a clsid list of its own — a second answer to a
@@ -479,7 +483,7 @@ public:
 	// GetRowKeyColumn / IsReferenceAttribute / GetIdentitySort — all of them derived from this one
 	// authority, and the last was retired for pretending to be a second: it answered with a SORT whose
 	// tail happened to be the key, so a source sorting by something else first handed a number to
-	// everyone who wanted identity. (docs/query-language-arc.md §22.1)
+	// everyone who wanted identity. (docs/private/query-language-arc.md §22.1)
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
 		const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
 		if (refAttr == nullptr)
@@ -572,6 +576,9 @@ public:
 	// ROW DATA / presentation — what a row IS and how it shows:
 	virtual ibValue GetSelectValue(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE cell
 	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE guid
+	// The row's state picture — none here: an enumeration's value is declared, it has no state to show. The
+	// writeable levels answer by their own cells (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& /*rowValues*/) const { return 0; }
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;         // enum: reference VISIBLE, rest hidden
 	// COMMAND INTERFACE — the command band (the writeable levels override to fill these):
 	virtual void GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& /*commands*/) const {}
@@ -626,7 +633,7 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//create single object
-	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const {
+	virtual ibValuePtr<ibValueRecordDataObject> CreateRecordDataObjectValue() const {
 		wxASSERT_MSG(false, "ibValueMetaObjectRecordDataRef::CreateRecordDataObjectValue");
 		return nullptr;
 	}
@@ -953,12 +960,12 @@ public:
 	virtual bool OnAfterCloseMetaObject();
 
 	//create associate value
-	ibValueRecordDataObjectRef* CreateObjectValue() const;
-	ibValueRecordDataObjectRef* CreateObjectValue(const ibGuid& guid) const;
-	ibValueRecordDataObjectRef* CreateObjectValue(ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
+	ibValuePtr<ibValueRecordDataObjectRef> CreateObjectValue() const;
+	ibValuePtr<ibValueRecordDataObjectRef> CreateObjectValue(const ibGuid& guid) const;
+	ibValuePtr<ibValueRecordDataObjectRef> CreateObjectValue(ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
 
 	//copy associate value
-	ibValueRecordDataObjectRef* CopyObjectValue(const ibGuid& guid) const;
+	ibValuePtr<ibValueRecordDataObjectRef> CopyObjectValue(const ibGuid& guid) const;
 
 	// This source's OWN command ids (class-scoped — no global enum, no collision with the action system). eEditValue
 	// bakes the front inline-edit flag (standardCommand.h eStartEditingFlag). Ids < 32767 (wxMenuItem), band 1..27.
@@ -976,11 +983,13 @@ public:
 	// by id against `key` (create/copy/open/delete/mark) and refreshes `srcForm`; ShowValueByKey opens the row's form.
 	// Bodies in objectList.cpp (next to the list models they were lifted from). Document overrides to add Post.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: the record, or the record marked for deletion (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//create single object
-	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const;
+	virtual ibValuePtr<ibValueRecordDataObject> CreateRecordDataObjectValue() const;
 
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
@@ -1020,7 +1029,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
-	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid — born owned
 
 protected:
 
@@ -1420,6 +1429,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// flat catalog reaching here shows no folder command). CallAsCommand handles eAddFolder (new folder) and
 	// delegates the rest to the base. Bodies in objectList.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: a group is the folder, the rest the base's record — each marked for deletion or not.
+	// An arrangement without groups has no folder cell, and its rows are records (commonObjectAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//process choice
@@ -1475,12 +1487,12 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const override;
 
 	//create associate value
-	ibValueRecordDataObjectHierarchyRef* CreateObjectValue(ibObjectMode mode) const;
-	ibValueRecordDataObjectHierarchyRef* CreateObjectValue(ibObjectMode mode, const ibGuid& guid) const;
-	ibValueRecordDataObjectHierarchyRef* CreateObjectValue(ibObjectMode mode, ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
+	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode) const;
+	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode, const ibGuid& guid) const;
+	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode, ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
 
 	//copy associate value
-	ibValueRecordDataObjectHierarchyRef* CopyObjectValue(ibObjectMode mode, const ibGuid& guid) const;
+	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CopyObjectValue(ibObjectMode mode, const ibGuid& guid) const;
 
 #pragma region _form_builder_h_
 	//support form 
@@ -1539,8 +1551,8 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
-	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
-	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const final;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid — born owned
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const final;
 
 protected:
 
@@ -1831,21 +1843,22 @@ public:
 	// The unit a record's period is kept to — as written, to the second, unless the register says otherwise.
 	virtual ibTotalsPeriod GetPeriodicityUnit() const { return ibTotalsPeriod::Second; }
 
-	ibValueRecordKeyObject* CreateRecordKeyObjectValue() const;
+	// Born owned, like the record data objects above (CreateRecordDataObjectValue says why).
+	ibValuePtr<ibValueRecordKeyObject> CreateRecordKeyObjectValue() const;
 	// Build a record key POPULATED from a set of dimension values (a register-list row → its key).
-	ibValueRecordKeyObject* CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const;
+	ibValuePtr<ibValueRecordKeyObject> CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const;
 
-	ibValueRecordSetObject* CreateRecordSetObjectValue(bool needInitialize = true) const;
-	ibValueRecordSetObject* CreateRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey, bool needInitialize = true) const;
-	ibValueRecordSetObject* CreateRecordSetObjectValue(ibValueRecordSetObject* source, bool needInitialize = true) const;
+	ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectValue(bool needInitialize = true) const;
+	ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey, bool needInitialize = true) const;
+	ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectValue(ibValueRecordSetObject* source, bool needInitialize = true) const;
 
-	ibValueRecordSetObject* CopyRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey);
+	ibValuePtr<ibValueRecordSetObject> CopyRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey);
 
-	ibValueRecordManagerObject* CreateRecordManagerObjectValue() const;
-	ibValueRecordManagerObject* CreateRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const;
-	ibValueRecordManagerObject* CreateRecordManagerObjectValue(ibValueRecordManagerObject* source) const;
+	ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectValue() const;
+	ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const;
+	ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectValue(ibValueRecordManagerObject* source) const;
 
-	ibValueRecordManagerObject* CopyRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const;
+	ibValuePtr<ibValueRecordManagerObject> CopyRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const;
 
 	// This register's OWN command ids (class-scoped). eEditValue bakes the front inline-edit flag.
 	enum {
@@ -1868,6 +1881,8 @@ public:
 	// ITEM KEY — a register has SEVERAL key columns; its identity is the COMPOSITE record key built from the row's
 	// dimension cells (CreateUniqueKeyPair). commonObjectAction.cpp.
 	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;
+	// The row's state picture: the record, or the same shaded when it is not active. commonObjectAction.cpp.
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const;
 	// REGISTER variant — all columns (dimensions / resources / period …) visible by default. commonObjectAction.cpp.
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;
 
@@ -1933,8 +1948,9 @@ protected:
 
 	///////////////////////////////////////////////////////////////////
 
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const = 0;
-	virtual ibValueRecordManagerObject* CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const { return nullptr; }
+	// born owned, as their creators are
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const = 0;
+	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const { return nullptr; }
 
 	// Declare the register table (dimension / resource columns + the lookup index).
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
@@ -2137,7 +2153,9 @@ public:
 		return nullptr;
 	}
 
-	virtual ibValueRecordDataObject* CopyObjectValue() = 0;
+	// born owned — see ibValueMetaObjectRecordData::CreateRecordDataObjectValue. One return type for every
+	// override: a holder is a class, so it cannot narrow the way a pointer did (CopyObject narrows it).
+	virtual ibValuePtr<ibValueRecordDataObject> CopyObjectValue() = 0;
 
 	// Composed name surface (replaces the old monolithic PrepareNames). The surface
 	// is split so the common part lives once on the base and each leaf adds only its
@@ -2311,7 +2329,7 @@ public:
 	virtual bool IsEmpty() const { return false; }
 
 	//copy new object
-	virtual ibValueRecordDataObjectExt* CopyObjectValue();
+	virtual ibValuePtr<ibValueRecordDataObject> CopyObjectValue();
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordDataExt* GetMetaObject() const { return m_metaObject; }
@@ -2398,8 +2416,8 @@ public:
 	virtual bool FillObject(ibValue& vFillObject) const {
 		return Filling(vFillObject);
 	}
-	virtual ibValueRecordDataObjectRef* CopyObject(bool showValue = false) {
-		ibValueRecordDataObjectRef* objectRef = CopyObjectValue();
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CopyObject(bool showValue = false) {
+		const ibValuePtr<ibValueRecordDataObjectRef> objectRef = CopyObjectValue();
 		if (objectRef != nullptr && showValue)
 			objectRef->ShowFormValue();
 		return objectRef;
@@ -2420,7 +2438,7 @@ public:
 	virtual const ibUniqueKey& GetGuid() const { return m_objGuid; }
 
 	//copy new object
-	virtual ibValueRecordDataObjectRef* CopyObjectValue();
+	virtual ibValuePtr<ibValueRecordDataObject> CopyObjectValue();
 
 	//get reference
 	virtual class ibValueReferenceDataObject* GetReference() const;
@@ -2442,7 +2460,7 @@ protected:
 
 	// Optimistic-concurrency Write protection.
 	//
-	// Two-layer defence (see docs/record-locks.md):
+	// Two-layer defence (see docs/private/record-locks.md):
 	//   Layer 1 — issues `SELECT DataVersion FROM <tbl> WHERE uuid = ?
 	//             <FOR UPDATE>` inside the current TX (m_lockForUpdate; the dialect renders the
 	//             clause from m_rowLockSuffix). The driver-side
@@ -2478,13 +2496,14 @@ protected:
 	//   bool ibValueRecordDataObjectCatalog::WriteObject() {
 	//     ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	//     if (!BeginWriteScope(scope)) return true;          // designer / eval
+	//     ibWriteScope objectScope(*this);                   // put back if never durable
 	//
 	//     ibBackendValueForm* const valueForm = GetForm();
 	//     const bool newObject = IsNewObject();
 	//
 	//     /* === middle: BeforeWrite + codegen + SaveData + OnWrite === */
 	//
-	//     CommitWriteScope(scope, valueForm, newObject);
+	//     CommitWriteScope(scope, objectScope, valueForm, newObject);
 	//     return true;
 	//   }
 	//
@@ -2501,9 +2520,42 @@ protected:
 	// machine were PROMOTED onto ibValueRecordDataObjectRecorderRef, built on
 	// these same Begin/Commit helpers (bodies in commonObject.cpp).
 	// Constants stay inline (single use, single file).
+	// ⭐⭐ WHAT A WRITE CHANGES ON THE OBJECT BEFORE IT IS DURABLE, PUT BACK IF IT NEVER BECOMES SO.
+	//
+	// The database rolls a refused write back; the OBJECT did not. SaveData marks it written (m_newObject =
+	// false) straight after the INSERT - it has to, the posting and OnWrite handlers read its reference
+	// through that flag - and a refusal after that (a posting that failed, an OnWrite cancel, a refused
+	// commit) left it believing it was in the database. The next Write took the UPDATE road for a row
+	// that did not exist: "'Payroll': the row to rewrite was not found by its key" (2026-09-21). A number
+	// generated for the attempt stayed in the object too, while its sequence step was rolled back.
+	//
+	// The OBJECT's half of the write scope, beside the connection's (ibConnectionScope): opened right after
+	// BeginWriteScope, committed by CommitWriteScope the moment the transaction commits, and on any other
+	// way out - every refusal leaves by an exception - its destructor puts both back, as the connection
+	// scope rolls the transaction back. The same arrangement the version marker already has
+	// (CaptureLoadedDataVersion).
+	class ibWriteScope {
+	public:
+		// What it will put back is asked of the object as the write opens: was it new, did it have a number.
+		explicit ibWriteScope(ibValueRecordDataObjectRef& object)
+			: m_object(object), m_wasNew(object.m_newObject), m_hadNumber(object.IsSetUniqueIdentifier()) {}
+		~ibWriteScope();
+		ibWriteScope(const ibWriteScope&) = delete;
+		ibWriteScope& operator=(const ibWriteScope&) = delete;
+
+		void Commit() { m_committed = true; }   // durable: the object stays as written
+	protected:
+		bool IsCommitted() const { return m_committed; }   // a recorder's scope puts its own stamp back on the same answer
+	private:
+		ibValueRecordDataObjectRef& m_object;
+		const bool m_wasNew;
+		const bool m_hadNumber;
+		bool       m_committed = false;
+	};
+
 	bool BeginWriteScope (ibConnectionScope& scope);
 	bool BeginDeleteScope(ibConnectionScope& scope);
-	void CommitWriteScope (ibConnectionScope& scope,
+	void CommitWriteScope (ibConnectionScope& scope, ibWriteScope& objectScope,
 	                        ibBackendValueForm* valueForm, bool newObject);
 	void CommitDeleteScope(ibConnectionScope& scope,
 	                        ibBackendValueForm* valueForm);
@@ -2537,7 +2589,7 @@ protected:
 
 	// Captured at successful ReadData; compared against the row's
 	// current DataVersion at Write/Delete time. Empty for new objects.
-	// See LockAndCheckDataVersion + docs/record-locks.md.
+	// See LockAndCheckDataVersion + docs/private/record-locks.md.
 	wxString m_loadedDataVersion;
 
 public:
@@ -2574,7 +2626,7 @@ public:
 	virtual ibObjectMode GetObjectMode() const override { return m_objMode; }
 
 	//copy new object
-	virtual ibValueRecordDataObjectRef* CopyObjectValue();
+	virtual ibValuePtr<ibValueRecordDataObject> CopyObjectValue();
 
 	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
@@ -2742,10 +2794,25 @@ public:
 	// Hooks for leaf-specific Document state. Defaults are no-op so a
 	// future plain "recorder" type without these Document concepts
 	// (e.g. a bare business-process recorder) doesn't need to override.
-	virtual bool IsPosted() const                                          { return false; }
-	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode /*wm*/) const { return true; }   // true = ok to proceed
-	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode /*wm*/)   {}
-	virtual void FillDefaultDateForNew()                                   {}
+	virtual bool IsPosted() const           { return false; }
+	virtual void SetPosted(bool /*posted*/) {}   // the write's own stamp: into the slot, past Modify
+
+protected:
+	// THE RECORDER'S HALF ON TOP OF THE OBJECT'S. A posting marks the recorder posted before its
+	// movements are written (SetPosted in WriteObject), and a posting refused after that left it
+	// marked: the next plain Write stored "posted" over no movements at all (2026-09-21). Declared
+	// under the same name, so WriteObject opens this one exactly as a catalog opens the object's.
+	class ibWriteScope : public ibValueRecordDataObjectRef::ibWriteScope {
+	public:
+		explicit ibWriteScope(ibValueRecordDataObjectRecorderRef& recorder)
+			: ibValueRecordDataObjectRef::ibWriteScope(recorder), m_recorder(recorder), m_wasPosted(recorder.IsPosted()) {}
+		~ibWriteScope();
+	private:
+		ibValueRecordDataObjectRecorderRef& m_recorder;
+		const bool m_wasPosted;
+	};
+
+public:
 
 	// WHAT THIS RECORDER WRITES INTO, by list (ibRecorderWrites): the registers it posts movements to,
 	// or the sequences it registers in. Returns null for a kind that declares nothing of that list —
@@ -3020,8 +3087,8 @@ public:
 	const ibValue& GetKeyValue(const ibMetaID& id) const { return m_keyValues.at(id); }
 	void EraseKeyValue(const ibMetaID& id) { m_keyValues.erase(id); }
 
-	//copy new object
-	virtual ibValueRecordSetObject* CopyRegisterValue();
+	//copy new object — born owned (ibValueMetaObjectRecordData::CreateRecordDataObjectValue says why)
+	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue();
 
 	bool Selected() const { return m_selected; }
 	void Read() { ReadData(); }
@@ -3094,7 +3161,7 @@ public:
 	virtual long AppendRow(unsigned int before = 0);
 
 	virtual bool LoadDataFromTable(ibValueModel* srcTable);
-	virtual ibValueModel* SaveDataToTable() const;
+	virtual ibValuePtr<ibValueModel> SaveDataToTable() const;
 
 	// Phase B template-method scaffolds. The 3 register-set leaves
 	// (Accumulation / Accounting / Information) have byte-identical
@@ -3157,7 +3224,7 @@ protected:
 	//
 	// Must be called inside an active TX (the SafeBeginTransaction
 	// scope on the WriteRecordSet / DeleteRecordSet hot path).
-	// See docs/record-locks.md "Registers — keyed by recorder Document".
+	// See docs/private/record-locks.md "Registers — keyed by recorder Document".
 	bool LockByKeys();
 
 	// Phase A scaffold helpers — register-side counterparts of the
@@ -3246,8 +3313,8 @@ public:
 		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : m_metaObject->GetSynonym());
 	}
 
-	//copy new object
-	virtual ibValueRecordManagerObject* CopyRegisterValue();
+	//copy new object — born owned
+	virtual ibValuePtr<ibValueRecordManagerObject> CopyRegisterValue();
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; leaves bind their
 	// own fillers. (PrepareNames is gone.)

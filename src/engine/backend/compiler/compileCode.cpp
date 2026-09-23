@@ -1922,7 +1922,7 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// same time). Previously this line nullified m_parentContext,
 	// enforcing the strict isolation discipline that has been
 	// superseded by the per-frame heap-promotion design (see
-	// docs/closure-capture.md). Phase B (runtime frame capture) landed
+	// docs/private/closure-capture.md). Phase B (runtime frame capture) landed
 	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which
 	// heap-promote the frame and fill ibValueFunction::m_capturedFrames.
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
@@ -2990,7 +2990,7 @@ loopLabel:
 		// ⭐⭐ A PIPELINE WRITTEN AND CONSUMED IN ONE EXPRESSION IS A LOOP, AND COMPILES AS ONE.
 		// Asked BEFORE the dot is consumed, because the answer needs the whole chain and the
 		// receiver as it stands. Refuses everything outside its slice, and then the ordinary
-		// OPER_CALL_LINQ road below takes it — which is always correct. (docs/linq.md §0.2g)
+		// OPER_CALL_LINQ road below takes it — which is always correct. (docs/private/linq.md §0.2g)
 		{
 			ibParamUnit inlined;
 			if (CompileLinqChain(context, variable, inlined)) {

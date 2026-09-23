@@ -21,7 +21,7 @@
 // and the second telling drifted: an all-empty row writes no cell, the cursor
 // and the document disagreed by one, and every fold marker sat a line off.
 //
-// WHAT THE REPORT LOOKS LIKE (see docs/report-engine.md §4d):
+// WHAT THE REPORT LOOKS LIKE (see docs/private/report-engine.md §4d):
 //   * DIMENSIONS stack into ONE column, indented per level;
 //   * MEASURES take a column each, numbers right-aligned;
 //   * a grouping row is tinted per level and bold;

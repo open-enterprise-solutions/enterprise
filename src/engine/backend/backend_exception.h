@@ -73,7 +73,7 @@ enum { //Error message numbers
 	// ibProcUnit::Execute. They live in the same table on purpose: the texts
 	// were previously spelled inline as _("…") at ~20 sites inside the loop,
 	// which put wxString + wxFormatString construction into the hot function
-	// (see docs/runtime-perf.md §5). A code is a constant at the call site.
+	// (see docs/private/runtime-perf.md §5). A code is a constant at the call site.
 	// Keep in lock-step with gs_listErrorString in backend_exception.cpp.
 	ERROR_DIVIDE_BY_ZERO,
 	ERROR_ARRAY_SET,
@@ -365,7 +365,7 @@ public:
 
 // Concurrent-write protection failures surfaced by the Write-time
 // DataVersion check or the DB-side row-lock acquisition.
-// See docs/record-locks.md.
+// See docs/private/record-locks.md.
 class BACKEND_API ibBackendLockException : public ibBackendException {
 public:
 	enum class Kind {

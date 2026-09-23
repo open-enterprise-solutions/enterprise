@@ -2,7 +2,7 @@
 #define __PARAMETERIZED_JOB_H__
 
 // A PARAMETERIZED scheduled job — unattended work whose unit of multiplication is a ROW, not a
-// declaration. The code is written once; the instances are data (docs/scheduled-jobs.md § 3).
+// declaration. The code is written once; the instances are data (docs/private/scheduled-jobs.md § 3).
 //
 // Read it as a catalog entry that, next to Write, also has EXECUTE. That is why it derives from the
 // hierarchical record base rather than owning some structure of its own: description, folders,
@@ -208,13 +208,13 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
 	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;

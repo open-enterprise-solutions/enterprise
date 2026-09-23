@@ -20,8 +20,8 @@
 //     but NOT auto-installed — the desktop still runs script on the wx main
 //     thread directly. The session arg is unused (desktop = one session).
 //
-// See docs/worker-pool-tls-audit.md (TLS migration prerequisite — done)
-// and docs/compute-server-tiering.md (architectural roadmap).
+// See docs/private/worker-pool-tls-audit.md (TLS migration prerequisite — done)
+// and docs/private/compute-server-tiering.md (architectural roadmap).
 
 #include "backend/backend.h"
 

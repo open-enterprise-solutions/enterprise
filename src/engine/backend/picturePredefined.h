@@ -64,4 +64,17 @@ constexpr ibPictureID g_picHomePageCLSID = picture_to_clsid("PC_HOMEP");
 // Art: icons8 ("ai"), downscaled from 96px — see the note in picturePredefined.cpp.
 constexpr ibPictureID g_picAssistantCLSID = picture_to_clsid("PC_ASSIS");
 
+// THE ROW'S STATE — what a list's first column shows at its left (ibDataViewModel::GetRowPicture). Chosen by
+// the row's own kind from its cells: a catalog's or a chart's record and its group (each marked for deletion or
+// not), a document (posted, not, marked for deletion), a register's record (active, or the same greyed).
+constexpr ibPictureID g_picRowItemCLSID = picture_to_clsid("PC_ROWITEM");
+constexpr ibPictureID g_picRowItemDeletedCLSID = picture_to_clsid("PC_ROWITEMDEL");
+constexpr ibPictureID g_picRowFolderCLSID = picture_to_clsid("PC_ROWFOLDER");
+constexpr ibPictureID g_picRowFolderDeletedCLSID = picture_to_clsid("PC_ROWFOLDERDEL");
+constexpr ibPictureID g_picRowDocumentCLSID = picture_to_clsid("PC_ROWDOC");
+constexpr ibPictureID g_picRowDocumentPostedCLSID = picture_to_clsid("PC_ROWDOCPOST");
+constexpr ibPictureID g_picRowDocumentDeletedCLSID = picture_to_clsid("PC_ROWDOCDEL");
+constexpr ibPictureID g_picRowRecordCLSID = picture_to_clsid("PC_ROWREC");
+constexpr ibPictureID g_picRowRecordInactiveCLSID = picture_to_clsid("PC_ROWRECOFF");
+
 #endif 

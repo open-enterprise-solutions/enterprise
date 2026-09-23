@@ -115,9 +115,9 @@ void ibModuleEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 		toolbar->AddSeparator();
 		toolbar->AddTool(wxID_FORMAT_CODE, _("Format selection"), wxArtProvider::GetBitmapBundle(wxART_FORMAT_CODE, wxART_DOC_MODULE), _("Format"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_FORMAT_CODE, m_codeEditor->IsEditable());
-		toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_GO_FORWARD, wxART_TOOLBAR, wxSize(16, 16)), _("Indent"), wxItemKind::wxITEM_NORMAL);
+		toolbar->AddTool(wxID_INCREASE_INDENT, _("Increase indent"), wxArtProvider::GetBitmapBundle(wxART_INCREASE_INDENT, wxART_DOC_MODULE), _("Indent"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_INCREASE_INDENT, m_codeEditor->IsEditable());
-		toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_GO_BACK, wxART_TOOLBAR, wxSize(16, 16)), _("Unindent"), wxItemKind::wxITEM_NORMAL);
+		toolbar->AddTool(wxID_DECREASE_INDENT, _("Decrease indent"), wxArtProvider::GetBitmapBundle(wxART_DECREASE_INDENT, wxART_DOC_MODULE), _("Unindent"), wxItemKind::wxITEM_NORMAL);
 		toolbar->EnableTool(wxID_DECREASE_INDENT, m_codeEditor->IsEditable());
 	}
 }

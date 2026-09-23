@@ -180,7 +180,7 @@ public:
 	// the QUERYABLE kinds only (records with a data-reference, registers,
 	// constants; no modules / forms / reports). Lazy by contract: vending a
 	// Queryable reads NOTHING. (moduleManagerDataUnit.cpp;
-	// docs/query-language-arc.md §23.5)
+	// docs/private/query-language-arc.md §23.5)
 	class BACKEND_API ibValueDataUnit :
 		public ibValueDynamicMembers {
 	public:

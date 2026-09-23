@@ -3,7 +3,7 @@
 
 // A PREDEFINED scheduled job — the configuration's own unattended work, declared once and existing
 // once. It serves the CONFIGURATION; a job that serves DATA is the parameterized kind, a reference
-// object whose rows are its instances (docs/scheduled-jobs.md § 2).
+// object whose rows are its instances (docs/private/scheduled-jobs.md § 2).
 //
 // It is a plain ibValueMetaObject holding ONE module — the MANAGER module, which is where execution
 // lives for both kinds. That choice is not stylistic: the scheduler knows the METAOBJECT, never a
@@ -43,7 +43,7 @@ public:
 
 	// Declared but switched off — still visible, never registered. The Designer's value is the
 	// STARTING POINT for a base that has not seen this job yet; the live value belongs in the
-	// database (docs/scheduled-jobs.md § 8), which is a later step.
+	// database (docs/private/scheduled-jobs.md § 8), which is a later step.
 	bool IsUsed() const { return m_propertyUse->GetValueAsBoolean(); }
 
 	// WHAT HAPPENS AFTER A FAILURE. Most failures of unattended work are transient — a network

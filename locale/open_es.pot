@@ -4817,7 +4817,11 @@ msgstr ""
 msgid "Templates:"
 msgstr ""
 
-#: src/engine/frontend/win/dlgs/colHeight.cpp:11
+#: src/engine/frontend/win/dlgs/colHeight.cpp:22
+msgid "Default column width"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/colHeight.cpp:27
 msgid "Maximun column width"
 msgstr ""
 
@@ -4907,7 +4911,11 @@ msgstr ""
 msgid "Select generation"
 msgstr ""
 
-#: src/engine/frontend/win/dlgs/rowHeight.cpp:11
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:23
+msgid "Auto row height"
+msgstr ""
+
+#: src/engine/frontend/win/dlgs/rowHeight.cpp:28
 msgid "Maximun row height"
 msgstr ""
 
@@ -4971,6 +4979,10 @@ msgstr ""
 
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:291
 msgid "Column width..."
+msgstr ""
+
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:378
+msgid "Fit width to content"
 msgstr ""
 
 #: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:301
@@ -5064,4 +5076,56 @@ msgstr ""
 
 #: src/engine/launcher/launcher.h:49
 msgid "Launch OES"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:23
+msgid "Navigation panel"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:24
+msgid "Actions panel"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:25
+msgid "Form command bar"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:96
+msgid "Command group"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:98
+msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:101
+msgid "The icon beside the group's caption: at its heading on a section page, and on its button on a form command bar. Empty: caption only."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandGroupObject.h:103
+msgid "The hint shown when the pointer rests on the group's heading or on its button, one text per language. Empty: the synonym is shown."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaCommandObject.h:153
+msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the configuration declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a common command. Normal by default."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:27
+msgid "Command groups"
+msgstr ""
+
+#: src/engine/frontend/docView/print/printPreview.cpp:46
+msgid "Fit to page width"
+msgstr ""
+
+#: src/engine/frontend/docView/print/printPreview.cpp:48
+msgid "Shrink a table wider than the page so that it is printed on one page across"
+msgstr ""
+
+#: src/engine/frontend/docView/docView.cpp:1271
+msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
+msgstr ""
+
+#: src/engine/frontend/docView/docView.cpp:1272
+msgid "Print"
 msgstr ""

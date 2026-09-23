@@ -154,7 +154,7 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 // a value follow with an unreachable dummy return — the codebase's Error();return idiom).
 //
 // ⭐ THE TIER RAISES ITS OWN VARIETY. A query that does not hold up is not "an error with no
-// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/exceptions.md §3).
+// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/private/exceptions.md §3).
 // Typed as Core it could only be caught by catching everything, which is the same as not being able
 // to catch it at all: a script's Try/Except around a query, a tool that wants to show the author
 // where the query is wrong, and a caller that must let real faults through were all indistinguishable.
@@ -371,6 +371,20 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	std::vector<ibQuerySourceParameter> declared;
 	if (ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(ns, name))
 		descriptor->DescribeParameters(declared);
+
+	// 🛑 AN ARGUMENT PAST THE LAST ONE THE SOURCE DECLARED IS REFUSED, NOT DROPPED. A source reads its
+	// arguments by position and never looks past the ones it declared, so an extra one simply vanished: the
+	// accounting listing asked for `"Period DESC", 10` after it lost its Order and Top came back unordered and
+	// uncut, and read as an answer (measured 2026-09-21) - an ignored ORDER BY is the kind of wrong nobody
+	// notices. A source that declares nothing is not judged here: it has not said what it takes.
+	if (!declared.empty() && src.m_args.size() > declared.size()) {
+		wxString names;
+		for (const ibQuerySourceParameter& parameter : declared)
+			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + parameter.m_name;
+		ibBackendQueryNameException::ErrorAt(src.m_line, src.m_col,
+			_("'%s' takes %d arguments (%s), and %d were given. How its rows are ordered and how many are taken is said in the query around it: ORDER BY, TOP."),
+			ns + wxT(".") + name, static_cast<int>(declared.size()), names, static_cast<int>(src.m_args.size()));
+	}
 
 	// ⚠ A CONDITION SLOT TAKES EITHER SHAPE, and the shape decides the road — not the declaration.
 	// `Balance(&P, Warehouse = &W)` is a predicate and becomes a condition; `Balance(&P, &Filter)`
@@ -6879,7 +6893,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// FROM — single source, a JOIN chain, or a UNION stack. In every case the flat read
 	// (b.Execute -> ExecuteRead) realizes the source (server-side or RAM-composed), the TotalBy config is
 	// stamped on the result, and the runtime folds the ONE snapshot — no separate totals terminal. The
-	// dimension / aggregate resolution below reads through `sources`. (docs/query-language-arc.md §22.1b)
+	// dimension / aggregate resolution below reads through `sources`. (docs/private/query-language-arc.md §22.1b)
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
 	// Conditions written INSIDE a virtual table's call — collected here so the totals read applies

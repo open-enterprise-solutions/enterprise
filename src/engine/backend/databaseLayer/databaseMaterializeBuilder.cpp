@@ -1493,11 +1493,11 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	// point of the variety: the engine merely REPORTED the fault, it did not commit it. The trigger
 	// body is text WE generated, and "Column unknown NEW.FLDnnnn_RTRef" says our declaration named a
 	// column our own schema does not carry — a translation failure by any reading. Typed as a DB
-	// fault it would inherit DB retry semantics (docs/exceptions.md §3), and retrying a mistranslation
+	// fault it would inherit DB retry semantics (docs/private/exceptions.md §3), and retrying a mistranslation
 	// is an infinite loop.
 	//
 	// The driver's message rides along verbatim, because it names the exact column and no summary of
-	// ours could. A refusal is an exception (docs/exceptions.md §5a).
+	// ours could. A refusal is an exception (docs/private/exceptions.md §5a).
 	// AND THE STATEMENT TRAVELS WITH IT. The driver names the fault ("expression evaluation not
 	// supported") but not what it was evaluating, and the maintenance is the ONE place where the
 	// failing text is OURS — a trigger body this level rendered a moment ago. Reported without it,
@@ -1566,7 +1566,7 @@ ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMateria
 	}
 
 	// Apply RAISES when it cannot install the bundle — so reaching this line means it is installed,
-	// and there is no failing value to answer with (docs/exceptions.md §5a).
+	// and there is no failing value to answer with (docs/private/exceptions.md §5a).
 	sql.Apply(conn);
 	return ibMaterializeApply::Rebuilt;
 }

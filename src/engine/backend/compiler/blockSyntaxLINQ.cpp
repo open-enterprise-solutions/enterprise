@@ -277,24 +277,25 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 		}
 	};
 
-	// The order, then the cut. Keys of one direction in a row share a clause; a change of direction
-	// opens the next one. `spell` is how an order key is written where it stands.
+	// The order, then the cut. ONE clause, each key followed by its own way when it runs descending
+	// (`OrderBy g.Group, g.Price Descending, g.Name`). `spell` is how an order key is written where it stands.
 	const auto writeOrderAndCut = [&](const std::function<wxString(const wxString&)>& spell) {
-		for (size_t i = 0; i < m_order.size(); ) {
-			const bool descending = m_order[i].m_descending;
-			wxString keys;
-			for (; i < m_order.size() && m_order[i].m_descending == descending; ++i) {
-				const wxString key = wxString(m_order[i].m_expression).Trim(true).Trim(false);
-				if (key.IsEmpty())
-					continue;
-				finished(key);
-				keys +=(keys.IsEmpty() ? wxString() : wxString(wxT(", "))) + spell(key);
-			}
-			if (keys.IsEmpty())
+		wxString keys;
+		size_t descendingKeys = 0;
+		for (const ibLinqBlockOrder& order : m_order) {
+			const wxString key = wxString(order.m_expression).Trim(true).Trim(false);
+			if (key.IsEmpty())
 				continue;
-			lines.push_back(word(KEY_ORDERBY) + wxT(" ") + keys + (descending ? wxT(" ") + word(KEY_DESCENDING) : wxString()));
+			finished(key);
+			keys += (keys.IsEmpty() ? wxString() : wxString(wxT(", "))) + spell(key)
+				+ (order.m_descending ? wxString(wxT(" ")) + word(KEY_DESCENDING) : wxString());
+			if (order.m_descending)
+				++descendingKeys;
+		}
+		if (!keys.IsEmpty()) {
+			lines.push_back(word(KEY_ORDERBY) + wxT(" ") + keys);
 			say(KEY_ORDERBY, true);
-			if (descending)
+			for (size_t d = 0; d < descendingKeys; ++d)
 				say(KEY_DESCENDING, false);
 		}
 		if (!m_skip.IsEmpty()) {
@@ -846,15 +847,17 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		}
 		case KEY_ORDERBY: {
 			rowsCut = rowsCut || !grouped;
-			// The direction closes the clause and is the whole clause's.
-			size_t keysEnd = e;
-			bool descending = false;
-			if (e > s + 1 && (isKey(e - 1, KEY_DESCENDING) || isKey(e - 1, KEY_ASCENDING))) {
-				descending = isKey(e - 1, KEY_DESCENDING);
-				keysEnd = e - 1;
+			// Each key may close with its own way: `OrderBy a, b Descending, c`.
+			for (const auto& part : splitAtTop(s + 1, e, wxT(','))) {
+				size_t keyEnd = part.second;
+				bool descending = false;
+				if (part.second > part.first + 1
+					&& (isKey(part.second - 1, KEY_DESCENDING) || isKey(part.second - 1, KEY_ASCENDING))) {
+					descending = isKey(part.second - 1, KEY_DESCENDING);
+					keyEnd = part.second - 1;
+				}
+				block.m_order.push_back({ span(part.first, keyEnd), descending });
 			}
-			for (const auto& part : splitAtTop(s + 1, keysEnd, wxT(',')))
-				block.m_order.push_back({ span(part.first, part.second), descending });
 			break;
 		}
 		case KEY_SKIP:

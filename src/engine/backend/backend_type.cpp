@@ -9,13 +9,6 @@
 
 ibValue ibBackendTypeFactory::CreateValue() const
 {
-	ibValue* refData = CreateValueRef();
-	return refData ?
-		refData : ibValue();
-}
-
-ibValue* ibBackendTypeFactory::CreateValueRef() const
-{
 	const ibTypeDescription& typeDesc = GetTypeDesc();
 	if (typeDesc.GetClsidCount() == 1) {
 		const ibClassID& clsid = typeDesc.GetFirstClsid();
@@ -33,35 +26,31 @@ ibValue* ibBackendTypeFactory::CreateValueRef() const
 					// pointer, the enumeration is then destroyed, its member releases the variant to
 					// zero — and the caller IncrRef's freed memory (ibValue::operator=(ibValue*)).
 					//
-					// So the value is given a reference of its OWN before its holder goes. It comes
-					// back at refcount 1 and the caller's assignment takes it to 2.
-					//
-					// 🛑 THAT LEAVES ONE REFERENCE UNRELEASED, and it is deliberate and TEMPORARY:
-					// a leaked count on a rarely-taken path is not a use-after-free, and the honest
-					// fix is a different question — this enumeration should be reached from the
-					// registry that already keeps one, not built and thrown away per read. Named here
-					// rather than hidden, because the balanced-looking version was the broken one.
-					ibValuePtr<ibValueEnumerationWrapper> enumVal(
-						ibValue::CreateAndConvertObjectRef<ibValueEnumerationWrapper>(so->GetClassName())
-					);
-					ibValue* const variant = enumVal ? enumVal->GetEnumVariantValue() : nullptr;
+					// So the value is given a reference of its OWN before its holder goes — and the
+					// answer IS that reference: a return value is built before the locals are
+					// destroyed, so the variant is held by the answer while the enumeration still
+					// lives, and nothing is left over. (It used to be answered as a raw pointer with
+					// one count taken by hand and never given back.) The honest question remains a
+					// different one — this enumeration should be reached from the registry that
+					// already keeps one, not built and thrown away per read.
+					const ibValuePtr<ibValueEnumerationWrapper> enumVal = ibValue::CreateObject(so->GetClassName());
+					ibValue* const variant = enumVal != nullptr ? enumVal->GetEnumVariantValue() : nullptr;
 					if (variant != nullptr)
-						variant->IncrRef();
-					return variant;
+						return variant;
 				}
 				catch (...) {
 				}
-				return nullptr;
+				return wxEmptyValue;
 			}
 			try {
-				return ibValue::CreateObjectRef(so->GetClassType());
+				return ibValue::CreateObject(so->GetClassType());
 			}
 			catch (...) {
-				return nullptr;
+				return wxEmptyValue;
 			}
 		}
 	}
-	return nullptr;
+	return wxEmptyValue;
 }
 
 #include "backend/system/value/valueType.h"
@@ -90,18 +79,10 @@ ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeD
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-ibValue ibBackendTypeConfigFactory::CreateValue() const
-{
-	ibValue* refData = CreateValueRef();
-	if (refData == nullptr)
-		return ibValue();
-	return refData;
-}
-
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-ibValue* ibBackendTypeConfigFactory::CreateValueRef() const
+ibValue ibBackendTypeConfigFactory::CreateValue() const
 {
 	ibMetaData const* metaData = GetMetaData();
 	wxASSERT(metaData);
@@ -110,14 +91,14 @@ ibValue* ibBackendTypeConfigFactory::CreateValueRef() const
 		const ibCtorMetaValueType* so = metaData->GetTypeCtor(typeDesc.GetFirstClsid());
 		if (so != nullptr) {
 			try {
-				return metaData->CreateObjectRef(so->GetClassType());
+				return metaData->CreateObject(so->GetClassType());
 			}
 			catch (...) {
-				return nullptr;
+				return wxEmptyValue;
 			}
 		}
 	}
-	return ibBackendTypeFactory::CreateValueRef();
+	return ibBackendTypeFactory::CreateValue();
 }
 
 // …the same rule for a configuration's declarations, where a characteristic actually occurs.

@@ -21,7 +21,7 @@ class ibValueGlobalContextStructureManager : public ibValueStructure {
 			ibCtorMetaValueType* so = m_metaData->GetTypeCtor(object, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
 			if (so == nullptr)
 				continue;
-			ibValuePtr<ibValue> createdValue(so->CreateObject());
+			const ibValue createdValue = so->CreateObject();
 			// Name surface builds lazily on first GetPMethods() — no eager populate.
 			ibValueStructure::Insert(object->GetName(), createdValue);
 		}

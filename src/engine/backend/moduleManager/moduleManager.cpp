@@ -26,15 +26,10 @@ ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMe
 	m_metaManager(new ibValueMetadataUnit(metadata)),
 	m_dataManager(new ibValueDataUnit(metadata))
 {
-	// "Metadata" global — bound straight into the compile module's extern map
-	// (the single source for globals; m_metaManager owns the value). m_compileModule
-	// is live here (created in the ibRuntimeModuleDataObject base ctor above). The name
-	// surface (module exports) autobinds as the helper's tail in that descriptor ctor.
-	BindExportVariable(objectMetadataManager, m_metaManager);
-	// "Data" global — the queryable-source mirror of "Metadata" (L4-2): same kind-
-	// namespace shape, leaves vend ibValueQueryable (lazy, inert — reading the value
-	// reads no data). Same ownership / binding pattern as m_metaManager.
-	BindExportVariable(objectDataManager, m_dataManager);
+	// (The "Metadata" / "Data" globals are bound by the CONFIGURATION's managers only — see
+	// ibValueModuleManagerRuntimeConfiguration's ctor. Bound here, they became exports of every
+	// module a manager is built on: an external data processor's object module among them, and
+	// the object shares that module, so `ThisObject.Metadata` / `ThisObject.Data` showed up.)
 }
 
 ibValueModuleManager::~ibValueModuleManager()
@@ -342,6 +337,14 @@ ibValueModuleManagerRuntimeConfiguration::ibValueModuleManagerRuntimeConfigurati
 	ibValueMetaObjectConfiguration* metaObject)
 	: ibValueModuleRuntimeManager(metadata, metaObject ? metaObject->GetObjectModule() : nullptr)
 {
+	// ⭐ THE CONFIGURATION'S GLOBALS ARE THE EXPORTS OF ITS MODULE — and only of its module. "Metadata" is
+	// bound straight into the compile module's extern map (the single source for globals; m_metaManager
+	// owns the value); "Data" is its queryable-source mirror (L4-2): same kind-namespace shape, leaves
+	// vend ibValueQueryable (lazy, inert — reading the value reads no data). An external data processor's
+	// or report's manager does NOT bind them: its module is the object's, and it reads globals from the
+	// configuration root (GetGlobalVariables). The designer's configuration manager binds the same two.
+	BindExportVariable(objectMetadataManager, m_metaManager);
+	BindExportVariable(objectDataManager, m_dataManager);
 }
 
 //main module - initialize
@@ -381,7 +384,8 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
 		// EnumManager / SystemManager — transparent scope containers too.
-		BindScopeVariable(ctor->GetClassName(), ctor->CreateObject());
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
 	// Compile only — runtime (ibProcUnit) is created per session by
@@ -503,6 +507,9 @@ ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
 	ibValueMetaObjectConfiguration* metaObject)
 	: ibValueModuleManager(metaData, metaObject ? metaObject->GetObjectModule() : nullptr)
 {
+	// The configuration's globals — see ibValueModuleManagerRuntimeConfiguration's ctor.
+	BindExportVariable(objectMetadataManager, m_metaManager);
+	BindExportVariable(objectDataManager, m_dataManager);
 }
 
 ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
@@ -550,7 +557,8 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 
 	//ctor-context objects (EnumManager / SystemManager) — transparent too.
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		BindScopeVariable(ctor->GetClassName(), ctor->CreateObject());
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
 	}
 
 	// No unit compilation here — see AddCommonModule. The editor parses common

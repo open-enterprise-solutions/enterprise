@@ -120,7 +120,14 @@ public:
 // ibProperty and not on the string base. A string property stores a string and its setter replaces
 // it, which is exactly how every other language used to be lost.
 class BACKEND_API ibPropertyTString : public ibProperty {
-	wxVariantData* CreateVariantData(const ibTranslateString& translate) const;
+	// 🛑 STATIC, BECAUSE EVERY CALLER IS A MEMBER-INITIALISER. The three constructors below pass its
+	// result to the base, which means it runs BEFORE this object's lifetime has begun; as a non-static
+	// member that is a call on an object that does not exist yet, and UBSan says so in those words -
+	// "member call on address which does not point to an object of type 'ibPropertyTString'", 98 times
+	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
+	// ⚠ The same shape lives in the other property headers of this family - they are not converted
+	// here, because only the one the tests exercise has been measured.
+	static wxVariantData* CreateVariantData(const ibTranslateString& translate);
 public:
 
 	ibTranslateString& GetValueAsTranslate() const;

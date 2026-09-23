@@ -358,17 +358,16 @@ public:
 
 			// HELD IN AN ibValue, never on the stack as a raw pointer: these are refcounted, and a
 			// bare pointer here is the shape that has produced heap corruption in this tree before.
-			ibValue* const made = ctor->CreateObject();
+			// The registry answers with the owner, so it is held from the moment it exists.
+			value = ctor->CreateObject();
 
-			if (made == nullptr) {
+			if (!value.IsReference()) {
 				refusal = wxString::Format(
 					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
 					  "exists only against the object that declares it. Read that object with "
 					  "metadata_get, its fields with query_fields."), name);
 				return false;
 			}
-
-			value = ibValue(made);
 
 			// ⭐⭐ AND THE CLASS ID SAYS MORE THAN "IT EXISTS" — it says WHAT KIND OF THING this is
 			// and WHICH METAOBJECT declares it, and both are answers a caller otherwise infers from
@@ -639,12 +638,13 @@ public:
 				"A total over a group is its Values' aggregate: `<name>.Values.Sum()` over the one "
 				"field the group keeps (`group o.Amount by ...`), `<name>.Values.Count()`.")));
 		clauses.push_back(clause(
-			word(KEY_ORDERBY) + wxT(" <expr>[, <expr>...] [") + word(KEY_ASCENDING) + wxT("|")
-				+ word(KEY_DESCENDING) + wxT("]"),
+			word(KEY_ORDERBY) + wxT(" <expr> [") + word(KEY_ASCENDING) + wxT("|") + word(KEY_DESCENDING)
+				+ wxT("][, <expr> [") + word(KEY_ASCENDING) + wxT("|") + word(KEY_DESCENDING) + wxT("]...]"),
 			ibMcpText("Orders the answer by values worked out per row. SEVERAL KEYS, comma-separated, "
 				"in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within "
-				"each, by item. Ascending is the default, and the direction written after the last "
-				"key applies to the whole ordering.")));
+				"each, by item. EACH KEY HAS ITS OWN DIRECTION, written after it; a key that names "
+				"none runs ascending: `orderby Warehouse, Date descending, Item` - by warehouse, "
+				"within each the latest date first, and within a date by item.")));
 		clauses.push_back(clause(
 			word(KEY_SKIP) + wxT(" <n> / ") + word(KEY_TAKE) + wxT(" <n>"),
 			ibMcpText("A window over what survived.")));
@@ -678,7 +678,8 @@ public:
 			+ wxT("  ") + word(KEY_WHERE) + wxT(" <cond>")
 			+ wxT("  ") + word(KEY_GROUP) + wxT(" <row> ") + word(KEY_BY) + wxT(" <key> ")
 				+ word(KEY_INTO) + wxT(" <group>")
-			+ wxT("  ") + word(KEY_ORDERBY) + wxT(" <key>[, <key>...] [") + word(KEY_DESCENDING) + wxT("]")
+			+ wxT("  ") + word(KEY_ORDERBY) + wxT(" <key> [") + word(KEY_DESCENDING) + wxT("][, <key> [")
+				+ word(KEY_DESCENDING) + wxT("]...]")
 			+ wxT("  ") + word(KEY_SKIP) + wxT(" <n>  ") + word(KEY_TAKE) + wxT(" <n>")
 			+ wxT("  ") + word(KEY_SELECT) + wxT(" { <name> = <expr>, ... }")
 			+ wxT("  ") + word(KEY_DISTINCT));

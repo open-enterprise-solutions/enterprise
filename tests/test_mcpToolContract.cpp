@@ -421,8 +421,21 @@ TEST(McpToolContract, PictureSet_DeclaresTheNameItAsksForWhenTheImageComesAsData
 	ASSERT_NE(tool, nullptr);
 
 	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const wxString& name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("name") })
+	for (const wxString& name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
+		wxT("width"), wxT("height"), wxT("name") })
 		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << wxString(name).ToStdString() << "'";
+}
+
+// The same fact for the drawing verb: it refuses without `svg` and without `name`, and sizes by `width` /
+// `height` - all four read in Call, none of them in the required list.
+TEST(McpToolContract, PictureFromSvg_DeclaresEverythingItReads)
+{
+	const ibMcpTool* tool = ibFindMcpTool(wxT("picture_from_svg"));
+	ASSERT_NE(tool, nullptr);
+
+	const std::set<wxString> declared = DeclaredArguments(SchemaOf(tool));
+	for (const wxString& name : { wxT("svg"), wxT("width"), wxT("height"), wxT("name") })
+		EXPECT_TRUE(declared.count(name) != 0) << "picture_from_svg does not declare '" << wxString(name).ToStdString() << "'";
 }
 
 TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)

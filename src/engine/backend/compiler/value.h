@@ -11,8 +11,11 @@
 #include <mutex>
 #include <thread>
 
-#include "backend/backend_core.h"
-#include "backend/compiler/typeCtor.h"
+#include "backend/backend_core.h"   // + ibCtorObjectType — the registry surface below names it
+
+// The registry's ctor type — its definition (compiler/typeCtor.h) is built on a complete ibValue,
+// so it is included at the end of this file.
+class ibCtorAbstractType;
 
 // Forward declaration - full definition in value_ptr.h included at end of file
 template <class T> class ibValuePtr;
@@ -83,7 +86,7 @@ public:
 // What remains is real and stands on the other side of the boundary: a query COLUMN carries its own
 // control block (ibBackendQueryColumn : enable_shared_from_this), so nobody needs to invent a second
 // owner for one, and a runtime value travels by ibValuePtr, which counts rather than deletes. The
-// rule itself lives in docs/ownership-authority.md; on this side it is a rule people keep, not one
+// rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
 // the compiler keeps for them.
 
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
@@ -973,7 +976,7 @@ public:
 	// keep, not one the compiler keeps for them: release with DecrRef, travel by ibValuePtr, and
 	// never hand a runtime value to another owner. The QUERY side is a different matter and is
 	// closed by construction — a column carries its own control block, so no second owner is ever
-	// needed (query/queryColumn.h). (docs/ownership-authority.md)
+	// needed (query/queryColumn.h). (docs/private/ownership-authority.md)
 
 	//operators:
 	void operator = (const ibValue& cParam);
@@ -1090,79 +1093,36 @@ public:
 
 public:
 
+	// ⭐⭐ EVERY FACTORY HERE ANSWERS WITH THE OWNER — the ibValue that holds what it made, empty (not a
+	// reference) when nothing was made. There used to be a second family beside this one handing back a
+	// bare pointer at reference count zero (CreateObjectRef, CreateAndConvertObjectRef<T>,
+	// CreateObjectValueRef<T>), and a new object that ran code of its own before its caller wrapped it
+	// could be freed by that code (see ibCtorAbstractType::CreateObject). A caller that needs the type
+	// asks the owner for it: `ibValuePtr<T> created = ibValue::CreateObject(...)`.
 	template<typename T>
 	static ibValue CreateObject(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef<T>(paParams, lSizeArray);
+		return CreateObject(typeid(T), paParams, lSizeArray);
 	}
-	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
+	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
 	static ibValue CreateObject(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(typeInfo, paParams, lSizeArray);
+		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
+		return CreateObject(clsid, paParams, lSizeArray);
 	}
 	static ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(className, paParams, lSizeArray);
+		const ibClassID& clsid = GetIDObjectFromString(className);
+		return CreateObject(clsid, paParams, lSizeArray);
 	}
 	template<typename T, typename... Args>
 	static ibValue CreateObjectValue(Args&&... args) {
-		return CreateObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	template<typename T>
-	static ibValue* CreateObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CreateObjectRef(typeid(T), paParams, lSizeArray);
-	}
-	static ibValue* CreateObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
-	static ibValue* CreateObjectRef(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	static ibValue* CreateObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		const ibClassID& clsid = GetIDObjectFromString(className);
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	template<typename T, typename... Args>
-	static ibValue* CreateObjectValueRef(Args&&... args) {
-		return CreateAndConvertObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	template<typename T>
-	static T* CreateAndConvertObjectRef(ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(typeid(T), paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(clsid, paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(typeInfo, paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	static T* CreateAndConvertObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) {
-		return CastValue<T>(CreateObjectRef(className, paParams, lSizeArray));
-	}
-	template<typename T, typename... Args>
-	static T* CreateAndConvertObjectValueRef(Args&&... args) {
 		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))
 			return new T(args...);
-		wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");
-		return nullptr;
+		wxASSERT_MSG(false, "CreateObjectValue: the type is not registered");
+		return wxEmptyValue;
 	}
 
 	template<typename T, typename valT>
-	static ibValue CreateEnumObject(const valT& v) {
-		return CreateEnumObjectRef<T>(v);
-	}
-
-	template<typename T, typename valT>
-	static ibValue* CreateEnumObjectRef(const valT& v) {
-		return CreateAndConvertEnumObjectRef<T>(v);
-	}
-
-	template<typename T, typename valT>
-	static ibValue* CreateAndConvertEnumObjectRef(const valT& v);
+	static ibValue CreateEnumObject(const valT& v);
 
 	static void RegisterCtor(ibCtorAbstractType* typeCtor);
 	static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
@@ -1774,7 +1734,7 @@ private:
 	// NOTE: this sits at the END of the class, so under MSVC's declaration-order
 	// layout it occupies the TAIL word — the intended repack next to the two
 	// 1-byte scalars (to fill the hole before the 8-aligned union) never
-	// happened, and that hole is still padding. See docs/value-audit.md.
+	// happened, and that hole is still padding. See docs/private/value-audit.md.
 	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory
 	// model; part of the incremental wxBase→std migration. Never copied /
 	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only
@@ -1897,45 +1857,13 @@ protected:
 /////////////////////////////////////////////////////////////////////////
 
 template<typename T, typename valT>
-ibValue* ibValue::CreateAndConvertEnumObjectRef(const valT& v) {
-	ibValuePtr<ibValueEnumeration<valT>> createdEnum(ibValue::CreateAndConvertObjectRef<T>());
+ibValue ibValue::CreateEnumObject(const valT& v) {
+	const ibValuePtr<ibValueEnumeration<valT>> createdEnum(ibValue::CreateObject<T>());
 	wxASSERT(createdEnum != nullptr);
 	return createdEnum->CreateEnumVariantValue(v);
 }
 
-/////////////////////////////////////////////////////////////////////////
-// value_register template implementations (deferred from typeCtor.h
-// because they require the complete ibValue type)
-/////////////////////////////////////////////////////////////////////////
-
-template<typename typeCtor>
-value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
-	try {
-		if (m_so != nullptr) {
-			ibValue::RegisterCtor(m_so);
-		}
-	}
-	catch (...) {
-#ifdef DEBUG
-		ibJournalError(wxT("value"), wxT("failed to register class: %s"), m_so->GetClassName());
-#endif
-		wxDELETE(m_so);
-	}
-}
-
-template<typename typeCtor>
-value_register<typeCtor>::~value_register() {
-	try {
-		if (m_so != nullptr) {
-			ibValue::UnRegisterCtor(m_so);
-		}
-	}
-	catch (...) {
-#ifdef DEBUG
-		ibJournalError(wxT("value"), wxT("failed to unregister class: %s"), m_so->GetClassName());
-#endif
-		wxDELETE(m_so);
-	}
-}
+// The ctors — last, because each of them answers with a complete ibValue.
+#include "backend/compiler/typeCtor.h"
 
 #endif

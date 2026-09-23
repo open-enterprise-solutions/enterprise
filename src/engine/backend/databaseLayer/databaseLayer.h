@@ -29,7 +29,7 @@
 
 // ==========================================================================
 // ibDialectDictionary — the per-DBMS "dictionary" that closes all dialect
-// difference (docs/query-language-arc.md §6). The dialect is an L1 driver
+// difference (docs/private/query-language-arc.md §6). The dialect is an L1 driver
 // DESCRIPTOR — each driver self-describes its SQL via GetDialect() below — so it
 // lives here, with the driver interface (moved from the former dialectDictionary.h).
 // Level 2 stays DBMS-indifferent: ONE generic renderer walks the ibQueryIR and, at
@@ -368,19 +368,19 @@ struct ibDialectDictionary
 	// register set lock). Default = PG " FOR UPDATE"; Firebird overrides to " WITH
 	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS
 	// the lock, there is no row-level FOR UPDATE). Rendered after ORDER BY / LIMIT.
-	// (docs/record-locks.md)
+	// (docs/private/record-locks.md)
 	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
 
 	// Appended AFTER m_rowLockSuffix when the IR asks for a non-blocking acquire (ibQueryIR::
 	// m_lockNoWait). Default = PG " NOWAIT" (=> " FOR UPDATE NOWAIT"). Firebird leaves it
 	// EMPTY — it has no FOR UPDATE NOWAIT; a non-blocking acquire is expressed by the transaction's
 	// own lock-timeout (ibTxOptions::noWait -> isc_tpb_nowait). SQLite empty (whole-DB lock).
-	// (docs/record-locks.md — unifies the old ibDatabaseLayer::NoWaitClause virtual onto the dictionary.)
+	// (docs/private/record-locks.md — unifies the old ibDatabaseLayer::NoWaitClause virtual onto the dictionary.)
 	wxString m_rowLockNoWaitSuffix = wxT(" NOWAIT");
 
 	// GROUP BY ROLLUP spelling (used only when m_features.m_rollup): the keys render between
 	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MSSQL: prefix empty,
-	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/query-language-arc.md §22.1b)
+	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/private/query-language-arc.md §22.1b)
 	wxString m_rollupPrefix = wxT("ROLLUP(");
 	wxString m_rollupSuffix = wxT(")");
 
@@ -472,7 +472,7 @@ struct ibDialectDictionary
 // pre-declared GTT pool) is captured here only as the m_strategy enum (data); the actual
 // control-flow fork lives in the temp-table MANAGER that reads it — never as `if(driver)` in
 // this struct. Keeping that line is what preserves "dictionary = facts, behaviour elsewhere".
-// (docs/query-language-arc.md — temp-db foundation)
+// (docs/private/query-language-arc.md — temp-db foundation)
 // ==========================================================================
 struct ibTempTableDialect
 {
@@ -523,7 +523,7 @@ struct ibTempTableDialect
 // PURE DECLARATIVE FACTS + a strategy DISCRIMINATOR, matching ibTempTableDialect: the
 // family below is DATA; the control-flow fork it selects lives in the generator that
 // reads it, never as `if (driver)` in this struct.
-// (docs/register-totals-strategy.md § Engine integration)
+// (docs/private/register-totals-strategy.md § Engine integration)
 // ==========================================================================
 
 // Execution model of the maintenance trigger — the discriminator that picks a template
@@ -1083,7 +1083,7 @@ public:
 	// until each implements it, so the feature lands additively, driver by driver. Paradox by
 	// design: Firebird (fixed-shape GTTs, embedded/small deployments) will typically stay on RAM,
 	// while PostgreSQL / SQLite (ad-hoc any-shape temp) carry the temp-table path — capability
-	// lands where the data scale needs it. (docs/query-language-arc.md — temp-db foundation)
+	// lands where the data scale needs it. (docs/private/query-language-arc.md — temp-db foundation)
 	virtual const ibTempTableDialect* GetTempTableDialect() const { return nullptr; }
 
 	// ⭐⭐ THE ROUTINES THIS ENGINE DOES NOT HAVE AND THE PLATFORM'S OWN SQL ASSUMES.
@@ -1117,7 +1117,7 @@ public:
 	// scale and merely slower. ODBC is the permanent nullptr — it is engine-agnostic by
 	// construction, so it cannot template engine-specific triggers, and that is a floor
 	// rather than a gap. NOT pure: drivers inherit nullptr until each opts in, so totals
-	// land additively, driver by driver. (docs/register-totals-strategy.md)
+	// land additively, driver by driver. (docs/private/register-totals-strategy.md)
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const { return nullptr; }
 
 	// Best-effort reconnect when an external cluster event has
@@ -1138,7 +1138,7 @@ public:
 	// (m_rowLockSuffix / m_rowLockNoWaitSuffix); the L2-1 door renders it from
 	// ibQueryIR::m_lockForUpdate / m_lockNoWait. The old RowLockHint() / NoWaitClause()
 	// virtuals are gone — their last callers (ibLockManager, the constant row-lock) now
-	// go through the door. See docs/record-locks.md.
+	// go through the door. See docs/private/record-locks.md.
 
 	/// Close all result set objects that have been generated but not yet closed
 	void CloseResultSets();

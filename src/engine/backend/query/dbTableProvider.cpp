@@ -6,7 +6,7 @@
 //	              SetValueAttribute). The ONLY place L2-1 and the attribute field-
 //	              machinery meet for a physical table. Split out of queryProvider.cpp
 //	              (which keeps the composer / computed provider / result sources).
-//	              See docs/query-language-arc.md §18, §22.
+//	              See docs/private/query-language-arc.md §18, §22.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dbTableProvider.h"   // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
@@ -41,7 +41,7 @@
 // ==========================================================================
 // Name-substitution primitives (ibMetaIRBuilder) — query-native conditions /
 // sorts (columns) -> physical query IR. Emits IR, not SQL text; the dialect fork
-// and manual binding are gone. See docs/query-language-arc.md §18.
+// and manual binding are gone. See docs/private/query-language-arc.md §18.
 // ==========================================================================
 
 namespace {
@@ -1915,7 +1915,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable
 	//     object clears the reference to itself in its children, in the same transaction
 	//     (ibValueRecordDataObjectRef::DeleteData);
 	//   * old-layout rows are a MIGRATION, which is what the declared compatibility version exists
-	//     for (docs/compatibility-version.md). A change to a physical constant with data already in
+	//     for (docs/private/compatibility-version.md). A change to a physical constant with data already in
 	//     the field needs a rung and a branch — not a predicate that carries the past forever.
 	return rootTest;
 }
@@ -2050,7 +2050,7 @@ static ibQueryExprPtr TypedScalarEmpty(const ibBackendQueryColumn* leaf)
 // Builds (and dedups) the reference dot-walk LEFT-join chain on a FROM tree: a path's prefix joined once
 // is reused. Shared by the read (BuildPageIR) and the single-source aggregate (ExecuteAggregate) so both
 // resolve `Producer.Region` to the joined target the SAME way — no per-path duplication. The leaf
-// qualifies by the returned alias; a plain column by the root table. (docs/query-language-arc.md §22.4b)
+// qualifies by the returned alias; a plain column by the root table. (docs/private/query-language-arc.md §22.4b)
 //
 // ⭐⭐ …AND THE FILTER THAT WALKS IS LOWERED HERE TOO (PathConditions, Predicate). It was the read's
 // alone, inside BuildPageIR, while the aggregate beside it joined its GROUP BY keys through this very chain
@@ -2118,7 +2118,7 @@ public:
 	// branch's value. Each segment is re-resolved BY NAME per branch (the path columns were resolved against
 	// the representative type at lowering). Returns nullptr for a PURE single-target path (the caller keeps
 	// the qualified-alias road, Resolve) or — with the typed empty asked for — a non-scalar leaf.
-	// (docs/query-language-arc.md §22.4b)
+	// (docs/private/query-language-arc.md §22.4b)
 	//
 	// ⭐⭐ AND THE TYPED EMPTY IS THE PROJECTION'S NEED, NOT THE WALK'S. A read must hand back a VALUE for a
 	// row whose type has no such field, and an empty of the leaf's own type is that value — which is why a
@@ -2874,7 +2874,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 // terminal is GroupBy()/Sum()/Count()/Having() runs the JOIN + the GROUP BY + the aggregates in
 // ONE server-side SELECT, instead of materialising both leaves to RAM and folding in C++
 // (RamAggregate). Same leaf gate as the read fast path + scalar group keys / aggregate inputs.
-// (docs/query-language-arc.md §22.1a, §22.5 step 3 — multi-source)
+// (docs/private/query-language-arc.md §22.1a, §22.5 step 3 — multi-source)
 // ==========================================================================
 bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 	{
@@ -3309,7 +3309,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 	}
 
 // ==========================================================================
-// Totals push-down — GROUP BY ROLLUP (docs/query-language-arc.md §22.1b). The DBMS computes every
+// Totals push-down — GROUP BY ROLLUP (docs/private/query-language-arc.md §22.1b). The DBMS computes every
 // subtotal level (each from raw detail -> correct for COUNT/AVG) + the grand total in ONE pass; we
 // read the result + the GROUPING(key) flags and assemble the ibSelectorTree node tree the runtime
 // already consumes. Only the aggregated subtotal rows transit — no raw detail.
@@ -4078,7 +4078,7 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 //                                dispatches on this; ExecuteColocatedRollupTotals then runs GROUP BY
 //                                ROLLUP over the co-located JOIN (server-side) instead of the composer
 //                                materialising both leaves and folding the totals tree in RAM.
-// (docs/query-language-arc.md §22.1b)
+// (docs/private/query-language-arc.md §22.1b)
 bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 	{
 		const ibQueryNode* root = spec.m_root;
@@ -5266,7 +5266,7 @@ bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibFieldType
 // resolves off `queryable`'s metadata context: the clsid KIND (bit-check, no metadata lookup) says
 // reference, then metaData->GetTypeCtor vends the reference ctor and ctor->GetQueryable() the target
 // queryable by VIRTUAL dispatch — NO cast, no RTTI on this dot-walk hot path. The base provider returns
-// null; the computed provider forwards here. (docs/query-language-arc.md §22 dot-walk; kind-typing)
+// null; the computed provider forwards here. (docs/private/query-language-arc.md §22 dot-walk; kind-typing)
 // ==========================================================================
 const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBackendQueryable* queryable,
                                                                     const ibBackendQueryColumn* refColumn) const

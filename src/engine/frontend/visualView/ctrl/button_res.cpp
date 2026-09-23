@@ -1,70 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_button_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 36 1",
-	"  c None",
-	"8 c #D0EDFF",
-	"4 c #2D2D2D",
-	", c #E6F4FF",
-	"= c #E4F4FF",
-	"- c #262626",
-	"6 c #D1EEFF",
-	"e c #CAEDFF",
-	"# c #272727",
-	"1 c #D9F0FF",
-	"w c #C8EAFF",
-	"O c #F4FBFF",
-	"5 c #DEF1FF",
-	"u c #CDEBFF",
-	"9 c #D7F0FF",
-	"$ c #EDF7FF",
-	"2 c #DCF1FF",
-	". c #CFD9EC",
-	"t c #CBEBFF",
-	"+ c #282828",
-	"r c #C9EBFF",
-	"o c #FAFDFF",
-	"3 c #292929",
-	": c #E5F4FF",
-	"; c #E3F4FF",
-	"7 c #D2EEFF",
-	"> c #2A2A2A",
-	"< c #DAF0FF",
-	"q c #C9EAFF",
-	"% c #2B2B2B",
-	"0 c #C7EAFF",
-	"* c #EEF7FF",
-	"& c #ECF7FF",
-	"@ c #2C2C2C",
-	"y c #CDECFF",
-	"X c #003399",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	" .XXXXXXXXXXXX. ",
-	" XooooooooooooX ",
-	" XOO+@OO#OOOOOX ",
-	" X$%&&@*#*$#*&X ",
-	" X=-=;@:>$%,;;X ",
-	" X<%1<+2345111X ",
-	" X6378#9>9%888X ",
-	" X00@%qw#er%q0X ",
-	" XttyytttttuttX ",
-	" .XXXXXXXXXXXX. ",
-	"                ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_button_png = "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";
 
 wxIcon ibValueButton::GetIcon() const
 {
-	return wxIcon(s_button_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_button_png, wxSize(16, 16));
 }
 
 wxIcon ibValueButton::GetIconGroup()
 {
-	return wxIcon(s_button_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_button_png, wxSize(16, 16));
 }

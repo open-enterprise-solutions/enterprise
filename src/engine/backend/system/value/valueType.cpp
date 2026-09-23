@@ -102,6 +102,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		ibValueTypes vt = ibValue::GetVTByID(varValue.GetClassType());
 		if (vt < ibValueTypes::TYPE_REFFER) {
 			if (vt == ibValueTypes::TYPE_NUMBER) {
+				// Precision 0 is "no limit", as a string's length 0 is (Unqualified) — no rounding.
+				if (typeDescription.m_typeData.m_number.m_precision == 0)
+					return varValue;
 				return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
 			}
 			else if (vt == ibValueTypes::TYPE_DATE) {
@@ -138,6 +141,8 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
 				if (vt == ibValueTypes::TYPE_NUMBER) {
+					if (typeDescription.m_typeData.m_number.m_precision == 0)
+						return ibValue(varValue.GetNumber());   // no limit: the number as it is (the value may be of another type)
 					return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
 				}
 				else if (vt == ibValueTypes::TYPE_DATE) {
@@ -167,16 +172,37 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
+// ⭐⭐ A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER LIMITS NOTHING. `ibTypeData`'s own defaults — ten digits
+// and no fraction, ten characters, a date without its time — are what the designer gives a NEW ATTRIBUTE,
+// and they reached every description a script built: `New TypeDescription("String")` cut a text to ten
+// characters, "Number" rounded to a whole number, "Date" dropped the time, and a value table's column added
+// without a type kept the first ten characters of whatever was written into it (measured 2026-09-21).
+//
+// No qualifier means no limit: precision 0 (AdjustValue does not round), a date with its time, length 0
+// (already "unlimited" to AdjustValue). The designer's defaults stay where they belong — on a new attribute,
+// whose type becomes a column in the database and has to say how wide it is.
+ibTypeDescription::ibTypeData ibValueTypeDescription::Unqualified()
+{
+	return ibTypeDescription::ibTypeData(ibQualifierNumber(0, 0),
+		ibQualifierDate(ibDateFractions::ibDateFractions_DateTime), ibQualifierString(0));
+}
+
+ibTypeDescription ibValueType::GetOwnerTypeDescription() const
+{
+	return ibTypeDescription(GetOwnerTypeClass(), ibValueTypeDescription::Unqualified());
+}
+
 ibValueTypeDescription::ibValueTypeDescription() :
 	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType) :
-	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }){
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }, Unqualified()){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
-	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 }, (qNumber ? *qNumber : ibQualifierNumber()), (qDate ? *qDate : ibQualifierDate()), (qString ? *qString : ibQualifierString())){
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 },
+		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const ibTypeDescription& typeDescription)
@@ -184,11 +210,12 @@ ibValueTypeDescription::ibValueTypeDescription(const ibTypeDescription& typeDesc
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& array) :
-	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array){
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array, Unqualified()){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& array, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
-	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array, (qNumber ? *qNumber : ibQualifierNumber()), (qDate ? *qDate : ibQualifierDate()), (qString ? *qString : ibQualifierString())){
+	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array,
+		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
 }
 
 ibValueTypeDescription::~ibValueTypeDescription()
@@ -199,6 +226,9 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
+
+	// A qualifier not given limits nothing (Unqualified); the ones given override it below.
+	m_typeDesc.m_typeData = Unqualified();
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		wxString classType = paParams[0]->GetString();
@@ -340,6 +370,88 @@ bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetV
 }
 
 //**********************************************************************
+//*                            Qualifiers                              *
+//**********************************************************************
+
+#include "backend/compiler/enumUnit.h"
+#include "backend/backend_exception.h"
+
+// The two closed sets a qualifier is written with — so `QualifierDate` has something to be given at all.
+class ibValueEnumDateFractions : public ibValueEnumeration<ibDateFractions> {
+public:
+	ibValueEnumDateFractions() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() override {
+		AddEnumeration(ibDateFractions::ibDateFractions_Date,     wxT("Date"),     _("Date"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Time,     wxT("Time"),     _("Time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, wxT("DateTime"), _("Date and time"));
+	}
+};
+
+class ibValueEnumAllowedLength : public ibValueEnumeration<ibAllowedLength> {
+public:
+	ibValueEnumAllowedLength() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() override {
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, wxT("Variable"), _("Variable"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    wxT("Fixed"),    _("Fixed"));
+	}
+};
+
+// 🛑 A QUALIFIER TAKES ITS ARGUMENTS. The three had no Init of their own, so the base answered every
+// `New QualifierNumber(15, 2)` by ignoring what was given: the qualifier kept the default ten digits and
+// no fraction, and `New TypeDescription("Number", New QualifierNumber(15, 2))` rounded 0.25 to 0 — no
+// fraction could be declared from a script at all (measured 2026-09-21). Given nothing, a qualifier
+// limits nothing, the same as a description that names none (ibValueTypeDescription::Unqualified).
+bool ibValueQualifierNumber::Init()
+{
+	m_qNumber = ibValueTypeDescription::Unqualified().m_number;
+	return true;
+}
+
+bool ibValueQualifierNumber::Init(ibValue** paParams, const long lSizeArray)
+{
+	const long precision = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
+	const long scale     = lSizeArray > 1 ? paParams[1]->GetInteger() : 0;
+	if (precision < 0 || precision > 38)
+		ibBackendCoreException::Error(_("QualifierNumber: the number of digits is from 0 (no limit) to 38, not %d"), (int)precision);
+	if (scale < 0 || (precision > 0 && scale > precision))
+		ibBackendCoreException::Error(_("QualifierNumber: the digits after the point are from 0 to the number of digits, not %d"), (int)scale);
+	m_qNumber = ibQualifierNumber(static_cast<unsigned char>(precision), static_cast<char>(scale),
+		lSizeArray > 2 && paParams[2]->GetBoolean());
+	return true;
+}
+
+bool ibValueQualifierDate::Init()
+{
+	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	return true;
+}
+
+bool ibValueQualifierDate::Init(ibValue** paParams, const long lSizeArray)
+{
+	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	if (lSizeArray > 0 && !paParams[0]->IsEmpty())
+		m_qDate = ibQualifierDate(paParams[0]->ConvertToEnumValue<ibDateFractions>());
+	return true;
+}
+
+bool ibValueQualifierString::Init()
+{
+	m_qString = ibValueTypeDescription::Unqualified().m_string;
+	return true;
+}
+
+bool ibValueQualifierString::Init(ibValue** paParams, const long lSizeArray)
+{
+	const long length = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
+	if (length < 0 || length > 65535)
+		ibBackendCoreException::Error(_("QualifierString: the length is from 0 (no limit) to 65535, not %d"), (int)length);
+	m_qString = ibQualifierString(static_cast<unsigned short>(length),
+		lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibAllowedLength>()
+		                                          : ibAllowedLength::ibAllowedLength_Variable);
+	return true;
+}
+
+//**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
@@ -349,3 +461,6 @@ VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", value_to_clsid("V
 VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", value_to_clsid("VL_QNUM"));
 VALUE_TYPE_REGISTER(ibValueQualifierDate, "QualifierDate", value_to_clsid("VL_QDAT"));
 VALUE_TYPE_REGISTER(ibValueQualifierString, "QualifierString", value_to_clsid("VL_QSTR"));
+
+ENUM_TYPE_REGISTER(ibValueEnumDateFractions, "DateFractions", enum_to_clsid("EN_DFRAC"));
+ENUM_TYPE_REGISTER(ibValueEnumAllowedLength, "AllowedLength", enum_to_clsid("EN_ALLEN"));

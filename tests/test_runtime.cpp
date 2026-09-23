@@ -933,7 +933,7 @@ TEST(RuntimeTest, LinqOrderBy_SecondKeyBreaksTheTie) {
 	EXPECT_EQ(ret.GetInteger(), 111221);
 }
 
-TEST(RuntimeTest, LinqOrderBy_DescendingReversesTheWholeOrdering) {
+TEST(RuntimeTest, LinqOrderBy_DescendingTurnsOnlyItsKey) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function TwoKeysDown() Public\n")
@@ -953,10 +953,41 @@ TEST(RuntimeTest, LinqOrderBy_DescendingReversesTheWholeOrdering) {
 
 	ibValue ret;
 	pu.CallAsFunc(wxT("TwoKeysDown"), ret);
-	// The direction is written ONCE, after the last key, and turns the whole
-	// ordering round: (2,1) (1,2) (1,1) -> 21, 12, 11. Applying it to the LAST
-	// key only would have given 12 before 11 but left A ascending: 11, 12, 21.
-	EXPECT_EQ(ret.GetInteger(), 211211);
+	// The direction is the KEY'S it is written after: A ascending, and within
+	// A = 1 the larger B first - (1,2) (1,1) (2,1) -> 12, 11, 21. Until 2026-09-21
+	// it was one flag for the whole query and turned A round too: 21, 12, 11.
+	EXPECT_EQ(ret.GetInteger(), 121121);
+}
+
+// Every key its own way, the one in the middle included - `orderby f1, f2
+// descending, f3` (Max, 2026-09-21). A key before a comma could not carry a
+// direction at all until then.
+TEST(RuntimeTest, LinqOrderBy_EachKeyRunsItsOwnWay) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function ThreeWays() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 2, 1, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 2, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 2, 1));\n")
+		wxT("  q = from r in rows orderby r.A, r.B descending, r.C select { V = r.A * 100 + r.B * 10 + r.C };\n")
+		wxT("  If q.Count() <> 5 Then Return -1; EndIf;\n")
+		wxT("  If q[3].V <> 112 Or q[4].V <> 211 Then Return -2; EndIf;\n")
+		wxT("  Return q[0].V * 1000000 + q[1].V * 1000 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("ThreeWays"), ret);
+	// A up; within A = 1, B down; within each B, C up again - C is what puts 121
+	// before 122, which arrived the other way round: 121, 122, 111, 112, 211.
+	EXPECT_EQ(ret.GetInteger(), 121122111);
 }
 
 TEST(RuntimeTest, LinqOrderBy_ThirdKeyIsStillConsulted) {

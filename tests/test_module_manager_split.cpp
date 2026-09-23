@@ -5,7 +5,7 @@
 // lightweight base + a heavy runtime branch + a designer holder, and routed
 // every object/record/module through the ibSession::GetEditModuleManager seam
 // (Designer → lightweight designer manager from the compile cache; runtime →
-// per-session root mm). See docs/module-manager-split.md.
+// per-session root mm). See docs/private/module-manager-split.md.
 //
 // These are pure structural/null-safety smoke tests — they need no database,
 // no appData wiring, no live session pool. The behavioural half (which manager

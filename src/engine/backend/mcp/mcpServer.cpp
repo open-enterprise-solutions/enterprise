@@ -1574,6 +1574,15 @@ void ibMcpDescribePlatform(ibDataNode& into)
 {
 	into.AddField(wxT("build"), ibDataValue::Int((s64)GetBuildId()));
 
+	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
+	// and two designers can stand open on two different bases — so an answer naming the configuration but
+	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
+	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
+	// else had open). The mode is said beside it because a path means a file base and nothing else does.
+	into.SetValue(wxT("connection"), appData->GetDatabaseModeDescr());
+	if (!appData->GetFile().IsEmpty())
+		into.SetValue(wxT("base"), appData->GetFile());
+
 	const ibUserInfo& who = appData->GetUserInfo();
 
 	if (!who.IsOk()) {

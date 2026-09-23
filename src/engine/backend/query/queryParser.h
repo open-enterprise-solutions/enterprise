@@ -40,11 +40,11 @@
 // The parser accepts the FULL grammar above and the lowering (queryLowering) EXECUTES it — arithmetic,
 // CASE, UNION and IN-subquery all run. What still throws a clear "not yet executed" is the residual
 // tail only (a computed expression across a JOIN's leaves, a computed column over aggregates, a
-// dot-walk leaf inside a boolean WHERE over a non-co-located JOIN). See docs/query-language-arc.md §23.4.
+// dot-walk leaf inside a boolean WHERE over a non-co-located JOIN). See docs/private/query-language-arc.md §23.4.
 //
 // Throws ibBackendCoreException (line / position) on a syntax error.
 //
-// See docs/query-language-arc.md §14 / §23.
+// See docs/private/query-language-arc.md §14 / §23.
 
 #include "queryLexer.h"
 #include "queryAST.h"

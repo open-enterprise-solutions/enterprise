@@ -25,15 +25,17 @@ class ibDataNode;   // serialize/dataBuilder.h — universal node (layer -> node
 // is the resolved display mode (picture / text / both) for THIS command; enabled greys the
 // tool out (an item's Enabled flag) without dropping it from the bar. item is
 // the source child (nullptr for an AutoFill command) — lets a designer click resolve back.
-// ⭐⭐ WHAT A BAR ENTRY IS — and there are two answers, which is why this is a KIND and not a flag.
+// ⭐⭐ WHAT A BAR ENTRY IS — and there are three answers, which is why this is a KIND and not a flag.
 // A COMMAND stands for something to DO; a QUICK FILTER stands for a filter LINE the author marked
-// «quick access», and clicking it edits that line's value rather than running anything.
+// «quick access», and clicking it edits that line's value rather than running anything; a GROUP stands
+// for a command group of the form command bar, and clicking it opens a submenu of its commands.
 //
 // The kind is asked in exactly two places — the click (which door it opens) and the caption (a
-// filter shows its value) — and nowhere else has to care, because both are entries on one bar.
+// filter shows its value) — and nowhere else has to care, because all are entries on one bar.
 enum ibCommandEntryKind {
 	ibCommandEntryKind_Command = 0,
 	ibCommandEntryKind_QuickFilter,
+	ibCommandEntryKind_Group,
 };
 
 struct ibCommandEntry {
@@ -49,6 +51,11 @@ struct ibCommandEntry {
 	// setting in force. An index rather than a pointer because the settings are rebuilt under the
 	// bar (a refetch, another variant), and a pointer into a vector dies the moment one is added.
 	size_t                  filterLine;
+	// …and WHAT IS UNDER IT, for a group: one transient item per command, in the order they were gathered —
+	// owned by the bar's AutoFill set (m_autoItems), rebuilt with it. Empty for every other kind.
+	std::vector<ibValueCommandBarItem*> members;
+	// The hint on the tool. Empty: the caption.
+	wxString                tooltip;
 	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr),
 		kind(ibCommandEntryKind_Command), filterLine(0) {}
 	ibCommandEntry(const ibActionID& i, const wxString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr, const wxBitmap& bmp = wxNullBitmap)
@@ -234,6 +241,13 @@ public:
 	ibValueCommandBarItem* FindItemByCommandId(const ibActionID& id) const {
 		for (const ibCommandEntry& c : m_commands)
 			if (c.id == id) return c.item;
+		return nullptr;
+	}
+	// The entry built for this id — what the toolbar asks before deciding what a click means (a group opens its
+	// submenu). nullptr when the id is not one of this bar's.
+	const ibCommandEntry* FindEntry(const ibActionID& id) const {
+		for (const ibCommandEntry& c : m_commands)
+			if (c.id == id) return &c;
 		return nullptr;
 	}
 

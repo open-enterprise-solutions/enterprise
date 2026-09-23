@@ -22,6 +22,7 @@
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
+    <ClCompile Include="docView\print\printPreview.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
     <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
@@ -497,8 +498,10 @@
   <ItemGroup>
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\print\printPreview.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
     <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
@@ -793,16 +796,6 @@
     <ClInclude Include="win\theme\luna_dockart.h" />
     <ClInclude Include="win\theme\luna_tabart.h" />
     <ClInclude Include="win\theme\luna_toolbarart.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="win\ctrls\res\checked2.xpm" />
-    <None Include="win\ctrls\res\checked_d.xpm" />
-    <None Include="win\ctrls\res\checked_ld.xpm" />
-    <None Include="win\ctrls\res\checked_mo.xpm" />
-    <None Include="win\ctrls\res\unchecked2.xpm" />
-    <None Include="win\ctrls\res\unchecked_d.xpm" />
-    <None Include="win\ctrls\res\unchecked_ld.xpm" />
-    <None Include="win\ctrls\res\unchecked_mo.xpm" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\frontend.rc" />

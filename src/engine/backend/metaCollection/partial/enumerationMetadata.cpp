@@ -42,19 +42,19 @@ ibValueMetaObjectFormBase* ibValueMetaObjectEnumeration::GetDefaultFormByID(cons
 
 #include "enumerationManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectEnumeration::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectEnumeration::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectEnumeration(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectEnumeration(this));
 }
 
-ibSourceDataObject* ibValueMetaObjectEnumeration::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectEnumeration::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetDataOrder()->GetQueryColumn());   // migrated onto the universal dynamic list
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDataOrder()->GetQueryColumn()));   // migrated onto the universal dynamic list
 	case eFormSelect:
-		return ibCreateList(GetQueryable(), GetDataOrder()->GetQueryColumn(), ibDynamicListView_Choice);   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDataOrder()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	}
 
 	return nullptr;

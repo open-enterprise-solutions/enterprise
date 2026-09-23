@@ -6,7 +6,7 @@
 
 ////////////////////////////////////////////////////////////////////////////
 //	Description : a sequence — up to which point the documents of a key
-//	              have been posted in order (docs/sequence-arc.md)
+//	              have been posted in order (docs/private/sequence-arc.md)
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐⭐ WHAT IT ANSWERS: a document posted out of turn, or changed after later documents were already
@@ -209,7 +209,7 @@ public:
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const override;
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const override;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const override;
 
 	//support form
 	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString,
@@ -237,8 +237,10 @@ public:
 	bool HasBorders() const { return m_borders->GetMetaID() != 0; }
 
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
+	virtual bool OnBeforeRunMetaObject(int flags) override;
 	virtual bool OnAfterRunMetaObject(int flags) override;
 	virtual bool OnBeforeCloseMetaObject() override;
+	virtual bool OnAfterCloseMetaObject() override;
 
 	// …and everything that reads the registrations meets the surface that knows about the moment.
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_ownQueryable.GetQueryable(); }
@@ -255,9 +257,9 @@ public:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	// The manager — `Sequences.<Name>`, where the border is read and said (sequenceManager.h).
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const override;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const override;
 	// …and the registrations of ONE recorder, as a set: what the document's posting handler fills.
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(
 		const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const override;
 
 	// ⭐⭐ WHAT A REGISTRATION IS MADE OF, said to everything that asks: this list becomes the table's
@@ -354,8 +356,8 @@ public:
 		m_members.Bind(this, &ibValueRecordSetObjectSequence::FillMembers);
 	}
 
-	virtual ibValueRecordSetObject* CopyRegisterValue() override {
-		return new ibValueRecordSetObjectSequence(*this);
+	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue() override {
+		return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectSequence(*this));
 	}
 
 	const ibValueMetaObjectSequence* GetSequenceMetaObject() const {

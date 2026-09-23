@@ -102,7 +102,7 @@ protected:
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
 		virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const override {
-			ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateAndConvertObjectRef<ibValueEnumeration<valType>>(m_clsid));
+			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
 			for (auto& e : enumOwner->m_listEnumData) {
 				if (e.second.Contains(findData)) {
 					ibValueEnumerationVariant<valType>* enumValue = new ibValueEnumerationVariant<valType>(e.first, m_clsid);

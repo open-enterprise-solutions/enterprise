@@ -1,54 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_checkbox_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 20 1",
-	"  c None",
-	"# c #E8E8E8",
-	": c #F7F7F7",
-	"+ c #E1E1E1",
-	"= c #F0F0F0",
-	"o c #DADADA",
-	", c #F9F9F9",
-	"% c #E3E3E3",
-	"- c #F2F2F2",
-	"$ c #DCDCDC",
-	"< c #EBEBEB",
-	"X c #D6D6D6",
-	"1 c #FCFCFC",
-	"& c #009900",
-	"@ c #E6E6E5",
-	"> c #E6E6E6",
-	"; c #F5F5F5",
-	"O c #DFDFDF",
-	"* c #EEEEEE",
-	". c #333366",
-	/* pixels */
-	"                ",
-	"                ",
-	"  ............  ",
-	"  .XXXooO+@##.  ",
-	"  .XXX$O%%@&#.  ",
-	"  .XX$O%%@&&*.  ",
-	"  .XO++%@&&&=.  ",
-	"  .+&+%@&&&=-.  ",
-	"  .+&&@&&&=-;.  ",
-	"  .+&&&&&=-;:.  ",
-	"  .%>&&&=-;:,.  ",
-	"  .@#<&==;:,1.  ",
-	"  .#<*=-;:,11.  ",
-	"  ............  ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_checkbox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAE9klEQVR4nOyafVAUZRzHv3u8v2lkBAEJ4qgkGcVLgpogjnI01RiN/VHQmCLC5IyNaFg2DjUxQohjryi+jGMx5Shq1GCikGDDAQo2DoKYyIkHxhBwkiQvcts+1+DcKXPPcnt37Ln3ubnZ293vs/M833ue3d/+nkcGiSODxLEZAIljMwASx2YAJI79RMQRC2KSwWIFyyCKAeMLEcGC7WRY1GgY5nhD9dnv+ZZj+IgiI2N9NA5sEdfoOFgBnBmnh0btkxtry7toWl5DgLXHUWtpPIGr6zJn2WgRH60dTRAeFZvCyPAerA0GQT5+gTduqZR/GJJR7wEMgzd09+NiY5CeuhqBAdMhJpQ32lFQeAAVZyvvH5MxbCK3OWioHHUIsEC07v66lFWiazyB1InUTRfuZh1OK8enB0zV3Q+aEQix8mDd+DypbIEQJI4tEoSVUdxSisqbCjzt4Yu3QxLh6+4NIViNAW2327H5t89wra/t/rHiq6XIj9uGhX6RMBarGAKdd/7CmtIMvcYTBu8NYmN5Fpp6rsJYRG9A790+rD25Gb2D6nHPD40O43BzCYxF1ENgYORfpJd9iA6uBxiivb8DxiJaA8g/u/70VrT0tlK1c6fNhrGI0gANq8Gmik9xsauRqvV29ULaC+/AWERpQNbv+TinqqXqPBzdUCj/XLs1FtEZ8GX9fpRcK6PqnO2cULA8FwFT/SEEURlw5MovOHDpR6rOjktQfL0sG896zYFQTGJAD/eoOqeqw+2hfoR7z+MqFoyJUnq9AtmKL3hpsxdvQcRToTAFgg1o7VMi9dQHWhPGeD9iLVbNe5P3NRQdF/BxVS4v7dboDZAHLYGpEBQI9Q/9gzUnM/QaT9h1YS921u3hdY3G7hZsKN+mvfPTSAl9CyuDX4EpEWRAbu23UHPdfjwOXT6K/LrdBsu3qpVIO5WJ4dER0FgxS471Ye/C1Agy4IyyyuD57y4XY+f5wnHPdQ10Y92vmbgzMgAaSwMWIWtRBsyBIAOmuXhSNYcaj2C74iu9Y+rBfqwu3Yi/7/ZSy4d6zUVOzEcwF4IMeG1WPC/d4SslyKst0P4mb3DpZVuo8T0h+PGZKJDnwMHOAeZC0FMg7flkVKvO41J3M1Vb1HQMGu7Tpm5Hc8+fVP30KX4oiM+Bq70LzIng12ESkMzh/ik+/NB0AjWdDVSdp/Nj2hCXbM2NYAOmOHlgf0I+bxNokLh+nzwPPm5PwhKYJCHiTiqdsEM7ZoXgZOeIb5Zvx0zPQFgKk2WEPBzdOROM7wkyLr7ftfQTPOf1DCyJSVNipCcYOxyyF2ci2i8ClsbkOcH/h0P+hLI0m15MR0LQ5My+myUpOpaoCHmCbgJ5aUoKScRkYbasMOkJe+U7DJogn7FE++Y4mZg1Le7q4ML1hDxE+YY9dO4l//nIiTVfiMsXs2eE3BxcsTs+l8v2/AxFZz2ZssZC/0gkzn4ZYsBiKbGVwa9qv2LDNj0OiWMzgKpgoffifr1NCbHyYN1YsLdoZXj0APai7t6efQfRflMFsUGWyZG66cEy9bRy1KWyYdExr8sY5hisEBaa+PrqKoPTTNQe0KCoPM5dqRxWBgv8RGs8gddNkLmHJO6KZ2AlkMXSIxhO5aPltVp8jLAFsUkMyyZypeaLbrk8iw6GQQ03vXLC5MvlH2VscQAkjs0ASBybAZA4kjfgPwAAAP//e3sOPQAAAAZJREFUAwBdqncFS/5/GQAAAABJRU5ErkJggg==";
 
 wxIcon ibValueCheckbox::GetIcon() const
 {
-	return wxIcon(s_checkbox_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_checkbox_png, wxSize(16, 16));
 }
 
 wxIcon ibValueCheckbox::GetIconGroup()
 {
-	return wxIcon(s_checkbox_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_checkbox_png, wxSize(16, 16));
 }

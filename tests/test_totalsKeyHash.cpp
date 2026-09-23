@@ -11,7 +11,7 @@
 // twenty-one index segments, against Firebird's sixteen. Nothing in an accounting
 // totals key is removable, so the UNIQUENESS moves into one hashed field while the
 // key columns stay exactly as they are and the delta goes on MATCHING BY THEM.
-// (docs/register-shared-machinery.md § 4a)
+// (docs/private/register-shared-machinery.md § 4a)
 //
 // What this file pins down, in the order the mechanism is decided:
 //

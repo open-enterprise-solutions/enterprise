@@ -26,7 +26,7 @@
 // sizeof(std::wstring) (the allocator folds away via EBO).
 //
 // Why std::wstring (and the file named fstring.h, not string.h): see
-// docs/value-audit.md. The runtime indexes strings by wxChar position, so wchar
+// docs/private/value-audit.md. The runtime indexes strings by wxChar position, so wchar
 // storage keeps Mid/Find/StrLen O(1) and exact; string.h would shadow the C
 // <string.h>.
 // =============================================================================
@@ -88,7 +88,7 @@ namespace detail {
 		// NOT done on Windows, deliberately: there a thread_local with a destructor is built by
 		// __dyn_tls_init for EVERY thread and costs an 8-byte registration node that is lost when
 		// a thread is killed at process exit — the trade is measured in
-		// docs/engineering-playbook/25-memory-leaks.md. DllMain covers those threads for free, so
+		// docs/private/engineering-playbook/25-memory-leaks.md. DllMain covers those threads for free, so
 		// the pool stays trivially destructible there.
 		~ThreadPool() noexcept { Release(); }
 #endif

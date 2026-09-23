@@ -14,7 +14,7 @@
 // an L3 ibBackendQueryColumn plus the metadata context (for reference-type
 // detection). This is the one home for the "magic" column spread that used to be
 // duplicated across the attribute metaobject, the provider codec and the DDL
-// builder. (docs/query-language-arc.md §22.4b)
+// builder. (docs/private/query-language-arc.md §22.4b)
 
 #include "backend/databaseLayer/columnType.h"             // ibColumnType (shared canonical type — ibColumnSlot carries one)
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibQueryStatement / ibQueryResult (L2) — the codec binds/reads through them
@@ -200,7 +200,7 @@ BACKEND_API void BindWriteValue(class ibQueryStatement& statement, const ibBacke
 // the read/write data door (L3-1) and the schema door's seed phase (L3-2, e.g. predefined
 // values) share ONE codec, so a write and its DDL can never disagree on the field shape.
 // This header stays light: the persisted variant tag (ibFieldTypes) is an implementation
-// detail of the .cpp, not exposed here. (docs/query-language-arc.md §22.4b)
+// detail of the .cpp, not exposed here. (docs/private/query-language-arc.md §22.4b)
 // ==========================================================================
 class BACKEND_API ibColumnCodec
 {

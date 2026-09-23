@@ -213,9 +213,6 @@
     <ClInclude Include="win\dlg\functionAll.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\splashLogo.xpm" />
-  </ItemGroup>
-  <ItemGroup>
     <Image Include="enterprise.ico" />
   </ItemGroup>
   <ItemGroup>

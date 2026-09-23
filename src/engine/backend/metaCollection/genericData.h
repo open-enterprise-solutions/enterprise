@@ -14,6 +14,8 @@ class BACKEND_API ibBackendControlFrame;
 class BACKEND_API ibValueManagerDataObject;
 class BACKEND_API ibValueSpreadsheetDocument;
 
+template <class T> class ibSourcePtr;   // srcDataObject.h
+
 class BACKEND_API ibFormTypeList {
 
 	struct ibFormTypeItem {
@@ -201,17 +203,9 @@ public:
 	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
 	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
 	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
-	// would have nothing to act on.
+	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
 	virtual ibBackendValueForm* CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
-		const ibUniqueKey& formGuid = wxNullGuid) const {
-		return ibValueMetaObjectGenericData::CreateAndBuildForm(
-			metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
-			metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
-			nullptr,
-			CreateSourceObject(metaForm),
-			formGuid
-		);
-	}
+		const ibUniqueKey& formGuid = wxNullGuid) const;
 
 #pragma region _form_builder_h_
 	//support form 
@@ -233,12 +227,13 @@ public:
 
 #pragma endregion
 
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const = 0;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const = 0;   // born owned, like every creator
 
 protected:
 
-	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const { return nullptr; }
+	// create object data with meta form — the OWNER of a new source (a data object is born owned); empty
+	// when the form has none. (Out of line: the holder needs the source complete.)
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 };
 
 // THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its

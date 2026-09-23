@@ -33,6 +33,7 @@
 #include "backend/metaCollection/metaObjectMetadata.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaSectionObject.h"
+#include "backend/metaCollection/metaCommandGroupObject.h"   // the section's groups, in the desktop's order
 #include "backend/interfaceHelper.h"
 #include "backend/backend_picture.h"
 
@@ -1229,7 +1230,7 @@ namespace {
 //   everything else (ibBackendCoreException etc.) → {error:"script_exception", message:"..."}
 //     UX: generic error toast carrying the actual text — never lose info
 //
-// See docs/record-locks.md for the lock-specific shape.
+// See docs/private/record-locks.md for the lock-specific shape.
 std::string ExceptionToJson(const ibBackendException& e)
 {
 	nlohmann::json j;
@@ -1591,16 +1592,19 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 		if (!icon.IsOk()) return std::string();
 		return iconToDataUri(wxBitmap(icon));
 	};
-	// Command sections per interface — desktop's subsystem popup groups
-	// items by these. Listing them all so the web popup can mirror the
-	// structure.
-	struct SectionSpec { ibInterfaceCommandSection section; const char* name; };
-	const SectionSpec sectionSpecs[] = {
-		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Default,  "Default"  },
-		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Create,   "Create"   },
-		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Combined, "Combined" },
-		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Report,   "Reports"  },
-		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Service,  "Service"  },
+	// ⭐ THE GROUPS OF A SECTION, as the desktop's section page shows them: the platform's (Important, Normal,
+	// Create, Reports, Service — g_platformCommandGroups, the one list) and then the ones the configuration
+	// declares for a section page. A group of the FORM command bar is not one of them.
+	//
+	// `section` is what the client sends back as the COMMAND TYPE when an item is opened (client.html:
+	// showInterfacePopup) — so it is Create for the Create group and Default for every other, Important and
+	// the declared ones included; `name` is the heading it shows. This list used to be written out here by hand
+	// as five areas, one of them Combined — the catalogs a second time, a block the desktop never had — and
+	// without Important, so a command marked Important and every command in a declared group was on no web page.
+	struct SectionSpec {
+		std::vector<ibValueMetaObject*> items;
+		ibInterfaceCommandType type;
+		wxString caption;
 	};
 	nlohmann::json arr = nlohmann::json::array();
 	for (auto* obj0 : activeMetaData->GetAnyArrayObject(g_metaSectionCLSID)) {
@@ -1613,26 +1617,39 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 		o["synonym"] = std::string(iface->GetSynonym().utf8_str());
 		const std::string uri = iconToDataUri(iface->GetPictureAsBitmap());
 		if (!uri.empty()) o["icon"] = uri;
+		std::vector<SectionSpec> sectionSpecs;
+		for (const ibInterfaceCommandSection area : g_platformCommandGroups) {
+			SectionSpec spec{ {}, area == ibInterfaceCommandSection_Create
+				? ibInterfaceCommandType_Create : ibInterfaceCommandType_Default, ibCommandGroupCaption(area) };
+			iface->GetInterfaceItemArrayObject(area, spec.items);
+			sectionSpecs.push_back(std::move(spec));
+		}
+		for (const ibValueMetaObjectCommandGroup* group :
+				activeMetaData->GetAnyArrayObject<ibValueMetaObjectCommandGroup>(g_metaCommandGroupCLSID)) {
+			if (group == nullptr || group->IsDeleted() || group->GetCategory() == ibCommandGroupCategory_FormCommandBar)
+				continue;
+			SectionSpec spec{ {}, ibInterfaceCommandType_Default, group->GetSynonym() };
+			iface->GetInterfaceItemArrayObject(group, spec.items);
+			sectionSpecs.push_back(std::move(spec));
+		}
+
 		nlohmann::json sections = nlohmann::json::array();
 		for (const auto& spec : sectionSpecs) {
 			nlohmann::json items = nlohmann::json::array();
-			std::vector<ibValueMetaObject*> objs;
-			if (iface->GetInterfaceItemArrayObject(spec.section, objs)) {
-				for (auto* obj : objs) {
-					if (obj == nullptr || obj->IsDeleted()) continue;
-					nlohmann::json it;
-					it["id"]      = (int)obj->GetMetaID();
-					it["name"]    = std::string(obj->GetName().utf8_str());
-					it["synonym"] = std::string(obj->GetSynonym().utf8_str());
-					const std::string iconUri = iconFromIcon(obj->GetIcon());
-					if (!iconUri.empty()) it["icon"] = iconUri;
-					items.push_back(std::move(it));
-				}
+			for (auto* obj : spec.items) {
+				if (obj == nullptr || obj->IsDeleted()) continue;
+				nlohmann::json it;
+				it["id"]      = (int)obj->GetMetaID();
+				it["name"]    = std::string(obj->GetName().utf8_str());
+				it["synonym"] = std::string(obj->GetSynonym().utf8_str());
+				const std::string iconUri = iconFromIcon(obj->GetIcon());
+				if (!iconUri.empty()) it["icon"] = iconUri;
+				items.push_back(std::move(it));
 			}
 			if (items.empty()) continue;
 			nlohmann::json sec;
-			sec["section"] = (int)spec.section;
-			sec["name"]    = spec.name;
+			sec["section"] = (int)spec.type;
+			sec["name"]    = std::string(spec.caption.utf8_str());
 			sec["items"]   = std::move(items);
 			sections.push_back(std::move(sec));
 		}

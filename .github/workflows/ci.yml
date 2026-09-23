@@ -32,6 +32,34 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # The review remarks a script can make (.github/lint.sh): header guards, attribution lines, XPM, ASCII
+  # message ids. Seconds and no build, so a pull request hears them before anyone reads it.
+  # ---------------------------------------------------------------------------
+  review-rules:
+    name: Review rules
+    runs-on: ubuntu-22.04
+    steps:
+      # The whole history is needed to find the merge base and walk the commits, but not the contents of
+      # every file ever written: blob:none fetches commits and trees, and git fetches the few blobs the
+      # rules read on demand.
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check the change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch or a manual run has no "before"; the last commit is then the change.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE="$HEAD_SHA~1"
+          fi
+          bash .github/lint.sh "$BASE" "$HEAD_SHA"
+
+  # ---------------------------------------------------------------------------
   # The primary signal: the backend suite (~850 tests), no GUI, no display.
   # ---------------------------------------------------------------------------
   tests-linux:
@@ -248,6 +276,157 @@ jobs:
           OES_PG_USER: postgres
           OES_PG_PASSWORD: postgres
         run: ./bin/Debug/oes_pg_dialect_test --gtest_color=no
+
+  # ---------------------------------------------------------------------------
+  # Firebird — EXECUTED, on the kit the package ships.
+  #
+  # The general jobs compile the Firebird driver but cannot run it: it loads
+  # fbclient at run time and a runner has none, so every test that needs a live
+  # Firebird SKIPS there (FirebirdBatchInsert says so at its top). This job lays
+  # the pinned Firebird 5 kit out as `_fb/` beside the test binary — the kit and
+  # the place the nightly package uses (.github/firebird-kit-linux.sh) — and runs
+  # the Firebird tests. A file base opens through the embedded engine, so no
+  # server container is needed.
+  #
+  # ⚠ A SKIP HERE IS A FAILURE. The tests skip where no client loads, which is
+  # right on a developer's machine and wrong in the one job that exists to load
+  # it: a kit that stopped loading would otherwise leave the job green.
+  # ---------------------------------------------------------------------------
+  tests-firebird:
+    name: Firebird (Linux, Debug)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # docs/private/ is private and not needed; wxWidgets is — see tests-linux.
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      # ⚠ POSTGRES IS ON HERE TOO, as in every other job. This one is ABOUT Firebird, so it was configured
+      # with that driver alone — and the test tree does not build without the other: three query tests
+      # name `ibDatabaseLayerPostgres::Dialect()` outright, so the link failed before a single Firebird
+      # test ran (first run of this job, 2026-09-22). What a job is about is which tests it RUNS, not
+      # which drivers exist in the binary.
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+
+      - name: Build the test target
+        run: cmake --build --preset linux-debug --target oes_tests
+
+      - name: Firebird 5 kit
+        run: |
+          bash .github/firebird-kit-linux.sh
+          cp -a fbkit build/linux-debug/bin/Debug/_fb
+
+      - name: Run
+        working-directory: build/linux-debug
+        run: |
+          set -o pipefail
+          ./bin/Debug/oes_tests --gtest_filter='Firebird*' --gtest_color=no | tee firebird.txt
+          if grep -q '\[  SKIPPED \]' firebird.txt; then
+            echo "::error::a Firebird test skipped - the kit did not load"
+            exit 1
+          fi
+
+      - name: Firebird log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-log
+          path: build/linux-debug/bin/Debug/_fb/firebird.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # The backend suite under AddressSanitizer + UndefinedBehaviorSanitizer
+  # (OES_SANITIZE, CMakeLists.txt). The general jobs prove the tests PASS; this
+  # one proves they pass without touching memory they do not own (use after
+  # free, overflow) and without undefined behaviour. On Linux LeakSanitizer rides
+  # in with ASan, so a leak at exit is reported with the stack that allocated it
+  # (docs/private/engineering-playbook/25-memory-leaks.md).
+  #
+  # ⚠ NOT BLOCKING YET. The suite has never run under a sanitizer, so the first
+  # runs are a harvest, not a verdict; the job is made blocking once the harvest
+  # is fixed. A finding is in the output of the test that failed, with its stack.
+  # ---------------------------------------------------------------------------
+  tests-sanitize:
+    name: Tests (Linux, ASan + UBSan)
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # docs/private/ is private and not needed; wxWidgets is — see tests-linux.
+      - run: bash .github/fetch-wxwidgets.sh
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev
+
+      - name: Configure
+        run: >
+          cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+          -DOES_SANITIZE=address,undefined
+
+      # The same targets as tests-linux. ⚠ NO LEAK CHECK WHILE BUILDING: gtest_discover_tests RUNS each test
+      # binary to list its tests, and a leak reported at that exit would fail the build before a single
+      # test ran.
+      - name: Build the test targets
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: >
+          cmake --build --preset linux-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test
+
+      # Twice the timeout of tests-linux: ASan costs about 2x.
+      #
+      # ⭐ check_initialization_order EARNED ITS PLACE ON THE FIRST RUN (2026-09-22): 2076 failed of
+      # 2092, and every one of them the SAME report - initialization-order-fiasco on `s_traceTypes`,
+      # a file-scope flag in compiler/valueFactory.cpp read from the static initialisation of a
+      # registrar one translation unit away. One defect at startup, and since ASan cannot recover
+      # from it (not without -fsanitize-recover=address, so halt_on_error would change nothing), it
+      # wore the whole suite's output: no leak, no overflow and no undefined behaviour underneath it
+      # was ever reached. Both flags are function-local statics now, which is what utils/debugTrace.h
+      # asks of its callers and names those two files for; the check stays ON so the next one is
+      # caught the same way rather than silently allowed.
+      - name: Run
+        working-directory: build/linux-debug
+        env:
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          # THE LEAKS THAT ARE NOT OURS, and only those — each line of the file says whose they are
+          # and why nobody frees them. Without it every test process ends red on fontconfig and the
+          # GTK singletons, and a run where everything is red says nothing about anything.
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.github/lsan-suppressions.txt
+        run: ctest --output-on-failure --timeout 600 -E "oes_frontend_runtime_test|oes_pg_dialect_test"
+
+      - name: Journal on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-linux-sanitize
+          path: build/linux-debug/bin/Debug/journal/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
@@ -506,7 +685,7 @@ jobs:
   #
   # READ IT AS AN ORDER OF MAGNITUDE. A GitHub runner is a shared VM: locally, on
   # a quiet desktop, host->script alone swung 228 -> 468 ns inside ONE series
-  # (docs/runtime-perf.md §5.8). So this catches a catastrophic regression - a
+  # (docs/private/runtime-perf.md §5.8). So this catches a catastrophic regression - a
   # figure that doubles and stays doubled across runs - and nothing finer. Do not
   # quote these numbers as the platform's performance; measure on real hardware
   # for that.

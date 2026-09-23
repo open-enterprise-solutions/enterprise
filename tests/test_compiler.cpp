@@ -763,7 +763,7 @@ TEST(BarrierTypes, CreateNothing) {
 	// No value is ever "an AnyRef" — the name exists to be declared.
 	const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(wxT("AnyRef"));
 	ASSERT_NE(nullptr, ctor);
-	EXPECT_EQ(nullptr, ctor->CreateObject());
+	EXPECT_FALSE(ctor->CreateObject().IsReference());
 }
 
 TEST(BarrierTypes, CarryOrdinaryIdsOfTheirOwn) {
@@ -815,7 +815,7 @@ TEST(BarrierTypes, AMetatypeFamilyExistsWithoutAConfiguration) {
 	const ibCtorAbstractType* catalogRef = ibValue::GetAvailableCtor(wxT("CatalogRef"));
 	ASSERT_NE(nullptr, catalogRef) << "the family did not arrive with its metatype";
 
-	EXPECT_EQ(nullptr, catalogRef->CreateObject())
+	EXPECT_FALSE(catalogRef->CreateObject().IsReference())
 		<< "no value is ever a CatalogRef";
 }
 
@@ -1156,7 +1156,7 @@ TEST(MetaDataSerialize, TheTreeIS_WhatTravels) {
 TEST(MetaDataSerialize, WhatItDoesNotKnowGoesToTheValueFactory) {
 	// The redirect, from the side where it is visible: this stand-in claims
 	// nothing, so every type on the way through is the factory's answer —
-	// reached inside IsRegisterCtor / CreateObjectRef, not around them.
+	// reached inside IsRegisterCtor / CreateObject, not around them.
 	StandInMetaData metaData;
 	const ibValue original(wxT("through the factory"));
 

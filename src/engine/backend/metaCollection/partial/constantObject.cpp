@@ -40,18 +40,19 @@ std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColum
 //*                           constant value                            *
 //***********************************************************************
 
-ibValueRecordDataObjectConstant* ibValueMetaObjectConstant::CreateRecordDataObjectValue() const
+ibValuePtr<ibValueRecordDataObjectConstant> ibValueMetaObjectConstant::CreateRecordDataObjectValue() const
 {
 	ibValueRecordDataObjectConstant* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->FindCompileModule(m_propertyModule->GetMetaObject(), pDataRef))
-			return new ibValueRecordDataObjectConstant(this);
-	}
-	else {
-		pDataRef = new ibValueRecordDataObjectConstant(this);
+		if (cc->FindCompileModule(m_propertyModule->GetMetaObject(), pDataRef))
+			return ibValuePtr<ibValueRecordDataObjectConstant>(pDataRef);   // the cache's, initialised already
 	}
 
-	return pDataRef;
+	// Held BEFORE its module runs, as every data object is (issue #154): the module's top level may take
+	// `ThisObject` and let it go again. It used to run inside the constructor, where nothing could hold it.
+	const ibValuePtr<ibValueRecordDataObjectConstant> created(new ibValueRecordDataObjectConstant(this));
+	created->InitializeObject();
+	return created;
 }
 
 //*********************************************************************************************
@@ -103,14 +104,7 @@ ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMe
 	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
 	m_objModified(false), m_metaObject(metaObject)
 {
-	InitializeObject();
-}
-
-ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
-	m_objModified(false), m_metaObject(source.m_metaObject)
-{
-	InitializeObject(&source);
+	// (No InitializeObject here — the creator runs it once the object is held; see CreateRecordDataObjectValue.)
 }
 
 ibValueRecordDataObjectConstant::~ibValueRecordDataObjectConstant()
@@ -358,7 +352,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	// conflict (each constant has its own table); concurrent writes to THIS constant serialize on the
 	// RECORD_KEY='6' row via the dialect's row-lock clause (FOR UPDATE / WITH LOCK). The L2 door runs
 	// it on the session's bound conn — the SAME TX as the scope above — via q(session holder).
-	// See docs/record-locks.md.
+	// See docs/private/record-locks.md.
 	{
 		ibDatabaseQueryBuilder q(ibSession::Current()->Holder());
 		ibQueryIR ir(ibProject(

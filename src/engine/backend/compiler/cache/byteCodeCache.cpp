@@ -29,7 +29,7 @@
 // inlined); UPSERT stays DELETE-then-INSERT (uniform across drivers). A passive
 // scope (pool not up) makes Execute throw NoConnection, which the surrounding
 // try/catch turns into a cache miss → recompile — the same graceful degradation
-// as the old `db_query == nullptr` guard. See docs/query-language-arc.md §17.
+// as the old `db_query == nullptr` guard. See docs/private/query-language-arc.md §17.
 // The SAVE is the exception: it writes on a holder of its own, never inside the
 // caller's business transaction (see Save).
 

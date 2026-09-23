@@ -242,7 +242,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 
 	// Outer container with consistent left-margin via cellpadding.
 	// Cream bg #FAF7F0 — matches the content tier in the interior
-	// palette (docs/ui-palette.md). Keeps the syntax helper inside
+	// palette (docs/private/ui-palette.md). Keeps the syntax helper inside
 	// the warm content family instead of reading as a cool island.
 	html += wxT("<html><body bgcolor=\"#FAF7F0\">"
 	             "<table border=\"0\" cellpadding=\"12\" cellspacing=\"0\" "

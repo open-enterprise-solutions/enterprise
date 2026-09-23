@@ -190,6 +190,7 @@
   <ItemGroup>
     <ClCompile Include="connectionDB.cpp" />
     <ClCompile Include="launcher.cpp" />
+    <ClCompile Include="launcher_res.cpp" />
     <ClCompile Include="mainApp.cpp" />
   </ItemGroup>
   <ItemGroup>

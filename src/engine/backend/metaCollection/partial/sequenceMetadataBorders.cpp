@@ -251,8 +251,9 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 		std::vector<const ibBackendQueryColumn*> byKey;
 		for (const ibValueMetaObjectDimension* dimension : GetDimensionArrayObject())
 			byKey.push_back(dimension->GetQueryColumn());
-		byKey.push_back(GetRegisterPeriod()->GetQueryColumn());
-		ibDeclareLookupIndex(t, t.m_name + wxT("_KIX"), byKey);
+		// The period CLOSES the index whatever is cut: what stands between the border and a registration is a
+		// RANGE on it, served only while it stands right after the key's equalities - the totals' `_DL` twin.
+		ibDeclareLookupIndex(t, t.m_name + wxT("_KIX"), byKey, /*closing*/ GetRegisterPeriod()->GetQueryColumn());
 	}
 
 	// …and the borders, one row per key.

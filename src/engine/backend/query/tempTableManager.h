@@ -20,7 +20,7 @@
 // tables; one that does not (Firebird today -> nullptr) makes Materialise return null and the caller
 // stays on the RAM composer (the always-works floor). Fail-fast: a runtime CREATE / INSERT failure
 // also returns null (graceful RAM fallback) after best-effort dropping the half-built table.
-// (docs/temp-db.md)
+// (docs/private/temp-db.md)
 
 #include "tempTableQueryable.h"                          // ibDbTempTableQueryable (the vended source)
 #include "backend/databaseLayer/databaseLayer.h"         // ibTempTableDialect

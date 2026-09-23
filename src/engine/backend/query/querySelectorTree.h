@@ -6,7 +6,7 @@
 // subtotal levels is the Selector's job, and the product is THIS: a tree of nodes, each carrying
 // its cell values (group-key path + rolled aggregates) and its child nodes. The snapshot has NO
 // tree; the tree has NO flat rows. L3 names no runtime type but ibValue — turning the tree into a
-// runtime model is the RUNTIME's job. (docs/query-language-arc.md §22.1b)
+// runtime model is the RUNTIME's job. (docs/private/query-language-arc.md §22.1b)
 
 #include "queryRamTable.h"   // ibQueryRamColumn + ibValue + ibMetaID + ibTypeDescription (the snapshot it folds from)
 

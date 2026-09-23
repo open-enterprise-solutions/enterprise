@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the three rules of a sequence's border (docs/sequence-arc.md)
+//	Description : the three rules of a sequence's border (docs/private/sequence-arc.md)
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐⭐ THE BORDER MOVES BY WHAT THE CONFIGURATION WROTE, AND BY NOTHING IT HAS TO GUESS. A document's

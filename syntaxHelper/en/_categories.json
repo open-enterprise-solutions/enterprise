@@ -13,6 +13,9 @@
     "query": "Data queries",
     "rls": "Row-level security (RLS)",
     "spreadsheet": "Spreadsheet document — templates and printing",
+    "value_types": "Value types",
+    "collections": "Collections",
+    "value_table": "Value table (Table)",
     "guide": "Guide"
   }
 }

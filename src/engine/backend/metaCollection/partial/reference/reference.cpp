@@ -809,17 +809,15 @@ void ibValueReferenceDataObject::ShowValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
-		ibValueRecordDataObject* objValue = nullptr;
-		if (metaObject != nullptr && m_objGuid.isValid())
-			objValue = metaObject->CreateObjectValue(m_objGuid);
-		else
-			objValue = metaObject->CreateObjectValue();
+		const ibValuePtr<ibValueRecordDataObjectRef> objValue = metaObject != nullptr && m_objGuid.isValid()
+			? metaObject->CreateObjectValue(m_objGuid)
+			: metaObject->CreateObjectValue();
 		if (objValue != nullptr)
 			objValue->ShowFormValue();
 	}
 }
 
-ibValueRecordDataObjectRef* ibValueReferenceDataObject::GetObject() const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueReferenceDataObject::GetObject() const
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {

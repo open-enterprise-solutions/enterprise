@@ -1309,12 +1309,12 @@
         "common_lang",
         "linq"
       ],
-      "signature": "orderby <Выражение>[, <Выражение>...] [ascending|descending]",
-      "description": "Клауза сортировки LINQ-запроса. НЕСКОЛЬКО КЛЮЧЕЙ через запятую, в порядке значимости: `orderby Склад, Товар` сортирует по складу, а внутри каждого склада — по товару; второй ключ смотрят только там, где первый одинаков. Направление по умолчанию — возрастание; `descending` после последнего ключа разворачивает всю сортировку.",
-      "syntax_block": "orderby <Выражение>[, <Выражение>...] [ascending|descending]",
+      "signature": "orderby <Выражение> [ascending|descending][, <Выражение> [ascending|descending]...]",
+      "description": "Клауза сортировки LINQ-запроса. НЕСКОЛЬКО КЛЮЧЕЙ через запятую, в порядке значимости: `orderby Склад, Товар` сортирует по складу, а внутри каждого склада — по товару; второй ключ смотрят только там, где первый одинаков. У каждого ключа своё направление, оно пишется после ключа; ключ без направления идёт по возрастанию: `orderby Склад, Дата descending, Товар` сортирует по складу, внутри склада — сначала последние даты, внутри даты — по товару.",
+      "syntax_block": "orderby <Выражение> [ascending|descending][, <Выражение> [ascending|descending]...]",
       "parameters": "",
       "return_descr": "",
-      "example": "// по складу, внутри — по дате\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
+      "example": "// по складу, внутри — сначала последние\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "guide.linq",

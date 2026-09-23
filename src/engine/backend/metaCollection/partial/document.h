@@ -50,6 +50,8 @@ public:
 	// source COMMANDS — the writeable-ref base set PLUS Post / ClearPosting. CallAsCommand loads the document by
 	// key and writes it in the posting / undo-posting mode; the rest delegates to the base. Bodies in documentAction.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	// The row's state picture: the document marked for deletion, posted, or neither (documentAction.cpp).
+	virtual ibPictureID GetRowPicture(const ibRowMetaValues& rowValues) const override;
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//support icons
@@ -112,13 +114,13 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
 
 	//load & save metaData from DB
 
@@ -205,9 +207,7 @@ class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRe
 	// Hook overrides for Document-specific posting semantics. See
 	// ibValueRecordDataObjectRecorderRef in commonObject.h.
 	virtual bool IsPosted() const override;
-	virtual bool CheckDeletionMarkOnPosting(ibDocumentWriteMode wm) const override;
-	virtual void ApplyPostedAttributeOnWrite(ibDocumentWriteMode wm) override;
-	virtual void FillDefaultDateForNew() override;
+	virtual void SetPosted(bool posted) override;
 	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const override;
 
 	//****************************************************************************

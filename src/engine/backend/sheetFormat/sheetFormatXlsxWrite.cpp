@@ -602,6 +602,7 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 		}
 
 		const int height = sheet.GetRowSize(row);
+		const bool ownHeight = sheet.HasRowSize(row);   // a row without one has automatic height
 
 		// 🛑 AN EMPTY ROW CAN STILL HAVE SOMETHING TO SAY, AND IN A PRINTED FORM IT USUALLY DOES.
 		// This skipped every row with no cells in it — and a blank's GAPS are exactly that: a row
@@ -611,13 +612,14 @@ bool ibSheetFormatXlsx::Write(const wxString& fileName, const ibSpreadsheetDescr
 		// vertical rhythm collapsed while every visible line was still correct (2026-09-05).
 		//
 		// A row is now skipped only when it has nothing at all — no cells AND no height of its own.
-		if (cells.IsEmpty() && height == s_defaultRowHeight)
+		if (cells.IsEmpty() && !ownHeight)
 			continue;
 		wxString rowTag = wxString::Format(wxT("<row r=\"%d\""), row + 1);
-		// The height goes across as it stands, against the default declared in `sheetFormatPr` above.
-		// A height of ZERO is how «Hide» is stored here, so it is written as the flag rather than as
-		// a height of nothing.
-		if (height != s_defaultRowHeight && height > 0)
+		// A height of its own goes across as it stands, against the default declared in `sheetFormatPr`
+		// above; a row without one says nothing, and the reader fits it to its text, which is what
+		// automatic height means. A height of ZERO is how «Hide» is stored here, so it is written as the
+		// flag rather than as a height of nothing.
+		if (ownHeight && height > 0)
 			rowTag += wxString::Format(wxT(" ht=\"%d\" customHeight=\"1\""), height);
 		// …AND ITS PLACE IN THE OUTLINE — the depth, whether it is folded away inside a closed group,
 		// and whether it is the summary line that opens one.

@@ -29,7 +29,7 @@ constexpr int kMaxColWidth   = 420;
 // rather than announces itself. The deeper the level, the paler the tint, so nesting is visible
 // without a second mechanism.
 //
-// They belong in the palette (docs/ui-palette.md) rather than in a driver, and they are here
+// They belong in the palette (docs/private/ui-palette.md) rather than in a driver, and they are here
 // only until the report gets its own palette roles — a report that prints must eventually take
 // these from the theme, not from a constant.
 const wxColour kHeaderFill(0xD4, 0xE4, 0xD4);
@@ -1464,7 +1464,6 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// cell by construction.
 	wxFont boldFont = s_defaultSpreadsheetFont;
 	boldFont.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
-	const int areaRowHeight = ibBackendSpreadsheetObject().GetRowSize(0);   // what PutArea gave each line
 	// WHAT EACH CELL OF A LINE SAYS, gathered first and written in ONE call per cell (SetCell) — its
 	// text, its alignment, its link and its look — instead of a setter per attribute, each finding the
 	// cell again. Kept across the lines so their storage is reused.
@@ -1610,9 +1609,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			cell.m_detailsParameter = std::move(cellLink[c]);   // …and its links cleared at its top
 			m_document->SetCell(at, col, cell);
 		}
-		// …and what PutArea said about the line besides its cells: its height, the end of the printed
-		// rows, and the group it folds into at its depth.
-		m_document->SetRowSize(at, areaRowHeight);
+		// …and what PutArea said about the line besides its cells: the end of the printed rows, and the
+		// group it folds into at its depth. NO HEIGHT: a line of a report has automatic height, taller
+		// where its text needs it (spreadsheetDescription.h, HasRowSize) — the 15 it used to be given was
+		// the default written down as a height of its own.
 		m_document->SetRowBrake(at);
 		if (source.m_level > 0)
 			m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(at),

@@ -11,7 +11,20 @@
 
 #ifdef DEBUG
 // OFF unless OES_TRACE_TYPES says otherwise — see utils/debugTrace.h.
-static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+//
+// ⚠ HELD BY A FUNCTION, NOT AT FILE SCOPE, which is what that header asks of its callers and names
+// this file for. Both readers below run from the STATIC INITIALISATION of OTHER translation units —
+// a registrar is a file-scope object in its own file, and registering is the first thing it does —
+// so a file-scope flag here was read before its own initialiser had run, and answered with whatever
+// the memory held. ASan said it on the first sanitised run (2026-09-22): initialization-order-fiasco
+// on `s_traceTypes`, read in RegisterCtor from enumFactory.cpp's registrar, reported by 2076 of the
+// 2092 tests — one defect wearing the suite's whole output. A function-local static is built by its
+// first caller, whenever that is; metaObject.cpp and reference.cpp already hold their flags so.
+static bool TraceTypes()
+{
+	static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+	return s_traceTypes;
+}
 #endif
 
 // Single owner of the registered value-ctors + the clsid / type_info / name
@@ -52,41 +65,41 @@ static std::atomic<unsigned int> s_factoryCtorCountChanges = 0;
 //*                      Support dynamic object                                 *
 //*******************************************************************************
 
-ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
+ibValue ibValue::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(clsid);
 
 	if (typeCtor != nullptr) {
-		ibValue* created_value = typeCtor->CreateObject();
+		// OWNED FROM THE MOMENT IT EXISTS — Init() below may run code that takes a reference to it and
+		// lets it go (see ibCtorAbstractType::CreateObject). A refusal throws, and the owner lets it go.
+		ibValue created = typeCtor->CreateObject();
 
-		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers nullptr, and that
+		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers empty, and that
 		// is an ORDINARY answer for the parameterised families — a reference type, a register's
 		// record set, a document object. Asking about one of those is a normal thing to do
 		// (type_members does it, wrapped in a try, precisely because it expects a refusal), and the
 		// assert turned that question into a debug break: the caller's own handling never ran, and a
 		// person at the designer got a stack instead of a sentence.
-		if (created_value == nullptr)
+		if (!created.IsReference())
 			ibBackendCoreException::Error(_("Object '%s' cannot be created without arguments"),
 				typeCtor->GetClassName());
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
 			if (lSizeArray > 0)
-				succes = created_value->Init(paParams, lSizeArray);
+				succes = created.Init(paParams, lSizeArray);
 			else
-				succes = created_value->Init();
-			if (!succes) {
-				wxDELETE(created_value);
+				succes = created.Init();
+			if (!succes)
 				ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-			}
 			// Name surface builds lazily on first GetPMethods() — no eager populate.
 		}
-		return created_value;
+		return created;
 	}
 	else {
 		ibBackendCoreException::Error(_("Error creating object '%llu'"), clsid);
 	}
 
-	return nullptr;
+	return wxEmptyValue;
 }
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
@@ -101,7 +114,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		}
 
 #ifdef DEBUG
-		if (s_traceTypes && wxTheApp != NULL)
+		if (TraceTypes() && wxTheApp != NULL)
 			ibJournalInfo(wxT("compiler"),wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
@@ -123,7 +136,7 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		// The wxTheApp guard is NOT about noise: this also runs from static teardown, where a log
 		// call would ask wx to build a log target nobody can then delete (see OnExit's
 		// wxLog::DontCreateOnDemand note).
-		if (s_traceTypes && wxTheApp != NULL)
+		if (TraceTypes() && wxTheApp != NULL)
 			ibJournalInfo(wxT("compiler"),wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's

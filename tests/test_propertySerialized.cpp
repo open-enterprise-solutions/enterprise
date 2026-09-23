@@ -15,7 +15,7 @@
 // with ON, emitted nothing, and left the physical table without the column its
 // maintenance was about to be written for. It looked intermittent because
 // breakage depended on which way the setting differed from the default.
-// (docs/register-shared-machinery.md § 4d)
+// (docs/private/register-shared-machinery.md § 4d)
 //
 // The check is mechanical and needs no database, no session and no metadata: for
 // every metatype header, take the `m_property*` members it DECLARES and require
@@ -244,7 +244,7 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 				<< headerFile.GetFullName().ToStdString() << " declares " << name.ToStdString()
 				<< " but no " << stem.ToStdString() << "Metadata*.cpp names it, by itself or through a"
 				   " list of properties it calls — a setting that cannot survive a save makes the baseline"
-				   " lie (docs/register-shared-machinery.md § 4d)";
+				   " lie (docs/private/register-shared-machinery.md § 4d)";
 		}
 		++checked;
 	}

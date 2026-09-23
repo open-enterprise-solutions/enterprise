@@ -28,20 +28,34 @@ bool KindMatchesRole(ibHelpKind kind, ibHelpResolveHint::Role role) {
 	switch (role) {
 	case Role::kUnknown:
 		return true;
+	// ⚠ EVERY KIND THAT HAS ARTICLES BELONGS IN A ROLE, or the role silently answers with fewer
+	// entries than the corpus holds. The member kinds (property / method / procedure) were added
+	// to the corpus long before the loader had words for them, so they arrived here as kKeyword
+	// and matched nothing but kUnknown; and the enum VALUES, which are read after a dot like any
+	// member, had never been listed at all.
 	case Role::kTypeName:
 		return kind == ibHelpKind::kPrimitiveType
 		    || kind == ibHelpKind::kCollection
-		    || kind == ibHelpKind::kMetaObjectType;
+		    || kind == ibHelpKind::kMetaObjectType
+		    || kind == ibHelpKind::kEnumType;
 	case Role::kCallExpression:
 		return kind == ibHelpKind::kSystemFunction
-		    || kind == ibHelpKind::kMetaObjectMethod;
+		    || kind == ibHelpKind::kSystemProcedure
+		    || kind == ibHelpKind::kMetaObjectMethod
+		    || kind == ibHelpKind::kMethod
+		    || kind == ibHelpKind::kProcedure;
 	case Role::kMemberAccess:
 		return kind == ibHelpKind::kMetaObjectAttribute
 		    || kind == ibHelpKind::kMetaObjectMethod
-		    || kind == ibHelpKind::kEvent;
+		    || kind == ibHelpKind::kEvent
+		    || kind == ibHelpKind::kProperty
+		    || kind == ibHelpKind::kMethod
+		    || kind == ibHelpKind::kProcedure
+		    || kind == ibHelpKind::kSystemEnum;
 	case Role::kAssignmentTarget:
 		return kind == ibHelpKind::kMetaObjectAttribute
-		    || kind == ibHelpKind::kSystemConstant;
+		    || kind == ibHelpKind::kSystemConstant
+		    || kind == ibHelpKind::kProperty;
 	}
 	return true;
 }

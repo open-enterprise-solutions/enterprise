@@ -16,7 +16,7 @@ wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGScheduleProperty, wxPGProperty, HyperLink)
 
 // register frontend property — the dynamic_cast in the registry IS the type match, so naming
 // ibPropertySchedule in the lambda's parameter is the whole registration
-// (docs/property-system.md § 4.1).
+// (docs/private/property-system.md § 4.1).
 class ibPropertyScheduleLoader
 {
 public:

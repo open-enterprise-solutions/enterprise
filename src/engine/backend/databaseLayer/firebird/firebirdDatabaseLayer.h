@@ -101,7 +101,7 @@ public:
 	// the one that diverges most: an accumulating upsert must be MERGE (UPDATE OR INSERT ..
 	// MATCHING can only replace), and there is no date_trunc — period truncation is built
 	// from EXTRACT + DATEADD. Both differences are absorbed here, in data.
-	// (docs/register-totals-strategy.md)
+	// (docs/private/register-totals-strategy.md)
 	static const ibMaterializationDialect& MaterializationDialect();
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
 

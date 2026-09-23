@@ -865,7 +865,7 @@ window.OES.debug  = (m) => outputAppend(m, 'debug');
 // "something went wrong" cases (script exception), silence for
 // interrupted (user pressed cancel — they already know). Returns
 // true when the payload was an error response (caller should skip
-// the success render path), false otherwise. See docs/record-locks.md.
+// the success render path), false otherwise. See docs/private/record-locks.md.
 window.OES.handleBackendError = (j) => {
   if (!j || typeof j !== 'object' || !j.error) return false;
   const msg = j.message || '';

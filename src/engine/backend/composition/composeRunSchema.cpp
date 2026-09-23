@@ -41,7 +41,7 @@ namespace {
 //
 // A reference carries neither: what identifies it is not text at all. Its presentation is what a
 // person sees, so that is what travels, and anything needing the identity asks the schema for the
-// column instead (docs/reference-key-metaid.md - the name carries the name, the id carries the
+// column instead (docs/private/reference-key-metaid.md - the name carries the name, the id carries the
 // object).
 ibDataValue ValueEntry(const ibValue& value)
 {

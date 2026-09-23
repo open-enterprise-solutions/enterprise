@@ -348,7 +348,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [metaObject, this]() -> ibBackendValueForm* {
 				// Keyed by the METAFORM: this value IS the compile cache's, one per metaform.
 				return metaObject->CreateObjectForm(this);
-			})]() -> ibValue* {
+			})]() -> ibValue {
 			return deferred.Construct();
 			});
 	}
@@ -432,7 +432,7 @@ bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
 		// directly; the paste RE-HOME is forced by ibValueMetaObject::PasteObject at paste end (mark still live).
 		if (cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [this]() -> ibBackendValueForm* {
 				return ibValueMetaObjectFormBase::CreateAndBuildForm(this, defaultFormType);
-			})]() -> ibValue* {
+			})]() -> ibValue {
 			return deferred.Construct();
 			})) {
 			return ibValueMetaObjectModuleBase::OnAfterRunMetaObject(flags);

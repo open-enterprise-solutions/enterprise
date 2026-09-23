@@ -286,8 +286,19 @@ void ibWorkerPoolHeadless::Stop()
 		// nothing beyond the pointer we hold; Cancel takes the connection
 		// pool's lock and the job manager's, and neither ever calls back
 		// into this pool.
-		for (auto& kv : m_sessions)
-			if (kv.first != nullptr) kv.first->Cancel();
+		// 🛑 A DROPPED ENTRY NAMES A SESSION THAT MAY ALREADY BE GONE. `dropped` is set by
+		// DropSession when the queue is leased, and the session's teardown continues without
+		// waiting for the worker to let go — so between that moment and the worker's erase the
+		// KEY is a pointer to freed memory. It is legal to look one up (a map compares
+		// addresses), and it is a use-after-free to call through one, which is what this loop
+		// did: AddressSanitizer caught it in ibWorkerPoolHeadless::Stop on 2026-09-22, from the
+		// pool's own destructor. A dropped session needs no cancelling anyway — it is already
+		// tearing down, and that teardown is what dropped it.
+		for (auto& kv : m_sessions) {
+			if (kv.first == nullptr) continue;
+			if (kv.second && kv.second->dropped) continue;
+			kv.first->Cancel();
+		}
 	}
 	m_cv.notify_all();
 

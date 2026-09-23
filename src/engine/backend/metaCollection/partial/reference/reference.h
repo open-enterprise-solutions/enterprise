@@ -261,7 +261,7 @@ public:
 		return m_metaObject;
 	}
 
-	ibValueRecordDataObjectRef* GetObject() const;
+	ibValuePtr<ibValueRecordDataObjectRef> GetObject() const;   // a new object, born owned
 
 	//****************************************************************************
 	//*                              Support methods                             *

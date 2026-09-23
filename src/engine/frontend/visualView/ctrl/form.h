@@ -367,6 +367,12 @@ public:
 	bool IsViewOnly() const;
 	void SetViewOnly(bool viewOnly) { m_viewOnly = viewOnly; }
 
+	// The control of this form last clicked into (given the focus) — ThisForm.CurrentItem, and what the form's
+	// view is a facade over. Put by that view as the focus moves; a focus outside the form (a menu, a toolbar,
+	// the print preview) leaves it where it was, and one that has left the form since is no longer answered.
+	ibValueFrame* GetActiveControl() const;
+	void SetActiveControl(ibValueFrame* control) { m_activeControl = control; }
+
 public:
 
 	class ibValueFormCollectionControl : public ibValueDynamicMembers {
@@ -518,6 +524,9 @@ private:
 	// Explicit view-only override (set on open); IsViewOnly() also derives it live from the source's WRITE
 	// right, so an unset flag still yields view-only when the role denies writing.
 	bool					m_viewOnly = false;
+
+	// Kept, never followed, until it is found among the form's own controls (GetActiveControl).
+	ibValueFrame*			m_activeControl = nullptr;
 
 	bool					m_closeOnChoice;
 	bool					m_closeOnOwnerClose;

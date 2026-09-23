@@ -491,6 +491,18 @@ ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
 	return holder->GetItemKey(node->GetTableValues());
 }
 
+// ⚠ NO LOOKUP FOR A KEY-ONLY ROW. GetItemKey resolves a restore stub by its key because a command needs the row;
+// the picture is asked on every paint, and a point read per paint is the price of a picture - so a stub shows
+// none until the fetch that replaces it. A heading is not a row, and shows none either.
+ibPictureID ibValueDynamicList::GetRowPicture(const ibDataViewItem& item) const
+{
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr || node->IsGroup() || node->IsKeyOnlyAnchor())
+		return 0;
+	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
+	return holder != nullptr ? holder->GetRowPicture(node->GetTableValues()) : 0;
+}
+
 // Selection-restore after a child-form save (createdValue / changedValue → the current row is re-found): the list
 // is metadata-blind, so the ROW-KEY is built by the source descriptor (GetRowKeyByValue) — a record keys by its
 // reference, a REGISTER decomposes its COMPOSITE key across the PK columns (the SAME the fetch stamps into

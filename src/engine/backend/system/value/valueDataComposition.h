@@ -449,7 +449,7 @@ private:
 	void RebuildSource();
 
 	// ⭐⭐ ASKING IS WHAT RESOLVES — and RUNNING is the asking. Reading a description stores what a
-	// composition IS and works out nothing (§ "the refresh" in docs/description-serialization.md), so
+	// composition IS and works out nothing (§ "the refresh" in docs/private/description-serialization.md), so
 	// a report opened and composed straight away had a composer that had never been shown the query:
 	// "Composer: no source is set" on the FIRST Generate, and it worked on the second because opening
 	// the settings window had applied the source in between (Max, 2026-08-24: "the source is known —

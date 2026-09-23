@@ -424,6 +424,60 @@ TEST(SpreadsheetDocument, RowAndColSize_SetTwiceReplacesRatherThanAppends)
 	EXPECT_NE(60, doc->GetRowSize(4));
 }
 
+// AUTOMATIC ROW HEIGHT (2026-09-22): a row without a height of its own follows its text, and giving it
+// one by hand is what switches that off — so "has a height" and "back to automatic" have to be exact,
+// and removing one entry must leave the others findable where the serializer reads them.
+TEST(SpreadsheetDocument, RowSize_ResetGivesTheRowBackItsAutomaticHeight)
+{
+	auto doc = MakeDocument();
+	doc->SetRowSize(5, 40);
+	doc->SetRowSize(2, 30);
+	doc->SetRowSize(7, 50);
+
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+
+	desc.ResetRowSize(2);
+	desc.ResetRowSize(3);   // a row that has no height of its own: nothing to do
+
+	EXPECT_FALSE(desc.HasRowSize(2));
+	EXPECT_EQ(s_defaultRowHeight, doc->GetRowSize(2));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+	EXPECT_EQ(40, doc->GetRowSize(5));
+	EXPECT_EQ(50, doc->GetRowSize(7));
+
+	// …and the one after the removed entry moved down in the order the serializer reads.
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(1));
+	EXPECT_EQ(7u, desc.GetRowSizeByIdx(1)->m_row);
+
+	doc->SetRowSize(7, 55);   // still found through the index after the move
+	EXPECT_EQ(55, doc->GetRowSize(7));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+}
+
+// An area put into a document takes a height only where its row has one. Copying GetRowSize's answer
+// for every row wrote the default down as a height of its own, and every line of a composed report came
+// out fixed — automatic height gone before anything was shown.
+TEST(SpreadsheetDocument, PutArea_CarriesOnlyTheHeightsThatWereSet)
+{
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("caption"));
+	area->SetCellValue(1, 0, wxT("line"));
+	area->SetRowSize(0, 40);
+
+	auto doc = MakeDocument();
+	doc->PutArea(area);
+	doc->PutArea(area);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(0));
+	EXPECT_FALSE(desc.HasRowSize(1));
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+	EXPECT_EQ(40, doc->GetRowSize(2));
+}
+
 // ---------------------------------------------------------------------------
 //  Outline groups — what makes a composed report fold
 // ---------------------------------------------------------------------------

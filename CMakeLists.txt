@@ -155,7 +155,7 @@ endif()
 #     cmake -B build -DCMAKE_BUILD_TYPE=Debug -DOES_SANITIZE=address
 #
 # The procedure is the same on every platform (see
-# docs/engineering-playbook/25-memory-leaks.md); only the instrument differs.
+# docs/private/engineering-playbook/25-memory-leaks.md); only the instrument differs.
 # Accepts anything the toolchain does: address, undefined, thread,
 # address,undefined. OFF by default — ASan roughly doubles memory and costs
 # ~2x runtime, which is not what an ordinary debug build should pay.
@@ -168,7 +168,7 @@ if(OES_SANITIZE)
         # so say so rather than let the flag imply cover it does not give.
         message(WARNING
             "OES_SANITIZE on MSVC: /fsanitize=address has no leak detector. "
-            "Use a Debug build and the CRT dump (docs/engineering-playbook/25-memory-leaks.md).")
+            "Use a Debug build and the CRT dump (docs/private/engineering-playbook/25-memory-leaks.md).")
         add_compile_options(/fsanitize=${OES_SANITIZE})
     else()
         add_compile_options(-fsanitize=${OES_SANITIZE} -fno-omit-frame-pointer -g)

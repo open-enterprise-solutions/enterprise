@@ -22,6 +22,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaSectionObject.h"
+#include "backend/metaCollection/metaCommandGroupObject.h"
 
 namespace {
 
@@ -140,4 +141,72 @@ TEST(SectionInterfaceItems, AnEmptySection_ShowsNothing)
 	SectionFix f;
 	ASSERT_NE(nullptr, f.section);
 	EXPECT_TRUE(f.section->GetInterfaceItemArrayObject().empty());
+}
+
+// =============================================================================
+// COMMAND GROUPS — a command names its group in Group: one of the platform's (the area) or one the
+// configuration declares (its metaID). The section files a command under a declared group there, and in
+// no platform area.
+// =============================================================================
+
+namespace {
+
+ibValueMetaObject* IncludeCommand(SectionFix& f, const wxString& name, long group) {
+	ibValueMetaObject* command = f.Include(g_metaCommonCommandCLSID, name);
+	if (command != nullptr)
+		command->GetProperty(wxT("Group"))->SetValue(wxVariant(group));
+	return command;
+}
+
+} // namespace
+
+TEST(SectionInterfaceItems, ACommandInADeclaredGroup_IsShownUnderThatGroupAndInNoArea)
+{
+	SectionFix f;
+	ASSERT_NE(nullptr, f.section);
+	ibValueMetaObjectCommandGroup* group = dynamic_cast<ibValueMetaObjectCommandGroup*>(
+		f.cfg.CreateMetaObject(g_metaCommandGroupCLSID, f.root, /*runObject*/ false));
+	ASSERT_NE(nullptr, group);
+	ibValueMetaObject* command = IncludeCommand(f, wxT("PrintAll"), group->GetMetaID());
+	ASSERT_NE(nullptr, command);
+
+	std::vector<ibValueMetaObject*> inGroup, normal;
+	f.section->GetInterfaceItemArrayObject(group, inGroup);
+	f.section->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, normal);
+
+	EXPECT_EQ(1u, Occurrences(inGroup, command));
+	EXPECT_EQ(0u, Occurrences(normal, command)) << "a command filed under its own group sits in no platform area";
+	EXPECT_EQ(1u, Occurrences(f.section->GetInterfaceItemArrayObject(), command)) << "…and the section still shows it, once";
+}
+
+// A group of the FORM command bar is no heading on a section page: its commands stand in a form's submenu, so
+// the page has them neither in an area nor in its list of everything (they came out as plain links there).
+TEST(SectionInterfaceItems, ACommandInAFormCommandBarGroup_IsNotOnTheSectionPage)
+{
+	SectionFix f;
+	ASSERT_NE(nullptr, f.section);
+	ibValueMetaObjectCommandGroup* group = dynamic_cast<ibValueMetaObjectCommandGroup*>(
+		f.cfg.CreateMetaObject(g_metaCommandGroupCLSID, f.root, /*runObject*/ false));
+	ASSERT_NE(nullptr, group);
+	group->GetProperty(wxT("Category"))->SetValue(wxVariant((long)ibCommandGroupCategory_FormCommandBar));
+	ASSERT_EQ(ibCommandGroupCategory_FormCommandBar, group->GetCategory());
+	ibValueMetaObject* command = IncludeCommand(f, wxT("PrintInvoice"), group->GetMetaID());
+	ASSERT_NE(nullptr, command);
+
+	std::vector<ibValueMetaObject*> normal;
+	f.section->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, normal);
+
+	EXPECT_EQ(0u, Occurrences(normal, command));
+	EXPECT_EQ(0u, Occurrences(f.section->GetInterfaceItemArrayObject(), command));
+}
+
+// The defect found beside it: Important was asked by no page, so a command marked Important was on none.
+TEST(SectionInterfaceItems, ACommandMarkedImportant_IsShown)
+{
+	SectionFix f;
+	ASSERT_NE(nullptr, f.section);
+	ibValueMetaObject* command = IncludeCommand(f, wxT("CloseDay"), ibInterfaceCommandSection_Important);
+	ASSERT_NE(nullptr, command);
+
+	EXPECT_EQ(1u, Occurrences(f.section->GetInterfaceItemArrayObject(), command));
 }

@@ -44,34 +44,33 @@ ibCtorMetaValueType* ibMetaImage::FindCtor(const ibValueMetaObject* metaValue, i
 	return result;
 }
 
-ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
+ibValue ibMetaData::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
 {
 	const ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
 
 	if (typeCtor != nullptr) {
 
-		ibValue* newObject = typeCtor->CreateObject();
-		wxASSERT(newObject);
+		// Owned from the moment it exists — see ibValue::CreateObject. A refusal throws, and the owner
+		// lets it go.
+		ibValue newObject = typeCtor->CreateObject();
+		wxASSERT(newObject.IsReference());
 
-		if (newObject == nullptr) return nullptr;
+		if (!newObject.IsReference()) return wxEmptyValue;
 
 		bool succes = true;
 		if (lSizeArray > 0)
-			succes = newObject->Init(paParams, lSizeArray);
+			succes = newObject.Init(paParams, lSizeArray);
 		else
-			succes = newObject->Init();
+			succes = newObject.Init();
 
-		if (!succes) {
-			wxDELETE(newObject);
+		if (!succes)
 			ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-			return nullptr;
-		}
 
 		// Name surface builds lazily on first GetPMethods() — no eager populate.
 		return newObject;
 	}
 
-	return ibValue::CreateObjectRef(clsid, paParams, lSizeArray);
+	return ibValue::CreateObject(clsid, paParams, lSizeArray);
 }
 
 void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)

@@ -30,8 +30,8 @@
         "common_lang",
         "linq"
       ],
-      "signature": "from <item> in <source> [where ...] [orderby K1[, K2...] [ascending|descending]] [group ... by ... [into ...]] select ...",
-      "description": "LINQ — встроенные в язык запросы к коллекциям в памяти. Два параллельных синтаксиса компилируются в одни и те же примитивы.\n\n**Блочный синтаксис** (eager): `from <var> in <source>` открывает запрос; затем клаузы `where / var / orderby K1[, K2...] [asc|desc] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закрывается `select <expr>` или `select { F = expr, ... }`. Сразу материализуется в Array.\n\n**Чейн-синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операция — конвейерные (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), терминальные (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варианты), агрегации (Sum / Min / Max / Average — опционально с лямбда-селектором).\n\nЛямбды захватывают локальные переменные внешнего scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключевые слова компилируются одинаково в режимах CES и VES.",
+      "signature": "from <item> in <source> [where ...] [orderby K1 [ascending|descending][, K2 [ascending|descending]...]] [group ... by ... [into ...]] select ...",
+      "description": "LINQ — встроенные в язык запросы к коллекциям в памяти. Два параллельных синтаксиса компилируются в одни и те же примитивы.\n\n**Блочный синтаксис** (eager): `from <var> in <source>` открывает запрос; затем клаузы `where / var / orderby K1 [asc|desc][, K2 [asc|desc]...] / group X by K [into g] / join b in Y on a.K equals b.K / skip N / take N / distinct`; закрывается `select <expr>` или `select { F = expr, ... }`. Сразу материализуется в Array.\n\n**Чейн-синтаксис** (lazy): `arr.Where(λ).Select(λ).Distinct().Take(10).ToArray()`. Доступно 31 операция — конвейерные (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / Union / Intersect / Except / WhereIndexed / SelectIndexed), терминальные (Count / ToArray / First / Last / Single / Any / ElementAt / Contains / SequenceEqual / Aggregate плюс *OrDefault варианты), агрегации (Sum / Min / Max / Average — опционально с лямбда-селектором).\n\nЛямбды захватывают локальные переменные внешнего scope: `var k = 5; arr.Where(Function(x) { return x > k; })`.\n\nLINQ-ключевые слова компилируются одинаково в режимах CES и VES.",
       "syntax_block": "var q = from o in orders\n        where o.Total > 100\n        var doubled = o.Total * 2\n        orderby o.Warehouse, o.Date descending\n        select { N = o.N, V = doubled };",
       "parameters": "",
       "return_descr": "Массив выбранных строк (блочный синтаксис) или ленивый итератор (чейн-синтаксис).",
@@ -43,7 +43,8 @@
         "kw.Select",
         "kw.OrderBy",
         "kw.Join",
-        "kw.Group"
+        "kw.Group",
+        "cls.Table"
       ],
       "reviewed": true
     },

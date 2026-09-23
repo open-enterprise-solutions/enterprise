@@ -407,7 +407,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	// BeforeStart / OnStart run on a bare window, and a script that vetoes the start never
 	// gets a home page built for nothing. Being FIRST no longer depends on being created
 	// first — the start page's tab is LOCKED, and wx keeps locked tabs ahead of every normal
-	// one no matter when they joined (docs/home-page.md § 5).
+	// one no matter when they joined (docs/private/home-page.md § 5).
 	CreateStartupPage();
 
 	SetClientSize(FromDIP(wxSize(800, 600)));

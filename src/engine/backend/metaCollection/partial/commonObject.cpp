@@ -42,26 +42,26 @@ ibBackendValueForm* ibValueMetaObjectGenericData::GetGenericForm(const wxString&
 }
 #pragma endregion
 #pragma region _form_creator_h_
+ibBackendValueForm* ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const
+{
+	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(metaForm);   // held across the build
+	return CreateAndBuildForm(
+		metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
+		metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
+		nullptr,
+		source,
+		formGuid
+	);
+}
+
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectGenericData::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+{
+	return nullptr;
+}
+
 ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const wxString& strFormName, const ibFormID& form_id, ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) const
 {
-#pragma region _source_guard_
-	class ibSourceDataObjectGuard {
-	public:
-
-		ibSourceDataObjectGuard(ibSourceDataObject* srcObject) : m_srcObject(srcObject) {
-			if (m_srcObject != nullptr) m_srcObject->SourceIncrRef();
-		}
-
-		~ibSourceDataObjectGuard() {
-			if (m_srcObject != nullptr) m_srcObject->SourceDecrRef();
-		}
-
-	private:
-		ibSourceDataObject* m_srcObject;
-	};
-
-	ibSourceDataObjectGuard sourceGuard(srcObject);
-#pragma endregion
+	const ibSourcePtr<ibSourceDataObject> sourceGuard(srcObject);   // held across the build
 
 	ibValueMetaObjectFormBase* creator = nullptr;
 
@@ -192,31 +192,28 @@ ibValueMetaObjectRecordDataExt::ibValueMetaObjectRecordDataExt() :
 {
 }
 
-ibValueRecordDataObjectExt* ibValueMetaObjectRecordDataExt::CreateObjectValue() const
+// ⭐⭐ Every creator below holds what it made BEFORE InitializeObject: initializing runs the object's
+// module, and the module may take `ThisObject` into a value and let it go again — on a raw pointer at
+// refcount 0 that release deleted the object in the middle of its own initialization (issue #154).
+// A refused initialization lets the holder go, and the object with it.
+
+ibValuePtr<ibValueRecordDataObjectExt> ibValueMetaObjectRecordDataExt::CreateObjectValue() const
 {
-	ibValueRecordDataObjectExt* createdValue = CreateObjectExtValue();
-	if (!IsExternalCreate()) {
-		if (createdValue && !createdValue->InitializeObject()) {
-			wxDELETE(createdValue);
-			return nullptr;
-		}
-	}
-	return createdValue;
+	const ibValuePtr<ibValueRecordDataObjectExt> created(CreateObjectExtValue());
+	if (created != nullptr && !IsExternalCreate() && !created->InitializeObject())
+		return nullptr;
+	return created;
 }
 
-ibValueRecordDataObjectExt* ibValueMetaObjectRecordDataExt::CreateObjectValue(ibValueRecordDataObjectExt* objSrc) const
+ibValuePtr<ibValueRecordDataObjectExt> ibValueMetaObjectRecordDataExt::CreateObjectValue(ibValueRecordDataObjectExt* objSrc) const
 {
-	ibValueRecordDataObjectExt* createdValue = CreateObjectExtValue();
-	if (!IsExternalCreate()) {
-		if (createdValue && !createdValue->InitializeObject(objSrc)) {
-			wxDELETE(createdValue);
-			return nullptr;
-		}
-	}
-	return createdValue;
+	const ibValuePtr<ibValueRecordDataObjectExt> created(CreateObjectExtValue());
+	if (created != nullptr && !IsExternalCreate() && !created->InitializeObject(objSrc))
+		return nullptr;
+	return created;
 }
 
-ibValueRecordDataObject* ibValueMetaObjectRecordDataExt::CreateRecordDataObjectValue() const
+ibValuePtr<ibValueRecordDataObject> ibValueMetaObjectRecordDataExt::CreateRecordDataObjectValue() const
 {
 	return CreateObjectValue();
 }
@@ -964,50 +961,41 @@ int ibValueMetaObjectRecordDataRecorderRef::CompareDataValues(const ibValueDataO
 
 ///////////////////////////////////////////////////////////////////////////////
 
-ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataMutableRef::CreateObjectValue() const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CreateObjectValue() const
 {
-	ibValueRecordDataObjectRef* createdValue = CreateObjectRefValue();
-	if (createdValue && !createdValue->InitializeObject()) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue());
+	if (created != nullptr && !created->InitializeObject())
 		return nullptr;
-	}
-
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataMutableRef::CreateObjectValue(const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CreateObjectValue(const ibGuid& guid) const
 {
-	ibValueRecordDataObjectRef* createdValue = CreateObjectRefValue(guid);
-	if (createdValue && !createdValue->InitializeObject()) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue(guid));
+	if (created != nullptr && !created->InitializeObject())
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataMutableRef::CreateObjectValue(ibValueRecordDataObjectRef* objSrc, bool generate) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CreateObjectValue(ibValueRecordDataObjectRef* objSrc, bool generate) const
 {
 	if (objSrc == nullptr)
 		return nullptr;
-	ibValueRecordDataObjectRef* createdValue = CreateObjectRefValue();
-	if (createdValue && !createdValue->InitializeObject(objSrc, generate)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue());
+	if (created != nullptr && !created->InitializeObject(objSrc, generate))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataMutableRef::CopyObjectValue(const ibGuid& srcGuid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CopyObjectValue(const ibGuid& srcGuid) const
 {
-	ibValueRecordDataObjectRef* createdValue = CreateObjectRefValue();
-	if (createdValue && !createdValue->InitializeObject(srcGuid)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue());
+	if (created != nullptr && !created->InitializeObject(srcGuid))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObject* ibValueMetaObjectRecordDataMutableRef::CreateRecordDataObjectValue() const
+ibValuePtr<ibValueRecordDataObject> ibValueMetaObjectRecordDataMutableRef::CreateRecordDataObjectValue() const
 {
 	return CreateObjectValue();
 }
@@ -1068,44 +1056,36 @@ int ibValueMetaObjectRecordDataHierarchyMutableRef::CompareDataValues(const ibVa
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode) const
 {
-	ibValueRecordDataObjectHierarchyRef* createdValue = CreateObjectRefValue(mode);
-	if (createdValue && !createdValue->InitializeObject()) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode));
+	if (created != nullptr && !created->InitializeObject())
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode, const ibGuid& guid) const
 {
-	ibValueRecordDataObjectHierarchyRef* createdValue = CreateObjectRefValue(mode, guid);
-	if (createdValue && !createdValue->InitializeObject()) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode, guid));
+	if (created != nullptr && !created->InitializeObject())
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode, ibValueRecordDataObjectRef* objSrc, bool generate) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectValue(ibObjectMode mode, ibValueRecordDataObjectRef* objSrc, bool generate) const
 {
-	ibValueRecordDataObjectHierarchyRef* createdValue = CreateObjectRefValue(mode);
-	if (createdValue && !createdValue->InitializeObject(objSrc, generate)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode));
+	if (created != nullptr && !created->InitializeObject(objSrc, generate))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectRecordDataHierarchyMutableRef::CopyObjectValue(ibObjectMode mode, const ibGuid& srcGuid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CopyObjectValue(ibObjectMode mode, const ibGuid& srcGuid) const
 {
-	ibValueRecordDataObjectHierarchyRef* createdValue = CreateObjectRefValue(mode);
-	if (createdValue && !createdValue->InitializeObject(srcGuid)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode));
+	if (created != nullptr && !created->InitializeObject(srcGuid))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
 //***************************************************************************
@@ -1423,7 +1403,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendCont
 
 //////////////////////////////////////////////////////////////////////
 
-ibValueRecordDataObjectRef* ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectRefValue(const ibGuid& objGuid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CreateObjectRefValue(const ibGuid& objGuid) const
 {
 	return CreateObjectRefValue(ibObjectMode::OBJECT_ITEM, objGuid);
 }
@@ -1646,100 +1626,79 @@ bool ibValueMetaObjectRegisterData::OnAfterCloseMetaObject()
 //*								ARRAY									*
 //***********************************************************************
 
-ibValueRecordKeyObject* ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue() const
+ibValuePtr<ibValueRecordKeyObject> ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue() const
 {
-	return new ibValueRecordKeyObject(this);
+	return ibValuePtr<ibValueRecordKeyObject>(new ibValueRecordKeyObject(this));
 }
 
-ibValueRecordKeyObject* ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const
+ibValuePtr<ibValueRecordKeyObject> ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const
 {
-	return new ibValueRecordKeyObject(this, keyValues);
+	return ibValuePtr<ibValueRecordKeyObject>(new ibValueRecordKeyObject(this, keyValues));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(bool needInitialize) const
+// Held before InitializeObject, as the record data objects are (the note above CreateObjectValue).
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(bool needInitialize) const
 {
-	ibValueRecordSetObject* createdValue = CreateRecordSetObjectRegValue();
-	if (!needInitialize)
-		return createdValue;
-	if (createdValue && !createdValue->InitializeObject(nullptr, true)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordSetObject> created(CreateRecordSetObjectRegValue());
+	if (created != nullptr && needInitialize && !created->InitializeObject(nullptr, true))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordSetObject* ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey, bool needInitialize) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey, bool needInitialize) const
 {
-	ibValueRecordSetObject* createdValue = CreateRecordSetObjectRegValue(uniqueKey);
-	if (!needInitialize)
-		return createdValue;
-	if (createdValue && !createdValue->InitializeObject(nullptr, false)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordSetObject> created(CreateRecordSetObjectRegValue(uniqueKey));
+	if (created != nullptr && needInitialize && !created->InitializeObject(nullptr, false))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordSetObject* ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(ibValueRecordSetObject* source, bool needInitialize) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(ibValueRecordSetObject* source, bool needInitialize) const
 {
-	ibValueRecordSetObject* createdValue = CreateRecordSetObjectRegValue();
-	if (!needInitialize)
-		return createdValue;
-	if (createdValue && !createdValue->InitializeObject(source, true)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordSetObject> created(CreateRecordSetObjectRegValue());
+	if (created != nullptr && needInitialize && !created->InitializeObject(source, true))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordSetObject* ibValueMetaObjectRegisterData::CopyRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey)
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectRegisterData::CopyRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey)
 {
-	ibValueRecordSetObject* createdValue = CreateRecordSetObjectRegValue(uniqueKey);
-	if (createdValue && !createdValue->InitializeObject(nullptr, true)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordSetObject> created(CreateRecordSetObjectRegValue(uniqueKey));
+	if (created != nullptr && !created->InitializeObject(nullptr, true))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue() const
+ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue() const
 {
-	ibValueRecordManagerObject* createdValue = CreateRecordManagerObjectRegValue();
-	if (createdValue && !createdValue->InitializeObject(nullptr, true)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordManagerObject> created(CreateRecordManagerObjectRegValue());
+	if (created != nullptr && !created->InitializeObject(nullptr, true))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const
 {
-	ibValueRecordManagerObject* createdValue = CreateRecordManagerObjectRegValue(uniqueKey);
-	if (createdValue && !createdValue->InitializeObject(nullptr, false)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordManagerObject> created(CreateRecordManagerObjectRegValue(uniqueKey));
+	if (created != nullptr && !created->InitializeObject(nullptr, false))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue(ibValueRecordManagerObject* source) const
+ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CreateRecordManagerObjectValue(ibValueRecordManagerObject* source) const
 {
-	ibValueRecordManagerObject* createdValue = CreateRecordManagerObjectRegValue();
-	if (createdValue && !createdValue->InitializeObject(source, true)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordManagerObject> created(CreateRecordManagerObjectRegValue());
+	if (created != nullptr && !created->InitializeObject(source, true))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
-ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CopyRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CopyRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const
 {
-	ibValueRecordManagerObject* createdValue = CreateRecordManagerObjectRegValue();
-	if (createdValue && !createdValue->InitializeObject(uniqueKey)) {
-		wxDELETE(createdValue);
+	const ibValuePtr<ibValueRecordManagerObject> created(CreateRecordManagerObjectRegValue());
+	if (created != nullptr && !created->InitializeObject(uniqueKey))
 		return nullptr;
-	}
-	return createdValue;
+	return created;
 }
 
 //***********************************************************************
@@ -2378,7 +2337,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 	return true;
 }
 
-ibValueRecordDataObjectExt* ibValueRecordDataObjectExt::CopyObjectValue()
+ibValuePtr<ibValueRecordDataObject> ibValueRecordDataObjectExt::CopyObjectValue()
 {
 	return m_metaObject->CreateObjectValue(this);
 }
@@ -2643,7 +2602,7 @@ bool ibValueRecordDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	return ibValueRecordDataObject::GetValueByMetaID(id, pvarMetaVal);
 }
 
-ibValueRecordDataObjectRef* ibValueRecordDataObjectRef::CopyObjectValue()
+ibValuePtr<ibValueRecordDataObject> ibValueRecordDataObjectRef::CopyObjectValue()
 {
 	return m_metaObject->CreateObjectValue(this);
 }
@@ -2782,7 +2741,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 	return &m_sourceExplorer;
 }
 
-ibValueRecordDataObjectRef* ibValueRecordDataObjectHierarchyRef::CopyObjectValue()
+ibValuePtr<ibValueRecordDataObject> ibValueRecordDataObjectHierarchyRef::CopyObjectValue()
 {
 	return GetMetaObject()->CreateObjectValue(m_objMode, this);
 }
@@ -2925,6 +2884,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 {
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
+	ibWriteScope objectScope(*this);   // a refusal below leaves the object as it was (commonObject.h)
 
 	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
 	// A server has none, and that is not a reason for a write to fail.
@@ -2932,46 +2892,38 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	const bool newObject = IsNewObject();
 
 	// Stage-named failures — same rule as the recorder path: the message says which stage
-	// stopped the write and on which object, and a script cancel reads as a cancel.
+	// stopped the write and on which object, and a script cancel reads as a cancel. A refusal is the
+	// exception and nothing else: the connection scope rolls back, the object scope puts the object back.
+	const auto refuse = [this](const wxString& stage) -> bool {
+		ibBackendCoreException::Error(stage, GetSourceCaption());
+		return false;
+	};
+
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
 	}
 
-	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
-			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
-	if (!SaveData()) {
-		if (generateUniqueIdentifier) ResetUniqueIdentifier();
-		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
-		return false;
-	}
+	if (!SaveData())
+		return refuse(_("%s: failed to save the object data"));
 
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("OnWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
 
-	CommitWriteScope(scope, valueForm, newObject);
+	CommitWriteScope(scope, objectScope, valueForm, newObject);
 	return true;
 }
 
@@ -3269,11 +3221,10 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjec
 
 bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
 {
-	// Posting pre-guard: leaf-specific check (Document's DeletionMark
-	// blocks posting). Default hook returns true (ok to proceed).
+	// Posting pre-guard: a recorder marked for deletion is not posted.
 	if (!appData->DesignerMode()
 	    && writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
-	    && !CheckDeletionMarkOnPosting(writeMode))
+	    && GetValueByMetaID(*GetMetaObject()->GetDataDeletionMark()).GetBoolean())
 	{
 		ibBackendCoreException::Error(_("%s cannot be posted: it is marked for deletion"),
 			GetSourceCaption());
@@ -3281,56 +3232,64 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	}
 
 	// Scaffold via Phase A Begin/CommitWriteScope. Per-recorder middle:
-	// BeforeWrite(wm, pm) + ApplyPostedAttributeOnWrite hook + SetNew
-	// Number codegen + FillDefaultDateForNew hook + SaveData +
+	// BeforeWrite(wm, pm) + the posted mark (SetPosted) + SetNew
+	// Number codegen + the date of a new one + SaveData +
 	// register cascade (CreateRecordSet for new, Posting/UndoPosting
 	// scripts + WriteRecordSet/DeleteRecordSet) + OnWrite.
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginWriteScope(scope)) return true;
+	ibWriteScope objectScope(*this);   // a refusal below leaves the recorder as it was, posted mark included (commonObject.h)
 
 	// Asked only so an OPEN window can be told afterwards — see ibFormToNotify (backend_form.h).
 	// A server has none, and that is not a reason for a write to fail.
 	ibBackendValueForm* const valueForm = ibFormToNotify([this] { return GetForm(); });
 	const bool newObject = IsNewObject();
-	// Asked before the write marks it posted (ApplyPostedAttributeOnWrite below): is this a posting AGAIN.
+	// Asked before the write marks it posted (SetPosted below): is this a posting AGAIN.
 	const bool reposting = !newObject && IsPosted();
 
 	// Every failure below says WHICH STAGE refused and on WHICH OBJECT. A posting run walks a long
 	// chain — handler, row, movements per register, handler again — and "failed to write object in
 	// db!" for all of them tells the user nothing about where to look. A cancel raised by script is
 	// also reported as a cancel, not as a database failure: nothing went wrong in the DB there.
+	//
+	// A refusal is the exception and nothing else: the connection scope rolls the transaction back as it
+	// unwinds, and the object scope puts the object back. (Each branch used to reset the number and roll back by hand
+	// before raising - twelve copies, and every road that left by an exception of its own missed both.)
+	const auto refuse = [this](const wxString& stage) -> bool {
+		ibBackendCoreException::Error(stage, GetSourceCaption());
+		return false;
+	};
+
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentWriteMode>(writeMode),
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode)
 		);
-		if (cancel.GetBoolean()) {
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
-		ApplyPostedAttributeOnWrite(writeMode);
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
+		// A plain Write leaves the mark as it is; posting and undoing it set it.
+		if (writeMode != ibDocumentWriteMode::ibDocumentWriteMode_Write)
+			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
-	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
-			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
+			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
-	if (newObject)
-		FillDefaultDateForNew();
-
-	if (!SaveData()) {
-		if (generateUniqueIdentifier) ResetUniqueIdentifier();
-		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
-		return false;
+	// A new recorder written without a date is dated by the write. The date is the recorder's own
+	// (its metaobject declares it beside the number), so no leaf is asked.
+	if (newObject) {
+		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
+		if (GetValueByMetaID(*date).IsEmpty())
+			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
+
+	if (!SaveData())
+		return refuse(_("%s: failed to save the object data"));
 
 	if (newObject) {
 		m_registerRecords->CreateRecordSet();
@@ -3351,86 +3310,43 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		// movements from nothing. A register the handler leaves alone therefore keeps none — its movements
 		// are what its handler writes. (A set somebody filled before the write is left to replace its own; and whether
 		// they are cleared at all is the document's to say — ibRecorderRegister::DeleteRecordSet asks it.)
-		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the movements of the previous posting"),
-				GetSourceCaption());
-			return false;
-		}
+		if (reposting && !m_registerRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the movements of the previous posting"));
 		// …and the registrations of the previous posting, by the same rule and in the same transaction.
-		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the registrations of the previous posting"),
-				GetSourceCaption());
-			return false;
-		}
+		if (reposting && !m_sequenceRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the registrations of the previous posting"));
+
 		ibValue cancel = false;
 		ExecAsProc(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: posting cancelled by the Posting handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: posting cancelled by the Posting handler"));
+
 		// The cascade names the failing register itself (and lets its own exception through);
 		// this only covers a silent false from the fan-out.
-		if (!m_registerRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to write the register movements"),
-				GetSourceCaption());
-			return false;
-		}
+		if (!m_registerRecords->WriteRecordSet())
+			return refuse(_("%s: failed to write the register movements"));
 		// …and the registrations the handler filled — written here, where each set moves its own
 		// sequence's border (ibValueRecordSetObjectSequence::WriteRecordSet).
-		if (!m_sequenceRecords->WriteRecordSet()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to write the sequence registrations"),
-				GetSourceCaption());
-			return false;
-		}
+		if (!m_sequenceRecords->WriteRecordSet())
+			return refuse(_("%s: failed to write the sequence registrations"));
 	}
 	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
 		ibValue cancel = false;
 		ExecAsProc(wxT("UndoPosting"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: undo posting cancelled by the UndoPosting handler"),
-				GetSourceCaption());
-			return false;
-		}
-		if (!m_registerRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
-				GetSourceCaption());
-			return false;
-		}
-		if (!m_sequenceRecords->DeleteRecordSet(writeMode)) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: failed to clear the sequence registrations"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: undo posting cancelled by the UndoPosting handler"));
+		if (!m_registerRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the register movements"));
+		if (!m_sequenceRecords->DeleteRecordSet(writeMode))
+			return refuse(_("%s: failed to clear the sequence registrations"));
 	}
 
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("OnWrite"), cancel);
-		if (cancel.GetBoolean()) {
-			if (generateUniqueIdentifier) ResetUniqueIdentifier();
-			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
-				GetSourceCaption());
-			return false;
-		}
+		if (cancel.GetBoolean())
+			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
 
 	// Posting / UndoPosting audit. Layered on top of the generic
@@ -3450,10 +3366,16 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);
 	}
 
-	CommitWriteScope(scope, valueForm, newObject);
+	CommitWriteScope(scope, objectScope, valueForm, newObject);
 	m_registerRecords->RefreshRecordSet();
 	m_sequenceRecords->RefreshRecordSet();
 	return true;
+}
+
+ibValueRecordDataObjectRecorderRef::ibWriteScope::~ibWriteScope()
+{
+	if (!IsCommitted())
+		m_recorder.SetPosted(m_wasPosted);   // the posting never became durable, and its mark goes with it
 }
 
 void ibValueRecordDataObjectRecorderRef::SetDeletionMark(bool deletionMark)
@@ -3462,7 +3384,7 @@ void ibValueRecordDataObjectRecorderRef::SetDeletionMark(bool deletionMark)
 	// catalog/charts path (set the flag + SaveModify) but with an
 	// up-front un-post so the row's movements clear before the mark
 	// lands. UndoPosting is a no-op for non-posted recorders via the
-	// IsPosted / ApplyPostedAttributeOnWrite hooks.
+	// IsPosted / SetPosted hooks.
 	if (m_newObject)
 		return;
 	WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting,
@@ -3666,7 +3588,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibUniqueKeyPair& key)
 	return true;
 }
 
-ibValueRecordManagerObject* ibValueRecordManagerObject::CopyRegisterValue()
+ibValuePtr<ibValueRecordManagerObject> ibValueRecordManagerObject::CopyRegisterValue()
 {
 	return m_metaObject->CreateRecordManagerObjectValue(this);
 }
@@ -3894,7 +3816,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-ibValueRecordSetObject* ibValueRecordSetObject::CopyRegisterValue()
+ibValuePtr<ibValueRecordSetObject> ibValueRecordSetObject::CopyRegisterValue()
 {
 	return m_metaObject->CreateRecordSetObjectValue(this);
 }
@@ -4090,9 +4012,9 @@ bool ibValueRecordSetObject::LoadDataFromTable(ibValueModel* srcTable)
 	return true;
 }
 
-ibValueModel* ibValueRecordSetObject::SaveDataToTable() const
+ibValuePtr<ibValueModel> ibValueRecordSetObject::SaveDataToTable() const
 {
-	ibValueModelTable* valueTable = ibValue::CreateAndConvertObjectRef<ibValueModelTable>();
+	const ibValuePtr<ibValueModelTable> valueTable = ibValue::CreateObject<ibValueModelTable>();
 
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {

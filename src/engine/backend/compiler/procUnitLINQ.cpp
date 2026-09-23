@@ -109,7 +109,7 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	//
 	// The saving is real and the way to it is not a reset list that has to stay complete forever —
 	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
-	// is (docs/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
+	// is (docs/private/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
 	std::shared_ptr<ibRunContext> spHeapCtx;
 	// The stack frame leases its slots; the heap-promoted one cannot, because it is
 	// the case that OUTLIVES the call — a lambda captured it. procUnitState.h, ibRunStack.
@@ -480,7 +480,7 @@ private:
 //
 // Both indexes were std::map: a tree asks the comparator ~log2(n) times per
 // lookup where a bucket asks about once, and comparing an ibValue is the
-// expensive part (docs/runtime-perf.md §9). Neither is a sorted structure by
+// expensive part (docs/private/runtime-perf.md §9). Neither is a sorted structure by
 // intent — group-by keeps its emission order in a separate vector (m_groups),
 // join has no order at all — so the tree was buying ordering nobody read.
 
@@ -798,7 +798,7 @@ public:
 	//
 	// The width is not carried on the tape, so it is learned from the first row (a `at` beyond the
 	// current width widens the block, which is why `Rewiden` exists at all) and then never moves.
-	void KeepKey(const ibValue& key, long at)
+	void KeepKey(const ibValue& key, long at, bool descending)
 	{
 		if (at < 0 || m_rows.empty())
 			return;                                   // a key with no row to belong to
@@ -810,6 +810,9 @@ public:
 		if (m_keys.size() < base + m_keyStride)
 			m_keys.resize(base + m_keyStride);
 		m_keys[base + (size_t)at] = key;
+		// The way belongs to the key's POSITION, like the width: the compiler says it identically on
+		// every row, so writing it each time is writing the same answer.
+		m_keyDescending[(size_t)at] = descending;
 	}
 
 	long           Count()    const { return (long)Rows().size(); }
@@ -871,7 +874,7 @@ public:
 	// for the same reason everything else is: one collection, one place the rows live.
 	void ReverseRows() { std::reverse(m_rows.begin(), m_rows.end()); }
 
-	void SortByKeys(bool descending) {
+	void SortByKeys() {
 		if (!HasKeys())
 			return;                                   // nothing to pair them by; leave row order
 		std::vector<size_t> order(m_rows.size());
@@ -890,19 +893,21 @@ public:
 		//
 		// ⚠ AND EVERY ROW HAS THE SAME NUMBER OF KEYS, so the "one has fewer" arm the previous
 		// shape needed is gone with the shape: the keys live in one flat block of a fixed width.
+		//
+		// ⭐ EACH KEY RUNS ITS OWN WAY — the one that decides is read forwards or backwards by itself, so
+		// `orderby a, b descending` is a ascending and, within it, b descending. Rows equal on every key
+		// keep the order they arrived in whichever way the keys run (the sort is stable).
 		const auto before = [this](size_t l, size_t r) {
 			const size_t lhs = l * m_keyStride, rhs = r * m_keyStride;
 			for (size_t i = 0; i < m_keyStride; ++i) {
 				const int decided = m_keys[lhs + i].CompareValueLS(m_keys[rhs + i]);
 				if (decided != 0)
-					return decided < 0;
+					return m_keyDescending[i] ? decided > 0 : decided < 0;
 			}
 			return false;
 		};
 
-		std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-			return descending ? before(b, a) : before(a, b);
-		});
+		std::stable_sort(order.begin(), order.end(), before);
 		// ⭐ MOVED, NOT COPIED. Each row is an `ibValue` holding a counted reference; copying one
 		// here would take and release a reference per row for values that are going straight back
 		// into this same vector. The old row is left empty and dies with the temporary.
@@ -917,6 +922,7 @@ public:
 	void Rewiden(size_t width) {
 		if (width <= m_keyStride)
 			return;
+		m_keyDescending.resize(width, false);
 		if (m_keyStride == 0 || m_keys.empty()) { m_keyStride = width; return; }
 
 		std::vector<ibValue> wider(m_keys.size() / m_keyStride * width);
@@ -972,6 +978,8 @@ private:
 	// why the width belongs to the query rather than to a row.
 	std::vector<ibValue> m_keys;
 	size_t               m_keyStride = 0;
+	// The way each key position runs (true = descending), `m_keyStride` of them — see KeepKey.
+	std::vector<bool>    m_keyDescending;
 	// THE ONE KEY POLICY, taken from where it is written (ibValueHash / ibValueEqual, value.h):
 	// *"grouping, joining and de-duplicating all need the same pair … every index takes them from
 	// here."* These two are indexes by value, so they take them from there.
@@ -1944,7 +1952,7 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 //
 // Helper strings are English short descriptions surfaced in IntelliSense
 // tooltips. Concrete enough that the user understands what the op does
-// without opening docs/linq.md; one line each. Localisation is a
+// without opening docs/private/linq.md; one line each. Localisation is a
 // future concern (would join the existing wxString runtime-message
 // localisation path).
 const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
@@ -2164,22 +2172,22 @@ bool ibLinqSeen(ibValue& scratch, const ibValue& value)
 // ⭐⭐ ONE INSTRUCTION PER ORDERING KEY, and only the FIRST carries the row. `orderby a, b` emits a
 // KEEP that adds the row with key 0, then one KEEP per further key which adds nothing but the key —
 // so several keys reach a row without a second opcode and without widening the one there is
-// (compileCodeLINQ.cpp emits them; the fourth operand carries the position).
-void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt)
+// (compileCodeLINQ.cpp emits them; the fourth operand carries the position and the way it runs).
+void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt, bool descending)
 {
 	ibValueLinqRows& kept = LinqResultIn(scratch);
 	if (row != nullptr)
 		kept.Keep(*row);
 	if (key != nullptr)
-		kept.KeepKey(*key, keyAt);
+		kept.KeepKey(*key, keyAt, descending);
 }
 
 void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
 {
 	ibValueLinqRows& kept = LinqResultIn(scratch);
-	// 1 descending by key · 2 ascending · 3 simply reversed (no keys involved)
+	// 2 by the keys, each the way it was kept with · 3 simply reversed (no keys involved)
 	if (ordering == 3)      kept.ReverseRows();
-	else if (ordering != 0) kept.SortByKeys(ordering == 1);
+	else if (ordering != 0) kept.SortByKeys();
 
 	if (wantFirst) {
 		// An empty source answers with an empty value, which is what `First` over nothing IS — not

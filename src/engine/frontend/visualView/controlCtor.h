@@ -45,8 +45,8 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const {
-		return new T();
+	virtual ibValue CreateObject() const {
+		return ibValuePtr<T>(new T());   // a form is also an ibBackendValue — the holder says which side answers
 	}
 };
 

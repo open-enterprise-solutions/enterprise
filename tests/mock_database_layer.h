@@ -6,7 +6,8 @@
 // nullptr or zero — these tests don't exercise the SQL layer.
 // =============================================================================
 
-#pragma once
+#ifndef __MOCK_DATABASE_LAYER_H__
+#define __MOCK_DATABASE_LAYER_H__
 
 #include "backend/databaseLayer/databaseLayer.h"
 
@@ -42,3 +43,5 @@ public:
 private:
     bool m_open = true;
 };
+
+#endif

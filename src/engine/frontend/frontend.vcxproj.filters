@@ -142,6 +142,9 @@
     <ClCompile Include="docView\docManager.cpp">
       <Filter>docView</Filter>
     </ClCompile>
+    <ClCompile Include="docView\print\printPreview.cpp">
+      <Filter>docView\print</Filter>
+    </ClCompile>
     <ClCompile Include="win\ctrls\checktree.cpp">
       <Filter>win\ctrls</Filter>
     </ClCompile>
@@ -1743,6 +1746,9 @@
     <ClInclude Include="artProvider\private\picturePredefined.h">
       <Filter>artProvider\private</Filter>
     </ClInclude>
+    <ClInclude Include="artProvider\splash\splashLogo.h">
+      <Filter>artProvider</Filter>
+    </ClInclude>
     <ClInclude Include="res\resource.h">
       <Filter>res</Filter>
     </ClInclude>
@@ -1947,6 +1953,9 @@
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
     </ClInclude>
+    <ClInclude Include="docView\print\printPreview.h">
+      <Filter>docView\print</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="mcp">
@@ -1990,6 +1999,9 @@
     </Filter>
     <Filter Include="docView\templates">
       <UniqueIdentifier>{de8c1ef4-820a-4c8f-ab29-c012e37d6b0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docView\print">
+      <UniqueIdentifier>{137d4b26-af8f-4d63-83d4-f0e5713840ca}</UniqueIdentifier>
     </Filter>
     <Filter Include="visualView">
       <UniqueIdentifier>{15ab1d55-40d6-4e89-96f1-2b9b0bfdc779}</UniqueIdentifier>
@@ -2102,32 +2114,6 @@
     <Filter Include="win\editor\codeEditor\res">
       <UniqueIdentifier>{F9A98E34-3B01-4FE6-B842-1C8FB64ED407}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="win\ctrls\res\checked_d.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked_ld.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked_mo.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\checked2.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_d.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_ld.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked_mo.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
-    <None Include="win\ctrls\res\unchecked2.xpm">
-      <Filter>win\ctrls\res</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\frontend.rc">

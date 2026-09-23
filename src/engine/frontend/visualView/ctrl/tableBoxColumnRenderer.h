@@ -10,6 +10,9 @@
 #include "frontend/visualView/ctrl/form.h"
 #include "frontend/visualView/ctrl/tableBox.h"
 
+#include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
+#include <optional>
+
 class ibDataViewValueRenderer :
 	public ibDataViewCustomRenderer {
 public:
@@ -128,6 +131,19 @@ public:
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
+		// A BOOLEAN IS A TICK — the platform's own, where the text would start, not the word for it; false is an
+		// empty cell. A MARK, not a checkbox: a box says "click me", and a list cell is not ticked by a click. Not
+		// centred either: in a wide column a centred mark stands away from the row's picture.
+		if (m_valueFlag.has_value()) {
+			if (*m_valueFlag) {
+				wxWindow* const view = GetView();
+				const wxSize mark = wxRendererNative::Get().GetCheckMarkSize(view);
+				const wxRect at(rect.x, rect.y + (rect.height - mark.y) / 2, mark.x, mark.y);
+				wxRendererNative::Get().DrawCheckMark(view, *dc, at);
+			}
+			return true;
+		}
+
 		// ⭐ THE TEXT, NOT THE VARIANT. Passing m_valueVariant here converted it to a string on every
 		// draw - and GetSize() below converted the same variant separately to measure it, so one
 		// painted cell built the string twice. wxVariant::operator wxString was 3.10% of the whole
@@ -151,6 +167,8 @@ public:
 	}
 
 	virtual wxSize GetSize() const override {
+		if (m_valueFlag.has_value())
+			return wxRendererNative::Get().GetCheckMarkSize(GetView());
 		if (!m_valueVariant.IsNull()) {
 			return GetTextExtent(m_valueText);
 		}
@@ -176,6 +194,12 @@ public:
 		m_valueVariant = value;
 		// Built ONCE, here, where the value arrives - drawing and measuring both read it.
 		m_valueText = value.IsNull() ? wxString() : value.MakeString();
+
+		// A boolean is drawn as a tick (Render), and whether it has one is its text: a boolean cell writes itself
+		// True / False (ibValue::GetString), whatever the locale.
+		m_valueFlag.reset();
+		if (value.GetType() == wxT("bool"))
+			m_valueFlag = (m_valueText == wxT("True"));
 		return true;
 	}
 
@@ -219,6 +243,8 @@ private:
 	wxVariant m_valueVariant;
 	// The same value as text, built once in SetValue - see Render and GetSize.
 	wxString  m_valueText;
+	// A boolean cell's mark, set in SetValue; empty for any other value (drawn as text).
+	std::optional<bool> m_valueFlag;
 };
 
 // ----------------------------------------------------------------------------

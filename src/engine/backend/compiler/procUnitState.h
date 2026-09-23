@@ -7,7 +7,7 @@
 // refactor will swap the contents in/out at session boundaries to
 // allow N sessions to share M workers. This struct is the swap target.
 //
-// See docs/worker-pool-tls-audit.md for the migration plan. Step 1 is
+// See docs/private/worker-pool-tls-audit.md for the migration plan. Step 1 is
 // to provide this struct on ibSession with no behaviour change — the
 // interpreter still reads/writes its TLS, the swap helpers come later.
 
@@ -76,7 +76,7 @@ struct ibErrorPlace {
 // every call anyway. Reserving here removes that allocation rather than adding one,
 // and takes ~1.2 KB out of every frame on x64 — which is what makes the recursion
 // guard reachable, since ibProcUnit::Execute reserves 9 376 bytes of stack per
-// interpreted level there. docs/runtime-perf.md §10.
+// interpreted level there. docs/private/runtime-perf.md §10.
 //
 // ⚠ THE DISCIPLINE IS LIFO, AND IT IS THE CALLERS' PROPERTY, not a hope: only a
 // frame whose life IS one call reserves here. A frame that can outlive its call is

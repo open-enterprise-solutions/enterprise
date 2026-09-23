@@ -21,7 +21,7 @@
 // > NOTE: the C++ class is `ibValueQueryExec` — `ibValueQuery` is already the LINQ chain wrapper
 // > (compiler/procUnitLINQ.cpp). Script-visible names: `Query` / `QueryResult` / `QuerySelect`.
 //
-// See docs/query-language-arc.md §14 / §22 / §23.
+// See docs/private/query-language-arc.md §14 / §22 / §23.
 
 #include "backend/compiler/value.h"
 #include "backend/compiler/enumUnit.h"          // ibValueEnumeration — runtime enum reflecting ibSelectKind

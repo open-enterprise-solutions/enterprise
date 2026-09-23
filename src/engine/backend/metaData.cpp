@@ -129,7 +129,7 @@ bool ibCompileValueCache::AddCompileModule(const ibValueMetaObject* moduleObject
 	return false;
 }
 
-bool ibCompileValueCache::AddCompileModule(const ibValueMetaObject* moduleObject, std::function<ibValue*()> builder)
+bool ibCompileValueCache::AddCompileModule(const ibValueMetaObject* moduleObject, std::function<ibValue()> builder)
 {
 	if (moduleObject == nullptr)
 		return false;
@@ -205,20 +205,20 @@ ibValue* ibCompileValueCache::FindCompileModuleRef(const ibValueMetaObject* modu
 		return nullptr;
 	it->second.m_constructing = true;
 
-	ibValue* value = it->second.m_deferred();
+	const ibValue built = it->second.m_deferred();
 
 	// Re-find: Construct may have called Invalidate / erase along the way.
 	it = m_cache.find(moduleObject);
 	if (it == m_cache.end())
-		return value;  // cache cleared; just return what we built (may be null)
+		return nullptr;  // cache cleared: nobody is left to hold what we built, and it goes with `built`
 
 	it->second.m_constructing = false;
-	if (value == nullptr) {
+	if (!built.IsReference()) {
 		m_cache.erase(it);
 		return nullptr;
 	}
-	it->second.m_value = ibValuePtr<ibValue>(value);
-	return value;
+	it->second.m_value = ibValuePtr<ibValue>(built);
+	return &(*it->second.m_value);
 }
 
 ibValue* ibCompileValueCache::FindParentCompileModuleRef(const ibValueMetaObject* moduleObject) const
@@ -276,6 +276,12 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	if (!IsEditable())
 		return nullptr;
 
+	// ⭐ AN OBJECT COMES IN UNDER ITS OWNER, and the owner is what keeps it: the answer is borrowed from
+	// the parent's child vector. Born owned (ibCtorAbstractType::CreateObject), an object with no parent
+	// would have nobody left holding it by the time it was handed back.
+	if (parent == nullptr)
+		return nullptr;
+
 	// ⭐⭐ THE OWNER IS ASKED WHETHER IT HOSTS THIS KIND, AND ITS ANSWER IS TAKEN. ResolveChild
 	// says both things at once: WHICH variant of the kind belongs here (a tabular section's RAM
 	// MD_TBL and DB-backed MD_TBLR are the same kind, and the owner remaps a pasted child to ITS
@@ -291,22 +297,16 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	//
 	// One reading now: 0 is no, and nothing is built. The check in Init stays as the guard for the
 	// other creation roads — this is the door, not the only one.
-	ibClassID clsid = clsidIn;
-	if (parent != nullptr) {
-		const ibClassID resolved = parent->ResolveChild(clsidIn);
-		if (resolved == 0)
-			return nullptr;
-		clsid = resolved;
-	}
-
-	wxASSERT(clsid != 0);
+	const ibClassID clsid = parent->ResolveChild(clsidIn);
+	if (clsid == 0)
+		return nullptr;
 
 	ibValue* ppParams[] = { parent };
-	ibValueMetaObject* newMetaObject = nullptr;
+	ibValuePtr<ibValueMetaObject> newMetaObject;
 
 	try {
 		// AddChild (inside Init via ppParams[0]=parent) takes the owning reference.
-		newMetaObject = ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(clsid, ppParams, 1);
+		newMetaObject = ibValue::CreateObject(clsid, ppParams, 1);
 	}
 	catch (...) {
 		return nullptr;
@@ -323,29 +323,20 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 
 		//first initialization
 		if (!success || !newMetaObject->OnLoadMetaObject(this)) {
-			if (parent != nullptr)
-				parent->RemoveChild(newMetaObject); // owning vector releases → destroys
-			else
-				wxDELETE(newMetaObject); // never attached (no parent) — destroy directly
+			parent->RemoveChild(newMetaObject); // the owning vector lets it go, and our holder with it
 			return nullptr;
 		}
 
 		//and running initialization
 		if (runObject && (!success || !newMetaObject->OnBeforeRunMetaObject(newObjectFlag))) {
-			if (parent != nullptr)
-				parent->RemoveChild(newMetaObject); // owning vector releases → destroys
-			else
-				wxDELETE(newMetaObject); // never attached (no parent) — destroy directly
+			parent->RemoveChild(newMetaObject); // the owning vector lets it go, and our holder with it
 			return nullptr;
 		}
 
 		Modify(true);
 
 		if (runObject && (!success || !newMetaObject->OnAfterRunMetaObject(newObjectFlag))) {
-			if (parent != nullptr)
-				parent->RemoveChild(newMetaObject); // owning vector releases → destroys
-			else
-				wxDELETE(newMetaObject); // never attached (no parent) — destroy directly
+			parent->RemoveChild(newMetaObject); // the owning vector lets it go, and our holder with it
 			return nullptr;
 		}
 

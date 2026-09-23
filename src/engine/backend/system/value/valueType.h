@@ -8,7 +8,8 @@ class BACKEND_API ibValueType : public ibValue {
 	public:
 
 	ibClassID GetOwnerTypeClass() const { return m_clsid; }
-	ibTypeDescription GetOwnerTypeDescription() const { return ibTypeDescription(GetOwnerTypeClass()); }
+	// The type as a description with NO qualifier, which limits nothing (ibValueTypeDescription::Unqualified).
+	ibTypeDescription GetOwnerTypeDescription() const;
 
 	ibValueType(const ibClassID& clsid = 0);
 	ibValueType(const ibValue& cObject);
@@ -48,6 +49,10 @@ public:
 	{
 	}
 
+	// `New QualifierNumber(precision, scale, nonNegative)` — see the definitions for why these exist at all.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierNumber() const { return m_qNumber; }
 };
 
@@ -62,6 +67,10 @@ public:
 	{
 	}
 
+	// `New QualifierDate(DateFractions.Date)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierDate() const { return m_qDate; }
 };
 
@@ -75,6 +84,10 @@ public:
 		m_qString(length)
 	{
 	}
+
+	// `New QualifierString(length, AllowedLength.Fixed)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
 
 	operator ibQualifierString() const { return m_qString; }
 };
@@ -101,6 +114,10 @@ public:
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
 		const class ibMetaData* metaData = nullptr);
+
+	// ⭐ WHAT A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER HOLDS: anything of that type — a number unrounded
+	// (precision 0), a date with its time, a string of any length (0). See the definition.
+	static ibTypeDescription::ibTypeData Unqualified();
 
 	ibValueTypeDescription();
 

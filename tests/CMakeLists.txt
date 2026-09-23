@@ -31,6 +31,7 @@ add_executable(oes_tests
     test_ctorRegistry.cpp
     test_exception.cpp
     test_value.cpp
+    test_valueFactoryInit.cpp
     test_string.cpp
     bench_string.cpp
     test_number.cpp
@@ -38,6 +39,7 @@ add_executable(oes_tests
     test_blockSyntaxLINQ.cpp
     test_byteCodeAOT.cpp
     test_compiler.cpp
+    test_lexerComments.cpp
     test_runtime.cpp
     test_compileTree.cpp
     test_compilerContract.cpp
@@ -123,6 +125,8 @@ add_executable(oes_tests
     test_valueArray.cpp
     test_valueTableIndex.cpp
     test_valueTableWalk.cpp
+    test_valueTableVerbs.cpp
+    test_typeQualifiers.cpp
     test_valueContainer.cpp
     test_valueStructure.cpp
     test_valueGeometry.cpp

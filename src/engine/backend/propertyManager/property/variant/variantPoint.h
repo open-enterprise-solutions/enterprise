@@ -9,7 +9,7 @@
 // wx/propgrid/propgriddefs.h, reachable through `variant << point`. But it belongs to
 // PROPGRID: using it made the backend property layer depend on the editor library for a
 // pair of ints. Same shape as ibVariantDataNumber — data in the variant, Eq for change
-// detection and diff (docs/property-system.md §3, §6.1).
+// detection and diff (docs/private/property-system.md §3, §6.1).
 class BACKEND_API ibVariantDataPoint : public wxVariantData {
 	wxString MakeString() const;
 public:

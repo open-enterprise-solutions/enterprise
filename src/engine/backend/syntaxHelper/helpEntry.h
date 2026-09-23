@@ -2,11 +2,12 @@
 // Single help-corpus topic.
 //
 // Backing record for one identifier in the syntax helper: keyword,
-// built-in function, system enum, metadata class / attribute / method,
+// built-in function or procedure, system enum (its type and its values),
+// metadata class / attribute / method, a platform class and its members,
 // primitive type, collection, form event, operator. One ibHelpEntry per
 // locale per id; ids are canonical and locale-independent.
 //
-// See docs/syntax-helper-design.md §2 for the binding contract:
+// See docs/private/syntax-helper-design.md §2 for the binding contract:
 // - Id grammar  ……………………… §2.2  (e.g. "fn.Message", "attr.Document.Invoice.Code")
 // - JSON schema  ……………………… §2.3
 // - Category dictionary  ……… §2.4  (locale-stable category_keys + per-locale display)
@@ -17,6 +18,7 @@
 #define _IB_HELP_ENTRY_H_
 
 #include "backend/backend.h"
+#include "backend/clsid.h"   // ibClassID — the class an article is about
 
 #include <vector>
 
@@ -36,6 +38,23 @@ enum class ibHelpKind {
 	kCollection,         // "cls.<Name>"         — ValueList, Map, Array, …
 	kEvent,              // "ev.<Scope>.<Name>"  — form / object events
 	kOperator,           // "op.<Symbol>"        — language operators
+
+	// Appended 2026-09-22. The four member/global kinds below were ALREADY IN USE by the corpus and
+	// by nothing else: the loader knew eleven words, the corpus wrote fourteen, and the four it did
+	// not know fell through to kKeyword without a sound — 37 articles in English and 74 more in the
+	// other two locales, every one of them answering `help_read` with "keyword" where it meant
+	// "property". A word a corpus can write and a reader cannot read is not forward compatibility,
+	// it is a silent wrong answer; unknown words are a WARNING at load now (helpLoader.cpp).
+	kProperty,           // "cls.<Class>.<Member>" — a value read (and often written) on a class
+	kMethod,             // "cls.<Class>.<Member>" — a callable member that answers with a value
+	kProcedure,          // "cls.<Class>.<Member>" — a callable member that answers with nothing
+	kSystemProcedure,    // "fn.<Name>"          — a global procedure (Message, Alert, …)
+
+	// The HEAD of an enum family, beside its values' kSystemEnum. It carries the class_id, so the
+	// loader can check it against the registry the way it checks a collection's — an enum type is
+	// registered like any other type (ENUM_TYPE_REGISTER → the same ctor registry), and the values
+	// are not classes and carry no id of their own.
+	kEnumType,           // "enum.<Type>"        — HTTPMethod, TextEncoding, SortDirection, …
 };
 
 // One help topic in a single locale. Locales are stored in side-by-side
@@ -97,6 +116,14 @@ struct BACKEND_API ibHelpEntry {
 	// (e.g. "Designer, codeRunner, daemon, wenterprise-server").
 	// Localised string, no parsing required by readers.
 	wxString availability;
+
+	// ⭐ THE CLASS THIS ARTICLE IS ABOUT, by its id — set on the article of a runtime value type
+	// (`cls.<Name>`, the Value types section). A HIDDEN field: the detail pane does not show it. It is
+	// the join key between an article and a live value, which carries the same id, so the two are matched
+	// without comparing names — a localised name is not an identity. The loader checks it against the
+	// type registry at load (helpLoader.cpp), so an article cannot drift from its class
+	// unnoticed. JSON `class_id`: the id as the registry holds it, a number. 0 = none.
+	ibClassID classId = 0;
 
 	ibHelpKind kind = ibHelpKind::kKeyword;
 

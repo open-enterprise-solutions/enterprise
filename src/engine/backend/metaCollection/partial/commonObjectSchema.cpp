@@ -300,7 +300,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// DECLARATION time, before a single statement has been emitted. ("Field 'fldNNNN_TYPE' not found
 	// in the resultset", twelve times over, in front of the real failure.)
 	//
-	// It is also the schema-authority rule (docs/schema-authority.md): what DDL to emit is decided by
+	// It is also the schema-authority rule (docs/private/schema-authority.md): what DDL to emit is decided by
 	// the two configurations, never by asking the database what it currently holds.
 	for (const auto& object : m_predefinedObjectVector) {
 		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();

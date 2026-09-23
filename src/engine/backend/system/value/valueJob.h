@@ -145,7 +145,7 @@ constexpr ibClassID g_valueScheduleCLSID = value_to_clsid("VL_SCHED");
 //
 //  Why LIVE settings rather than the metaobject: the declaration answers what the developer wrote,
 //  and the question here is what the base is doing — is this job on, when did it last run, when is
-//  it due. Those live in the base (docs/scheduled-jobs.md § 8), because switching a misbehaving
+//  it due. Those live in the base (docs/private/scheduled-jobs.md § 8), because switching a misbehaving
 //  job off must not mean opening the Designer against production.
 //////////////////////////////////////////////////////////////////////
 

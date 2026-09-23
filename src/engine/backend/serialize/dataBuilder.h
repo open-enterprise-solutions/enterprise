@@ -14,7 +14,7 @@
 //	This mirrors the L3 schema split one level up: the Describe-walk is the
 //	ContributeTables analogue, the ibDataNode tree is the ibSchemaSnapshot
 //	analogue, and the providers are the consumers (ibStructureBuilder /
-//	ibDataMover analogues). See docs/schema-first-metadata.md.
+//	ibDataMover analogues). See docs/private/schema-first-metadata.md.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <vector>
