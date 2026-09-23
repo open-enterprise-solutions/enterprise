@@ -1,0 +1,533 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.TextReader",
+      "name_local": "TextReader",
+      "name_en": "TextReader",
+      "kind": "collection",
+      "class_id": 212494550608706170,
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New TextReader(path : string [, encoding : TextEncoding = UTF8])",
+      "description": "Текст файлу, що читається порядково. Файл декодується ЦІЛКОМ і ОДИН раз — під час відкриття: це про файли обміну — продажі з каси, прайс-лист, накладна іншої системи, — а не про журнали на гігабайти.\n\nФАЙЛ НЕ ТРИМАЄТЬСЯ ВІДКРИТИМ між відкриттям і Close. Його байти читаються цілком, а дескриптор відпускається всередині самого виклику відкриття; Close() відпускає розкодований текст — тобто звільняє пам'ять, а не дескриптор на диску.\n\nOpen, ReadLine, Read, LineCount, GetLine і Close — це вся поверхня: властивостей у читача немає. ReadLine і GetLine ходять по ОДНІЙ розмітці файлу, тому цикл до LineCount() і цикл до Undefined бачать ті самі рядки, а GetLine не зсуває місце, де стоїть ReadLine.\n\nКІНЕЦЬ ФАЙЛУ — ЦЕ Undefined, А НЕ ПОРОЖНІЙ РЯДОК. Порожній рядок — теж рядок: цикл, написаний проти \"\", зупиниться на першому порожньому рядку файлу, а написаний навпаки — не зупиниться ніколи. Read() — друга половина того самого правила: коли нічого не лишилося, він віддає \"\", а не Undefined.\n\nКОДУВАННЯ НАЗИВАЄ СКРИПТ — член TextEncoding, а якщо аргумент пропущено або він порожній, то UTF8. Байти, які не складаються в текст у цьому кодуванні, — це ВІДМОВА, а не текст із дірками: \"TextReader: the file '<path>' cannot be read in the encoding given\". Мітка порядку байтів на початку файлу UTF-8 або UTF-16 читається як мітка і текстом не віддається, а мітка UTF-16 ще й каже, який кінець іде першим.\n\nФайл, який не вдалося відкрити, файл, що не вміщається в пам'ять, і файл, який не дочитався, — кожен окрема відмова, і в кожній названо ім'я файлу. Будь-яке дієслово читача, у якого файл не відкрито, відмовляє словами \"TextReader: no file is open\"; побудований узагалі без аргументів читач файлу не тримає — його дає Open. ValueIsFilled відповідає, чи відкрито файл.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "syntax_block_ves": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nWhile Line <> Undefined Do        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\nEndDo;\nReader.Close();",
+      "parameters": "path — файл, який читаємо. Файл, який не вдалося відкрити, — відмова, і в повідомленні названо його ім'я.\nencoding — член TextEncoding; якщо пропущено або порожній — UTF8, а він СУВОРИЙ: байти, які не UTF-8, відхиляються, а не читаються з дірками.",
+      "return_descr": "TextReader.",
+      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, а не \"\": порожній рядок — це рядок\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // перше поле\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader.ReadLine",
+        "cls.TextReader.Read",
+        "cls.TextReader.LineCount",
+        "cls.TextReader.GetLine",
+        "cls.TextWriter",
+        "enum.TextEncoding",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Open",
+      "name_local": "Open",
+      "name_en": "Open",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Open(path : string, encoding : TextEncoding = UTF8)",
+      "description": "Відкриває файл на вже наявному читачі — те саме, що робить конструктор, тільки сказане потім. Те, що було відкрито, спершу відпускається, і читач стає на перший рядок нового файлу: ОДНИМ читачем можна пройти файл за файлом.\n\nВідмови ті самі, що й у конструктора, і в кожній названо ім'я файлу: файл, який не вдалося відкрити, файл, що не вміщається в пам'ять, файл, який не дочитався, і байти, які не складаються в текст у вказаному кодуванні.",
+      "syntax_block": "Reader.Open(path);\nReader.Open(path, TextEncoding.ANSI);",
+      "parameters": "path — файл, який читаємо.\nencoding — член TextEncoding; якщо пропущено або порожній — UTF8.",
+      "return_descr": "",
+      "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // перший файл відпущено; читач стоїть на рядку 1 другого\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.ReadLine",
+      "name_local": "ReadLine",
+      "name_en": "ReadLine",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.ReadLine() : string",
+      "description": "Наступний рядок, БЕЗ переведення рядка — і CRLF, і LF, тому файл, записаний в одній системі, читається в іншій. Кожен виклик просуває на один рядок.\n\nКІНЕЦЬ ФАЙЛУ — ЦЕ Undefined. Порожній рядок — теж рядок і повертається як \"\"; саме тому цикл пишеться проти Undefined: написаний проти \"\", він зупиниться на першому порожньому рядку файлу.\n\nGetLine і LineCount не зсувають місце, де стоїть ReadLine, тож обидва способи читання можна застосовувати разом. Коли файл не відкрито — відмова: \"TextReader: no file is open\".",
+      "syntax_block": "Line = Reader.ReadLine();",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — або Undefined у кінці файлу.",
+      "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // а не while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Read",
+        "cls.TextReader.GetLine",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Read() : string",
+      "description": "Усе, що лишилося, — від рядка, який наступним віддав би ReadLine, і до кінця файлу — ОДНИМ текстом, разом із переведеннями рядків, точно так, як вони стоять у файлі. Після цього читач стоїть у кінці.\n\nКОЛИ НЕ ЛИШИЛОСЯ НІЧОГО, ВІДПОВІДЬ — \"\", а не Undefined. У цьому відмінність від ReadLine: кінець файлу — це Undefined лише для того дієслова, що віддає рядки по одному.\n\nКоли файл не відкрито — відмова: \"TextReader: no file is open\".",
+      "syntax_block": "Rest = Reader.Read();",
+      "parameters": "Немає.",
+      "return_descr": "Рядок — \"\", коли нічого не лишилося.",
+      "example": "Header = Reader.ReadLine();       // перший рядок окремо\nBody = Reader.Read();             // усе, що після нього, разом із переведеннями рядків\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.ReadLine",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.LineCount",
+      "name_local": "LineCount",
+      "name_en": "LineCount",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.LineCount() : number",
+      "description": "Скільки у файлі рядків — тих самих, які віддає ReadLine, і розрізаних так само. Місце, де стоїть ReadLine, не зсувається.\n\nПЕРЕВЕДЕННЯ РЯДКА В САМОМУ КІНЦІ ЗАВЕРШУЄ ОСТАННІЙ РЯДОК, а не відкриває після нього порожній: файл із \"a\" і переведення рядка — це ОДИН рядок, тоді як StrLineCount, що рахує ТЕКСТ, скаже два. У порожнього файлу рядків немає взагалі.\n\nКоли файл не відкрито — відмова: \"TextReader: no file is open\".",
+      "syntax_block": "Count = Reader.LineCount();",
+      "parameters": "Немає.",
+      "return_descr": "Число.",
+      "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.GetLine",
+        "cls.TextReader.ReadLine",
+        "fn.StrLineCount"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.GetLine",
+      "name_local": "GetLine",
+      "name_en": "GetLine",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.GetLine(line : number) : string",
+      "description": "Рядок номер n, рахуючи З ОДИНИЦІ, — той самий, який ReadLine віддав би на цьому місці, і розрізаний так само. Місце, де стоїть ReadLine, не зсувається, тому файл можна читати за номерами і порядково водночас.\n\nНЕМАЄ ТАКОГО РЯДКА — ЦЕ Undefined: рядок 0, від'ємний номер і все, що за останнім. Та сама відповідь, яку дає кінець файлу в ReadLine, і з тієї самої причини: порожній рядок — це рядок, і повертається він як \"\".\n\nКоли файл не відкрито — відмова: \"TextReader: no file is open\".",
+      "syntax_block": "Line = Reader.GetLine(2);",
+      "parameters": "line — номер рядка, рахуючи з одиниці. Менше за одиницю або за останнім — відповідь Undefined.",
+      "return_descr": "Рядок — або Undefined, коли такого рядка немає.",
+      "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // рядок заголовка\nMessage(Reader.GetLine(Reader.LineCount()));   // останній\nMessage(Reader.ReadLine());                    // так само рядок 1: GetLine його не зсунув\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.LineCount",
+        "cls.TextReader.ReadLine",
+        "fn.StrGetLine"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Close()",
+      "description": "Відпускає розкодований текст файлу. Сам файл на диску було закрито ще в момент відкриття — його байти читаються цілком усередині того виклику, — тож тут звільняється пам'ять, яку тримає читач, а не дескриптор.\n\nПісля цього ReadLine, Read, LineCount і GetLine відмовляють словами \"TextReader: no file is open\", доки Open знову не дасть читачеві файл. Закрити того, хто нічого не тримає, — не помилка.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "Reader.Close();\nReader.Open(nextFile);        // той самий читач, інший файл",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Open"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter",
+      "name_local": "TextWriter",
+      "name_en": "TextWriter",
+      "kind": "collection",
+      "class_id": 209640218422438089,
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New TextWriter(path : string [, encoding : TextEncoding = UTF8 [, append : boolean = False]])",
+      "description": "Текст файлу, що записується. Write кладе текст як є; WriteLine додає ОДНЕ переведення рядка — LF, однакове на всіх платформах: файл, записаний тут, так само читається там.\n\nТЕКСТ НА ДИСКУ, КОЛИ ФАЙЛ ЗАКРИТО, А НЕ КОЛИ Write ВІДПОВІВ. Потік буферизований: повний диск, відвалена мережева тека — Write каже «так» буферові, а повідомляє про це ЗАКРИТТЯ, словами \"TextWriter: the file '<path>' could not be written to the end\". Закриття, узяте на віру, дозволяє скриптові видалити джерело в упевненості, що вивантаження ціле. Незакритий записувач однаково залишить записане на диску — він закривається сам, коли його відпускають, — але тоді ніхто не дізнається, якщо те закриття не вдалося.\n\nЗА ЗАМОВЧУВАННЯМ ФАЙЛ ЗАМІЩУЄТЬСЯ; третій аргумент, True, дописує в кінець того, що там є.\n\nКОДУВАННЯ — член TextEncoding, а якщо пропущено або порожнє — UTF8. UTF-16 отримує мітку порядку байтів, UTF-8 — ні: саме мітка ламає перше поле у всякого читача, який її не чекає; під час дописування мітка ставиться, лише якщо у файлі ще нічого немає. Символ, для якого в кодування немає байтів, — це ВІДМОВА, а не знак питання у файлі.\n\nOpen, Write, WriteLine і Close — це вся поверхня: властивостей у записувача немає. Побудований узагалі без аргументів, він файлу не тримає — його дає Open. ValueIsFilled відповідає, чи відкрито файл.",
+      "syntax_block": "Writer = New TextWriter(path, TextEncoding.UTF8);\nWriter = New TextWriter(path, TextEncoding.UTF8, True);   // append instead of replace\n\nWriter.WriteLine(\"code;name;qty\");\nWriter.Write(\"00001;Paper;12\");\nWriter.Close();                                           // here, and only here, a failure is told",
+      "parameters": "path — файл, у який пишемо. Файл, який не вдалося відкрити на запис, — відмова, і в повідомленні названо його ім'я.\nencoding — член TextEncoding; якщо пропущено або порожнє — UTF8.\nappend — True дописує в кінець файлу; False, за замовчуванням, заміщує його.",
+      "return_descr": "TextWriter.",
+      "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Папір;12\");\nWriter.Close();                      // вивантаження ціле лише після того, як це повернулося",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter.Write",
+        "cls.TextWriter.WriteLine",
+        "cls.TextWriter.Close",
+        "cls.TextReader",
+        "enum.TextEncoding",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Open",
+      "name_local": "Open",
+      "name_en": "Open",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Open(path : string, encoding : TextEncoding = UTF8, append : boolean = False)",
+      "description": "Відкриває файл на вже наявному записувачі — те саме, що робить конструктор, тільки сказане потім. Те, що було відкрито, спершу ЗАКРИВАЄТЬСЯ, тому про невдале закриття скажуть ТУТ, перш ніж торкнуться нового файлу.\n\nЗа замовчуванням новий файл заміщується; третій аргумент, True, дописує в нього. Файл UTF-16 отримує мітку порядку байтів, якщо тільки дописування не лягло на файл, у якому вже щось є. Файл, який не вдалося відкрити на запис, — відмова, і в повідомленні названо його ім'я.",
+      "syntax_block": "Writer.Open(path);\nWriter.Open(path, TextEncoding.UTF8, True);",
+      "parameters": "path — файл, у який пишемо.\nencoding — член TextEncoding; якщо пропущено або порожнє — UTF8.\nappend — True дописує в кінець файлу; False, за замовчуванням, заміщує його.",
+      "return_descr": "",
+      "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // перший файл ЗАКРИВАЄТЬСЯ тут — і про невдале закриття скажуть тут\nWriter.WriteLine(\"two\");\nWriter.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Write",
+      "name_local": "Write",
+      "name_en": "Write",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Write(text : string)",
+      "description": "Пише текст як є: переведення рядка не додається і нічого не перекладається — на диск ідуть байти тексту в кодуванні файлу. Порожній текст не пише взагалі нічого.\n\nСимвол, для якого в кодування немає байтів, — це ВІДМОВА: \"TextWriter: the text cannot be written to '<path>' in the encoding given\", — а не знак питання, залишений у файлі там, де має бути літера. Коли файл не відкрито — відмова: \"TextWriter: no file is open\".\n\nВІДПОВІДЬ ТУТ — ЦЕ ЩЕ НЕ ТЕКСТ НА ДИСКУ: потік буферизований, і про запис, який не ліг, повідомляє Close.",
+      "syntax_block": "Writer.Write(text);",
+      "parameters": "text — що покласти, як є.",
+      "return_descr": "",
+      "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Папір;\");\nWriter.WriteLine(\"12\");        // переведення рядка, що завершує рядок файлу",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.WriteLine",
+        "cls.TextWriter.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.WriteLine",
+      "name_local": "WriteLine",
+      "name_en": "WriteLine",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.WriteLine(text : string)",
+      "description": "Текст, а за ним ОДНЕ переведення рядка — LF, на будь-якій платформі: файл, записаний у Windows, так само читається в Linux і в macOS. CRLF не пишеться; TextReader знімає і те, і те, тож зроблений тут файл читається назад рядок у рядок.\n\nУсе, що сказано про Write, справджується й тут: кодування, яке не може виразити текст, — відмова; записувач без відкритого файлу — відмова; а про запис, який не ліг, повідомляє закриття.",
+      "syntax_block": "Writer.WriteLine(text);",
+      "parameters": "text — що покласти; переведення рядка після нього додає саме це дієслово.",
+      "return_descr": "",
+      "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // порожній рядок — теж рядок: лише переведення рядка",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Write",
+        "cls.TextReader.ReadLine"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Close()",
+      "description": "Закриває файл — і САМЕ ТУТ мовиться про запис, який не ліг: \"TextWriter: the file '<path>' could not be written to the end\". Повний диск, відвалена мережева тека, вичерпана квота: Write сказав «так» буферові, а з диском зустрічається закриття.\n\nТому закривайте — і дайте відмові до вас дійти — перш ніж скрипт видалить джерело в упевненості, що вивантаження ціле. Після невдалого закриття дескриптор відпускають, а не закривають удруге.\n\nЗакрити записувача, який файлу не тримає, — не помилка; а незакритий записувач закривається сам, коли його відпускають, — мовчки, і в цьому причина робити це тут.",
+      "syntax_block": "Writer.Close();",
+      "parameters": "Немає.",
+      "return_descr": "",
+      "example": "try {\n    Writer.Close();\n} except {\n    Message(\"вивантаження не дійшло до диска: \" + ErrorDescription());\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Write",
+        "cls.TextWriter.Open"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData",
+      "name_local": "BinaryData",
+      "name_en": "BinaryData",
+      "kind": "collection",
+      "class_id": 146987204006577027,
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New BinaryData([base64 : string])",
+      "description": "Байти як значення — картинка, PDF, zip, файл, вміст якого взагалі не текст. Рядок для цього не годиться: текст читається назад у якомусь кодуванні, порівнюється як текст і мовчки псує все, що в ньому неприпустиме.\n\nRead(path) бере вміст файлу цілком, Write(path) кладе вміст у файл, Size() каже, скільки байтів. Ці три — вся поверхня: властивостей у двійкового значення немає.\n\nРЯДОК КОНСТРУКТОРА — ЦЕ BASE64, А НЕ ШЛЯХ, тому читання файлу зроблено методом: один аргумент, що означає дві речі, — це файл, який мовчки не розкодувався. Рядок, який не є суворим base64, відхиляється під час побудови значення — \"Error initializing object 'BinaryData'\", — а інше BinaryData, передане конструкторові, копіюється.\n\nТЕКСТ — ЦЕ ПРОЄКЦІЯ БАЙТІВ, а не їхнє сховище: записане в рядок, BinaryData показується як base64, а порожнє — як \"\". Два такі значення РІВНІ, коли тримають ті самі байти, — порівняння читає вміст, а не його текст; з усім іншим порівнюється саме текст. ValueIsFilled відповідає, чи є байти взагалі.\n\nФайл, який не вдалося відкрити, — відмова; файл, що не вміщається в пам'ять, — теж: частина файлу ніколи не віддається як файл цілком.",
+      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
+      "parameters": "base64 — байти, записані в base64, у тій самій формі, якою значення показується як текст; суворо, усе інше відхиляється. Замість нього можна передати інше BinaryData — його буде скопійовано. Якщо аргумент пропущено, значення байтів не тримає.",
+      "return_descr": "BinaryData.",
+      "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData.Size",
+        "cls.BinaryData.Read",
+        "cls.BinaryData.Write",
+        "cls.TextReader",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Size",
+      "name_local": "Size",
+      "name_en": "Size",
+      "kind": "method",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Size() : number",
+      "description": "Скільки байтів тримає значення. Значення, що не тримає жодного, — це 0; стільки ж дає після Read файл нульової довжини, адже порожній файл — не відмова.",
+      "syntax_block": "Count = Bytes.Size();",
+      "parameters": "Немає.",
+      "return_descr": "Число.",
+      "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"файл порожній\"); }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Read(path : string)",
+      "description": "Бере вміст файлу ЦІЛКОМ, заміщаючи те, що значення тримало. Нічого не декодується і нічого не пропускається: мітка порядку байтів, якщо вона у файлі є, тут — частина вмісту, адже це байти, а не текст.\n\nФайл, який не вдалося відкрити, — відмова: \"BinaryData: cannot open the file '<path>' for reading\"; файл, що не вміщається в пам'ять, — теж: \"BinaryData: the file '<path>' is too large to be read whole\", замість того щоб віддати частину файлу як файл цілком. Файл нульової довжини читається як відсутність байтів, і це не відмова.",
+      "syntax_block": "Bytes.Read(path);",
+      "parameters": "path — файл, який читаємо.",
+      "return_descr": "",
+      "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Write",
+        "cls.BinaryData.Size",
+        "cls.TextReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Write",
+      "name_local": "Write",
+      "name_en": "Write",
+      "kind": "procedure",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Write(path : string)",
+      "description": "Кладе вміст у файл, заміщаючи те, що там було. Значення, яке не тримає байтів, пише порожній файл.\n\nБАЙТИ НА ДИСКУ, КОЛИ ФАЙЛ ЗАКРИТО, а не коли запис відповів — потік буферизований, — і обидві половини кажуться однією фразою: \"BinaryData: writing to the file '<path>' failed\". Файл, який не вдалося відкрити на запис, відхиляється до того, як хоч щось записано.",
+      "syntax_block": "Bytes.Write(path);",
+      "parameters": "path — файл, у який пишемо; він заміщується.",
+      "return_descr": "",
+      "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Read",
+        "cls.TextWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding",
+      "name_local": "TextEncoding",
+      "name_en": "TextEncoding",
+      "kind": "enum_type",
+      "class_id": 413303300201889308,
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
+      "description": "Як байти складаються в текст, сказане значенням: у TextEncoding п'ять членів — UTF8, UTF16, ANSI, OEM і System, — і член пишеться як TextEncoding.<Ім'я>. Скрипт такого значення не будує, і рядок \"utf-8\" ним теж не є: перелічення стоїть замість нього.\n\nЙОГО ЧИТАЮТЬ СКРІЗЬ, ДЕ БАЙТИ ЗУСТРІЧАЮТЬСЯ З ТЕКСТОМ, — New TextReader(path, encoding) і TextReader.Open, New TextWriter(path, encoding, append) і TextWriter.Open. Якщо пропущено або порожнє — UTF8.\n\nUTF-8 СУВОРИЙ: байти, які не UTF-8, — це відмова, а не текст із дірками. Під час читання мітка порядку байтів на початку файлу UTF-8 або UTF-16 читається як мітка і текстом не віддається, а мітка UTF-16 каже, який кінець іде першим; під час запису UTF-16 отримує мітку, UTF-8 — ні.\n\nANSI, OEM І System — ВЛАСНІ КОДУВАННЯ МАШИНИ, ЗАПИТАНІ В НЕЇ, а не припущені: база, що переїхала з машини на машину, читає файли тієї машини, на якій працює. У Windows це кодові сторінки, узяті ЗА НОМЕРОМ: ANSI і System — обидві сторінка ANSI системи, OEM — консольна. Поза Windows таке кодування одне — поточної локалі, — і всі три означають його. Байт, для якого в сторінки немає символа, і символ, для якого в неї немає байтів, — це відмови.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // файл від консольної програми\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding.UTF8",
+        "enum.TextEncoding.UTF16",
+        "enum.TextEncoding.ANSI",
+        "cls.TextReader",
+        "cls.TextWriter",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.UTF8",
+      "name_local": "UTF8",
+      "name_en": "UTF8",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF8",
+      "description": "UTF-8 і ЗНАЧЕННЯ ЗА ЗАМОВЧУВАННЯМ: саме це означає аргумент кодування, коли його пропущено або він порожній.\n\nСУВОРИЙ. Байти, які не UTF-8, відхиляються — \"TextReader: the file '<path>' cannot be read in the encoding given\", — а не читаються як текст із символами-замінниками: текст із дірками читається як текст і порівнюється як текст.\n\nМітка порядку байтів на початку файлу читається як мітка і текстом не віддається. Під час запису мітка НЕ ставиться: саме мітка перед JSON або перед першим полем CSV ламає всякого читача, який її не чекає.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // те саме, що New TextReader(path)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "cls.TextReader",
+        "cls.TextWriter"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.UTF16",
+      "name_local": "UTF16",
+      "name_en": "UTF16",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF16",
+      "description": "UTF-16: два байти на символ і мітка порядку байтів, що каже, який із них іде першим.\n\nЧИТАННЯ ЙДЕ ЗА МІТКОЮ — FF FE читається молодшим байтом уперед, FE FF — старшим, — і в обох випадках мітка лишається міткою, а не першим символом першого рядка.\n\nЗАПИС ІДЕ МОЛОДШИМ БАЙТОМ УПЕРЕД і ставить мітку, бо без неї ніщо, що читає файл, не відрізнить один кінець від іншого. Під час дописування мітка ставиться, лише якщо у файлі ще нічого немає.",
+      "syntax_block": "Writer = New TextWriter(path, TextEncoding.UTF16);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"Привіт\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // мітка каже, який кінець іде першим",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "cls.TextReader",
+        "cls.TextWriter"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.ANSI",
+      "name_local": "ANSI",
+      "name_en": "ANSI",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.ANSI",
+      "description": "Кодова сторінка ANSI ТІЄЇ МАШИНИ, на якій працює платформа, — запитана в системи, а не припущена: база, що переїхала з машини на машину, читає файли тієї машини, на якій перебуває зараз. Це те, чим пише більшість програм Windows, коли пише не в Unicode.\n\nУ Windows сторінка береться ЗА НОМЕРОМ — тим, який називає сама система, — і перетворюється системою, якій вона належить: нічого не виписується за іменем і нічого не вгадується. Байт, для якого в сторінки немає символа, — це ВІДМОВА; символ, для якого в сторінки немає байтів, — теж: текст не пишеться зі знаком питання там, де має стояти літера.\n\nПоза Windows таке кодування одне — поточної локалі, — і ANSI, OEM та System означають його.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.OEM",
+        "enum.TextEncoding.System"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.OEM",
+      "name_local": "OEM",
+      "name_en": "OEM",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.OEM",
+      "description": "Кодова сторінка OEM цієї машини — консольна: те, чим досі пише програма часів DOS або звіт, надрукований у файл. Запитана в системи, а не припущена.\n\nПравила ті самі, що в ANSI: у Windows сторінка береться за номером і перетворюється системою, якій належить, а байт, для якого в сторінки немає символа, або символ, для якого в неї немає байтів, — це відмова, а не хибна літера.\n\nПоза Windows окремої сторінки OEM немає: є кодування поточної локалі, і ANSI, OEM та System означають його.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.OEM);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // записаний консольною програмою\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.ANSI",
+        "enum.TextEncoding.System"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.System",
+      "name_local": "System",
+      "name_en": "System",
+      "kind": "system_enum",
+      "category_keys": [
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.System",
+      "description": "Кодування системи в тому вигляді, як вона налаштована зараз. У Windows це і Є її сторінка ANSI — та сама, яку називає ANSI, і дістається вона тією самою дорогою, — а поза Windows це кодування поточної локалі, яким там є і ANSI, і OEM.\n\nЦей член кажуть тоді, коли кодування файлу — це «те, чим пише ця машина». Коли воно відоме, називайте його: UTF8 для файлу обміну, OEM — для того, що записала консольна програма.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.System);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(path, TextEncoding.System);   // те, чим пише ця машина\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.ANSI",
+        "enum.TextEncoding.OEM"
+      ],
+      "reviewed": false
+    }
+  ]
+}
