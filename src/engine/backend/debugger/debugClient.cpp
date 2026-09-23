@@ -20,6 +20,8 @@
 
 #include "backend/fileSystem/fs.h"
 #include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
+#include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
+#include "backend/diagnostics/journal.h"     // …and the reason is written down before the socket goes
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 
@@ -815,13 +817,31 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 						if (m_socketClient->LastCount() != length)
 							break;
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
+							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
+							// refuses a chunk whose declared size is larger than what arrived (fileSystem/fs.cpp),
+							// and that refusal travels up here - on a worker thread, where an escaping exception
+							// takes the whole designer down with it. It did, on 2026-09-23, while the designer
+							// was debugging: two asserts in the journal and an access violation inside memcpy a
+							// second later, from a thread whose entire record was those two lines.
+							//
+							// What a bad frame means is that this end and the far end no longer agree about the
+							// wire, and the only honest thing left is to stop reading it. The loop above already
+							// treats a short read that way (`LastCount() != length`).
+							try {
 #if _USE_NET_COMPRESSOR == 1
-							BYTE* dest = nullptr; unsigned int dest_sz = 0;
-							_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
-							RecvCommand(dest, dest_sz); free(dest);
+								BYTE* dest = nullptr; unsigned int dest_sz = 0;
+								_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
+								RecvCommand(dest, dest_sz); free(dest);
 #else
-							RecvCommand(bufferData.GetData(), length);
+								RecvCommand(bufferData.GetData(), length);
 #endif
+							}
+							catch (const ibBackendException& err) {
+								ibJournalError(wxT("debugger"),
+									wxT("debug client: a frame of %u bytes could not be read, closing the connection: %s"),
+									length, err.GetErrorDescription());
+								break;
+							}
 							length = 0;
 						}
 					}
