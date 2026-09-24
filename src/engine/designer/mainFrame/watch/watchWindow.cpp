@@ -314,7 +314,12 @@ void ibWatchWindow::OnItemExpanding(wxTreeEvent& event)
 	while ((parent = GetItemParent(parent)) != nullptr)
 	{
 		if (parent != GetRootItem()) {
-			expression = wxT(".") + expression;
+			// A SUBSCRIPT JOINS WITHOUT A DOT. A row is named the way it is reached, and a
+			// Container's entry is reached by the key inside brackets -- ["fr"], not .fr,
+			// a key there being a value and not a field name. Written after a dot it would
+			// not compile, and the row could not be opened at the next stop.
+			if (!expression.StartsWith(wxT("[")))
+				expression = wxT(".") + expression;
 			expression = GetItemText(parent) + expression;
 		}
 	}

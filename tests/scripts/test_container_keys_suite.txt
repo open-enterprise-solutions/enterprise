@@ -1,0 +1,121 @@
+// ============================================================================
+// Container and Structure keys - 2026-09-23
+//
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+//
+//   1. A Container's string key is the string it is: "ab" and "AB" are two keys, as "ab" = "AB" is False.
+//   2. A Container has no dot: c.Name raises even when the key "Name" is there; [key] reaches it.
+//   3. A Structure's key is a field NAME: it folds case and is reached through a dot.
+//   4. A LINQ group by a string key splits "fr" from "FR". The groups live in LINQ's own collection,
+//      ordered by the language's comparison, so this was already so; it is here because a Container
+//      and a group must not answer the same question about two strings differently.
+//   5. The subscript that reaches a key is text this language reads: a quote inside a string key is
+//      doubled. It is the form the watch prints for such an entry (AccessorOf, not GetPropName -
+//      that one answers the key's own text), so the row it shows is a row it can open again.
+//   7. A key NAMES its entry, and a name is what a caller that wants a name gets: ToTable over
+//      containers builds the columns of its answer from those names, and a column called
+//      ["Amount"] would be a column no script could address.
+//   8. Undefined and Null are keys a script can WRITE - the lexer makes them values before
+//      anything else - and they are ONE key, the value ordering putting them in one place. The
+//      watch writes such a row the same way, which is why they are here. A boolean key is reached
+//      by Property but NOT by a subscript: `c[True]` compiles and answers Undefined,
+//      having no boolean case among the typed array opcodes, so the watch does not write one.
+// ============================================================================
+
+// 1
+if ("ab" = "AB") { Raise("the language's = was expected to tell the two apart"); }
+
+var c = New Container;
+c.Insert("ab", 1);
+c.Insert("AB", 2);
+if (c.Count() <> 2) { Raise("expected two keys, got " + c.Count()); }
+if (c["ab"] <> 1) { Raise("c[ab]: " + c["ab"]); }
+if (c["AB"] <> 2) { Raise("c[AB]: " + c["AB"]); }
+var found = Undefined;
+if (c.Property("Ab", found)) { Raise("a third spelling is not a key that was inserted"); }
+var missed = False;
+try {
+	found = c["Ab"];
+} except {
+	missed = True;
+}
+if (Not missed) { Raise("c[Ab] was expected to miss"); }
+Message("container keys: " + c.Count());
+
+// 2
+var named = New Container;
+named.Insert("Name", 7);
+var dotRaised = False;
+var viaDot = Undefined;
+try {
+	viaDot = named.Name;
+} except {
+	dotRaised = True;
+}
+if (Not dotRaised) { Raise("a Container's key was reached through a dot: " + viaDot); }
+if (named["Name"] <> 7) { Raise("named[Name]: " + named["Name"]); }
+Message("container dot refused");
+
+// 3
+var s = New Structure("Name", 7);
+if (s.name <> 7) { Raise("s.name: " + s.name); }
+if (s.NAME <> 7) { Raise("s.NAME: " + s.NAME); }
+if (s["nAmE"] <> 7) { Raise("s[nAmE]: " + s["nAmE"]); }
+s.Insert("Other", 1);
+var twice = False;
+try {
+	s.Insert("OTHER", 2);
+} except {
+	twice = True;
+}
+if (Not twice) { Raise("a Structure took the same field twice in another case"); }
+Message("structure fields: " + s.Count());
+
+// 4
+var rows = New Array;
+rows.Add(New Structure("Country, Amount", "fr", 1));
+rows.Add(New Structure("Country, Amount", "FR", 10));
+rows.Add(New Structure("Country, Amount", "fr", 100));
+var q = from r in rows group r.Amount by r.Country;
+if (q.Count() <> 2) { Raise("expected groups fr and FR, got " + q.Count()); }
+foreach (g in q) {
+	var total = 0;
+	foreach (a in g.Values) { total = total + a; }
+	if (g.Key = "fr" And total <> 101) { Raise("group fr: " + total); }
+	if (g.Key = "FR" And total <> 10) { Raise("group FR: " + total); }
+	Message(g.Key + ": " + total);
+}
+
+// 5
+var quoted = New Container;
+quoted.Insert("he said ""hi""", 7);
+if (quoted["he said ""hi"""] <> 7) { Raise("a doubled quote in a key: " + quoted["he said ""hi"""]); }
+Message("quoted key reached");
+
+// 7
+var lines = New Array;
+var line = New Container;
+line.Insert("Amount", 5);
+lines.Add(line);
+var table = lines.ToTable();
+var seen = 0;
+foreach (tableRow In table) {
+	if (tableRow.Amount <> 5) { Raise("a column of a table made from containers: " + tableRow.Amount); }
+	seen = seen + 1;
+}
+if (seen <> 1) { Raise("expected one row, got " + seen); }
+Message("table columns: " + table.Columns.Count());
+
+// 8
+var typed = New Container;
+typed.Insert(True, "yes");
+typed.Insert(Undefined, "nothing");
+typed.Insert(7, "seven");
+if (typed.Count() <> 3) { Raise("expected three keys, got " + typed.Count()); }
+if (typed[Undefined] <> "nothing") { Raise("typed[Undefined]: " + typed[Undefined]); }
+if (typed[Null] <> "nothing") { Raise("Undefined and Null were expected to be one key"); }
+if (typed[7] <> "seven") { Raise("typed[7]: " + typed[7]); }
+var boolFound = Undefined;
+if (Not typed.Property(True, boolFound)) { Raise("a boolean key was expected to be there"); }
+if (boolFound <> "yes") { Raise("Property(True): " + boolFound); }
+Message("constant keys: " + typed.Count());

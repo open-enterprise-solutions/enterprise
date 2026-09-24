@@ -14,8 +14,8 @@
 //
 //   * Lookup is O(1). The old store was a std::map keyed by ibValue with a
 //     comparator that materialised and uppercased BOTH keys on every comparison
-//     — O(log n) allocations per access. Here a hash index over a once-folded key
-//     answers in one probe.
+//     — O(log n) allocations per access. Here a hash index over the key (folded
+//     once per lookup, for a Structure's field names) answers in one probe.
 //   * Building is O(n). The old member table published every key as a script
 //     property and rebuilt that O(size) surface on each mutation, so filling an
 //     n-key container was O(n^2) (docs/private/runtime-perf.md §1g). The member table now
@@ -37,17 +37,23 @@ private:
 	// The two are maintained together by every mutating method.
 	std::vector<std::pair<ibValue, ibValue>> m_entries;
 
-	// TWO KINDS OF KEY, TWO RULES, and neither renders the value to text:
+	// WHAT A STRING KEY IS depends on which of the two this is, and neither renders a value to text:
 	//
-	//   a STRING key folds case — a script reaches a field by name and does not care how it was
-	//   typed (`Structure.Name` and `structure.name` are one field). The fold runs once per LOOKUP
-	//   while hashing; inside a bucket the comparison decides most candidates on length alone and
-	//   folds only the characters that differ.
+	//   in a STRUCTURE a string key is a NAME — a script reaches the field through a dot and does not
+	//   care how it was typed (`s.Name` and `s.name` are one field), so it folds case. The fold runs
+	//   once per LOOKUP while hashing; inside a bucket the comparison decides most candidates on
+	//   length alone and folds only the characters that differ.
 	//
-	//   anything else compares AS A VALUE, through ibValue's own ordering — a reference by its guid,
-	//   a number by its magnitude. This is what replaced the old rendered identity, and with it the
-	//   rule that `1` and "1" were one key: they are different keys now, as they are everywhere else
-	//   in the language.
+	//   in a CONTAINER a string key is a VALUE like any other: "fr" and "FR" are two keys, exactly as
+	//   `"fr" = "FR"` is False, and a key is reached through `[key]`, never through a dot.
+	//
+	//   anything that is not a string compares AS A VALUE in both, through ibValue's own ORDERING — a
+	//   reference by its guid, a number by its magnitude — so `1` and "1" are different keys, as they
+	//   are everywhere else in the language. The ordering, not `=`: it puts Undefined and Null in one
+	//   place (CompareValueLS), so those two are ONE key here while `Undefined = Null` is False.
+	//
+	// Set once by the constructor and never changed: the index is built under it.
+	const bool m_keysAreNames;
 
 	// THE INDEX HOLDS POSITIONS, NOT A SECOND COPY OF THE KEY. It used to be
 	// keyed by the ibValue itself, so every insert copied the key — and a string
@@ -63,10 +69,13 @@ private:
 
 	// Hash and lookup, split because every mutating path wants both and hashing
 	// twice was the other half of the old shape's cost.
-	static size_t HashOf(const ibValue& key);
+	size_t HashOf(const ibValue& key) const;
 	long FindWithHash(const ibValue& key, size_t hash) const;
 
 protected:
+	// A Structure's constructor: its string keys are field NAMES (see m_keysAreNames).
+	ibValueContainer(bool readOnly, bool keysAreNames);
+
 	// -1 when absent; the entry index otherwise. The single lookup primitive the
 	// key-facing methods share.
 	long IndexOf(const ibValue& key) const;
@@ -134,7 +143,12 @@ public:
 	// only methods, so FindProp returns a key's entry index (or -1), and
 	// Get/SetPropVal read / write that entry. GetNProps / GetPropName expose the
 	// keys to introspection (debugger, inspectors) without maintaining a live
-	// surface: they read the store on demand.
+	// surface: they read the store on demand. What GetPropName answers is the
+	// key's TEXT; how an entry is REACHED is AccessorOf, below.
+	//
+	// FindProp is the DOT, and only a Structure has one: a Container's key is a
+	// value, and `c.Name` could not name a reference or a number anyway. So on a
+	// Container FindProp always misses and `c.Name` raises "not found".
 	virtual long FindProp(const wxString& strPropName) const override;
 	virtual long GetNProps() const override { return (long)m_entries.size(); }
 	virtual wxString GetPropName(const long lPropNum) const override;
@@ -146,6 +160,12 @@ public:
 	// (A key is never scope-local, so the base's IsPropScoped is already right.)
 	virtual bool IsPropReadable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
 	virtual bool IsPropWritable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
+
+	// The text that READS entry lPropNum - a field name in a Structure, the subscript in a
+	// Container - or empty when nothing written can reach it. Its one caller is the debugger's
+	// watch, where the name of a row is also the expression the row is opened by; valueMap.cpp
+	// says why that is a question of its own and not what GetPropName answers.
+	wxString AccessorOf(const long lPropNum) const;
 
 	// The FIXED method surface — methods only, no keys. Type-invariant given the
 	// read-only flag, bound once in the ctor and never rebuilt on a mutation.
@@ -192,12 +212,12 @@ protected:
 class BACKEND_API ibValueStructure : public ibValueContainer {
 	public:
 
-	ibValueStructure() : ibValueContainer(false) {}
-	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true) {
+	ibValueStructure() : ibValueContainer(false, true) {}
+	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true, true) {
 		for (auto& strBVal : structureValues) ibValueContainer::SetAt(strBVal.first, strBVal.second);
 	}
 
-	ibValueStructure(bool readOnly) : ibValueContainer(readOnly) {}
+	ibValueStructure(bool readOnly) : ibValueContainer(readOnly, true) {}
 
 	// `New Structure("Field1, Field2, ...", value1, value2, ...)` —
 	// named-column ctor: first arg is comma-separated field-name list,
