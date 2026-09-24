@@ -25,6 +25,26 @@ constexpr ibPictureID g_picDeleteCLSID = picture_to_clsid("PC_DELVL");
 constexpr ibPictureID g_picAddFolderCLSID = picture_to_clsid("PC_ADDFV");
 constexpr ibPictureID g_picSelectCLSID = picture_to_clsid("PC_SELVL");
 
+// THE COMPOSER'S FOUR VERBS, each with a picture of its own. Three of them used to borrow: compose took
+// the document's Generate, settings took Structure, and VARIANTS AND RESTORE SHARED THE SELECT TICK —
+// two different questions under one picture, which is what a bar of ticks reads as (Max, 2026-09-25:
+// "it looks unrelated"). Borrowing is what made repainting impossible: Select is pressed in a dozen
+// other places and means "take this one".
+//
+// Art: drawn in the debug toolbar's manner — flat solid shapes, no keyline, one colour each. Compose is
+// the green run-triangle and the rows it produces; settings is a gear; variants are three arrangements
+// with one taken; restore is the arrow OUT of the store, the mirror of Save's arrow into it, told apart
+// by direction exactly as the debugger's step-into and step-out are.
+constexpr ibPictureID g_picComposeCLSID = picture_to_clsid("PC_CMPSE");
+constexpr ibPictureID g_picComposerSettingsCLSID = picture_to_clsid("PC_CMSET");
+constexpr ibPictureID g_picVariantsCLSID = picture_to_clsid("PC_VARNT");
+constexpr ibPictureID g_picRestoreSettingsCLSID = picture_to_clsid("PC_RSTOR");
+// …and its twin. Saving a SETTING is not saving the object — that one is g_picSaveCLSID and is pressed
+// on every form there is, so it could not be repainted into half of a pair without changing what Save
+// looks like everywhere. Here the two are one picture told apart by the arrow's direction, the way the
+// debugger tells step-into from step-out.
+constexpr ibPictureID g_picSaveSettingsCLSID = picture_to_clsid("PC_SVSET");
+
 constexpr ibPictureID g_picFilterCLSID = picture_to_clsid("PC_FLTER");
 constexpr ibPictureID g_picFilterSetCLSID = picture_to_clsid("PC_FLTES");
 constexpr ibPictureID g_picFilterClearCLSID = picture_to_clsid("PC_FLTEC");

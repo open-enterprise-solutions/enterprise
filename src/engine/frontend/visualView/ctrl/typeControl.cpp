@@ -55,14 +55,23 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData(), parent))
 			return true;
 
+		// ⭐⭐ WAS A WINDOW ACTUALLY RAISED? Asked of the same fact the type picker asks it of — it shows
+		// nothing when fewer than two types are admitted (ShowSelectType), and a cell that admits one
+		// has no question to put. Nothing ran an event loop, so nothing destroyed the editor, and the
+		// value can be chosen in this very call. It is only the MODAL that forces the call to end, and
+		// only a composite cell raises one; every other cell was paying that second click for a window
+		// it never saw (Max, 2026-09-25: "why does one have to click the three dots twice in the filter
+		// again?").
+		const bool asksTheUser = factory->GetTypeDesc().GetClsidCount() > 1;
+
 		const ibClassID clsid = factory->GetDataType();
 		const ibMetaData* metaData = factory->GetMetaData();
 		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
 			return false;   // the user closed the type choice
 		current = metaData->CreateObject(clsid);
-		ownerValue->SetControlValue(current);
+		ownerValue->SetControlValue(current);   // the cell now stands on its settled type
 
-		// AND THE CHOICE ENDS HERE. Settling the type is a MODAL question, and a modal runs an event
+		// AND THE CHOICE ENDS HERE WHEN IT WAS ASKED. Settling the type is a MODAL question, and a modal runs an event
 		// loop of its own: while it is up the grid finishes editing this cell and destroys the editor
 		// control - which is the window handed to us as `parent`. Carrying on in the same call opened
 		// the value chooser parented to freed memory, and it died inside wxGetTopLevelParent with a
@@ -72,7 +81,8 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 		// time there is a live editor to hang it on. No window pointer outlives a modal here, which is
 		// the rule rather than this one repair - the previous line ("keep going, the editor opens now,
 		// not on a second click") described a convenience the lifetime does not allow.
-		return true;
+		if (asksTheUser)
+			return true;
 	}
 
 	// THE VALUE OF THAT TYPE: the built-in quick choice first (it knows a boolean,
