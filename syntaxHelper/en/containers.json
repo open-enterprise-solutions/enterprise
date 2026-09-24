@@ -1,0 +1,406 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.Container",
+      "name_local": "Container",
+      "name_en": "Container",
+      "kind": "collection",
+      "class_id": 158350834197411078,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "New Container()",
+      "description": "A key bound to a value, and both of them are runtime VALUES. A key can be a string, a number, a date, a reference to an item -- whatever the language's `=` tells apart, a Container tells apart, so \"fr\" and \"FR\" are two keys and 1 is not \"1\".\n\nA key is not a field NAME, so there is no dot: `c.Name` raises even when the key \"Name\" is in the container. A key is reached by `c[key]`, which raises when nothing is bound to it; by Get, which answers Undefined instead; by Property; and by walking the container, which hands out a KeyValue per entry in the order the keys were inserted.\n\nFor a fixed set of NAMES written after a dot, the type is Structure.",
+      "syntax_block": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "parameters": "None.",
+      "return_descr": "Container — empty.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container.Count",
+        "cls.Container.Get",
+        "cls.Container.Property",
+        "cls.Container.Insert",
+        "cls.Container.Delete",
+        "cls.Container.Clear",
+        "cls.KeyValue",
+        "cls.Structure"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Count()",
+      "description": "How many keys the container holds.",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Get(key)",
+      "description": "The value bound to the key, or Undefined when nothing is bound to it. It does not raise, which `c[key]` does, and it asks for no second argument, which Property does.",
+      "parameters": "key — any value. Two string keys are the same key when they are the same text; a key of any other kind is settled by the value's own ordering, and that ordering puts Undefined and Null in one place.",
+      "return_descr": "The value bound to the key, or Undefined.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Property",
+        "cls.Container.Insert"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Property",
+      "name_local": "Property",
+      "name_en": "Property",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Property(key, valueFound)",
+      "description": "Whether the key is in the container. What it is bound to is handed back through the second argument, which is left as it was when the key is not there.",
+      "parameters": "key — any value.\nvalueFound — the variable the value is handed back in.",
+      "return_descr": "Boolean — True when the key is there.",
+      "example": "Rate = Undefined;\nIf (Rates.Property(\"fr\", Rate)) {\n    Message(Rate);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Insert",
+      "name_local": "Insert",
+      "name_en": "Insert",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Insert(key, value)",
+      "description": "Binds a value to a key that is not in the container yet. A key that is already there raises \"Key '<key>' is already using!\" -- to replace what a key is bound to, assign it: `Rates[\"fr\"] = 2`.",
+      "parameters": "key — any value.\nvalue — what to bind to it.",
+      "return_descr": "None.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Delete",
+        "cls.Container.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Delete(key)",
+      "description": "Removes the key and what it was bound to. A key that is not there is not an error. The keys that were inserted after it keep their order.",
+      "parameters": "key — any value. Two string keys are the same key when they are the same text; a key of any other kind is settled by the value's own ordering, and that ordering puts Undefined and Null in one place.",
+      "return_descr": "None.",
+      "example": "Rates.Delete(\"fr\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Clear",
+      "name_local": "Clear",
+      "name_en": "Clear",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Clear()",
+      "description": "Removes every key.",
+      "parameters": "None.",
+      "return_descr": "None.",
+      "example": "Rates.Clear();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure",
+      "name_local": "Structure",
+      "name_en": "Structure",
+      "kind": "collection",
+      "class_id": 170115149963636206,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "New Structure([fields [, value1, value2, ...]])",
+      "description": "A set of named fields. A field name is a NAME: case does not matter -- `s.Name`, `s.name` and `s[\"nAmE\"]` are one field -- and a field is read after a dot. Only a string can be a field name; anything else is refused.\n\nThe fields can be declared when the structure is made, `New Structure(\"Item, Amount\", \"Paper\", 12)`, or added one at a time with Insert. Walking a structure hands out a KeyValue per field, in the order the fields were added.\n\nWhen the keys are VALUES rather than names -- a reference, a number, two strings that differ in case -- the type is Container.",
+      "syntax_block": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
+      "syntax_block_ves": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach Field In Line Do\n    Message(Field.Key + \": \" + Field.Value);\nEndDo;",
+      "parameters": "fields — String, the field names separated by commas. May be left out.\nvalue1, value2, ... — the value of each field in the same order; a field with no value given is Undefined.",
+      "return_descr": "Structure — with the fields that were declared.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure.Count",
+        "cls.Structure.Get",
+        "cls.Structure.Property",
+        "cls.Structure.Insert",
+        "cls.Structure.Delete",
+        "cls.Structure.Clear",
+        "cls.KeyValue",
+        "cls.Container"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Count()",
+      "description": "How many fields the structure holds.",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Count());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Get(name)",
+      "description": "The value of the field, in any case, or Undefined when the structure has no such field. It does not raise, which `s.Name` and `s[\"Name\"]` do. A name that is not a string is refused, as it is at every other door of a Structure.",
+      "parameters": "name — String, the field name. Case does not matter.",
+      "return_descr": "The value of the field, or Undefined.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Get(\"item\"));\nMessage(ValueIsFilled(Line.Get(\"Vat\")));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Property"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Property",
+      "name_local": "Property",
+      "name_en": "Property",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Property(name, valueFound)",
+      "description": "Whether the structure has the field, in any case. Its value is handed back through the second argument, which is left as it was when there is no such field.",
+      "parameters": "name — String, the field name.\nvalueFound — the variable the value is handed back in.",
+      "return_descr": "Boolean — True when the field is there.",
+      "example": "Amount = Undefined;\nIf (Line.Property(\"Amount\", Amount)) {\n    Message(Amount);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Insert",
+      "name_local": "Insert",
+      "name_en": "Insert",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Insert(name, value)",
+      "description": "Adds a field and gives it a value. The name must be a string and must not be a field already, in any case: a second Insert of \"OTHER\" after \"Other\" raises. To change a field, assign it: `s.Other = 2`.",
+      "parameters": "name — String, the field name.\nvalue — its value.",
+      "return_descr": "None.",
+      "example": "Line = New Structure();\nLine.Insert(\"Item\", \"Paper\");\nLine.Item = \"Ink\";",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Delete(name)",
+      "description": "Removes the field and its value. A name that is not a field is not an error; a name that is not a string is refused.",
+      "parameters": "name — String, the field name. Case does not matter.",
+      "return_descr": "None.",
+      "example": "Line.Delete(\"Amount\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Clear",
+      "name_local": "Clear",
+      "name_en": "Clear",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Clear()",
+      "description": "Removes every field.",
+      "parameters": "None.",
+      "return_descr": "None.",
+      "example": "Line.Clear();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue",
+      "name_local": "KeyValue",
+      "name_en": "KeyValue",
+      "kind": "collection",
+      "class_id": 349839053701994867,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Foreach (Pair In Container) { ... }",
+      "description": "One entry of a Container or a Structure, as walking it hands the entry over: the key and what is bound to it. It is not made with New -- a Foreach over a container or a structure is where it comes from.",
+      "syntax_block": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Foreach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "parameters": "None.",
+      "return_descr": "KeyValue.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue.Key",
+        "cls.KeyValue.Value",
+        "cls.Container",
+        "cls.Structure"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue.Key",
+      "name_local": "Key",
+      "name_en": "Key",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "KeyValue.Key",
+      "description": "The key of the entry: a value in a Container, a field name in a Structure.",
+      "parameters": "None.",
+      "return_descr": "Any value.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue",
+        "cls.KeyValue.Value"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "KeyValue.Value",
+      "description": "What the key is bound to.",
+      "parameters": "None.",
+      "return_descr": "Any value.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue",
+        "cls.KeyValue.Key"
+      ],
+      "reviewed": false
+    }
+  ]
+}
