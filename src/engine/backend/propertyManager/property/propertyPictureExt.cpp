@@ -4,7 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id) const
+wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
 {
 	return new ibVariantDataExternalPicture(id);
 }

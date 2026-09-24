@@ -136,6 +136,68 @@ ibRunContext::~ibRunContext()
 	DestroyLocals();
 }
 
+//*************************************************************************************************
+//*                                     RunCaptureContext                                         *
+//*************************************************************************************************
+
+ibRunCaptureContext::~ibRunCaptureContext()
+{
+	m_destroying = true;
+	// IN THIS ORDER, so the chain comes apart from the inside out: our own slots go first — a
+	// lambda living in one of them dies here and lets go of us, which the flag above absorbs —
+	// and only then does the frame we were declared in hear its last holder leave. DestroyLocals
+	// is idempotent by design (see its note), so the base destructor running it again is fine.
+	DestroyLocals();
+	SetOuter(nullptr);
+}
+
+void ibRunCaptureContext::SetOuter(ibRunCaptureContext* outer)
+{
+	if (outer == m_outer)
+		return;
+
+	if (outer != nullptr)
+		outer->IncrRef();
+	if (m_outer != nullptr)
+		m_outer->DecrRef();
+
+	m_outer = outer;
+}
+
+void ibRunCaptureContext::DecrRef()
+{
+	if (m_destroying)
+		return;
+
+	wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid frame reference count");
+	if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+		delete this;
+}
+
+void ibRunCaptureContext::ReleaseTemporarySlots()
+{
+	if (m_currentFunction == nullptr || m_pLocVars == nullptr)
+		return;
+
+	// ⭐ THE BYTECODE ALREADY SAYS WHICH SLOTS ARE TEMPORARY, by leaving them out: compileCode.cpp
+	// skips `m_bTempVar` entries when it writes m_listLocals, so a slot that no entry claims — and
+	// is not a parameter — is one the compiler minted for an expression. Nothing is matched by name.
+	for (long slot = m_lParamCount; slot < m_lVarCount; slot++) {
+
+		if (m_pLocVars[slot].m_bReadOnly)
+			continue;
+
+		bool named = false;
+		for (const ibByteCode::ibByteCodeVarInfo& local : m_currentFunction->m_listLocals) {
+			if (local.m_slotIndex == slot) { named = true; break; }
+		}
+		if (named)
+			continue;
+
+		m_pLocVars[slot].Reset();
+	}
+}
+
 const ibByteCode* ibRunContext::GetByteCode() const
 {
 	return m_procUnit != nullptr ?

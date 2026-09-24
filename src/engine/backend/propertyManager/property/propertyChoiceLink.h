@@ -26,7 +26,7 @@ class ibMetaData;
 // nobody can satisfy is not a safeguard. The one thing with nothing to give is an empty declaration
 // (ibChoiceLinkResolver::CanGovern).
 class BACKEND_API ibPropertyChoiceLink : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription());
 public:
 
 	ibChoiceTypeLinkDescription& GetValueAsLinkDesc() const;
@@ -65,7 +65,7 @@ public:
 // ⭐ THE OWNER IS A ROW OF THIS TABLE (choiceLinkDescription.h): a catalog declaring `ListOwner` gets
 // one written for it, which is why there is no property for the owner anywhere.
 class BACKEND_API ibPropertyChoiceParameters : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription());
 public:
 
 	ibChoiceParametersDescription& GetValueAsParametersDesc() const;

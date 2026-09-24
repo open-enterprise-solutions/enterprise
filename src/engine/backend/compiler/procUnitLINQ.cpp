@@ -79,9 +79,9 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// `SelectMany(x => src.Where(y => y > x))` — the inner lambda reads the outer
 	// one's parameter, which is what a query block's second binding compiles to.
 	// The capture is established at OPER_LFUNC by walking the frame chain and
-	// keeping every ancestor whose `weak_from_this()` still locks; a stack frame
-	// never locks, so a lambda materialised under a pipeline captured nothing and
-	// `x` arrived empty.
+	// keeping every ancestor of the captured kind; an ordinary frame is not one,
+	// so a lambda materialised under a pipeline captured nothing and `x` arrived
+	// empty.
 	//
 	// Promotion alone was tried twice and crashed the corpus, which is why the
 	// note here used to say "not the fix". The missing half was the ARGUMENTS.
@@ -110,13 +110,13 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// The saving is real and the way to it is not a reset list that has to stay complete forever —
 	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
 	// is (docs/private/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
-	std::shared_ptr<ibRunContext> spHeapCtx;
-	// The stack frame leases its slots; the heap-promoted one cannot, because it is
-	// the case that OUTLIVES the call — a lambda captured it. procUnitState.h, ibRunStack.
+	ibRunCapturePtr spHeapCtx;
+	// The stack frame leases its slots; the capture frame cannot, because it is
+	// the case that OUTLIVES the call — a lambda took it. procUnitState.h, ibRunStack.
 	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount,
 	                                       ibRunLifetime::PerCall);
 	if (bHeapFrame)
-		spHeapCtx = std::make_shared<ibRunContext>((int)lambdaVarCount);
+		spHeapCtx.Reset(new ibRunCaptureContext((int)lambdaVarCount));
 
 	ibRunContext& cRunContext = bHeapFrame ? *spHeapCtx : stackCtx;
 

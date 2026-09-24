@@ -27,7 +27,7 @@ public:
 
 private:
 
-	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act) const;
+	static wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act);
 
 	class BACKEND_API ibEventOptionList {
 

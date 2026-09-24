@@ -3,7 +3,7 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart whose kinds these are
 
-wxVariantData* ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	return new ibVariantDataOwner(property, typeDesc);
 }

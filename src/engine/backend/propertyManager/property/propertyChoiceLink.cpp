@@ -5,7 +5,7 @@
 // What a link or a row may name, how it is spelled and what is gone from it are the variant's
 // (variantChoiceLink.cpp); the property makes it, hands it over and asks it for its lists.
 
-wxVariantData* ibPropertyChoiceLink::CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc) const
+wxVariantData* ibPropertyChoiceLink::CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc)
 {
 	return new ibVariantDataChoiceLink(property, linkDesc);
 }
@@ -60,7 +60,7 @@ bool ibPropertyChoiceLink::WriteNodeValue(ibDataValue& value) const
 //*                             The choice parameters — the table                                 *
 //*************************************************************************************************
 
-wxVariantData* ibPropertyChoiceParameters::CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc) const
+wxVariantData* ibPropertyChoiceParameters::CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc)
 {
 	return new ibVariantDataChoiceParameters(property, paramsDesc);
 }

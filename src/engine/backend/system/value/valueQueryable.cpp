@@ -32,7 +32,7 @@ namespace {
 // ⭐⭐ AT THE ADDRESS THE COMPILER WORKED OUT — no search at all.
 //
 // The lambda body's own instruction says `frame, cell`, and that is verbatim how the INVOKED lambda
-// addresses the same value: `m_capturedFrames[k]` IS depth k+1 for the call duration
+// addresses the same value: `CapturedAt(k)` IS depth k+1 for the call duration
 // (procUnitLambda.h, the OPER_CALL_LAMBDA shim). So the fold reads what the interpreter would read,
 // by the same coordinates, with nothing to look up.
 //
@@ -42,9 +42,9 @@ namespace {
 bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue& out)
 {
 	const long k = frame - 1;   // frame 1 = the context the lambda was written in
-	if (k < 0 || (size_t)k >= fn->m_capturedFrames.size())
+	if (k < 0)
 		return false;
-	const ibRunContext* const ctx = fn->m_capturedFrames[(size_t)k].get();
+	const ibRunContext* const ctx = fn->CapturedAt((size_t)k);
 	if (ctx == nullptr || ctx->m_pRefLocVars == nullptr)
 		return false;
 	if (slot < 0 || slot >= ctx->GetLocalCount() || ctx->m_pRefLocVars[slot] == nullptr)
@@ -63,9 +63,9 @@ bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue
 // engine takes the road above.
 bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibValue& out)
 {
-	for (const std::shared_ptr<ibRunContext>& sp : fn->m_capturedFrames) {
-		const ibRunContext* frame = sp.get();
-		if (frame == nullptr || frame->m_currentFunction == nullptr)
+	for (const ibRunCaptureContext* link = fn->GetCaptured(); link != nullptr; link = link->GetOuter()) {
+		const ibRunContext* frame = link;
+		if (frame->m_currentFunction == nullptr)
 			continue;
 		for (const ibByteCode::ibByteCodeVarInfo& local : frame->m_currentFunction->m_listLocals) {
 			if (local.m_strRealName.CmpNoCase(name) != 0)

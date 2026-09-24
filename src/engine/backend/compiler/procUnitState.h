@@ -81,8 +81,8 @@ struct ibErrorPlace {
 // ⚠ THE DISCIPLINE IS LIFO, AND IT IS THE CALLERS' PROPERTY, not a hope: only a
 // frame whose life IS one call reserves here. A frame that can outlive its call is
 // the case the compiler already marks (ibByteFunction::m_needsHeapFrame → the frame
-// is heap-promoted for a lambda to capture), and so is the context embedded in an
-// ibProcUnit; both own their slots instead.
+// is built as an ibRunCaptureContext for a lambda to take), and so is the context
+// embedded in an ibProcUnit; both own their slots instead.
 struct ibRunStack {
 
 	// Where a frame's slots are, and where the top stood before it took them.

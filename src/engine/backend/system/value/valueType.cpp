@@ -67,11 +67,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 	if (typeDescription.GetClsidCount() == 1) {
 
-		if (metaData != nullptr) {
-			return metaData->CreateObject(
-				typeDescription.GetFirstClsid()
-			);
-		}
+		const ibClassID& clsid = typeDescription.GetFirstClsid();
 
 		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
 		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
@@ -79,13 +75,17 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		// an access violation instead of the typed empty value it is documented to answer (2026-09-20). What
 		// the value registry can make by itself - a primitive - it makes; anything that needs a configuration
 		// and has none is the empty value.
-		if (activeMetaData == nullptr)
-			return ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())
-				? ibValue::CreateObject(typeDescription.GetFirstClsid()) : ibValue();
+		//
+		// ⭐ AND THE QUESTION IS ASKED ON EVERY ROAD, not only that one. A class the registry does not know
+		// cannot be made by any of the three, and asking for it anyway is a refusal thrown at a caller that
+		// only wanted to know what an empty cell of this column looks like: a configuration whose metaobjects
+		// were built without runtime objects has the type DESCRIBED and not REGISTERED, and the IN-set fold
+		// met exactly that (ComputedServerFix.In_AnEmptyReferenceAmongTheValuesGoesPairByPair, 2026-09-24).
+		if (!ibValue::IsRegisterCtor(clsid))
+			return ibValue();
 
-		return activeMetaData->CreateObject(
-			typeDescription.GetFirstClsid()
-		);
+		const ibMetaData* const owner = (metaData != nullptr) ? metaData : activeMetaData;
+		return (owner != nullptr) ? owner->CreateObject(clsid) : ibValue::CreateObject(clsid);
 	}
 
 	return wxEmptyValue;

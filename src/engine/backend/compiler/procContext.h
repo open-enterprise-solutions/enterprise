@@ -1,6 +1,7 @@
 #ifndef __PROC_CONTEXT__H__
 #define __PROC_CONTEXT__H__
 
+#include <atomic>    // a capture frame counts its holders the way ibValue does
 #include <memory>
 #include <utility>
 #include <vector>
@@ -45,13 +46,19 @@ enum class ibRunLifetime {
 	// run on the session's run stack, released in order.
 	PerCall,
 
-	// Can outlive the call that made it — heap-promoted for a lambda to capture
-	// (ibByteFunction::m_needsHeapFrame), or the context embedded in an ibProcUnit,
-	// which lives as long as its module. Owns its slots.
+	// Can outlive the call that made it: the context embedded in an ibProcUnit, which lives
+	// as long as its module. Owns its slots. A frame a CLOSURE outlives is the kind below —
+	// this one is not capturable, and the module frame is reached by its own road
+	// (ibValueFunction::m_moduleFrame).
 	//
 	// THE DEFAULT, because it is the safe answer: a frame declared as a member is
 	// default-constructed and must never reserve on a stack it will outlive.
-	Retained
+	Retained,
+
+	// Outlives its call BECAUSE A CLOSURE TOOK IT — ibRunCaptureContext, and only that class
+	// sets it. It is the kind the frame is asked for at run time (GetLifetime), so nothing has
+	// to infer "was this one promoted?" from the storage it happens to sit in.
+	Captured
 };
 
 // WHEN THE METHOD'S ARITY IS UNKNOWN, this many slots. `GetNParams` answers
@@ -90,6 +97,11 @@ struct ibRunContextSmall {
 
 	long GetLocalCount() const { return m_lVarCount; }
 
+	// WHICH KIND OF FRAME THIS IS, asked rather than inferred. The capture walk and the debugger
+	// both used to ask `weak_from_this().lock()` and read a live control block as "this one was
+	// promoted" — a mechanism standing in for an answer about kind.
+	ibRunLifetime GetLifetime() const { return m_lifetime; }
+
 	long m_lStart, m_lParamCount;
 
 	ibValue*  m_pLocVars    = nullptr;
@@ -111,15 +123,12 @@ protected:
 	unsigned int  m_runMark   = 0xFFFFFFFFu;
 };
 
-// Inherits enable_shared_from_this so heap-promoted instances (created
-// via std::make_shared by OPER_CALL / OPER_CALL_LAMBDA when the called
-// function has ibByteFunction::m_needsHeapFrame=true) can hand out
-// shared_ptr<ibRunContext> copies at OPER_LFUNC capture time. Stack-
-// allocated instances (the common case — function has no inner
-// lambda) return an expired weak_ptr from weak_from_this() — used as
-// the runtime discriminator: "heap-promoted iff weak_from_this().lock()
-// is non-null". No separate kind flag needed.
-struct ibRunContext : ibRunContextSmall, std::enable_shared_from_this<ibRunContext> {
+// The ORDINARY frame: it is the call, and it ends where the call ends — on the C stack or as a
+// member. A frame a closure takes is ibRunCaptureContext below, which is a kind of this one and
+// says so through GetLifetime(). (Until 2026-09-24 there was one class for both, and
+// "was it promoted?" was answered by asking whether weak_from_this() still locked — a control
+// block standing in for a kind.)
+struct ibRunContext : ibRunContextSmall {
 
 	ibRunContext(int varCount = wxNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained) :
 		ibRunContextSmall(wxNOT_FOUND, lifetime), m_lCurLine(0) {
@@ -159,9 +168,9 @@ struct ibRunContext : ibRunContextSmall, std::enable_shared_from_this<ibRunConte
 	// Call-stack parent — set in OPER_CALL / OPER_CALL_METHOD / OPER_CALL_LAMBDA
 	// handlers when constructing the callee's frame. Raw pointer: the
 	// caller's frame is always alive for the duration of the call
-	// (either C-stack or a shared_ptr held by some outer ibRunContext
-	// or value). Walked at OPER_LFUNC materialise to identify
-	// heap-promoted ancestors that the new lambda value captures.
+	// (either C-stack, or a capture frame held by some outer frame or
+	// value). Walked at OPER_LFUNC materialise to find the captured
+	// ancestors the new lambda value links to.
 	// nullptr for module-body entry (the Execute(bDelta=true) path).
 	ibRunContext* m_parentRunContext = nullptr;
 
@@ -211,6 +220,122 @@ struct ibRunContext : ibRunContextSmall, std::enable_shared_from_this<ibRunConte
 	// with a case-insensitive compare, and the only write happens when that scan
 	// found nothing. A vector is what the code was already doing.
 	std::vector<std::pair<wxString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
+};
+
+// ⭐⭐ THE FRAME A CLOSURE TOOK, and it counts its own holders — the mechanism ibValue already
+// uses, not a second one beside it. Whoever takes it says so (IncrRef), whoever lets go says so
+// (DecrRef), and the last one out destroys it; the destructor releases the slots, so a lambda
+// living in one of them dies with the frame.
+//
+// ⭐ AND IT HOLDS ITS OWN OUTER LINK, so a chain of nested closures comes apart in a CASCADE: a
+// lambda holds the frame it was written in, that frame holds the one outside it, and so on to the
+// root. Before this a lambda held a VECTOR of every frame in the chain — N strong references where
+// one does the work, and the chain's shape was restated at every capture site.
+//
+// 🛑 AND NOTHING HERE WEIGHS WHO THE HOLDERS ARE. A first cut had DecrRef ask its slots how many
+// of the remaining references were theirs and destroy the frame when that was all — and it crashed
+// `MakeCounter`, because a returned lambda IS the lambda in the slot: one object, one reference to
+// the frame, so "held only from my own slot" and "held by what escaped" are the same number
+// (0xc0000005 in ClosureWritesBackIntoItsCapturedSlot / ScriptCorpus, 2026-09-24).
+//
+// The ring is cut where it is MADE instead: the slot OPER_LFUNC writes into is a compiler
+// temporary, and a temporary does not outlive its call (ReleaseTemporarySlots, called on the way
+// out of the function). Then nothing holds the frame from inside, and the counting below is the
+// whole of the lifetime again.
+class ibRunCaptureContext : public ibRunContext {
+public:
+
+	explicit ibRunCaptureContext(int varCount)
+		: ibRunContext(varCount, ibRunLifetime::Captured) {}
+
+	// ⚠ Destroyed by its own DecrRef and by nothing else — never `delete`d through a base
+	// pointer, which is why neither destructor here is virtual and no frame pays for a vptr.
+	~ibRunCaptureContext();
+
+	void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
+	void DecrRef();
+
+	// The next link outwards, held the same way: this frame keeps the one it was declared in
+	// alive for as long as it is alive itself. Setting it to null is what starts the cascade.
+	void SetOuter(ibRunCaptureContext* outer);
+	ibRunCaptureContext* GetOuter() const { return m_outer; }
+
+	// ⭐ THE COMPILER'S TEMPORARIES GO WHEN THE CALL DOES — the slots OPER_LFUNC and the expression
+	// tape write through. Which ones they are is already in the bytecode: m_listLocals carries the
+	// declared locals and leaves temporaries out (compileCode.cpp skips m_bTempVar), so a slot past
+	// the parameters that no entry claims is one of them. No closure can have captured such a slot,
+	// because it has no name to capture. Declared locals are untouched: they are exactly what an
+	// escaped closure came for.
+	void ReleaseTemporarySlots();
+
+private:
+
+	// Counted the way ibValue counts: a lambda can be handed to a background job, so the
+	// holders of a frame are not always on one thread.
+	ibRunCaptureContext*      m_outer      = nullptr;
+	std::atomic<unsigned int> m_refCount   { 0 };
+	// Destruction releases the slots, and a lambda dying there lets go of US — the DecrRef
+	// that arrives then must not delete a second time.
+	bool                      m_destroying = false;
+};
+
+// The frame this one is, when it is a captured one — asked of the kind it carries, so no cast is
+// made to find out. Answers null for an ordinary frame.
+inline ibRunCaptureContext* AsCaptureContext(ibRunContext* frame) {
+	return (frame != nullptr && frame->GetLifetime() == ibRunLifetime::Captured)
+		? static_cast<ibRunCaptureContext*>(frame) : nullptr;
+}
+
+// A hold on a captured frame — the ibValuePtr of frames. Taking it says IncrRef, letting it go
+// says DecrRef, and that is the whole of the lifetime: the call site keeps one for the length of
+// the call and never has to remember anything on the way out, exceptions included.
+class ibRunCapturePtr {
+public:
+
+	ibRunCapturePtr() = default;
+	explicit ibRunCapturePtr(ibRunCaptureContext* frame) : m_frame(frame) { if (m_frame) m_frame->IncrRef(); }
+
+	ibRunCapturePtr(const ibRunCapturePtr& other) : m_frame(other.m_frame) { if (m_frame) m_frame->IncrRef(); }
+	ibRunCapturePtr(ibRunCapturePtr&& other) noexcept : m_frame(other.m_frame) { other.m_frame = nullptr; }
+
+	// ⭐ THE HOLD ENDING IS THE CALL ENDING, so the compiler's temporaries go here — the one place
+	// that knows the body is done, exceptions included, and no call site has to remember it.
+	// (One hold per call in this engine; a copy of it would only repeat a release that is
+	// harmless twice.)
+	~ibRunCapturePtr() {
+		if (m_frame) {
+			m_frame->ReleaseTemporarySlots();
+			m_frame->DecrRef();
+		}
+	}
+
+	ibRunCapturePtr& operator=(const ibRunCapturePtr& other) {
+		if (this != &other) { Reset(other.m_frame); }
+		return *this;
+	}
+	ibRunCapturePtr& operator=(ibRunCapturePtr&& other) noexcept {
+		if (this != &other) {
+			if (m_frame) m_frame->DecrRef();
+			m_frame = other.m_frame; other.m_frame = nullptr;
+		}
+		return *this;
+	}
+
+	void Reset(ibRunCaptureContext* frame = nullptr) {
+		if (frame == m_frame) return;
+		if (frame) frame->IncrRef();
+		if (m_frame) m_frame->DecrRef();
+		m_frame = frame;
+	}
+
+	ibRunCaptureContext* Get()        const { return m_frame; }
+	ibRunCaptureContext* operator->() const { return m_frame; }
+	ibRunCaptureContext& operator*()  const { return *m_frame; }
+	explicit operator bool()          const { return m_frame != nullptr; }
+
+private:
+
+	ibRunCaptureContext* m_frame = nullptr;
 };
 
 #endif // ! _PROC_CONTEXT__H__

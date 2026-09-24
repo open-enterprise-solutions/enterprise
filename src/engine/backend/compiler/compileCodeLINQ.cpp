@@ -2822,8 +2822,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 					skipContinueGotoIps.push_back(gotoIp);
 				}
 				else {
-					auto* pList = context->m_listContinue[context->m_numDoNumber];
-					if (pList != nullptr) pList->emplace_back(gotoIp);
+					const auto& pList = context->m_listContinue[context->m_numDoNumber];
+					if (pList) pList->emplace_back(gotoIp);
 				}
 			}
 			m_cByteCode.m_listCode[skipIfIp].m_param2.m_numIndex =
@@ -2858,8 +2858,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				c.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
-				auto* pList = context->m_listBreak[context->m_numDoNumber];
-				if (pList != nullptr) pList->emplace_back(gotoIp);
+				const auto& pList = context->m_listBreak[context->m_numDoNumber];
+				if (pList) pList->emplace_back(gotoIp);
 			}
 			m_cByteCode.m_listCode[takeIfIp].m_param2.m_numIndex =
 				(long)m_cByteCode.m_listCode.size();

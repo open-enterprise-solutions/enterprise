@@ -683,10 +683,9 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 	// Closure capture (Phase F) — show captured outer frames as
 	// additional Locals entries with "<fn>.<var>" labels. Walks
 	// m_parentRunContext chain (set in OPER_CALL_LAMBDA to the lexical
-	// parent for lambdas); each heap-promoted ancestor
-	// (weak_from_this().lock() non-null = was allocated via
-	// make_shared = closure-related) contributes its UserLocal
-	// entries. Non-heap-promoted parents (regular call callers) are
+	// parent for lambdas); each ancestor of the CAPTURED kind
+	// (ibRunCaptureContext = a frame a closure took) contributes its
+	// UserLocal entries. Ordinary parents (regular call callers) are
 	// skipped — they belong to the call stack view, not Locals.
 	auto emitFromCtx = [&](ibRunContext* ctx, const wxString& prefix) {
 		const std::vector<ibByteCode::ibByteCodeVarInfo>* pTable = nullptr;
@@ -715,7 +714,7 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 	for (const auto& v : *table)
 		if (isLocalsViewable(v) && isInScope(v)) ++emitCount;
 	for (ibRunContext* p = runContext->m_parentRunContext; p != nullptr; p = p->m_parentRunContext) {
-		if (!p->weak_from_this().lock()) continue;   // skip stack-only frames
+		if (AsCaptureContext(p) == nullptr) continue;   // skip ordinary frames — only a captured one is a closure's
 		const auto* pTable = (p->m_currentFunction != nullptr)
 			? &p->m_currentFunction->m_listLocals
 			: (p->GetByteCode() != nullptr ? &p->GetByteCode()->m_listVar : nullptr);
@@ -734,7 +733,7 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 	// Pass 2b — emit captured frames in chain order. Label =
 	// owning fn's m_strRealName (or "<module>" for module bodies).
 	for (ibRunContext* p = runContext->m_parentRunContext; p != nullptr; p = p->m_parentRunContext) {
-		if (!p->weak_from_this().lock()) continue;
+		if (AsCaptureContext(p) == nullptr) continue;
 		const wxString fnName = p->m_currentFunction != nullptr
 			? p->m_currentFunction->m_strRealName
 			: wxString(wxT("<module>"));

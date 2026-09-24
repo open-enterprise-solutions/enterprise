@@ -13,7 +13,7 @@
 #include "backend/job/jobSchedule.h"
 
 class BACKEND_API ibPropertySchedule : public ibProperty {
-	wxVariantData* CreateVariantData(const ibJobScheduleDescription& schedule = ibJobScheduleDescription()) const;
+	static wxVariantData* CreateVariantData(const ibJobScheduleDescription& schedule = ibJobScheduleDescription());
 public:
 
 	ibJobScheduleDescription& GetValueAsSchedule() const;

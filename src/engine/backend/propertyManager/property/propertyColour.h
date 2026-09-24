@@ -5,7 +5,7 @@
 
 //base property for "colour"
 class BACKEND_API ibPropertyColour : public ibProperty {
-	wxVariant CreateVariantData(const wxColour& val) const {
+	static wxVariant CreateVariantData(const wxColour& val) {
 		wxVariant newValue;
 		newValue << val;
 		return newValue;

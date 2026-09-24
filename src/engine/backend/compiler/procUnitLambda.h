@@ -105,11 +105,11 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
 
 	// ibEventDispatcher — a lambda IS its own dispatcher: run its own body with the args (+ trailing cancel). NOT const
-	// (the invoke may heap-promote / mutate the lambda's captured frames). IsEmpty is false: a bound lambda is set.
+	// (the invoke may build a capture frame / mutate the chain the lambda holds). IsEmpty is false: a bound lambda is set.
 	virtual bool IsEmpty() const override { return false; }
 
 	// NOT transferable across sessions: m_parentBc points into the COMPILING
-	// session's bytecode (see the lifetime note above), and m_capturedFrames holds
+	// session's bytecode (see the lifetime note above), and the captured chain holds
 	// that session's locals. Dispatched elsewhere this runs one session's bytecode
 	// on another's interpreter, and once the owner closes the pointer dangles.
 	virtual bool IsTransferable() const override { return false; }
@@ -131,23 +131,41 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		return &m_parentBc->m_listFunc[m_funcIndex];
 	}
 
-	// Captured enclosing-frame chain — populated at OPER_LFUNC
-	// materialise. [0] = direct enclosing fn frame, [1] = outer-outer,
-	// ... down to root. Only heap-promoted ancestors land here; stack-
-	// allocated frames (caller's fn has m_needsHeapFrame=false) are
-	// skipped by the weak_from_this().lock() guard at capture time.
-	// Vector size = nesting depth of heap-promoted ancestors at
-	// materialise site (≤ closure nesting count, not per-reference).
-	// At OPER_CALL_LAMBDA invoke, shim's m_ppArrayContext[k+1] is wired to
-	// m_capturedFrames[k]->m_pRefLocVars for the call duration.
-	std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
+	// ⭐⭐ ONE LINK, NOT THE WHOLE CHAIN. The frame this lambda was written in, taken at OPER_LFUNC
+	// materialise; the frames outside it are reached through ibRunCaptureContext::GetOuter(), each
+	// link holding the next. Depth k of the emitted code is CapturedAt(k) — k steps out — which is
+	// what the shim wires m_ppArrayContext[k + 1] to for the call duration.
+	//
+	// It was a VECTOR of shared_ptr to every ancestor: N strong references where one does the work,
+	// and the chain's shape restated at each capture site. Only frames a closure may take are in it
+	// (ibRunLifetime::Captured); an ordinary frame ends with its call and cannot be captured.
+	ibRunCapturePtr m_captured;
 
-	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames that
-	// had to be HEAP-PROMOTED to survive the call that made them; a module body's frame needs no
-	// promoting because it never ends while the module is loaded — it is a member of the
-	// ibProcUnit (ibRunLifetime::Retained). So `weak_from_this().lock()` returns nothing for it and
-	// the capture walk skipped it, silently: a lambda could not see the module's own variables at
-	// all, and read whatever sat at that depth in the shim instead.
+	ibRunCaptureContext* GetCaptured() const { return m_captured.Get(); }
+
+	// k steps out from the frame this lambda was written in — null past the end of the chain.
+	ibRunCaptureContext* CapturedAt(size_t k) const {
+		ibRunCaptureContext* frame = m_captured.Get();
+		for (size_t step = 0; step < k && frame != nullptr; ++step)
+			frame = frame->GetOuter();
+		return frame;
+	}
+
+	// How many links the chain has — walked, because the chain IS the answer and nothing else
+	// keeps a count of it.
+	size_t CapturedDepth() const {
+		size_t depth = 0;
+		for (ibRunCaptureContext* frame = m_captured.Get(); frame != nullptr; frame = frame->GetOuter())
+			++depth;
+		return depth;
+	}
+
+	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames a
+	// closure took in order to survive the call that made them; a module body's frame needs no
+	// taking because it never ends while the module is loaded — it is a member of the
+	// ibProcUnit (ibRunLifetime::Retained, not Captured). So the capture walk skipped it, silently:
+	// a lambda could not see the module's own variables at all, and read whatever sat at that depth
+	// in the shim instead.
 	//
 	// Measured 2026-09-08, and it was quiet in the worst way — an ANSWER, not a refusal:
 	//     var s = "hi"; var f = Function(x){ return s; };  f(0)  →  "Data"
@@ -169,7 +187,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// m_needsHeapFrame. OPER_CALL_LAMBDA reads it as a single field
 	// access on the lambda value, no need to dereference through
 	// m_parentBc->m_listFunc[m_funcIndex]. True ⇒ this lambda's own
-	// frame must be heap-promoted at invoke time (some inner lambda
+	// frame must be a capture frame at invoke time (some inner lambda
 	// captures from it).
 	bool m_needsHeapFrame = false;
 
@@ -203,7 +221,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		// Closure capture (Phase B) — install captured frames as
 		// extra layers in shim's m_ppArrayContext for the call
 		// duration. Lambda body OPER_GET / OPER_SET at depth k+1
-		// (k in [0, N)) reads/writes through m_capturedFrames[k]'s
+		// (k in [0, N)) reads/writes through CapturedAt(k)'s
 		// m_pRefLocVars. Pre-existing parent layers (root, common
 		// modules) shift from positions [1..] to [N+1..] so the
 		// previously-emitted depths still hit the correct frames.
@@ -214,7 +232,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		ibRunContext** newList  = nullptr;
 		bool           ownsList = false;   // true = this invoke malloc'd it and must free it
 		unsigned int origSize = 0;
-		const unsigned int N  = (unsigned int)m_capturedFrames.size();
+		const unsigned int N  = (unsigned int)CapturedDepth();
 
 		// The module's own frame is one more layer, and it goes AFTER the captured ones — the
 		// order the compiler counted the depths in. See ibValueFunction::m_moduleFrame.
@@ -247,8 +265,11 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 			// m_ppArrayContext[0] is unused in normal execution but kept for
 			// the bDelta=true case where slot=-1 lands here.
 			newList[0] = prevList ? prevList[0] : nullptr;
+			// Walked once, link by link, instead of indexing k times into a chain.
+			ibRunCaptureContext* link = m_captured.Get();
 			for (unsigned int k = 0; k < N; ++k) {
-				newList[k + 1] = m_capturedFrames[k].get();
+				newList[k + 1] = link;
+				link = (link != nullptr) ? link->GetOuter() : nullptr;
 			}
 			if (M != 0)
 				newList[N + 1] = m_moduleFrame;

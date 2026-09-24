@@ -278,9 +278,15 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// come from the surface at all: it has to stand on the register's own movements, which is what
 	// `FromMovements()` has said since it was written.
 	//
-	// 🛑 WITHOUT THIS THE RECORDER WAS NOT MERELY MISSING — IT WAS FILTERED OUT. Every reading here
-	// took the stored arm (`RestrictToStoredArm`, i.e. `Recorder IS NULL`), so a caller who asked for
-	// `Periodicity = Recorder` got correct totals under an EMPTY recorder, all of them folded into
+	// 🛑 ✅ THE DEFECT BELOW IS CLOSED — the two lines under this paragraph are its cure, and the
+	// `atMovementGrain` key on line ~337 is the rest of it. Read the rest of this as HISTORY: it says
+	// what the code did BEFORE 2026-09-06, not what it does. (Spelling that out because a reader who
+	// stops at the symptom reports it as today's behaviour — an outside audit did exactly that on
+	// 2026-09-24, and told the owner that a reading in memory folds every document into one group.)
+	//
+	// WHAT IT USED TO DO: the recorder was not merely missing — it was FILTERED OUT. Every reading
+	// here took the stored arm (`RestrictToStoredArm`, i.e. `Recorder IS NULL`), so a caller who asked
+	// for `Periodicity = Recorder` got correct totals under an EMPTY recorder, all of them folded into
 	// one group. MEASURED 2026-09-06 on GoodsInWarehouses: `Turnovers(, , Recorder, )` answered 116
 	// against a blank name, while the same data read from the movements table named three documents
 	// (1 / 55 / 60). The periodicity was parsed, the fold was built, the column was declared and the

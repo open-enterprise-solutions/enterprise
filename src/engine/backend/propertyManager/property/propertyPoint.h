@@ -5,7 +5,7 @@
 
 //base property for "point"
 class BACKEND_API ibPropertyPoint : public ibProperty {
-	wxVariantData* CreateVariantData(const wxPoint& val);
+	static wxVariantData* CreateVariantData(const wxPoint& val);
 public:
 
 	wxPoint GetValueAsPoint() const;

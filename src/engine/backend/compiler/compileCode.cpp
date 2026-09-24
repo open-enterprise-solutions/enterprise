@@ -1416,9 +1416,9 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	}
 	else {
 		// OPER_CALL vs OPER_CALL_CLOSURE — same operand layout, different
-		// runtime path. _L variant heap-allocates the callee frame
-		// (shared_ptr<ibRunContext>) so inner lambdas materialised
-		// during the call can capture it. m_needsHeapFrame is settled
+		// runtime path. The closure variant builds the callee frame as an
+		// ibRunCaptureContext (it counts its own holders) so inner lambdas
+		// materialised during the call can take it. m_needsHeapFrame is settled
 		// by the time we get here: backward refs see the fully-compiled
 		// callee directly; forward refs land in m_listCallFunc and
 		// PushCallFunction reruns at finalize when all bodies are done.
@@ -1923,8 +1923,8 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// enforcing the strict isolation discipline that has been
 	// superseded by the per-frame heap-promotion design (see
 	// docs/private/closure-capture.md). Phase B (runtime frame capture) landed
-	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which
-	// heap-promote the frame and fill ibValueFunction::m_capturedFrames.
+	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which build the
+	// frame as an ibRunCaptureContext and hand the lambda its link to it.
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;
@@ -2311,7 +2311,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					code.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					std::vector<int>* pList = loopContext->m_listContinue[loopContext->m_numDoNumber];
+					const auto& pList = loopContext->m_listContinue[loopContext->m_numDoNumber];
 					pList->emplace_back(addrLine);
 				}
 				else {
@@ -2324,21 +2324,17 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			{
 				GETKeyWord(KEY_BREAK);
 				ibCompileContext* loopContext = context->FindLoopContext();
-				std::vector<int>* pList = loopContext != nullptr
-					? loopContext->m_listBreak[loopContext->m_numDoNumber]
-					: nullptr;
-				if (pList != nullptr) {
-					ibByteUnit code;
-					AddLineInfo(code);
-					code.m_numOper = OPER_GOTO;
-					m_cByteCode.m_listCode.emplace_back(std::move(code));
-					const int addrLine = m_cByteCode.m_listCode.size() - 1;
-					pList->emplace_back(addrLine);
-				}
-				else {
+				if (loopContext == nullptr || !loopContext->m_listBreak[loopContext->m_numDoNumber]) {
 					SetError(ERROR_USE_BREAK); // break operator can only be used inside a loop
 					return false;
 				}
+				const auto& pList = loopContext->m_listBreak[loopContext->m_numDoNumber];
+				ibByteUnit code;
+				AddLineInfo(code);
+				code.m_numOper = OPER_GOTO;
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				const int addrLine = m_cByteCode.m_listCode.size() - 1;
+				pList->emplace_back(addrLine);
 				break;
 			}
 			case KEY_FUNCTION:

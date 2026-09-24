@@ -5,7 +5,7 @@
 
 //////////////////////////////////////////////////////////////////
 
-wxVariantData* ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act) const
+wxVariantData* ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act)
 {
 	return new ibVariantDataAction(act);
 }

@@ -1848,8 +1848,8 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 //
 // The suspected cause is that the pipeline invoke path (procUnitLINQ.cpp,
 // CallLambdaWithArgs) builds a C-stack frame and never honours
-// `m_needsHeapFrame`, so the inner lambda's weak_from_this() on the outer frame
-// is already expired. Promoting it was tried once and made things worse; the
+// `m_needsHeapFrame`, so the outer frame is an ordinary one and the inner
+// lambda finds nothing it may capture. Promoting it was tried once and made things worse; the
 // note there says not to re-apply without a repro that fails first.
 //
 // This is that repro.

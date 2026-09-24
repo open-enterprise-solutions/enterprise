@@ -387,15 +387,15 @@ struct ibCompileContext {
 
 		//create lists for Continue and Break commands (they will store the addresses of byte codes where the corresponding commands were encountered)
 		m_numDoNumber++;
-		m_listContinue[m_numDoNumber] = new std::vector<int>();
-		m_listBreak[m_numDoNumber] = new std::vector<int>();
+		m_listContinue[m_numDoNumber] = std::make_unique<std::vector<int>>();
+		m_listBreak[m_numDoNumber] = std::make_unique<std::vector<int>>();
 	}
 
 	//Setting jump addresses for Continue and Break commands
 	void FinishLoopList(ibByteCode& cByteCode, int gotoContinue, int gotoBreak) {
-		std::vector<int>* pListC = m_listContinue[m_numDoNumber];
-		std::vector<int>* pListB = m_listBreak[m_numDoNumber];
-		if (pListC == 0 || pListB == 0) {
+		const std::unique_ptr<std::vector<int>>& pListC = m_listContinue[m_numDoNumber];
+		const std::unique_ptr<std::vector<int>>& pListB = m_listBreak[m_numDoNumber];
+		if (!pListC || !pListB) {
 #ifdef DEBUG 
 			ibJournalInfo(wxT("compiler"), wxT("Error (FinishLoopList) gotoContinue=%d, gotoBreak=%d\n"), gotoContinue, gotoBreak);
 			ibJournalInfo(wxT("compiler"), wxT("m_numDoNumber=%d\n"), m_numDoNumber);
@@ -413,10 +413,8 @@ struct ibCompileContext {
 		for (unsigned int i = 0; i < pListB->size(); i++) {
 			cByteCode.m_listCode[(*pListB)[i]].m_param1.m_numIndex = gotoBreak;
 		}
-		m_listContinue.erase(m_numDoNumber);
-		m_listBreak.erase(m_numDoNumber);   // was a second erase of m_listContinue — m_listBreak kept a dangling entry
-		delete pListC;
-		delete pListB;
+		m_listContinue.erase(m_numDoNumber);   // the erase IS the release now — pListC / pListB are gone with it
+		m_listBreak.erase(m_numDoNumber);      // was a second erase of m_listContinue — m_listBreak kept a dangling entry
 		m_numDoNumber--;
 	}
 
@@ -537,8 +535,15 @@ struct ibCompileContext {
 	//Service attributes
 	unsigned short m_numDoNumber;//nested loop number
 
-	std::map<unsigned short, std::vector<int>*> m_listContinue;//addresses of Continue operators
-	std::map<unsigned short, std::vector<int>*> m_listBreak;//addresses of Break operators
+	// ⚠ THE LIST OWNS ITSELF, because the only way out is not the one that was coded for.
+	// FinishLoopList deleted both vectors and was the sole place that did; a compilation that
+	// FAILS between StartLoopList and FinishLoopList — a refused LINQ clause, a script the corpus
+	// cannot compile — never reaches it, and the destructor of this context is empty. So a unique_ptr
+	// per entry: erase releases, Reset releases, and the context taking its leave releases.
+	// (A null entry still means "no loop opened at this level" — FindLoopContext reads it that way,
+	//  and operator[] on a level nobody opened still inserts exactly that.)
+	std::map<unsigned short, std::unique_ptr<std::vector<int>>> m_listContinue;//addresses of Continue operators
+	std::map<unsigned short, std::unique_ptr<std::vector<int>>> m_listBreak;//addresses of Break operators
 
 	//LABELS
 	std::map<wxString, unsigned int> m_listLabelDef; //declarations

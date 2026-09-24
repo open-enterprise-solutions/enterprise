@@ -1690,14 +1690,15 @@ start_label:
 				break;
 			}
 			case OPER_CALL_CLOSURE:
-			{ //function call — heap-frame variant. Target has
+			{ //function call — capture-frame variant. Target has
 				// m_needsHeapFrame=true (some inner lambda captures
-				// a local from it). Allocate frame via make_shared so
-				// escaping lambdas can hold a shared_ptr at OPER_LFUNC
-				// materialise time, keeping the frame alive past return.
-				// Operand layout identical to OPER_CALL.
+				// a local from it), so the callee's frame is one that
+				// can be TAKEN at OPER_LFUNC materialise time and kept
+				// past the return. Operand layout identical to OPER_CALL.
 				const long lModuleNumber = array2;
-				std::shared_ptr<ibRunContext> heapCtx = std::make_shared<ibRunContext>(index3);
+				// A captured frame counts its own holders; this hold is the call, and it ends
+				// where the call does — including an exception on the way out.
+				ibRunCapturePtr heapCtx(new ibRunCaptureContext(index3));
 				heapCtx->m_lStart = index2;
 				heapCtx->m_lParamCount = array3;
 				heapCtx->m_parentRunContext = pContext;
@@ -1720,7 +1721,7 @@ start_label:
 						}
 					}
 				}
-				m_ppArrayCode[lModuleNumber]->Execute(heapCtx.get(), pRetValue, false);
+				m_ppArrayCode[lModuleNumber]->Execute(heapCtx.Get(), pRetValue, false);
 				break;
 			}
 			case OPER_SET_ARRAY:
@@ -1900,24 +1901,24 @@ start_label:
 					if (bfnLfunc) newFn->m_needsHeapFrame = bfnLfunc->m_needsHeapFrame;
 				}
 				// Closure capture (Phase B) — walk the call-stack chain
-				// via m_parentRunContext; each heap-promoted ancestor
-				// (weak_from_this().lock() returns non-null) gets its
-				// shared_ptr copied into the new lambda's
-				// m_capturedFrames. Stack-allocated frames return an
-				// expired weak_ptr and are skipped — they couldn't be
-				// captured anyway (frame dies on return; no inner
-				// lambda flagged the enclosing fn at compile time so
-				// no heap promotion happened at OPER_CALL).
+				// via m_parentRunContext; every ancestor of the CAPTURED
+				// kind becomes a link of the chain the lambda keeps, each
+				// link holding the next. An ordinary frame is skipped: it
+				// could not be captured anyway (it dies on return; no
+				// inner lambda flagged the enclosing fn at compile time,
+				// so OPER_CALL built no capture frame for it).
 				//
-				// Order: index 0 = direct enclosing frame (the
-				// materialising lambda's caller), index 1 = next outer,
-				// .... Matches the depth math from Phase A's GetVariable
+				// Order: the nearest link is the direct enclosing frame
+				// (the materialising lambda's caller), its outer is the
+				// next one out. Matches the depth math from Phase A's GetVariable
 				// (numParent - numContext counting): emit depth = 1
-				// reads m_capturedFrames[0], depth = 2 reads [1], etc.
+				// reads CapturedAt(0), depth = 2 reads CapturedAt(1), etc.
+				ibRunCaptureContext* nearestCapture = nullptr;   // the first link — what the lambda holds
+				ibRunCaptureContext* innerCapture   = nullptr;   // the last link seen, waiting for its outer
 				for (ibRunContext* p = pContext; p != nullptr; p = p->m_parentRunContext) {
 
 					// ⭐⭐ THE MODULE BODY'S FRAME IS TAKEN SEPARATELY, and it has to be: it is
-					// Retained rather than heap-promoted, so the lock() below never sees it, and a
+					// Retained rather than captured, so the question below answers no for it, and a
 					// lambda was left unable to read the module's own variables — see
 					// ibValueFunction::m_moduleFrame for the measurement. The FIRST one found wins:
 					// walking further would reach a parent module, whose variables this lambda
@@ -1928,10 +1929,18 @@ start_label:
 						continue;
 					}
 
-					std::shared_ptr<ibRunContext> sp = p->weak_from_this().lock();
-					if (sp)
-						newFn->m_capturedFrames.push_back(std::move(sp));
+					// Ask the frame what KIND it is — an ordinary one ends with its call and cannot
+					// be captured. Each captured frame keeps the next one outwards, so the lambda
+					// holds one link and the chain holds itself.
+					if (ibRunCaptureContext* captured = AsCaptureContext(p)) {
+						if (nearestCapture == nullptr)
+							nearestCapture = captured;
+						else
+							innerCapture->SetOuter(captured);
+						innerCapture = captured;
+					}
 				}
+				newFn->m_captured.Reset(nearestCapture);
 				CopyValue(variable1, ibValue(newFn));
 				// Skip past the body — body opcodes are inert at
 				// module-init walk and reached only via OPER_CALL_LAMBDA
@@ -1982,15 +1991,15 @@ start_label:
 				// materialise; one indirection, no detour through
 				// m_parentBc->m_listFunc[funcIdx].
 				const bool useHeapFrame = fn->m_needsHeapFrame;
-				std::shared_ptr<ibRunContext> heapCtx;
+				ibRunCapturePtr heapCtx;
 				// Declared with the slot stack but no width — SetLocalCount below
-				// leases through the pool it was given. The heap-promoted branch
+				// leases through the pool it was given. The captured branch
 				// takes none: that frame is the one that outlives the call.
 				ibRunContext  stackCtx(wxNOT_FOUND, ibRunLifetime::PerCall);
 				ibRunContext* pNewCtx = nullptr;
 				if (useHeapFrame) {
-					heapCtx = std::make_shared<ibRunContext>(lambdaVarCount);
-					pNewCtx = heapCtx.get();
+					heapCtx.Reset(new ibRunCaptureContext(lambdaVarCount));
+					pNewCtx = heapCtx.Get();
 				} else {
 					stackCtx.SetLocalCount(lambdaVarCount);
 					pNewCtx = &stackCtx;
@@ -2004,14 +2013,15 @@ start_label:
 				// For OPER_LFUNC chain-walks inside this lambda body to
 				// reach the lambda's LEXICAL outer scope (not its dynamic
 				// caller), wire m_parentRunContext to the first captured
-				// frame. The captured chain (fn->m_capturedFrames) holds
-				// shared_ptrs to the enclosing fn frames at materialise
-				// time — that's the closure's defining scope. Empty chain
+				// frame. The lambda holds the enclosing frame it was
+				// written in and that one holds the next outwards — the
+				// closure's defining scope. No capture at all
 				// (top-level lambda with no captures) falls back to the
 				// dynamic caller so debugger / stack-walk still sees
 				// something sensible.
-				pNewCtx->m_parentRunContext = !fn->m_capturedFrames.empty()
-					? fn->m_capturedFrames[0].get()
+				ibRunContext* const lexicalOuter = fn->GetCaptured();
+				pNewCtx->m_parentRunContext = lexicalOuter != nullptr
+					? lexicalOuter
 					: (fn->m_moduleFrame != nullptr ? fn->m_moduleFrame : pContext);
 				ibValue* pRetValue = &variable1;
 
@@ -2899,10 +2909,10 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// directly — no +1 shift in pppArrayList[depth + (bDelta?1:0)].
 	// ⭐⭐ AN EVAL BLOCK RUNS IN A HEAP FRAME, so a lambda made inside it can CAPTURE it.
 	//
-	// Capture is decided by one runtime question (procContext.h): a frame is capturable iff
-	// `weak_from_this().lock()` returns something — which is true of frames built by make_shared and
-	// false of every frame that is a MEMBER, as `m_cCurContext` is. A lambda materialised in an eval
-	// block therefore captured NOTHING, and the depths the compiler had emitted no longer pointed
+	// Capture is decided by the KIND a frame carries (procContext.h): only ibRunCaptureContext is
+	// capturable, which no frame that is a MEMBER can be, as `m_cCurContext` is one. A lambda
+	// materialised in an eval block therefore captured NOTHING, and the depths the compiler had
+	// emitted no longer pointed
 	// where it meant: depth 1 was supposed to reach the block's own frame and instead landed on the
 	// host's, one layer further out.
 	//
@@ -2920,16 +2930,16 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// ⚠ `m_ppArrayContext[0]` still points at the member frame and that is correct: depth 0 is read
 	// straight from `m_pRefLocVars` (procUnitLambda.h), so slot 0 of the list is unused in normal
 	// execution — the note there says so, and this relies on it rather than restating it.
-	std::shared_ptr<ibRunContext> spBlockFrame;
+	ibRunCapturePtr spBlockFrame;
 	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
 	if (compileBlock) {
 		const ibByteCode* evalBc = runEvaluate->GetByteCode();
-		spBlockFrame = std::make_shared<ibRunContext>(
-			evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount());
+		spBlockFrame.Reset(new ibRunCaptureContext(
+			evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount()));
 		spBlockFrame->m_procUnit         = runEvaluate.get();
 		spBlockFrame->m_parentRunContext = pRunContext;   // the host frame, for the capture walk
 		spBlockFrame->m_lStart           = runEvaluate->m_cCurContext.m_lStart;
-		pEvalFrame = spBlockFrame.get();
+		pEvalFrame = spBlockFrame.Get();
 	}
 
 	try {
