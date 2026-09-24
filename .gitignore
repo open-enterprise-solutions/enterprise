@@ -271,3 +271,10 @@ __pycache__/
 # covers them all; the packages/build/ exception above is unaffected, being a path deeper in.
 build-debug/
 build*/
+
+# What a crash leaves behind, and what an editor leaves beside a file it touched. A shell
+# that died drops bash.exe.stackdump where it stood, and a *.bak is the previous version of
+# something git already remembers — neither is ours to keep.
+*.stackdump
+*.dmp
+*.bak
