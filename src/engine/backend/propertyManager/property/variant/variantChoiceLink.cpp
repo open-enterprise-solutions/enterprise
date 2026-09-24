@@ -179,7 +179,7 @@ wxString ibChoiceHolderName(const ibPropertyObject* owner)
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
-	return holder != nullptr ? holder->GetName() : wxEmptyString;
+	return holder != nullptr ? holder->GetName() : wxString();
 }
 
 wxString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id)
