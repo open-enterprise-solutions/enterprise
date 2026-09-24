@@ -756,6 +756,13 @@ bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* 
 	if (object->OnAfterCloseMetaObject()) {
 		if (object->OnDeleteMetaObject()) {
 			object->MarkAsDeleted();
+
+			// ⭐ THE INVALIDATION COUNTER MOVES FOR ANY REMOVAL, not only for a type's. Values that name
+			// objects by id refresh themselves on it — a type description drops a type whose object is gone —
+			// and a field is named the same way by a choice link, but removing a FIELD unregisters nothing,
+			// so the counter stood still and the link kept a row naming nothing (2026-09-24).
+			m_factoryCtorCountChanges++;
+
 			for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
 				auto child = object->GetChild(idx);
 				if (!object->FilterChild(child->GetClassType()))

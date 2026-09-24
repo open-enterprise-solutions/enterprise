@@ -6,7 +6,7 @@
 #include "metaAttributeObject.h"
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
-#include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // a characteristic answers with its chart's list
+#include "backend/metaCollection/partial/commonObject.h"   // the owners an attribute asks: generic data, a hierarchy
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -40,30 +40,26 @@ ibTypeDescription& ibValueMetaObjectAttributeBase::ibMetaAttributeColumn::GetTyp
 	return m_owner != nullptr ? m_owner->GetTypeValueDesc() : ibDetachedColumnTypeDesc();
 }
 
-// WHAT A VALUE HERE MAY BE. Ordinary declarations answer with themselves; a characteristic answers
-// with the list its CHART declares — the owner keeps it, the field borrows it, so a chart that gains
-// a type widens every field declared through it at once, with nothing copied or recomputed.
-//
-// The chart is reached through the registry this attribute already belongs to — its own configuration,
-// never the active one. An unresolved chart (not loaded yet) leaves the declaration standing.
+// The empty answers — a field that is not chosen within anything. Statics, so the reference handed back
+// outlives the call and every asker sees the same nothing (a predefined field, a common attribute).
+const ibChoiceTypeLinkDescription& ibValueMetaObjectAttributeBase::GetTypeLink() const
+{
+	static const ibChoiceTypeLinkDescription s_none;
+	return s_none;
+}
+
+const ibChoiceParametersDescription& ibValueMetaObjectAttributeBase::GetChoiceParameters() const
+{
+	static const ibChoiceParametersDescription s_none;
+	return s_none;
+}
+
+// WHAT A VALUE HERE MAY BE — the type factory's answer (backend_type.cpp: a characteristic stands for its
+// chart's types). Overridden here only because an attribute is both a type factory and a source column,
+// and each base declares the question: one overrider answers for both, with the factory's answer.
 ibTypeDescription& ibValueMetaObjectAttributeBase::GetTypeValueDesc() const
 {
-	ibTypeDescription& declared = GetTypeDesc();
-	if (m_metaData == nullptr || declared.GetClsidCount() != 1 || !IsCharacteristic(declared.GetFirstClsid()))
-		return declared;
-
-	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(declared.GetFirstClsid());
-	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
-	if (typeCtor == nullptr || typeCtor->GetMetaObject() == nullptr ||
-		!typeCtor->GetMetaObject()->ConvertToValue(chart) || chart == nullptr)
-		return declared;
-
-	// The chart's list, BORROWED: the owner keeps it, the field only points at it.
-	//
-	// Non-const on purpose. Reaching it THROUGH THE METADATA is the legal way to get at a live
-	// declaration — a configuration is edited, so its type descriptions are state, not a frozen
-	// snapshot. Constifying the borrow here would only force a cast at the first editor that needs it.
-	return chart->GetTypesOfCharacteristics();
+	return ibBackendTypeConfigFactory::GetTypeValueDesc();
 }
 
 bool ibValueMetaObjectAttributeBase::ContainType(const ibValueTypes& valType) const
@@ -179,6 +175,16 @@ bool ibValueMetaObjectAttributeBase::OnAfterRunMetaObject(int flags)
 // FillCheck is a readable Bool; ItemMode/Select/Type ride the base Binary bridge
 // until their property types override (enum -> Int, Type -> Child sub-node).
 
+// 🛑🛑 THIS LIST IS THE WHOLE OF WHAT SURVIVES. There is no generic walk of an object's properties:
+// ibPropertyObject::ReadProperty / WriteProperty only route to attached objects, and every metatype
+// names its own by hand. A property added to the class, given a variant, an editor, a dialog and a
+// tool — and NOT added here — works perfectly in the session that set it and is gone at the next
+// start. Nothing refuses, nothing warns; a read-back in the same session shows it set.
+//
+// MEASURED 2026-09-23: the link by type and the choice parameters were set, saved, applied, and read
+// back EMPTY after the designer was restarted — so every battery over them narrowed nothing and
+// cleared nothing, and it looked like the mechanism being broken rather than the value being absent.
+// Whenever a property is added above, it is added HERE in the same change.
 bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 {
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
@@ -186,6 +192,8 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 	m_propertyIndexingMode->SetNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
 	m_propertyItemMode->SetNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
 	m_propertySelectMode->SetNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
+	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
+	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 	return true;
 }
 bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
@@ -195,6 +203,8 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyIndexingMode->GetName(),   m_propertyIndexingMode->GetNodeValue());
 	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
 	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
+	node.SetProperty(m_propertyTypeLink->GetName(),   m_propertyTypeLink->GetNodeValue());
+	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 	return true;
 }
 

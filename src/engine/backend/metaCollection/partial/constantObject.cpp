@@ -198,7 +198,7 @@ ibBackendValueForm* ibValueRecordDataObjectConstant::GetFormValue()
 	ibBackendValueForm* const foundedForm = GetForm();
 
 	if (foundedForm == nullptr)
-		return ibValueMetaObjectFormBase::CreateAndBuildForm(nullptr, nullptr, this, m_metaObject->GetGuid());
+		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaObject->GetGuid()), nullptr, nullptr, this);
 
 	return foundedForm;
 }

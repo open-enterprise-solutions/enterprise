@@ -81,16 +81,16 @@ ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectDocument::CreateObjectRe
 	return ibValuePtr<ibValueRecordDataObjectRef>(pDataRef);
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue()); break;
 	case eFormList:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn()));   // migrated onto the universal dynamic list
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDocumentNumber()->GetQueryColumn()));   // migrated onto the universal dynamic list
 		break;
 	case eFormSelect:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 		break;
 	}
 
@@ -98,33 +98,30 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(co
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectDocument::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectDocument::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormObject,
-		ownerControl, CreateObjectValue(),
-		formGuid
+		ownerControl, CreateObjectValue()
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormList,
-		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn()),   // migrated onto the universal dynamic list
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetDocumentNumber()->GetQueryColumn())   // migrated onto the universal dynamic list
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDocument::eFormSelect,
-		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 #pragma endregion

@@ -16,12 +16,13 @@
 #include "frontend/visualView/ctrl/frame.h"
 #include "frontend/win/dlgs/typeSelector.h"          // the shared type picker — second caller
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
+#include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
+#include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the CONTOUR that narrows the picker
 #include "backend/metaCollection/partial/reference/reference.h"          // a reference built on a predefined guid
 #include "frontend/win/dlgs/selectPredefined.h"      // the designer's declared-value window — one call, no widgets here
 
 #include "backend/appData.h"                                             // DesignerMode — the two roads part here
-#include "backend/system/systemManager.h"                                // Message — "nothing is declared" is an answer
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	const ibValueMetaObject* choiceForm, wxWindow* parent)
@@ -99,7 +100,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			// variable) passes no filter and gets the whole shape, which is the honest answer.
 			std::vector<ibClassID> contour;
 			if (const ibValueMetaObjectAttributeBase* attr =
-				dynamic_cast<const ibValueMetaObjectAttributeBase*>(factory->GetSourceAttributeObject())) {
+				ibChoiceLinkResolver::FieldOf(factory->GetChoiceHolder(), factory)) {
 				if (const ibValueMetaObjectChartOfCharacteristicTypes* chart =
 					dynamic_cast<const ibValueMetaObjectChartOfCharacteristicTypes*>(attr->GetParent()))
 					contour = chart->GetTypesOfCharacteristics().GetClsidList();
@@ -153,8 +154,23 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			// a form control bound to one attribute — is already standing on its type, so the value
 			// it holds is the whole offer. Asked ABOVE, before the quick choice, so an enumeration
 			// takes this road too.
-			return metaObject->ProcessChoice(ownerValue,
-				choiceForm != nullptr ? choiceForm->GetName() : wxString(), factory->GetSelectMode());
+
+			// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
+			// the FIELD being filled, and WHERE the values its link names are read. The second is the
+			// control's own answer — the form's source for a control on a form, the row being edited
+			// for a table column — so the list is narrowed by exactly what the person can see beside
+			// the field they are filling.
+			const ibChoiceHolder holder = factory->GetChoiceHolder();
+			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
+				ibChoiceLinkResolver::FieldOf(holder, factory));
+
+			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
+			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
+			// condition with nothing in it, and the list asks the same question of both.
+			const ibFormRequest request(
+				choiceForm != nullptr ? choiceForm->GetName() : wxString(),
+				ibCreateRequest(factory->GetSelectMode(), condition));
+			return metaObject->ProcessChoice(ownerValue, request);
 		}
 	}
 	return false;
@@ -615,7 +631,7 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →
 	// default to item selection.
 	const ibValueMetaObjectAttributeBase* attr =
-		dynamic_cast<const ibValueMetaObjectAttributeBase*>(GetSourceAttributeObject());
+		ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
 	if (attr != nullptr) return attr->GetSelectMode();
 	return ibSelectMode::ibSelectMode_Items;
 }

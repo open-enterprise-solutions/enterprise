@@ -68,7 +68,7 @@ public:
 
 #pragma region _form_builder_h_
 	//suppot form
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	virtual ibBackendValueForm* GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//get module object in compose object
@@ -87,7 +87,7 @@ protected:
 	virtual ibValuePtr<ibValueRecordDataObjectExt> CreateObjectExtValue() const;  //create object
 
 	//create object data with meta form
-	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//load & save metaData from DB
 

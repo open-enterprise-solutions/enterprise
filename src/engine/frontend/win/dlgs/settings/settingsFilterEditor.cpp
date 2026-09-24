@@ -736,7 +736,45 @@ ibValueCompositionField* ibFilterEditor::ChooseField(wxWindow* parent, const wxS
 void ibFilterEditor::SetFilter(ibFilterDescription* filter)
 {
 	m_filter = filter;
+	TypeFieldOperands();
 	Reload();
+}
+
+// ⭐⭐ A CONDITION THAT CAME WITHOUT ITS TYPE IS TYPED HERE, FROM THE FIELD IT NAMES. The picker writes a
+// field with its type; three other roads write only the path — a setting read back (the type is not
+// packed: compositionDescription.cpp), "filter by this cell" (tableBoxAction.cpp) and a list narrowed in
+// code (AddFilter). And the right side is edited THROUGH the left side's type, so such a line had nothing
+// to choose a value by: the picker offered nothing (2026-09-24, the journal: `offered 0 type(s)`).
+//
+// ⭐ ASKED OF THE FIELDS THIS WINDOW OFFERS — the one list that knows the source — by the walk the picker's
+// own tree makes, so a condition is typed exactly as picking its field again would type it. Called from
+// both doors, the filter's and the fields', because the lines and the fields arrive in either order.
+void ibFilterEditor::TypeFieldOperands()
+{
+	if (m_filter == nullptr || m_fieldSource == nullptr || m_fieldCtrl == nullptr)
+		return;
+
+	const auto typeOf = [this](ibFilterOperandDescription& side) {
+		if (!side.IsField() || side.m_type.GetClsidCount() > 0)
+			return;
+		const ibValuePtr<ibValueCompositionField> field(
+			ibSettingsFieldTree::FieldAt(m_fieldCtrl, m_fieldSource->FindByPath(m_fieldCtrl, side.m_path)));
+		if (!field)
+			return;
+		side.m_type = field->GetTypeDescription();
+		if (side.m_leafId == wxNOT_FOUND)
+			side.m_leafId = field->GetLeafId();
+	};
+
+	const std::function<void(std::vector<ibFilterNodeDescription>&)> walk =
+		[&](std::vector<ibFilterNodeDescription>& nodes) {
+			for (ibFilterNodeDescription& node : nodes) {
+				typeOf(node.m_left);
+				typeOf(node.m_right);
+				walk(node.m_children);
+			}
+		};
+	walk(m_filter->m_nodes);
 }
 
 // ⭐ WHOSE WINDOW THIS IS — see the header. The model decides what to enumerate, so it is told and
@@ -766,6 +804,7 @@ void ibFilterEditor::ReloadFields()
 {
 	if (m_fieldSource != nullptr)
 		m_fieldSource->Populate(m_fieldCtrl);
+	TypeFieldOperands();
 }
 
 // OPEN ON THE ROOT, AND ON EVERY GROUP UNDER IT. A collapsed root hides the whole filter behind one

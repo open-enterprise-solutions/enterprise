@@ -1046,6 +1046,9 @@
     <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClCompile Include="session\workerPoolGUI.cpp">
       <Filter>session</Filter>
     </ClCompile>
@@ -1905,6 +1908,9 @@
     <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClInclude Include="session\workerPoolGUI.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -2095,6 +2101,12 @@
     </Filter>
     <Filter Include="win\dlgs\translateConstructor">
       <UniqueIdentifier>{017A57B3-51E1-4B43-A1EE-B2CFFE55BF47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\choiceLink">
+      <UniqueIdentifier>{7C4E2A18-95D6-4B03-8E7A-1D2F60B4C933}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\choiceParameters">
+      <UniqueIdentifier>{2F6C1B90-3A84-4E27-9C51-7A3D0B65E118}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\formatConstructor">
       <UniqueIdentifier>{D8E1C84A-B7D0-4DF4-8B67-0C82D41A65F5}</UniqueIdentifier>
@@ -2363,6 +2375,12 @@
     <ClCompile Include="visualView\layers\commandReceiver.cpp">
       <Filter>visualView\layers</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp">
+      <Filter>win\dlgs\choiceLink</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp">
+      <Filter>win\dlgs\choiceParameters</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp">
       <Filter>win\dlgs\jobSchedule</Filter>
     </ClCompile>
@@ -2394,6 +2412,12 @@
     </ClInclude>
     <ClInclude Include="visualView\layers\commandReceiver.h">
       <Filter>visualView\layers</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\choiceLink\choiceLink.h">
+      <Filter>win\dlgs\choiceLink</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h">
+      <Filter>win\dlgs\choiceParameters</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h">
       <Filter>win\dlgs\jobSchedule</Filter>

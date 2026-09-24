@@ -11,6 +11,8 @@
 #include "backend/propertyManager/property/propertyType.h"     // ibPropertyType — the one with a verb of its own
 #include "backend/propertyManager/property/propertyPicture.h"  // ibPropertyPicture — a picture reads in its own shape
 #include "backend/pictureDescription.h"                         // ibPictureDescriptionMemory — that shape
+#include "backend/propertyManager/property/propertyChoiceLink.h"         // a choice reads in its own shape too
+#include "backend/propertyManager/property/variant/variantChoiceLink.h"  // …named as the inspector names it
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
@@ -979,6 +981,33 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 		byLanguage.SetValue(cell.m_code, cell.m_data);
 }
 
+// ⭐ NAMED BY THE INSPECTOR'S OWN WORDS — ibChoiceHolderFieldName for a neighbour, ibChoiceTargetFieldName
+// for a field of what is chosen, `<gone>` where the inspector says `<gone>` — so MCP and the designer's line
+// cannot spell one field two ways. A field deleted from the configuration does not reach here: the choice has
+// dropped it already (variantChoiceLink.cpp).
+void ibMcpSayChoiceLink(const ibPropertyObject* field, const ibChoiceTypeLinkDescription& linkDesc, ibDataNode& into)
+{
+	into.SetValue(wxT("link"), linkDesc.IsOk() ? ibChoiceHolderFieldName(field, linkDesc.m_source.GetLeaf()) : wxString());
+
+	const ibMetaData* metaData = field != nullptr ? field->GetMetaData() : nullptr;
+	into.SetValue(wxT("governed_type"), linkDesc.m_governedType != 0 && metaData != nullptr
+		? metaData->GetNameObjectFromID(linkDesc.m_governedType) : wxString());
+}
+
+void ibMcpSayChoiceParameters(const ibPropertyObject* field, const ibChoiceParametersDescription& paramsDesc,
+	ibDataNode& into)
+{
+	for (const ibChoiceParameterRowDescription& row : paramsDesc.m_rows) {
+		auto cell = std::make_shared<ibDataNode>();
+		cell->SetValue(wxT("from"), ibChoiceHolderFieldName(field, row.m_source.GetLeaf()));
+		cell->SetValue(wxT("on_change"),
+			wxString(row.m_onChange == ibChoiceParameterOnChange::Keep ? wxT("keep") : wxT("clear")));
+
+		const wxString parameter = ibChoiceTargetFieldName(field, row.m_parameter);
+		into.AddField(!parameter.IsEmpty() ? parameter : ibMcpText("<gone>"), ibDataValue::Child(cell));
+	}
+}
+
 void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 	const wxString& only, bool editableOnly)
 {
@@ -1208,6 +1237,19 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				"file's bytes in base64 written \"base64:<...>\" and Width and Height are its size in pixels. To work "
 				"in SVG: picture_to_svg says it as SVG, and picture_from_svg draws SVG - the `Image` of its answer is "
 				"what goes here."));
+		}
+		else if (const ibPropertyChoiceParameters* rows = dynamic_cast<const ibPropertyChoiceParameters*>(property)) {
+
+			// 🛑 THE SAME TRAP A FOURTH TIME: the parameters are a Child, have no Name, and read back as
+			// {"name": ""} — set through metadata_set_choice, unseen through here, and a row naming a deleted
+			// field looked exactly like no row (2026-09-24). Said in the shape the setter takes. (The link by
+			// type does not come here: it answers GetValueList, and reads above as the neighbours it may name.)
+			entry->SetValue(wxT("kind"), wxString(wxT("choice")));
+			ibMcpSayChoiceParameters(object, rows->GetValueAsParametersDesc(), entry->Child(wxT("value")));
+			entry->SetValue(wxT("shape"), ibMcpText(
+				"Set through metadata_set_choice {id, parameters}, in this shape - the rows given replace the "
+				"table. A row whose field was deleted is dropped by itself; `<gone>` is a field this one can no "
+				"longer name, and leaving it out of the rows sent removes it."));
 		}
 		else {
 			const ibDataValue value = property->GetNodeValue();

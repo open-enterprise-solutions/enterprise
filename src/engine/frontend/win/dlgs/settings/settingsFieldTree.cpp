@@ -223,10 +223,10 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 // Walk a dotted path down the tree, loading each reference on the way, and land the
 // cursor on the leaf. The path is the technical one (that is what a field stores).
-void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const
+wxTreeItemId ibSettingsFieldTree::FindByPath(wxTreeCtrl* tree, const wxString& path) const
 {
 	if (tree == nullptr || path.IsEmpty())
-		return;
+		return wxTreeItemId();
 	wxTreeItemId parent = tree->GetRootItem();
 	wxStringTokenizer parts(path, wxT("."));
 	while (parts.HasMoreTokens() && parent.IsOk()) {
@@ -246,16 +246,20 @@ void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) c
 			child = tree->GetNextChild(parent, cookie);
 		}
 		if (!found.IsOk())
-			return;
-		if (parts.HasMoreTokens()) {
+			return wxTreeItemId();
+		if (parts.HasMoreTokens())
 			ExpandSourceFieldNode(tree, found, GetMetaData(), m_isResource);   // the road continues — load it
-			tree->Expand(found);
-		}
 		parent = found;
 	}
-	if (parent.IsOk() && parent != tree->GetRootItem()) {
-		tree->SelectItem(parent);
-		tree->EnsureVisible(parent);
+	return parent != tree->GetRootItem() ? parent : wxTreeItemId();
+}
+
+void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const
+{
+	const wxTreeItemId found = FindByPath(tree, path);
+	if (found.IsOk()) {
+		tree->SelectItem(found);
+		tree->EnsureVisible(found);   // …which opens every road above it
 	}
 }
 

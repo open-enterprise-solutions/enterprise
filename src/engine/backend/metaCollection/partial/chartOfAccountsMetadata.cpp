@@ -68,9 +68,9 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfAccounts
 	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfAccounts::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfAccounts::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder: return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
@@ -80,40 +80,40 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfAccounts::CreateSourceOb
 	// 51 lands between two unrelated account names and the chart stops reading as a chart. This road said
 	// "code" by itself while the forms below said "description"; both ask the one declaration now
 	// (DataPresentation, which a chart of accounts states as Code at construction).
-	case eFormList: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
-	case eFormSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
-	case eFormFolderSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
+	case eFormList: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
+	case eFormSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
+	case eFormFolderSelect: return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, eFormObject, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM), formGuid);
+	return CreateAndBuildForm(request, eFormObject, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, eFormFolder, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER), formGuid);
+	return CreateAndBuildForm(request, eFormFolder, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()), formGuid);   // migrated onto the universal dynamic list (hierarchy via queryable)
+	return CreateAndBuildForm(request, eFormList, ownerControl,
+		ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, eFormSelect, ownerControl,
-		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);   // select front-driven — choice mode
+	return CreateAndBuildForm(request, eFormSelect, ownerControl,
+		CreateSourceObject(request.m_create, eFormSelect));   // select front-driven — choice mode
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, eFormFolderSelect, ownerControl,
-		ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);   // folder-select = choice + IsFolder = true
+	return CreateAndBuildForm(request, eFormFolderSelect, ownerControl,
+		CreateSourceObject(request.m_create, eFormFolderSelect));   // folder-select = choice + IsFolder = true
 }
 #pragma endregion
 

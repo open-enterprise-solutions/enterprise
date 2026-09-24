@@ -58,9 +58,10 @@
 // the rest without parsing anything else on the line.
 //
 // ⚠ AND IT IS ABOUT THE FILE, NOT ABOUT THE USER. `Info` says "worth finding later", not "interrupt
-// somebody now" — it echoes to the debugger like an ordinary line. Only `Warning` and `Error` reach
-// the screen, and they do so because their callsites were wxLogWarning / wxLogError before the
-// migration and must keep saying what they said.
+// somebody now" — it echoes to the debugger like an ordinary line, and so does `Warning`: a warning
+// here is addressed to whoever opens the file, not to whoever is using the program. Only `Error`
+// reaches the screen, because that one says the thing the person asked for did not happen. See the
+// echo in journal.cpp for why the warning's dialog was taken away.
 enum class ibJournalMark : wxChar {
 	Info    = wxT('*'),
 	Warning = wxT('?'),

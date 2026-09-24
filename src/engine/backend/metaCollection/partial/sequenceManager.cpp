@@ -102,9 +102,8 @@ bool ibValueManagerDataObjectSequence::CallAsFunc(const long lMethodNum, ibValue
 	case eGetListForm:
 	{
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetListForm(paParams[0]->GetString(),
-			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
-			guidVal ? ((ibGuid)*guidVal) : ibGuid());
+		pvarRetValue = m_metaObject->GetListForm(ibFormRequest(paParams[0]->GetString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	}

@@ -130,7 +130,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm()
 
 	auto* cc = metaData->GetCompileCache();
 	if (!cc || !cc->FindCompileModule(creator, m_valueForm)) {
-		m_valueForm = new ibValueForm(creator, nullptr);
+		m_valueForm = new ibValueForm(ibFormRequest(), creator, nullptr);
 
 		// ⭐⭐ EMPTY IS NOT BROKEN — IT IS NEW, and it is built from its kind. The RUNTIME has said
 		// so all along (ibValueMetaObjectFormBase::CreateAndBuildForm: *load what is stored, or

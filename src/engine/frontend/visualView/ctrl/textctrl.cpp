@@ -13,6 +13,7 @@
 #include "form.h"
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this control's link reads its neighbours
 
 bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 {
@@ -311,6 +312,11 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 #endif
 
 	return true;
+}
+
+ibChoiceHolder ibValueTextCtrl::GetChoiceHolder() const
+{
+	return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
 }
 
 //*******************************************************************

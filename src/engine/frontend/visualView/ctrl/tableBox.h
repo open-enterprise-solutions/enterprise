@@ -704,6 +704,9 @@ public:
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue());
 	virtual bool GetControlValue(ibValue& pvarControlVal) const;
 
+	// A column stands on the ROW being edited: its neighbours are the other cells of that row.
+	virtual ibChoiceHolder GetChoiceHolder() const override;
+
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
 

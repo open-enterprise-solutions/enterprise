@@ -183,14 +183,14 @@ ibBackendValueForm* ibFrontendMainFrame::ActiveWindow() const {
 	return nullptr;
 }
 
-ibBackendValueForm* ibFrontendMainFrame::CreateNewForm(const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibFrontendMainFrame::CreateNewForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, ibBackendControlFrame* backendControl, ibSourceDataObject* srcObject)
 {
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
 	wxASSERT(!(backendControl == nullptr && ownerControl != nullptr));
 	// Parent descriptor wiring happens inside ibValueForm's ctor — it
 	// already receives ownerControl; for the UI path (null owner) it
 	// falls back to backend_mainFrame->GetSession()->GetManagerModule().
-	return new ibValueForm(creator, ownerControl, srcObject, formGuid);
+	return new ibValueForm(request, creator, ownerControl, srcObject);
 }
 
 ibUniqueKey ibFrontendMainFrame::CreateFormUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)

@@ -15,7 +15,7 @@
 #include "backend/compositionHelper.h"
 #include "backend/roleHelper.h"
 
-#include "backend/metaCollection/metaObjectEnum.h"   // ibSelectMode — ProcessChoice takes it
+#include "backend/createRequest.h"   // what ProcessChoice is asked with: mode, condition, form
 
 //*******************************************************************************
 class BACKEND_API ibMetaData;
@@ -523,9 +523,11 @@ public:
 		return owner == nullptr || owner->FilterChild(GetClassType());
 	}
 
-	//process choice
-	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, ibSelectMode selMode) const {
+	// ⭐ ONE ARGUMENT, BECAUSE THIS QUESTION GROWS. The form to open and what may be picked used to
+	// stand side by side here, and what NARROWS the list would have been a third — then a fourth, as
+	// the callers (a form field, a table cell, a filter row, a script) each learn one more thing about
+	// the choice they are asking for. The request carries them, so the door stops changing shape.
+	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue, const ibFormRequest& request) const {
 		return true;
 	}
 

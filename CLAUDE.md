@@ -257,10 +257,10 @@ unit.CallAsFunc(wxT("FunctionName"), result, arg1, arg2);
 
 ```cpp
 ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
+    ibFormRequest(),    // name, window key (m_formGuid — empty to auto-generate), choice condition
     metaFormObject,     // const ibValueMetaObjectFormBase* (creator), or nullptr
     ownerControl,       // ibBackendControlFrame* or nullptr
-    sourceObject,       // ibSourceDataObject* or nullptr
-    formGuid            // const ibUniqueKey& — wxNullUniqueKey to auto-generate
+    sourceObject        // ibSourceDataObject* or nullptr
 );
 ```
 

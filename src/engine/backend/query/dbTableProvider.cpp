@@ -15,6 +15,7 @@
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
 #include "backend/diagnostics/journal.h"   // ibJournal — why a server fold was declined, and what was lowered
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
+#include "columnSpread.h"      // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
 #include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
 
 #include "backend/databaseLayer/databaseLayer.h"
@@ -361,6 +362,31 @@ bool IsComputedColumn(const ibBackendQueryColumn* col)
 	return col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed;
 }
 
+// ⭐⭐ A TAGGED VALUE IS EQUAL ON ITS TAG AND ITS OWN FIELDS — the rest of the spread says nothing. A column
+// that may hold several kinds of value keeps one field per kind beside the tag, and a value fills only
+// its own; the others hold the codec's placeholders (false, 0, an empty date, "", a 0 type and a NULL
+// key) — or NULL outright in a row older than the field, which a restructuring adds without touching
+// the rows. Compared on all of them, `PropertyValue = True` asked `_RRRef = NULL` of every row and
+// matched none (2026-09-24: a chart of characteristic types had just gained a catalog, and its register
+// filtered by a boolean came up empty).
+//
+// Only a column whose layout STARTS with the discriminator is spread by kind; any other (a raw key, a
+// moment) is compared on everything it is made of, as before. A field that carries no kind of its own
+// (the tag, a raw slot) is always compared.
+std::vector<bool> ComparedFields(const std::vector<ibColumnSlot>& layout, const ibValue& value)
+{
+	std::vector<bool> compared(layout.size(), true);
+	if (layout.empty() || layout.front().m_role != ibColumnRole::Discriminator)
+		return compared;
+
+	const int tag = ibColumnSpread::TagForValue(value);
+	for (size_t i = 1; i < layout.size(); ++i) {
+		const int fieldTag = ibPersistedTypeTag(layout[i].m_role);
+		compared[i] = fieldTag == ibFieldTypes_Empty || fieldTag == tag;
+	}
+	return compared;
+}
+
 ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                  const wxString& mainQual = wxEmptyString)
 {
@@ -425,10 +451,32 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 		}
 	}
 
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const std::vector<bool> compared = ComparedFields(layout, value);
 	ibQueryExprPtr pred;
 	for (size_t i = 0; i < fields.size(); ++i) {
+		if (i < compared.size() && !compared[i])
+			continue;
 		ibQueryExprPtr c = (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());
 		pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), c));
+	}
+
+	// ⭐⭐ A ROW THE FIELD WAS NEVER WRITTEN IN READS AS THE COLUMN'S EMPTY VALUE — so it equals it. A field
+	// a restructuring added leaves every row before it UNTAGGED: the tag column comes in `DEFAULT 0 NOT
+	// NULL`, so the tag is the empty one (or NULL, where a column came without that default), and the codec
+	// reads such a cell as the empty value of the column's type (TagFitsColumn, columnLayout.cpp). Filtered
+	// by that very value those rows were not found: `Export = False` read False on every contract and found
+	// only the ones written after the flag existed — 2 of 18, measured 2026-09-24 — so a contract list
+	// narrowed by the flag lost its old contracts. The same reading the empty reference gets above.
+	if (!layout.empty() && layout.front().m_role == ibColumnRole::Discriminator) {
+		const ibValue unwritten = ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData);
+		if (value.GetType() == unwritten.GetType() && value.CompareValueEQ(unwritten)) {
+			const ibQueryExprPtr untagged = OrFold(
+				ibIsNull(ibColQ(mainQual, fields.front()), false),
+				ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields.front()),
+					ibConst(ibValue(static_cast<int>(ibFieldTypes_Empty)))));
+			pred = OrFold(pred, untagged);
+		}
 	}
 	return pred;
 }
@@ -482,9 +530,12 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 			ids.push_back(consts.back());
 		}
 		if (agree) {
+			// The values agree on their kind, so the first one says which fields are compared (ComparedFields).
+			const std::vector<bool> compared = ComparedFields(layout, values.front());
 			ibQueryExprPtr pred;
 			for (size_t i = 0; i < leading.size(); ++i)
-				pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), leading[i]));
+				if (i >= compared.size() || compared[i])
+					pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), leading[i]));
 			return AndFold(pred, ibIn(ibColQ(mainQual, fields.back()), std::move(ids)));
 		}
 	}

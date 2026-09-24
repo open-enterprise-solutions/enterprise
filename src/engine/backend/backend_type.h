@@ -108,6 +108,26 @@ public:
 	// ibVariantDataAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
 	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
 
+	// ⭐⭐ AND EVERY TYPE THAT KIND MAY TAKE — the same question as the default above, asked in full.
+	// What a field may hold is a fact about the FIELD, so it is answered here, beside the registry that
+	// knows which metatypes exist, and not by whichever window happens to be asking.
+	//
+	// 🛑 IT LIVED IN THE TYPE PICKER, a static function inside a frontend dialog, and so the designer
+	// was the only door that knew it. The MCP server, which is in this library and cannot see that
+	// function, therefore accepted types the picker would never have offered — `TypeDescription` set on
+	// an ordinary attribute, a state the editor cannot produce and the platform does not mean to have
+	// (Max, 2026-09-23: "it accepted it because the filter that works for me does not fire for you —
+	// the column type throws the wrong types out while the list is still being built").
+	//
+	// Two doors, one rule, and the rule was on the side that could not be asked from the other.
+	static void GetTypesByFilter(ibSelectorDataType filterDataType, const class ibMetaData* metaData,
+		std::vector<ibClassID>& out);
+
+	// ⭐⭐ A CHARACTERISTIC STANDS FOR ITS CHART'S TYPES — answered here, for EVERY holder of such a
+	// declaration: an attribute, a control bound to one, a filter cell, a form's own attribute. Body in
+	// backend_type.cpp.
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
+
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
 

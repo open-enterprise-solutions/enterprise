@@ -2,6 +2,7 @@
 #define __MAIN_FRAME_CORE_H__
 
 #include "backend/uniqueKey.h"
+#include "backend/createRequest.h"   // ibFormRequest — what a form is opened with
 #include "backend/backend_spreadsheet.h"
 #include "backend/system/systemEnum.h"
 #include "backend/session/sessionHolder.h"   // the frame OWNS its session
@@ -53,8 +54,8 @@ public:
 
 	// Form support
 	virtual class ibBackendValueForm* ActiveWindow() const { return nullptr; }
-	virtual class ibBackendValueForm* CreateNewForm(const class ibValueMetaObjectFormBase* creator, class ibBackendControlFrame* ownerControl = nullptr,
-		class ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) {
+	virtual class ibBackendValueForm* CreateNewForm(const ibFormRequest& request, const class ibValueMetaObjectFormBase* creator, class ibBackendControlFrame* ownerControl = nullptr,
+		class ibSourceDataObject* srcObject = nullptr) {
 		return nullptr;
 	}
 

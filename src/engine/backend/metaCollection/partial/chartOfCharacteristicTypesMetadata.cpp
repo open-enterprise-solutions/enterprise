@@ -79,73 +79,68 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfCharacte
 	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject:
 		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
 		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormObject,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolder,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()),   // migrated onto the universal dynamic list (hierarchy via queryable)
-		formGuid
+		ownerControl, ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn())   // migrated onto the universal dynamic list (hierarchy via queryable)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormFolderSelect)   // folder-select = choice + IsFolder = true
 	);
 }
 #pragma endregion

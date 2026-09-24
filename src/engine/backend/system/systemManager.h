@@ -5,6 +5,7 @@
 
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
+#include "backend/createRequest.h"   // ibFormRequest — a common form is opened with one too
 
 //-- Constants:
 #define PageBreak wxT("\n\n")
@@ -177,8 +178,8 @@ public:
 	static bool AccessRight(const wxString& strRoleName, const ibValue& cData);
 	static bool IsInRole(const ibValue& cData);
 
-	static ibValue GetCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
-	static void ShowCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static ibValue GetCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static void ShowCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 
 	static ibValue GetCommonTemplate(const wxString& strTemplateName);
 

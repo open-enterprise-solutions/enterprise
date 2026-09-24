@@ -400,12 +400,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 				pvarRetValue = IsInRole(*paParams[0]);
 			return lSizeArray > 0;
 		case enGetCommonForm: pvarRetValue = GetCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
 		case enShowCommonForm: ShowCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -431,7 +431,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 
 		case enGetCommonForm:
-			pvarRetValue = GetCommonForm(paParams[0]->GetString(),
+			pvarRetValue = GetCommonForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -473,7 +473,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
 		case enShowCommonForm: ShowCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -489,7 +489,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		{
 			//--- Special:
 		case enShowCommonForm:
-			ShowCommonForm(paParams[0]->GetString(),
+			ShowCommonForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;

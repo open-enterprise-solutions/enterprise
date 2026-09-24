@@ -470,6 +470,15 @@ BACKEND_API void ibMcpSayProperties(const class ibPropertyObject* object, ibData
 // it arrived — and neither hands over the stored template, which is what `GetNodeValue` would give.
 BACKEND_API void ibMcpSayCaption(const class ibPropertyTString* caption, ibDataNode& into);
 
+// …AND A FIELD'S CHOICE, BY NAMES: `link` and `governed_type` for the link by type, one field per parameter
+// row ({"Owner": {"from": "Counterparty", "on_change": "clear"}}) for the parameters — the shape
+// metadata_set_choice takes back. The answer to that write says both; the walk above says the parameters
+// (the link reads there as the enumeration of neighbours it is). Named in the inspector's own words.
+BACKEND_API void ibMcpSayChoiceLink(const class ibPropertyObject* field,
+	const struct ibChoiceTypeLinkDescription& linkDesc, ibDataNode& into);
+BACKEND_API void ibMcpSayChoiceParameters(const class ibPropertyObject* field,
+	const struct ibChoiceParametersDescription& paramsDesc, ibDataNode& into);
+
 // ⭐ WHAT THE OBJECT ITSELF SAYS AGAINST BEING STORED — from BOTH places it may
 // say it. A metaobject reports "not ready" either into the restructuring ledger
 // or through the message pane, and which one it picks is a matter of when that

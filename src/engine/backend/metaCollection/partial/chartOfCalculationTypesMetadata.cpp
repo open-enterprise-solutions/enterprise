@@ -77,73 +77,68 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectChartOfCalculat
 	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCalculationTypes::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCalculationTypes::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject:
 		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
 		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCalculationTypes::eFormObject,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetFolderForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCalculationTypes::eFormFolder,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER),
-		formGuid
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCalculationTypes::eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()),   // migrated onto the universal dynamic list (hierarchy via queryable)
-		formGuid
+		ownerControl, ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn())   // migrated onto the universal dynamic list (hierarchy via queryable)
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCalculationTypes::eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // select front-driven — choice mode
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect)   // select front-driven — choice mode
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectChartOfCalculationTypes::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectChartOfCalculationTypes::eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
-		formGuid
+		ownerControl, CreateSourceObject(request.m_create, eFormFolderSelect)   // folder-select = choice + IsFolder = true
 	);
 }
 #pragma endregion

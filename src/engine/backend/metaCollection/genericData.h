@@ -209,21 +209,20 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	ibBackendValueForm* GetGenericForm(const wxString& strFormName = wxEmptyString,
-		ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	ibBackendValueForm* GetGenericForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 #pragma region _form_creator_h_
-	ibBackendValueForm* CreateAndBuildForm(const wxString& strFormName, const ibFormID& form_id = defaultFormType,
+	ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id = defaultFormType,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr,
-		const ibUniqueKey& formGuid = wxNullGuid
+		ibSourceDataObject* srcObject = nullptr
 	) const;
 #pragma endregion
 
 #pragma region _template_builder_h_
 
-	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strFormName) const;
+	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strTemplateName) const;
 
 #pragma endregion
 
@@ -233,7 +232,7 @@ protected:
 
 	// create object data with meta form — the OWNER of a new source (a data object is born owned); empty
 	// when the form has none. (Out of line: the holder needs the source complete.)
-	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 };
 
 // THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its

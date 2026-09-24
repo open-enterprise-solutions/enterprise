@@ -24,12 +24,12 @@
 //*                              Frame                                       *
 //****************************************************************************
 
-ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
-	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
+ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
+	ibSourceDataObject* srcObject) : ibValueFrame(),
 	ibRuntimeModuleDataObject(m_members, this),
 	m_formType(defaultFormType), m_formModified(false),
 	m_closeOnChoice(true), m_closeOnOwnerClose(true),
-	m_metaFormObject(nullptr), m_controlOwner(nullptr),
+	m_metaFormObject(nullptr), m_controlOwner(nullptr), m_request(request),
 	m_formCollectionControl(new ibValueFormCollectionControl(this))
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
@@ -43,7 +43,7 @@ ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFram
 	m_commandBar->SetOwner(this);
 
 	//init default params
-	ibValueForm::InitializeForm(creator, ownerControl, srcObject, formGuid);
+	ibValueForm::InitializeForm(creator, ownerControl, srcObject, request.m_formGuid);
 
 	//set default params
 	m_controlId = defaultFormId;

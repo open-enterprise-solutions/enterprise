@@ -1113,27 +1113,27 @@ bool ibValueSystemFunction::IsInRole(const ibValue& cData)
 	return false;
 }
 
-ibValue ibValueSystemFunction::GetCommonForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+ibValue ibValueSystemFunction::GetCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
-	if (!strFormName.IsEmpty()) {
+	if (!request.m_formName.IsEmpty()) {
 
 		const ibValueMetaObjectCommonForm* creator =
-			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(strFormName, g_metaCommonFormCLSID);
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(request.m_formName, g_metaCommonFormCLSID);
 
 		if (creator != nullptr)
 			return creator->GetObjectForm(ownerControl, unique ? ((ibGuid)*unique) : ibGuid());
 	}
 
-	ibBackendCoreException::Error(_("Common form not found '%s'"), strFormName);
+	ibBackendCoreException::Error(_("Common form not found '%s'"), request.m_formName);
 	return wxEmptyValue;
 }
 
-void ibValueSystemFunction::ShowCommonForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
 	if (ibBackendException::IsEvalMode())
 		return;
 
-	const ibValue& cValue = GetCommonForm(strFormName, ownerControl, unique);
+	const ibValue& cValue = GetCommonForm(request, ownerControl, unique);
 
 	ibBackendValueForm* valueForm = dynamic_cast<ibBackendValueForm*>(cValue.GetRef());
 	if (valueForm != nullptr) valueForm->ShowForm();

@@ -10,6 +10,7 @@
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
 #include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
+#include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
 
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
@@ -36,41 +37,47 @@
 //***********************************************************************
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectGenericData::GetGenericForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectGenericData::GetGenericForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return CreateAndBuildForm(strFormName, defaultFormType, ownerControl, nullptr, formGuid);
+	return CreateAndBuildForm(request, defaultFormType, ownerControl, nullptr);
 }
 #pragma endregion
 #pragma region _form_creator_h_
 ibBackendValueForm* ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const
 {
-	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(metaForm);   // held across the build
+	// ⭐⭐ ONE PLACE MAKES A FORM'S SOURCE, and it is asked by the KIND of form — which is what it
+	// switched on all along (`metaObject->GetTypeForm()`), so handing it the metaform was handing it a
+	// question it then asked itself. Saying the kind outright is what lets the SELECT getters come
+	// through here too, instead of each spelling the same `ibCreateHierarchyList(...)` a second time
+	// in the same file (Max, 2026-09-23: "you gave it already — you have to change it all the way").
+	const ibFormID form_id = metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType;
+
+	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(ibCreateRequest(), form_id);   // held across the build
 	return CreateAndBuildForm(
-		metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
-		metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
+		ibFormRequest(metaForm != nullptr ? metaForm->GetName() : wxString(), formGuid),
+		form_id,
 		nullptr,
-		source,
-		formGuid
+		source
 	);
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectGenericData::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectGenericData::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
 	return nullptr;
 }
 
-ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const wxString& strFormName, const ibFormID& form_id, ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id, ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject) const
 {
 	const ibSourcePtr<ibSourceDataObject> sourceGuard(srcObject);   // held across the build
 
 	ibValueMetaObjectFormBase* creator = nullptr;
 
-	if (!strFormName.IsEmpty()) {
+	if (!request.m_formName.IsEmpty()) {
 
-		creator = FindFormObjectByFilter(strFormName, form_id);
+		creator = FindFormObjectByFilter(request.m_formName, form_id);
 
 		if (creator == nullptr) {
-			ibBackendCoreException::Error(_("Form not found '%s'"), strFormName);
+			ibBackendCoreException::Error(_("Form not found '%s'"), request.m_formName);
 			return nullptr;
 		}
 	}
@@ -80,14 +87,15 @@ ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const wxStr
 		return nullptr;
 	}
 
-	ibBackendValueForm* result = ibBackendValueForm::FindFormByUniqueKey(ownerControl, srcObject, formGuid);
+	ibBackendValueForm* result = ibBackendValueForm::FindFormByUniqueKey(ownerControl, srcObject, request.m_formGuid);
 
 	if (result == nullptr) {
 
 		result = ibValueMetaObjectFormBase::CreateAndBuildForm(
+			request,
 			creator != nullptr ? creator : GetDefaultFormByID(form_id),
 			form_id,
-			ownerControl, srcObject, formGuid
+			ownerControl, srcObject
 		);
 	}
 
@@ -397,9 +405,20 @@ bool ibValueMetaObjectRecordDataRef::OnAfterCloseMetaObject()
 //***********************************************************************
 
 //process choice 
-bool ibValueMetaObjectRecordDataRef::ProcessChoice(ibBackendControlFrame* ownerValue, const wxString& strFormName, ibSelectMode selMode) const
+bool ibValueMetaObjectRecordDataRef::ProcessChoice(ibBackendControlFrame* ownerValue, const ibFormRequest& request) const
 {
-	ibBackendValueForm* const selectChoiceForm = GetSelectForm(strFormName, ownerValue);
+	// ⭐⭐ THE REQUEST GOES TO THE MAKING, and opening stays what it always was. Getting the form is
+	// where its SOURCE OBJECT is created, and a list reads its settings exactly once — when it is
+	// built. Handing a narrowing to a form that already exists rewrites a description the composer
+	// was made from and that nothing reads again (Max, 2026-09-23: "pass these parameters as you
+	// create the form in memory, and the opening stays as it is, empty").
+	//
+	// Nobody keeps it either: it is an argument on the way in, and what it asks for has happened by
+	// the time the call returns.
+	//
+	// A flat list has one select form, so the mode says nothing here — what may be picked is a question
+	// its hierarchical sibling below answers, because only there is there more than one kind of row.
+	ibBackendValueForm* const selectChoiceForm = GetSelectForm(request, ownerValue);
 	if (selectChoiceForm == nullptr)
 		return false;
 
@@ -1375,8 +1394,10 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterCloseMetaObject()
 
 //////////////////////////////////////////////////////////////////////
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendControlFrame* ownerValue, const wxString& strFormName, ibSelectMode selMode) const
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendControlFrame* ownerValue, const ibFormRequest& request) const
 {
+	const ibSelectMode selMode = request.m_create.m_selectMode;
+
 	if (ownerValue == nullptr)
 		return false;
 
@@ -1387,11 +1408,14 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendCont
 	// They also made the first condition read as "(null AND items) OR foldersAndItems"
 	// (&& binds tighter), which is what GCC flagged. Behaviour is unchanged — the branch
 	// was, and is, chosen purely by selMode.
+	//
+	// The same as its flat sibling: whichever of the two forms is made, it is MADE with the request,
+	// and its list is born narrowed.
 	if (selMode == ibSelectMode::ibSelectMode_Items || selMode == ibSelectMode::ibSelectMode_FoldersAndItems) {
-		selectChoiceForm = GetSelectForm(strFormName, ownerValue);
+		selectChoiceForm = GetSelectForm(request, ownerValue);
 	}
 	else if (selMode == ibSelectMode::ibSelectMode_Folders) {
-		selectChoiceForm = GetFolderSelectForm(strFormName, ownerValue);
+		selectChoiceForm = GetFolderSelectForm(request, ownerValue);
 	}
 
 	if (selectChoiceForm == nullptr)
@@ -1924,7 +1948,7 @@ ibBackendValueForm* ibValueRecordDataObject::GetForm() const
 // virtual hooks (GetCurrentObjectFormID + OnFormCreated). See header.
 //----------------------------------------------------------------------
 
-void ibValueRecordDataObject::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+void ibValueRecordDataObject::ShowFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 	if (foundedForm && foundedForm->IsShown()) {
@@ -1932,25 +1956,28 @@ void ibValueRecordDataObject::ShowFormValue(const wxString& strFormName, ibBacke
 		return;
 	}
 
-	ibBackendValueForm* const valueForm = GetFormValue(strFormName, ownerControl);
+	ibBackendValueForm* const valueForm = GetFormValue(request, ownerControl);
 	if (valueForm != nullptr) {
 		valueForm->Modify(IsModified());
 		valueForm->ShowForm();
 	}
 }
 
-ibBackendValueForm* ibValueRecordDataObject::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+ibBackendValueForm* ibValueRecordDataObject::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 	if (foundedForm != nullptr)
 		return foundedForm;
 
+	// An object's window is keyed by the object: one window per object.
+	ibFormRequest objectRequest = request;
+	objectRequest.m_formGuid = m_objGuid;
+
 	ibBackendValueForm* createdForm = GetMetaObject()->CreateAndBuildForm(
-		strFormName,
+		objectRequest,
 		GetCurrentObjectFormID(),
 		ownerControl,
-		this,
-		m_objGuid
+		this
 	);
 	// Ref-flavour leaves used to set CloseOnOwnerClose(false) per-leaf;
 	// Ext (DataProcessor / Report) didn't. The flag is harmless when
@@ -2032,7 +2059,37 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 		const ibValueMetaObjectAttributeBase* attribute = metaObjectValue->FindAnyAttributeObjectByFilter(id);
 		if (attribute == nullptr)
 			return false;
-		it->second = attribute->AdjustValue(varMetaVal);
+		// ⭐ ADJUSTED THROUGH THE LINK, AND THE HOLDER IS THIS OBJECT. A field typed by a neighbour is
+		// narrowed to what that neighbour holds RIGHT NOW — the same narrowing whether the value came
+		// from a form, from a script or from a record written on the server (choiceLinkResolver.h).
+		const ibValue settled = ibChoiceLinkResolver::Adjust(ibChoiceHolder(this), attribute, varMetaVal);
+		const bool changed = !(it->second == settled);
+		it->second = settled;
+
+		// ⭐⭐ …AND WHAT WAS CHOSEN WITHIN THIS FIELD IS NOW STALE. A contract belongs to the
+		// counterparty that was standing here; write another one — or empty this one — and the
+		// contract is a contract with somebody the document no longer names. Emptying it is not
+		// tidiness, it is the difference between a wrong value and no value.
+		//
+		// ⭐ HERE, BESIDE `Adjust`, BECAUSE A FIELD IS A FIELD wherever it is written. This lived on
+		// two controls and so answered only for a person typing in a form: the same assignment from a
+		// posting handler, from a script or from a record set left the stale value in place (measured
+		// 2026-09-23 — a battery set the counterparty and the contract stayed).
+		//
+		// ⚠ WHICH MAKES THE ORDER OF ASSIGNMENTS MEAN SOMETHING IN CODE TOO. Filling a document
+		// contract-first and counterparty-second now empties the contract, exactly as doing it in that
+		// order in the form would. That is the rule, not an accident of it: what is chosen within
+		// something is chosen AFTER it.
+		//
+		// 🛑⭐ ON A CHANGE, NOT ON A WRITE — and the difference is the whole of it. Writing the value
+		// that is already there makes nothing stale, so clearing on every write punished the two most
+		// ordinary things a person does: CHOOSING THE SAME ELEMENT AGAIN emptied the field beside it
+		// (Max, 2026-09-23: "I re-pick the element, the same one, and it is removed altogether"), and
+		// a save that re-assigns a row's own values wiped them on the way past.
+		if (changed) {
+			ibChoiceHolder holder(this);
+			ibChoiceLinkResolver::ClearLinked(holder, id);
+		}
 		return true;
 	}
 	return false;
@@ -2219,7 +2276,7 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 	{
 	case eGetFormObject:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;
@@ -2582,13 +2639,17 @@ bool ibValueRecordDataObjectRef::Filling(ibValue cValue) const
 
 bool ibValueRecordDataObjectRef::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
-	if (varMetaVal != ibValueRecordDataObject::GetValueByMetaID(id)) {
-		if (ibValueRecordDataObject::SetValueByMetaID(id, varMetaVal)) {
-			ibValueRecordDataObjectRef::Modify(true);
-			return true;
-		}
+	// 🛑 WHETHER IT CHANGED IS READ OFF THE FIELD AFTER THE WRITE, not guessed from the raw value before
+	// it: the base narrows the value by its link, so "the same raw value" and "the same stored value" are
+	// different questions, and asking the first one skipped the narrowing of an empty field into the
+	// empty value of its settled type. See the same repair on the tabular section's own write.
+	const ibValue before = ibValueRecordDataObject::GetValueByMetaID(id);
+	if (!ibValueRecordDataObject::SetValueByMetaID(id, varMetaVal))
 		return false;
-	}
+	// …compared with the value where it is stored, not with a second copy of it: this is every write.
+	const auto stored = m_listObjectValue.find(id);
+	if (stored == m_listObjectValue.end() || !(before == stored->second))
+		ibValueRecordDataObjectRef::Modify(true);
 	return true;
 }
 
@@ -3668,12 +3729,12 @@ bool ibValueRecordManagerObject::GetValueBySourceHop(const ibSourceHop& hop, ibV
 
 bool ibValueRecordManagerObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
-	if (varMetaVal != ibValueRecordManagerObject::GetValueByMetaID(id)) {
-		bool result = m_recordLine->SetValueByMetaID(id, varMetaVal);
+	// Read off the record after the write, for the reason given at ibValueRecordDataObjectRef::SetValueByMetaID.
+	const ibValue before = ibValueRecordManagerObject::GetValueByMetaID(id);
+	const bool result = m_recordLine->SetValueByMetaID(id, varMetaVal);
+	if (!(before == ibValueRecordManagerObject::GetValueByMetaID(id)))
 		ibValueRecordManagerObject::Modify(true);
-		return result;
-	}
-	return true;
+	return result;
 }
 
 bool ibValueRecordManagerObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
@@ -4060,11 +4121,28 @@ bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const 
 				// the pass skipped the set as unmodified, so every result stayed 0 with the document posted
 				// and no word. Reading fills the lines past this door (AppendTableValue), so a set fresh from
 				// the database still answers "not modified".
-				const bool set = node->SetValue(
-					id, attribute->AdjustValue(varMetaVal), true
-				);
-				if (set)
+				// …and narrowed by the field's link, with THIS LINE as the holder: a resource typed by a
+				// kind column takes the type of the kind standing in the same record, not in some other
+				// one (choiceLinkResolver.h). A set written by a posting pass is exactly the road that
+				// has no control on it.
+				const ibValue settled =
+					ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute, varMetaVal);
+
+				ibValue previous;
+				const bool changed = !node->GetValue(id, previous) || !(previous == settled);
+
+				const bool set = node->SetValue(id, settled, true);
+				if (set) {
+					// …and this record's other cells that were chosen within this one go with it — THIS
+					// record, not the set: a kind column changed in one line says nothing about another.
+					//
+					// ⚠ ON A CHANGE, NOT ON A WRITE (see the object's own write, above in this file).
+					if (changed) {
+						ibChoiceHolder holder(this, item);
+						ibChoiceLinkResolver::ClearLinked(holder, id);
+					}
 					Modify(true);
+				}
 				return set;
 			}
 		}

@@ -225,7 +225,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 
 		if (!cc || !cc->FindCompileModule(defFormObject, result)) {
 
-			result = ibValueMetaObjectFormBase::CreateAndBuildForm(defFormObject, nullptr, m_objectValue);
+			result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
 
 			if (result != nullptr) {
 				result->ShowForm();
@@ -464,7 +464,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 		if (!cc || !cc->FindCompileModule(defFormObject, result)) {
 
-			result = ibValueMetaObjectFormBase::CreateAndBuildForm(defFormObject, nullptr, m_objectValue);
+			result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
 
 			if (result != nullptr) {
 				result->ShowForm();
@@ -484,9 +484,9 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	// is nothing to show, and an empty window would be a worse answer than none. Without this the
 	// module started and quietly died, which is the same outcome with no explanation.
 	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
-		// wxNullUniqueKey — the form is generated, so it takes a fresh key of its own.
+		// No key in the request — the form is generated, so it takes a fresh key of its own.
 		ibBackendValueForm* valueForm =
-			ibBackendValueForm::CreateNewForm(nullptr, nullptr, m_objectValue, wxNullUniqueKey);
+			ibBackendValueForm::CreateNewForm(ibFormRequest(), nullptr, nullptr, m_objectValue);
 		valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
 		try {
 			valueForm->ShowForm();

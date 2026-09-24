@@ -201,7 +201,7 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	}
 	else {
 		built = ibValueMetaObjectFormBase::CreateAndBuildForm(
-			creator, creator->GetTypeForm(), nullptr, nullptr, wxNullUniqueKey);
+			ibFormRequest(), creator, creator->GetTypeForm(), nullptr, nullptr);
 	}
 
 	ibValueForm* form = dynamic_cast<ibValueForm*>(built);
@@ -2043,7 +2043,7 @@ public:
 			if (data.GetDataLen() == 0)
 				continue;
 
-			ibValueForm form(creator);
+			ibValueForm form(ibFormRequest(), creator);
 			if (!form.LoadForm(data))
 				continue;
 

@@ -869,7 +869,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//prepare menu for item
@@ -958,7 +958,7 @@ protected:
 	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//load & save metaData from DB
 

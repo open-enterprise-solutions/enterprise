@@ -39,10 +39,10 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormBy
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()), formGuid);   // migrated onto the universal dynamic list
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormList, ownerControl,
+		ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list
 }
 #pragma endregion
 
@@ -982,10 +982,10 @@ ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectAccountingRegister::CreateRe
 	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectAccountingRegister(this, uniqueKey));
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectAccountingRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectAccountingRegister::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm()) {
-	case eFormList: return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list
+	switch (form_id) {
+	case eFormList: return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list
 	}
 	return nullptr;
 }

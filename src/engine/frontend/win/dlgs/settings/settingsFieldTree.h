@@ -83,8 +83,9 @@ public:
 	// fields exist, and this runs again to say so.
 	void Populate(wxTreeCtrl* tree) const;
 
-	// Walk a dotted technical path down the tree, loading each reference on the way,
-	// and land the cursor on the leaf.
+	// Walk a dotted technical path down the tree, loading each reference on the way — the node, or an
+	// invalid id when the path names nothing here. SelectByPath lands the cursor on it.
+	wxTreeItemId FindByPath(wxTreeCtrl* tree, const wxString& path) const;
 	void SelectByPath(wxTreeCtrl* tree, const wxString& path) const;
 
 	// WIRE the two behaviours every field tree has: unfold a reference lazily, and

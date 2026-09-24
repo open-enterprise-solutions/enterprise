@@ -18,6 +18,7 @@
 #include "backend/propertyManager/property/propertyOwner.h"
 #include "backend/propertyManager/property/propertySource.h"
 #include "backend/propertyManager/property/propertySchedule.h"
+#include "backend/propertyManager/property/propertyChoiceLink.h"
 
 //metaobject property
 #include "backend/propertyManager/property/propertyModule.h"

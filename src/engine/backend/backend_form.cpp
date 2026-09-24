@@ -6,18 +6,18 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ibBackendValueForm* ibBackendValueForm::CreateNewForm(
+	const ibFormRequest& request,
 	const ibValueMetaObjectFormBase* creator,
 	ibBackendControlFrame* ownerControl,
-	ibSourceDataObject* srcObject,
-	const ibUniqueKey& formGuid
+	ibSourceDataObject* srcObject
 )
 {
 	if (ibSession::CurrentFrame() != nullptr) {
 		ibBackendValueForm* createdForm = ibSession::CurrentFrame()->CreateNewForm(
+			request,
 			creator,
 			ownerControl,
-			srcObject,
-			formGuid
+			srcObject
 		);
 
 		if (createdForm == nullptr) {
@@ -29,6 +29,11 @@ ibBackendValueForm* ibBackendValueForm::CreateNewForm(
 
 	ibBackendFormException::Error();
 	return nullptr;
+}
+
+bool ibSessionHasFrame()
+{
+	return ibSession::CurrentFrame() != nullptr;
 }
 
 ibUniqueKey ibBackendValueForm::CreateFormUniqueKey(ibBackendControlFrame* ownerControl, ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid)

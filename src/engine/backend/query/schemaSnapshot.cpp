@@ -797,17 +797,18 @@ bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& tar
 			return false;                                   // new table
 
 		// Columns by MODEL ID, the same key the differ matches on; a column present on one side only is an
-		// add or a drop, and a matched pair differs when its type set does — which is exactly the condition
-		// DiffColumnInto tests before it emits anything. Adding a type to a COMPOSITE attribute that already
-		// carries a reference lands here as "same type set is not same" only when the physical layout really
-		// moves; when it does not, the type descriptions compare equal and the table stays unchanged.
+		// add or a drop, and a matched pair differs when what it may HOLD does (GetTypeValueDesc) — which
+		// is exactly the condition DiffColumnInto tests before it emits anything. Adding a type to a
+		// COMPOSITE attribute that already carries a reference lands here as "same type set is not same"
+		// only when the physical layout really moves; when it does not, the type descriptions compare
+		// equal and the table stays unchanged.
 		if (old->m_columns.size() != cur.m_columns.size())
 			return false;
 		for (const ibSchemaColumn& c : cur.m_columns) {
 			const ibSchemaColumn* o = FindColumn(old->m_columns, c.m_id);
 			if (o == nullptr || o->m_column == nullptr || c.m_column == nullptr)
 				return false;
-			if (!(o->m_column->GetTypeDesc() == c.m_column->GetTypeDesc()))
+			if (!(o->m_column->GetTypeValueDesc() == c.m_column->GetTypeValueDesc()))
 				return false;
 		}
 

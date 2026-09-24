@@ -9,6 +9,10 @@
 #include <memory>   // the query face is held, not inherited — see ibMetaAttributeColumn below
 
 #include "metaAttributeObjectEnum.h"
+#include "backend/metaCollection/metaObjectEnum.h"   // ibValueEnumSelectMode — the SelectMode property's enum face.
+                                                     // Named here rather than arriving through metaObject.h: that
+                                                     // header carries the select mode's TYPE (createRequest.h), and
+                                                     // the script face is a different subject that lives apart.
 
 class ibQueryResult;         // L2 cursor — GetBinaryData reads through it (dump)
 class ibQueryStatement;      // L2 statement — SetBinaryData binds through it (restore); no raw L1 here
@@ -159,10 +163,19 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// the column's.
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 
-	// A declaration that IS a characteristic answers with the chart's own list (see the factory's
-	// declaration in backend_type.h). Body in metaAttributeObject.cpp — the chart type is incomplete
-	// here.
+	// The type factory's answer — a characteristic stands for its chart's types (backend_type.cpp). Declared
+	// here only to be the one overrider for both bases, each of which declares the question.
 	virtual ibTypeDescription& GetTypeValueDesc() const override;
+
+	// ⭐ WHAT THIS FIELD IS CHOSEN WITHIN — asked of EVERY attribute, answered by the one kind that can
+	// carry it. A walk over an object's fields gets back `ibValueMetaObjectAttributeBase*`, and asking
+	// each of them what governs it by casting to the kind that holds the properties is the tree telling
+	// a caller to go and find out for itself (Max, 2026-09-23: "a pile of dynamic casts").
+	//
+	// The empty answers below are the honest ones for a predefined field and a common attribute: they
+	// are not chosen within anything.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
 
 	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
 	//  where the type description itself is declared, and therefore the only place that can answer
@@ -263,6 +276,16 @@ protected:
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
+public:
+
+	// ⭐ WHAT NARROWS THIS FIELD, ASKED OF THE FIELD ITSELF — the kind of attribute that can carry a
+	// link answering the question its base declares. The two are read wherever a choice is about to be
+	// offered — the control opening a list, the quick choice, a value adjusted on write — and the
+	// reader has the attribute in hand, not its property grid. Held by reference: they are
+	// descriptions, and a copy per read on a path that runs once per click is a copy nobody needed.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+
 private:
 
 	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
@@ -274,6 +297,12 @@ private:
 	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, wxT("Select"), _("Select group and items"), _("For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."), ibSelectMode::ibSelectMode_Items);
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyItemMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), _("In a catalog with folders: which nodes carry the attribute - items (the default), folders, or both. A folder's form and its record show only the attributes that folders use; the column is shared, the value is just not asked of the other kind."), ibItemMode::ibItemMode_Item);
+
+	// WHAT NARROWS THE CHOICE OF THIS FIELD. Its own category, because the choice parameters join it here
+	// (docs/private/choice-links.md): this one answers WHICH LIST OPENS, they answer what is shown in it.
+	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(wxT("Choice"), _("Choice"));
+	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, wxT("TypeLink"), _("Link by type"), _("The field whose value decides the TYPE of this one: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Every field beside this one that holds anything is offered - what is pulled is that field's own answer. Empty: the field opens the list its own type declares."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, wxT("ChoiceParameters"), _("Choice parameters"), _("What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the designer."));
 };
 
 class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjectAttributeBase {

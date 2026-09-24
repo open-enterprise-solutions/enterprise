@@ -281,6 +281,9 @@ public:
 	virtual bool GetControlValue(ibValue& pvarControlVal) const;
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue());
 
+	// A control on a form stands on the form's source: that is what holds this field and its neighbours.
+	virtual ibChoiceHolder GetChoiceHolder() const override;
+
 public:
 
 	virtual void ChoiceProcessing(ibValue& vSelected);

@@ -154,8 +154,16 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				}
 				else if (vt == ibValueTypes::TYPE_STRING) {
 					// Same rule as the branch above: 0 is "no declared limit", not "empty".
+					//
+					// 🛑 BUT THIS BRANCH IS REACHED BY A VALUE THAT IS *NOT* A STRING, and "no limit" is no reason
+					// to leave it one. It returned the value as it came — so an Undefined adjusted to an unlimited
+					// string stayed Undefined, where its siblings above hand back a number and a date. The field
+					// then held no type at all: a characteristic whose kind says "string" was cleared to Undefined
+					// instead of "", and the cell threw away whatever was typed into it, having nothing to read it
+					// by (2026-09-23: under a string kind the cell stayed Undefined, while a boolean kind made it
+					// `False` and a date kind an empty date).
 					if (typeDescription.m_typeData.m_string.m_length == 0)
-						return varValue;
+						return ibValue(varValue.GetString());
 					return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
 				}
 			}

@@ -105,6 +105,9 @@ private:
 	// fetched yet does nothing.
 	void ExpandFilterTree();
 
+	// Give a condition that arrived without its type the type of the field it names (see the .cpp).
+	void TypeFieldOperands();
+
 	// The verbs below are raised by the toolbar and by the context menu alike, so
 	// there is one implementation and one set of rules about what is possible where
 	// (a group can be added inside a group; only a group can be ungrouped).

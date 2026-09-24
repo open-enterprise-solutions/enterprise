@@ -141,8 +141,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetRecordForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
+	virtual ibBackendValueForm* GetRecordForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//prepare menu for item
@@ -205,7 +205,7 @@ protected:
 	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//get command section 
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
@@ -541,8 +541,8 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 
 #pragma region _form_builder_h_
 	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
+	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
 #pragma endregion
 
 	//support actionData

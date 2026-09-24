@@ -216,6 +216,7 @@
     <ClInclude Include="metaCollection\metaIntrospect.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
+    <ClInclude Include="metaCollection\createRequest.h" />
     <ClInclude Include="metaCollection\metaObjectEnum.h" />
     <ClInclude Include="metaCollection\metaObjectMetadataEnum.h" />
     <ClInclude Include="metaCollection\metaRoleObject.h" />
@@ -351,6 +352,7 @@
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h" />
     <ClInclude Include="propertyManager\property\propertyCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\propertyChoiceLink.h" />
     <ClInclude Include="propertyManager\property\propertyPicture.h" />
     <ClInclude Include="propertyManager\property\propertyPoint.h" />
     <ClInclude Include="propertyManager\property\propertyRecord.h" />
@@ -369,6 +371,7 @@
     <ClInclude Include="propertyManager\property\variant\variantNumber.h" />
     <ClInclude Include="propertyManager\property\variant\variantOwner.h" />
     <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h" />
     <ClInclude Include="propertyManager\property\variant\variantPicture.h" />
     <ClInclude Include="propertyManager\property\variant\variantPoint.h" />
     <ClInclude Include="propertyManager\property\variant\variantSize.h" />
@@ -415,6 +418,8 @@
     <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="calcScheduleDescription.h" />
+    <ClInclude Include="choiceLinkDescription.h" />
+    <ClInclude Include="choiceLinkResolver.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="uniqueKey.h" />
@@ -906,6 +911,7 @@
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp" />
     <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\propertyPicture.cpp" />
     <ClCompile Include="propertyManager\property\propertyPictureExt.cpp" />
     <ClCompile Include="propertyManager\property\propertyPoint.cpp" />
@@ -926,6 +932,7 @@
     <ClCompile Include="propertyManager\property\variant\variantNumber.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantPoint.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSize.cpp" />
@@ -971,6 +978,8 @@
     <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="calcScheduleDescription.cpp" />
+    <ClCompile Include="choiceLinkDescription.cpp" />
+    <ClCompile Include="choiceLinkResolver.cpp" />
     <ClCompile Include="tabularModelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />

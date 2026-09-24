@@ -139,8 +139,18 @@ public:
 
 public:
 
-	ibValueForm(const ibValueMetaObjectFormBase* creator = nullptr, ibControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey);
+	// ⭐⭐ BORN WITH WHAT IT WAS ASKED FOR. The opening parameters arrive here, in the constructor, so
+	// the form knows them before anything runs on it — its module, its source, its own build. That is
+	// the whole road: the front asks for a form with parameters, the server makes it with them, and
+	// this object is where they come to rest (Max, 2026-09-23: "and then you pass it into the form's
+	// constructor — at runtime it gets written down in the constructor").
+	ibValueForm(const ibFormRequest& request = ibFormRequest(),
+		const ibValueMetaObjectFormBase* creator = nullptr, ibControlFrame* ownerControl = nullptr,
+		ibSourceDataObject* srcObject = nullptr);
+
+	// What this form was opened with — its own parameters, for whoever reads them (the module, and the
+	// list command that fills a new row with the very values the list is narrowed by).
+	virtual const ibFormRequest& GetFormRequest() const override { return m_request; }
 
 	virtual ~ibValueForm();
 
@@ -534,6 +544,10 @@ private:
 	const ibValueMetaObjectFormBase* m_metaFormObject; // ref to metaData
 
 	ibControlFrame* m_controlOwner;
+
+	// What this opening asked for. Written in the constructor and not touched again — a form is not
+	// re-opened with different parameters, it is made again.
+	ibFormRequest m_request;
 
 	// The form's typed source registry: each entry OWNS an attribute (its definition)
 	// and holds, separately, the runtime VALUE that attribute manages. Held by unique_ptr

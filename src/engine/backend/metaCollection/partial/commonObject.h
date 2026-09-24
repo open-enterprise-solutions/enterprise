@@ -339,7 +339,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetObjectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+	virtual ibBackendValueForm* GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 protected:
@@ -640,7 +640,7 @@ public:
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName = wxEmptyString, ibSelectMode selMode = ibSelectMode::ibSelectMode_Items) const;
+		const ibFormRequest& request = ibFormRequest()) const;
 
 #pragma region __generic_h__
 
@@ -661,8 +661,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
-	virtual ibBackendValueForm* GetSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibBackendValueForm* GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	// ⭐⭐ HOW A METATYPE'S OWN VALUES ARE READ, AND HOW THEY ARE ORDERED. Two questions of one kind: both
@@ -1436,7 +1436,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName = wxEmptyString, ibSelectMode selMode = ibSelectMode::ibSelectMode_Items) const;
+		const ibFormRequest& request = ibFormRequest()) const;
 
 	// ResolveChild — inherited from ibValueMetaObjectRecordDataRef unchanged (it was copied here verbatim,
 	// comments included, and neither intermediate class re-declares it).
@@ -1496,8 +1496,8 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetFolderForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
-	virtual ibBackendValueForm* GetFolderSelectForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+	virtual ibBackendValueForm* GetFolderForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibBackendValueForm* GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	//append predefined value
@@ -1910,7 +1910,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	//special functions for DB
@@ -2237,8 +2237,8 @@ public:
 	// on ref-flavour leaves, no-op on Ext). valueForm->Modify uses the
 	// virtual IsModified() — Ref leaves return m_objModified, Ext keeps
 	// the default `false` from ibSourceDataObject.
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
+	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
 
 protected:
 	// Leaf-specific form-id enum value for the current object state.
@@ -3374,8 +3374,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) = 0;
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr) = 0;
+	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) = 0;
+	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) = 0;
 #pragma endregion 
 
 	//default showing

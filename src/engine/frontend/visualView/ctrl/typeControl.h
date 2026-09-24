@@ -9,7 +9,8 @@
 #include "backend/backend_type.h"
 #include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
 #include "backend/compiler/value.h"
-#include "backend/metaCollection/metaObjectEnum.h"   // ibSelectMode (GetSelectMode's return type)
+#include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
+#include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibMetaData;
@@ -86,6 +87,23 @@ public:
 	// GetSourceList is NOT implemented here — each concrete control overrides
 	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
 	// + GetFilterSourceDataType() (no cross-cast). See widgets / tableBox.
+
+	// (A VALUE IS *NOT* ADJUSTED HERE. It was, for one draft — and a form is one way a value arrives,
+	//  not the way it arrives most: a script, a record set written on the server and a data exchange
+	//  reach the same fields with no control anywhere. The narrowing belongs where the data is, so it
+	//  happens in the holder's own write, through ibChoiceLinkResolver::Adjust — Max, 2026-09-23.)
+
+	// ⭐ WHO HOLDS THIS CONTROL'S FIELD — the form's source for a control on a form, the ROW for a table
+	// column. One question, asked the way this class already asks GetOwnerForm / GetSourceObject; the
+	// answer is the tree's own pair of source shapes (choiceLinkResolver.h), not a new one.
+	//
+	// 🛑 AND NOT A PAIR OF VALUE VERBS, which is what stood here first: reading and writing values is
+	// the source's job, and putting it on the control dragged it onto the SCHEMA, which must know
+	// nothing about runtime values (Max, 2026-09-23).
+	//
+	// Empty by default: a control bound to nothing — a filter cell, a script's value — holds no fields
+	// and nothing is chosen within it.
+	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
 };
 
 #endif

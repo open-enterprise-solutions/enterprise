@@ -145,26 +145,25 @@ ibValueMetaObjectFormBase* ibValueMetaObjectSequence::GetDefaultFormByID(const i
 
 // The list shows the REGISTRATIONS, ordered by the moment they carry — which is what a person opens
 // a sequence to look at: what is registered, for which key, and how far it has got.
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectSequence::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectSequence::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormList:
-		return ibSourcePtr<ibSourceDataObject>(ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));
 	}
 
 	return nullptr;
 }
 
 // The list form of the registrations, built the way every register's list is.
-ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const wxString& strFormName,
-	ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const ibFormRequest& request,
+	ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectSequence::eFormList,
-		ownerControl, ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn())
 	);
 }
 

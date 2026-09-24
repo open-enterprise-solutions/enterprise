@@ -60,9 +60,9 @@ ibValuePtr<ibValueRecordDataObjectExt> ibValueMetaObjectDataProcessor::CreateObj
 	return ibValuePtr<ibValueRecordDataObjectExt>(new ibValueRecordDataObjectDataProcessor(this));
 }
 
-ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDataProcessor::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDataProcessor::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormDataProcessor:
 		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue());
@@ -72,14 +72,13 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDataProcessor::CreateSourceObje
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectDataProcessor::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectDataProcessor::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectDataProcessor::eFormDataProcessor,
 		ownerControl,
-		CreateObjectValue(),
-		formGuid
+		CreateObjectValue()
 	);
 }
 #pragma endregion
