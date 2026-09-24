@@ -2649,6 +2649,11 @@ TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
 // one run, so the stack named the destructor and nothing about the shape that got
 // there. This is that shape alone: make an array, walk it, make a second one from
 // it, walk that. Under a sanitiser it either passes or names the place directly.
+//
+// ⚠ It PASSED under ASan on 34715afe while the corpus still failed, so this is not
+// the shape. The corpus now runs one case per script
+// (Corpus/ScriptCorpusRun.RunsToTheEnd/<file>), and the next sanitiser run names
+// the file instead.
 // ===========================================================================
 
 TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
