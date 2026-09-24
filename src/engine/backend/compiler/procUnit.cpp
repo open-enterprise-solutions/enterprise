@@ -1111,21 +1111,83 @@ start_label:
 
 			switch (curCode.m_numOper)
 			{
+			// ⭐⭐ A TYPED OPERAND PICKS A DIFFERENT OPCODE, AND EVERY ONE IT CAN PICK IS ANSWERED HERE.
+			// The compiler adds a tier to the instruction when it knows a type at compile time --
+			// TYPE_DELTA1 number, 2 string, 3 date, 4 boolean (CorrectTypeDef / CheckTypeDef,
+			// compileCode.cpp): on a subscript's index, on an If's condition, on a LET, and on a binary
+			// operator whose LEFT side is a declared typed variable. A tier exists to skip the dispatch
+			// where reading the payload straight off is the whole operation; where there is no such
+			// shortcut the instruction still has to DO the thing.
+			//
+			// It did not. This switch has no default, so an opcode nobody wrote a case for falls
+			// through and the instruction simply does not run: no value written, no error raised. Four
+			// tiers times the opcodes a type can reach leaves gaps, and they were ordinary code -
+			// MEASURED with scripts, not read off this file:
+			//
+			//   Procedure P(String a, String b)   `if (a = b)` never took the branch, for any pair.
+			//   Procedure P(Boolean t, Boolean f) `if (t And Not f)` never took it either.
+			//   A container read by a boolean key answered Undefined, and `c[True] = v` wrote nothing.
+			//
+			// The tiers that have no shortcut are ANSWERED BY THE GENERAL BODY, which is what they
+			// would have run untyped: comparing two strings, AND / OR of anything, arithmetic on a kind
+			// that has none (a boolean minus a boolean raises here, as it always should have). The two
+			// subscript tiers below join the same bodies for the same reason - the typed array cases
+			// that DO exist are byte-for-byte the untyped one, so there was never a shortcut to pick.
+			//
+			// The rule this keeps: a tier the compiler can write, this switch can run.
+			//
+			// Two opcodes are still outside it, untiered and with no case at all - OPER_CHECK_ARRAY
+			// (compileCode.cpp ~2955, the check under a second subscript) and OPER_SET_ARRAY_SIZE
+			// (~1075, the dimensions a declaration names). They fall through the same way and are
+			// left for a change of their own: what they should DO is a question, not a label.
 			case OPER_CONST: CopyValue(variable1, m_pByteCode->m_listConst[index2]); break;
 			case OPER_CONSTN: SetTypeNumber(variable1, index2); break;
+			// ⭐ AND WHAT THE DATE AND BOOLEAN TIERS DID WITH A VALUE was write its field and leave the
+			// tag alone, exactly as the comparisons did: `Date dst; dst = src;` came out EMPTY, and so
+			// did a boolean one (measured). The date arithmetic was wrong a second way - two dates
+			// subtracted to raw MILLISECONDS in a date-shaped slot, where the general body answers
+			// seconds as a Number, which is the answer a script is written against (SubValue says so
+			// where it divides by 1000). Neither tier had a shortcut worth keeping, so both are gone
+			// and the general bodies answer for them: a copy that copies, arithmetic that means what
+			// it means elsewhere, and a kind that has no arithmetic raising rather than staying quiet.
+			case OPER_ADD + TYPE_DELTA3:
+			case OPER_ADD + TYPE_DELTA4:
 			case OPER_ADD: AddValue(variable1, cvariable2, cvariable3); break;
-			case OPER_SUB: SubValue(variable1, cvariable2, cvariable3); break;
-			case OPER_DIV: DivValue(variable1, cvariable2, cvariable3); break;
-			case OPER_MOD: ModValue(variable1, cvariable2, cvariable3); break;
-			case OPER_MULT: MultValue(variable1, cvariable2, cvariable3); break;
+			case OPER_SUB + TYPE_DELTA3:
+			case OPER_SUB:
+			case OPER_SUB + TYPE_DELTA2:
+			case OPER_SUB + TYPE_DELTA4: SubValue(variable1, cvariable2, cvariable3); break;
+			case OPER_DIV + TYPE_DELTA3:
+			case OPER_DIV:
+			case OPER_DIV + TYPE_DELTA2:
+			case OPER_DIV + TYPE_DELTA4: DivValue(variable1, cvariable2, cvariable3); break;
+			case OPER_MOD + TYPE_DELTA3:
+			case OPER_MOD:
+			case OPER_MOD + TYPE_DELTA2:
+			case OPER_MOD + TYPE_DELTA4: ModValue(variable1, cvariable2, cvariable3); break;
+			case OPER_MULT + TYPE_DELTA3:
+			case OPER_MULT:
+			case OPER_MULT + TYPE_DELTA2:
+			case OPER_MULT + TYPE_DELTA4: MultValue(variable1, cvariable2, cvariable3); break;
+			case OPER_LET + TYPE_DELTA3:
+			case OPER_LET + TYPE_DELTA4:
 			case OPER_LET: CopyValue(variable1, cvariable2); break;
+			case OPER_INVERT + TYPE_DELTA3:
+			case OPER_INVERT + TYPE_DELTA4:
 			case OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); break;
 			case OPER_NOT:
+			case OPER_NOT + TYPE_DELTA1:
+			case OPER_NOT + TYPE_DELTA2:
+			case OPER_NOT + TYPE_DELTA3:
 				// Kleene NOT(UNKNOWN)=UNKNOWN in a LINQ filter (IS_THREE_VALUED_NULL); else two-valued.
 				if (IS_THREE_VALUED_NULL(curCode) && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else SetTypeBoolean(variable1, IsEmptyValue(cvariable2));
 				break;
 			case OPER_AND:
+			case OPER_AND + TYPE_DELTA1:
+			case OPER_AND + TYPE_DELTA2:
+			case OPER_AND + TYPE_DELTA3:
+			case OPER_AND + TYPE_DELTA4:
 				if (IS_THREE_VALUED_NULL(curCode)) {           // FALSE dominates; else UNKNOWN if any; else TRUE
 					const bool aF = !IsHasValue(cvariable2) && !IsNullOperand(cvariable2);
 					const bool bF = !IsHasValue(cvariable3) && !IsNullOperand(cvariable3);
@@ -1137,6 +1199,10 @@ start_label:
 				else SetTypeBoolean(variable1, false);
 				break;
 			case OPER_OR:
+			case OPER_OR + TYPE_DELTA1:
+			case OPER_OR + TYPE_DELTA2:
+			case OPER_OR + TYPE_DELTA3:
+			case OPER_OR + TYPE_DELTA4:
 				if (IS_THREE_VALUED_NULL(curCode)) {           // TRUE dominates; else UNKNOWN if any; else FALSE
 					if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
 					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
@@ -1145,12 +1211,18 @@ start_label:
 				else if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
 				else SetTypeBoolean(variable1, false);
 				break;
-			case OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_LS: CompareValueLS(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_GE: CompareValueGE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_LE: CompareValueLE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_EQ:
+			case OPER_EQ + TYPE_DELTA2: CompareValueEQ(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_NE:
+			case OPER_NE + TYPE_DELTA2: CompareValueNE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_GT:
+			case OPER_GT + TYPE_DELTA2: CompareValueGT(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_LS:
+			case OPER_LS + TYPE_DELTA2: CompareValueLS(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_GE:
+			case OPER_GE + TYPE_DELTA2: CompareValueGE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
+			case OPER_LE:
+			case OPER_LE + TYPE_DELTA2: CompareValueLE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
 			case OPER_IF:
 				if (IsEmptyValue(cvariable1))
 					lCodeLine = index2 - 1;
@@ -1725,10 +1797,18 @@ start_label:
 				break;
 			}
 			case OPER_SET_ARRAY:
+			case OPER_SET_ARRAY + TYPE_DELTA1:
+			case OPER_SET_ARRAY + TYPE_DELTA2:
+			case OPER_SET_ARRAY + TYPE_DELTA3:
+			case OPER_SET_ARRAY + TYPE_DELTA4:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
 					Raise(ERROR_ARRAY_SET, cvariable3);
 				break; //setting the array value
 			case OPER_GET_ARRAY:
+			case OPER_GET_ARRAY + TYPE_DELTA1:
+			case OPER_GET_ARRAY + TYPE_DELTA2:
+			case OPER_GET_ARRAY + TYPE_DELTA3:
+			case OPER_GET_ARRAY + TYPE_DELTA4:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
 					Raise(ERROR_ARRAY_GET, cvariable3);
 				break; //getting the array value
@@ -2130,22 +2210,23 @@ start_label:
 			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1) = r; break; }
 			case OPER_MULT + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData * cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
 			case OPER_LET + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_NOT + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData.IsZero(); break;
 			case OPER_INVERT + TYPE_DELTA1: { const ibNumber r = -cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_EQ + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData == cvariable3.m_fData); break;
-			case OPER_NE + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData != cvariable3.m_fData); break;
-			case OPER_GT + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData > cvariable3.m_fData); break;
-			case OPER_LS + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData < cvariable3.m_fData); break;
-			case OPER_GE + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData >= cvariable3.m_fData); break;
-			case OPER_LE + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData <= cvariable3.m_fData); break;
-			case OPER_SET_ARRAY + TYPE_DELTA1:
-				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					Raise(ERROR_ARRAY_SET, cvariable3);
-				break;//set array value
-			case OPER_GET_ARRAY + TYPE_DELTA1:
-				if (!GetArrayValue(variable1, variable2, cvariable3))
-					Raise(ERROR_ARRAY_GET, cvariable3);
-				break; //getting the array value
+			// ⭐ A COMPARISON ANSWERS A VALUE, not a payload - the rule the boolean NOT below already
+			// follows, and the same reason it gives: "a declared type is a GATE (it permits a write, it
+			// does not convert), so nothing types the slot beforehand". These wrote the raw field and
+			// left the tag alone - variable1.m_fData = (a == b), for a result the compiler calls Boolean
+			// - which reads back only where the consumer reaches for that same field. An If does, so
+			// `if (a = b)` was right; anything that TAKES the value does not, and `var same = (a = b);`
+			// came out EMPTY for two typed Numbers (measured with a script, not read off this file).
+			// SetTypeBoolean writes both halves. It is the door NOT, AND and OR use; the general
+			// comparisons write the same two fields inline (CompareValueEQ and its family), so what
+			// this changes is the tier, not the answer.
+			case OPER_EQ + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData == cvariable3.m_fData)); break;
+			case OPER_NE + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData != cvariable3.m_fData)); break;
+			case OPER_GT + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData > cvariable3.m_fData)); break;
+			case OPER_LS + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData < cvariable3.m_fData)); break;
+			case OPER_GE + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData >= cvariable3.m_fData)); break;
+			case OPER_LE + TYPE_DELTA1: SetTypeBoolean(variable1, (cvariable2.m_fData <= cvariable3.m_fData)); break;
 			case OPER_IF + TYPE_DELTA1: if (cvariable1.m_fData.IsZero()) lCodeLine = index2 - 1; break;
 				//STRING
 			// ⭐⭐ NATIVE END TO END — the one string site where wxString leaves the path
@@ -2201,18 +2282,8 @@ start_label:
 				}
 				break;
 			}
-			case OPER_SET_ARRAY + TYPE_DELTA2:
-				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					Raise(ERROR_ARRAY_SET, cvariable3);
-				break; //set array value
-			case OPER_GET_ARRAY + TYPE_DELTA2:
-				if (!GetArrayValue(variable1, variable2, cvariable3))
-					Raise(ERROR_ARRAY_GET, cvariable3);
-				break; //getting the array value
 			case OPER_IF + TYPE_DELTA2: if (cvariable1.IsEmpty()) lCodeLine = index2 - 1; break;
 				//DATE
-			case OPER_ADD + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData + cvariable3.m_dData; break;
-			case OPER_SUB + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData - cvariable3.m_dData; break;
 			// ⚠ A DATE IS 64 BITS, AND BOTH SIDES OF THESE TWO WERE NARROWED TO 32.
 			//
 			// `m_dData` is milliseconds since year 1 — about 6.4e13 for any modern date, so `(int)` kept
@@ -2223,36 +2294,14 @@ start_label:
 			// exists to prevent it.
 			//
 			// Both operands are the same field now, and the guard tests what is actually divided by.
-			case OPER_DIV + TYPE_DELTA3:
-				if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); }
-				variable1.m_dData = cvariable2.m_dData / cvariable3.m_dData;
-				break;
-			case OPER_MOD + TYPE_DELTA3:
-				if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); }
-				variable1.m_dData = cvariable2.m_dData % cvariable3.m_dData;
-				break;
-			case OPER_MULT + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData * cvariable3.m_dData; break;
-			case OPER_LET + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData; break;
-			case OPER_NOT + TYPE_DELTA3: variable1.m_dData = ~cvariable2.m_dData; break;
-			case OPER_INVERT + TYPE_DELTA3: variable1.m_dData = -cvariable2.m_dData; break;
-			case OPER_EQ + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData == cvariable3.m_dData); break;
-			case OPER_NE + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData != cvariable3.m_dData); break;
-			case OPER_GT + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData > cvariable3.m_dData); break;
-			case OPER_LS + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData < cvariable3.m_dData); break;
-			case OPER_GE + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData >= cvariable3.m_dData); break;
-			case OPER_LE + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData <= cvariable3.m_dData); break;
-			case OPER_SET_ARRAY + TYPE_DELTA3:
-				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					Raise(ERROR_ARRAY_SET, cvariable3);
-				break; //setting the array value
-			case OPER_GET_ARRAY + TYPE_DELTA3:
-				if (!GetArrayValue(variable1, variable2, cvariable3))
-					Raise(ERROR_ARRAY_GET, cvariable3);
-				break; //getting the array value
+			case OPER_EQ + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData == cvariable3.m_dData)); break;
+			case OPER_NE + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData != cvariable3.m_dData)); break;
+			case OPER_GT + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData > cvariable3.m_dData)); break;
+			case OPER_LS + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData < cvariable3.m_dData)); break;
+			case OPER_GE + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData >= cvariable3.m_dData)); break;
+			case OPER_LE + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData <= cvariable3.m_dData)); break;
 			case OPER_IF + TYPE_DELTA3: if (!cvariable1.m_dData) lCodeLine = index2 - 1; break;
 				//BOOLEAN
-			case OPER_ADD + TYPE_DELTA4: variable1.m_bData = cvariable2.m_bData + cvariable3.m_bData; break;
-			case OPER_LET + TYPE_DELTA4: variable1.m_bData = cvariable2.m_bData; break;
 			case OPER_NOT + TYPE_DELTA4:
 				// Boolean-tier NOT — the typed path a `Not (comparison)` lambda hits. Kleene
 				// NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag (the comparison left an
@@ -2268,13 +2317,12 @@ start_label:
 				if (IS_THREE_VALUED_NULL(curCode) && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else SetTypeBoolean(variable1, !cvariable2.m_bData);
 				break;
-			case OPER_INVERT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;
-			case OPER_EQ + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData == cvariable3.m_bData); break;
-			case OPER_NE + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData != cvariable3.m_bData); break;
-			case OPER_GT + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData > cvariable3.m_bData); break;
-			case OPER_LS + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData < cvariable3.m_bData); break;
-			case OPER_GE + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData >= cvariable3.m_bData); break;
-			case OPER_LE + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData <= cvariable3.m_bData); break;
+			case OPER_EQ + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData == cvariable3.m_bData)); break;
+			case OPER_NE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData != cvariable3.m_bData)); break;
+			case OPER_GT + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData > cvariable3.m_bData)); break;
+			case OPER_LS + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData < cvariable3.m_bData)); break;
+			case OPER_GE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData >= cvariable3.m_bData)); break;
+			case OPER_LE + TYPE_DELTA4: SetTypeBoolean(variable1, (cvariable2.m_bData <= cvariable3.m_bData)); break;
 			case OPER_IF + TYPE_DELTA4: if (!cvariable1.m_bData) lCodeLine = index2 - 1; break;
 			}
 			lCodeLine++;
