@@ -23,9 +23,13 @@
 class BACKEND_API ibValueContainer : public ibValueDynamicMembers {
 	public:
 private:
+	// A METHOD NUMBER IS A POSITION in the member table, so the order here is the
+	// order BindContainerNames appends in -- and enGet sits before the three a
+	// read-only container does not get, where a position cannot move under it.
 	enum Func  {
 		enCount = 0,
 		enProperty,
+		enGet,
 		enClear,
 		enDelete,
 		enInsert

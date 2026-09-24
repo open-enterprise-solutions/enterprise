@@ -302,3 +302,45 @@ TEST(ValueContainer, AKeyThatCannotBeWrittenHasNoAccessor) {
     EXPECT_FALSE(c.GetPropName(1).IsEmpty()) << "the row still says which entry it is";
 }
 
+// GET IS THE THIRD QUESTION. Property answers whether a key is there, and hands the value back
+// through its second argument; [key] answers the value and raises when the key is not there. Get
+// answers the value, or Undefined -- what "nothing is bound to this key" looks like everywhere
+// else in the language, and what the reference system's Map answers.
+//
+// Called the way the runtime calls it, FindMethod then CallAsFunc with that number, because a
+// method number IS a position in the member table: an entry added in the wrong place would still
+// compile and would run some other method.
+TEST(ValueContainer, GetAnswersTheValueOrUndefined) {
+    ibValueContainer c;
+    c.Insert(Key(wxT("k")), Num(7));
+
+    const long at = c.FindMethod(wxT("Get"));
+    ASSERT_NE(at, wxNOT_FOUND) << "Get is not on the member table";
+
+    ibValue key = Key(wxT("k"));
+    ibValue* args[1] = { &key };
+    ibValue out = Num(1);                       // not empty to begin with: Get has to write its answer
+    ASSERT_TRUE(c.CallAsFunc(at, out, args, 1));
+    EXPECT_EQ(out.GetInteger(), 7);
+
+    ibValue absent = Key(wxT("nope"));
+    ibValue* argsAbsent[1] = { &absent };
+    out = Num(1);
+    ASSERT_TRUE(c.CallAsFunc(at, out, argsAbsent, 1));
+    EXPECT_EQ(out.GetType(), ibValueTypes::TYPE_EMPTY) << "a key that is not there answers Undefined";
+}
+
+// ...and a call that forgot the key is refused by name rather than answered. The arity check
+// catches only a call with too many arguments; the slot this one would have read is made empty and
+// handed over, so without this Get would say "the key is not there" about a key nobody wrote.
+TEST(ValueContainer, GetWithoutAKeyIsRefused) {
+    ibValueContainer c;
+    c.Insert(Key(wxT("k")), Num(7));
+    const long at = c.FindMethod(wxT("Get"));
+    ASSERT_NE(at, wxNOT_FOUND);
+
+    ibValue out;
+    ibValue empty;
+    ibValue* args[1] = { &empty };
+    EXPECT_THROW((void)c.CallAsFunc(at, out, args, 0), ibBackendException);
+}

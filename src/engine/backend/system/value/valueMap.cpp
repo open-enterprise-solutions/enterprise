@@ -241,6 +241,13 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
+	// back through its second argument; [key] answers the value and raises when the key is not
+	// there. Get is the third question, the one the reference system's Map answers: the value,
+	// or Undefined -- which is what "nothing is bound to this key" looks like everywhere else
+	// in the language. A Structure gets it too: the member table is one table, a position in it
+	// is a method number, and a field that is not there is the same question.
+	helper.AppendFunc(wxT("Get"), 1, wxT("Get(key : any)"));
 
 	if (!self->m_bReadOnly) {
 		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
@@ -398,6 +405,22 @@ bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 	{
 		ibValue defaultVal;
 		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : defaultVal);
+	}
+		return true;
+	case enGet:
+	{
+		// A FORGOTTEN ARGUMENT IS REFUSED BY NAME. The arity check catches only a call with TOO
+		// MANY arguments; a slot the method could have read is made empty and handed over, so
+		// `c.Get()` would answer Undefined - which is this method's word for "the key is not
+		// there" and would say it about a key nobody asked about.
+		if (lSizeArray < 1 || paParams == nullptr)
+			ibBackendCoreException::Error(_("Get: the key to look for is not given"));
+		// Through Property, which is the lookup that does not raise -- and which a Structure
+		// overrides to refuse a key that is not a field name, so Get refuses it there too.
+		// A key that is not there leaves the value untouched, and it starts empty: Undefined.
+		ibValue valueFound;
+		Property(*paParams[0], valueFound);
+		pvarRetValue = valueFound;
 	}
 		return true;
 	}

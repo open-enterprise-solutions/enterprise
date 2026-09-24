@@ -146,6 +146,29 @@ TEST(ValueStructure, AFieldNameThatIsNotANameIsReachedBySubscript) {
     EXPECT_EQ(out.GetInteger(), 7);
 }
 
+// The member table is ONE table, so a Structure answers Get as well -- by the field's name, in
+// any case, as everything else about a field is. The position matters: FindMethod then CallAsFunc
+// with that number is what the runtime does.
+TEST(ValueStructure, GetAnswersAFieldInAnyCaseOrUndefined) {
+    ibValueStructure s;
+    s.Insert(Field(wxT("Name")), ibValue(ibNumber(7)));
+
+    const long at = s.FindMethod(wxT("Get"));
+    ASSERT_NE(at, wxNOT_FOUND);
+
+    ibValue field = Field(wxT("nAmE"));
+    ibValue* args[1] = { &field };
+    ibValue out;
+    ASSERT_TRUE(s.CallAsFunc(at, out, args, 1));
+    EXPECT_EQ(out.GetInteger(), 7);
+
+    ibValue absent = Field(wxT("Other"));
+    ibValue* argsAbsent[1] = { &absent };
+    out = ibValue(ibNumber(1));
+    ASSERT_TRUE(s.CallAsFunc(at, out, argsAbsent, 1));
+    EXPECT_EQ(out.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
 // ===========================================================================
 // COPYING — the verb behind `Val`
 //

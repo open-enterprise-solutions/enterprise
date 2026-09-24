@@ -12,13 +12,15 @@
 //   5. The subscript that reaches a key is text this language reads: a quote inside a string key is
 //      doubled. It is the form the watch prints for such an entry (AccessorOf, not GetPropName -
 //      that one answers the key's own text), so the row it shows is a row it can open again.
+//   6. Get answers the value bound to a key, or Undefined when nothing is - without raising, which
+//      is what [key] does, and without a second argument, which is what Property needs.
 //   7. A key NAMES its entry, and a name is what a caller that wants a name gets: ToTable over
 //      containers builds the columns of its answer from those names, and a column called
 //      ["Amount"] would be a column no script could address.
 //   8. Undefined and Null are keys a script can WRITE - the lexer makes them values before
 //      anything else - and they are ONE key, the value ordering putting them in one place. The
 //      watch writes such a row the same way, which is why they are here. A boolean key is reached
-//      by Property but NOT by a subscript: `c[True]` compiles and answers Undefined,
+//      by Get and Property but NOT by a subscript: `c[True]` compiles and answers Undefined,
 //      having no boolean case among the typed array opcodes, so the watch does not write one.
 // ============================================================================
 
@@ -92,6 +94,16 @@ quoted.Insert("he said ""hi""", 7);
 if (quoted["he said ""hi"""] <> 7) { Raise("a doubled quote in a key: " + quoted["he said ""hi"""]); }
 Message("quoted key reached");
 
+// 6
+var got = New Container;
+got.Insert("k", 7);
+if (got.Get("k") <> 7) { Raise("got.Get(k): " + got.Get("k")); }
+if (ValueIsFilled(got.Get("nope"))) { Raise("a key that is not there was expected to answer Undefined"); }
+var fields = New Structure("Name", 7);
+if (fields.Get("nAmE") <> 7) { Raise("fields.Get(nAmE): " + fields.Get("nAmE")); }
+if (ValueIsFilled(fields.Get("Other"))) { Raise("a field that is not there was expected to answer Undefined"); }
+Message("get answered");
+
 // 7
 var lines = New Array;
 var line = New Container;
@@ -115,6 +127,7 @@ if (typed.Count() <> 3) { Raise("expected three keys, got " + typed.Count()); }
 if (typed[Undefined] <> "nothing") { Raise("typed[Undefined]: " + typed[Undefined]); }
 if (typed[Null] <> "nothing") { Raise("Undefined and Null were expected to be one key"); }
 if (typed[7] <> "seven") { Raise("typed[7]: " + typed[7]); }
+if (typed.Get(True) <> "yes") { Raise("typed.Get(True): " + typed.Get(True)); }
 var boolFound = Undefined;
 if (Not typed.Property(True, boolFound)) { Raise("a boolean key was expected to be there"); }
 if (boolFound <> "yes") { Raise("Property(True): " + boolFound); }
