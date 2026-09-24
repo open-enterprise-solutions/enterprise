@@ -256,10 +256,15 @@ both spellings, both layers (backend and frontend), and the last week of history
 ## 8. Documentation
 
 **`docs/` is public**: these rules, the build, portability, architecture, the context file for
-assistants, release notes. **`docs/private/` is a private submodule** with design documents,
-arcs and plans; it opens for members of the organisation and is empty for everyone else. Links
-into it from code and from public documents will not open for you. That is expected, and nothing
-in the build depends on it.
+assistants, release notes. **Design documents anyone may read go in `docs/public/`** — how a
+subsystem works, why an interface has its shape, what a mechanism guarantees; its README says
+what belongs there. **`docs/private/` is a private submodule** with arcs in progress, plans and
+whatever stays inside the organisation; it opens for members and is empty for everyone else.
+Links into it from code and from public documents will not open for you. That is expected, and
+nothing in the build depends on it.
+
+A document does not go to `private/` because it is unfinished — only because its contents are
+ours alone.
 
 **Documents are written in English**, and a document that describes code changes in the same
 push as the code.
