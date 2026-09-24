@@ -107,6 +107,13 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 		std::unique_lock<std::mutex> lk(m_mtx);
 		auto& slot = m_sessions[session];
 		if (!slot) slot = std::make_unique<ibSessionQueue>();
+		// Taken on every submit, not only on the first: a queue outlives the drop that retired it
+		// (the identity comes back, see ThePoolStaysUsableAfterADeferredErase), and what we want is
+		// a hold on the session THIS task belongs to. Empty for a session nobody holds by
+		// shared_ptr — a test's own, a stack one — and empty is the right answer there too: such a
+		// session cannot be cancelled by us, and must not be reached for.
+		if (session != nullptr)
+			slot->owner = session->weak_from_this();
 		slot->tasks.push_back({ std::move(task), std::move(promise) });
 	}
 	m_cv.notify_one();
@@ -286,18 +293,22 @@ void ibWorkerPoolHeadless::Stop()
 		// nothing beyond the pointer we hold; Cancel takes the connection
 		// pool's lock and the job manager's, and neither ever calls back
 		// into this pool.
-		// 🛑 A DROPPED ENTRY NAMES A SESSION THAT MAY ALREADY BE GONE. `dropped` is set by
-		// DropSession when the queue is leased, and the session's teardown continues without
-		// waiting for the worker to let go — so between that moment and the worker's erase the
-		// KEY is a pointer to freed memory. It is legal to look one up (a map compares
-		// addresses), and it is a use-after-free to call through one, which is what this loop
-		// did: AddressSanitizer caught it in ibWorkerPoolHeadless::Stop on 2026-09-22, from the
-		// pool's own destructor. A dropped session needs no cancelling anyway — it is already
-		// tearing down, and that teardown is what dropped it.
+		// 🛑 AN ENTRY NAMES A SESSION THAT MAY ALREADY BE GONE, and the key cannot say so. It is
+		// legal to look a freed address up (a map compares addresses) and a use-after-free to call
+		// through one. Two ways a session leaves without us: it DROPS while leased — `dropped` is
+		// set and the worker erases later, the case answered on 2026-09-22 — or it simply ENDS,
+		// telling nobody, which is what a pool declared before its sessions meets at scope exit
+		// (ThePoolStaysUsableAfterADeferredErase, AddressSanitizer, 2026-09-24).
+		//
+		// ⭐ So the question is not "was it dropped" but "is it still there", and only the holder
+		// can answer: the queue keeps a weak hold on its session and Cancel goes through a lock.
+		// A session nobody holds by shared_ptr answers empty, and is left alone — we do not own it
+		// and cannot cancel what is already gone.
 		for (auto& kv : m_sessions) {
-			if (kv.first == nullptr) continue;
-			if (kv.second && kv.second->dropped) continue;
-			kv.first->Cancel();
+			if (kv.second == nullptr || kv.second->dropped) continue;
+			const std::shared_ptr<ibSession> alive = kv.second->owner.lock();
+			if (!alive) continue;
+			alive->Cancel();
 		}
 	}
 	m_cv.notify_all();

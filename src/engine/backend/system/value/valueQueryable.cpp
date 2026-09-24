@@ -63,9 +63,9 @@ bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue
 // engine takes the road above.
 bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibValue& out)
 {
-	for (const ibRunCaptureContext* link = fn->GetCaptured(); link != nullptr; link = link->GetOuter()) {
-		const ibRunContext* frame = link;
-		if (frame->m_currentFunction == nullptr)
+	for (size_t k = 0; k < fn->CapturedDepth(); ++k) {
+		const ibRunContext* frame = fn->CapturedAt(k);
+		if (frame == nullptr || frame->m_currentFunction == nullptr)
 			continue;
 		for (const ibByteCode::ibByteCodeVarInfo& local : frame->m_currentFunction->m_listLocals) {
 			if (local.m_strRealName.CmpNoCase(name) != 0)

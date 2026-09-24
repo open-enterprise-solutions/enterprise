@@ -110,7 +110,7 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// The saving is real and the way to it is not a reset list that has to stay complete forever —
 	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
 	// is (docs/private/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
-	ibRunCapturePtr spHeapCtx;
+	ibRunCallFrame spHeapCtx;
 	// The stack frame leases its slots; the capture frame cannot, because it is
 	// the case that OUTLIVES the call — a lambda took it. procUnitState.h, ibRunStack.
 	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount,

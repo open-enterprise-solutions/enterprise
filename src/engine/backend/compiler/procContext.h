@@ -255,11 +255,6 @@ public:
 	void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
 	void DecrRef();
 
-	// The next link outwards, held the same way: this frame keeps the one it was declared in
-	// alive for as long as it is alive itself. Setting it to null is what starts the cascade.
-	void SetOuter(ibRunCaptureContext* outer);
-	ibRunCaptureContext* GetOuter() const { return m_outer; }
-
 	// ⭐ THE COMPILER'S TEMPORARIES GO WHEN THE CALL DOES — the slots OPER_LFUNC and the expression
 	// tape write through. Which ones they are is already in the bytecode: m_listLocals carries the
 	// declared locals and leaves temporaries out (compileCode.cpp skips m_bTempVar), so a slot past
@@ -272,7 +267,6 @@ private:
 
 	// Counted the way ibValue counts: a lambda can be handed to a background job, so the
 	// holders of a frame are not always on one thread.
-	ibRunCaptureContext*      m_outer      = nullptr;
 	std::atomic<unsigned int> m_refCount   { 0 };
 	// Destruction releases the slots, and a lambda dying there lets go of US — the DecrRef
 	// that arrives then must not delete a second time.
@@ -298,16 +292,14 @@ public:
 	ibRunCapturePtr(const ibRunCapturePtr& other) : m_frame(other.m_frame) { if (m_frame) m_frame->IncrRef(); }
 	ibRunCapturePtr(ibRunCapturePtr&& other) noexcept : m_frame(other.m_frame) { other.m_frame = nullptr; }
 
-	// ⭐ THE HOLD ENDING IS THE CALL ENDING, so the compiler's temporaries go here — the one place
-	// that knows the body is done, exceptions included, and no call site has to remember it.
-	// (One hold per call in this engine; a copy of it would only repeat a release that is
-	// harmless twice.)
-	~ibRunCapturePtr() {
-		if (m_frame) {
-			m_frame->ReleaseTemporarySlots();
-			m_frame->DecrRef();
-		}
-	}
+	// 🛑 A HOLD IS NOT THE CALL, and putting the temporaries' release here was a crash. The lambda
+	// holds its captured frame through a hold of this very type (ibValueFunction::m_capturedFrames), and in
+	// a pipeline a lambda is born and dies PER ROW — so the release fired on a frame that was still
+	// executing and emptied slots under it (0xcdcdcdcd at procUnit.cpp:1308, x.Description inside a
+	// Where lambda, live base, 2026-09-24). Harmless twice is not harmless EARLY.
+	//
+	// The call has one hold that stands for it, and only that one may release: ibRunCallFrame below.
+	~ibRunCapturePtr() { if (m_frame) m_frame->DecrRef(); }
 
 	ibRunCapturePtr& operator=(const ibRunCapturePtr& other) {
 		if (this != &other) { Reset(other.m_frame); }
@@ -336,6 +328,37 @@ public:
 private:
 
 	ibRunCaptureContext* m_frame = nullptr;
+};
+
+// ⭐⭐ THE HOLD THAT IS THE CALL — one per call, built where the frame is built, and the only thing
+// that may end the call's business. It holds the frame like any other hold; what it adds is that
+// going out of scope means "the body is done": the compiler's temporaries go, and with them the
+// lambda that sat in one, which is what keeps a closure from holding its own frame for ever.
+//
+// Why a type of its own rather than a flag: a hold says nothing about whose it is, and the lambda
+// keeps one too (ibValueFunction::m_capturedFrames). Only the call site builds THIS, so only the call
+// can end the call — the distinction the crash above was made of.
+class ibRunCallFrame {
+public:
+
+	ibRunCallFrame() = default;
+	explicit ibRunCallFrame(ibRunCaptureContext* frame) : m_hold(frame) {}
+
+	ibRunCallFrame(const ibRunCallFrame&) = delete;
+	ibRunCallFrame& operator=(const ibRunCallFrame&) = delete;
+
+	~ibRunCallFrame() { if (m_hold) m_hold->ReleaseTemporarySlots(); }
+
+	void Reset(ibRunCaptureContext* frame = nullptr) { m_hold.Reset(frame); }
+
+	ibRunCaptureContext* Get()        const { return m_hold.Get(); }
+	ibRunCaptureContext* operator->() const { return m_hold.Get(); }
+	ibRunCaptureContext& operator*()  const { return *m_hold.Get(); }
+	explicit operator bool()          const { return static_cast<bool>(m_hold); }
+
+private:
+
+	ibRunCapturePtr m_hold;
 };
 
 #endif // ! _PROC_CONTEXT__H__

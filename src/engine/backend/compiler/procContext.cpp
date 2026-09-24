@@ -143,25 +143,12 @@ ibRunContext::~ibRunContext()
 ibRunCaptureContext::~ibRunCaptureContext()
 {
 	m_destroying = true;
-	// IN THIS ORDER, so the chain comes apart from the inside out: our own slots go first — a
-	// lambda living in one of them dies here and lets go of us, which the flag above absorbs —
-	// and only then does the frame we were declared in hear its last holder leave. DestroyLocals
-	// is idempotent by design (see its note), so the base destructor running it again is fine.
+	// Our own slots go first, and a lambda living in one of them dies here and lets go of us —
+	// which the flag above absorbs. Letting go of the frames THAT lambda held is then its own
+	// business, so the chain comes apart from the inside out without this frame knowing the shape
+	// of it. DestroyLocals is idempotent by design (see its note), so the base destructor running
+	// it again is fine.
 	DestroyLocals();
-	SetOuter(nullptr);
-}
-
-void ibRunCaptureContext::SetOuter(ibRunCaptureContext* outer)
-{
-	if (outer == m_outer)
-		return;
-
-	if (outer != nullptr)
-		outer->IncrRef();
-	if (m_outer != nullptr)
-		m_outer->DecrRef();
-
-	m_outer = outer;
 }
 
 void ibRunCaptureContext::DecrRef()

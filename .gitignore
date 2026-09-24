@@ -265,5 +265,9 @@ __pycache__/
 # Assistant access config — carries a live MCP bearer token.
 .mcp.json
 
-# The Debug build tree, beside the Release one above.
+# The Debug build tree, beside the Release one above — and every other tree beside it:
+# a configuration differs by what it is BUILT WITH, and each one wants its own directory
+# (build-asan for /fsanitize=address, and whatever the next question needs). `build*/`
+# covers them all; the packages/build/ exception above is unaffected, being a path deeper in.
 build-debug/
+build*/

@@ -1698,7 +1698,7 @@ start_label:
 				const long lModuleNumber = array2;
 				// A captured frame counts its own holders; this hold is the call, and it ends
 				// where the call does — including an exception on the way out.
-				ibRunCapturePtr heapCtx(new ibRunCaptureContext(index3));
+				ibRunCallFrame heapCtx(new ibRunCaptureContext(index3));
 				heapCtx->m_lStart = index2;
 				heapCtx->m_lParamCount = array3;
 				heapCtx->m_parentRunContext = pContext;
@@ -1913,8 +1913,6 @@ start_label:
 				// next one out. Matches the depth math from Phase A's GetVariable
 				// (numParent - numContext counting): emit depth = 1
 				// reads CapturedAt(0), depth = 2 reads CapturedAt(1), etc.
-				ibRunCaptureContext* nearestCapture = nullptr;   // the first link — what the lambda holds
-				ibRunCaptureContext* innerCapture   = nullptr;   // the last link seen, waiting for its outer
 				for (ibRunContext* p = pContext; p != nullptr; p = p->m_parentRunContext) {
 
 					// ⭐⭐ THE MODULE BODY'S FRAME IS TAKEN SEPARATELY, and it has to be: it is
@@ -1930,17 +1928,11 @@ start_label:
 					}
 
 					// Ask the frame what KIND it is — an ordinary one ends with its call and cannot
-					// be captured. Each captured frame keeps the next one outwards, so the lambda
-					// holds one link and the chain holds itself.
-					if (ibRunCaptureContext* captured = AsCaptureContext(p)) {
-						if (nearestCapture == nullptr)
-							nearestCapture = captured;
-						else
-							innerCapture->SetOuter(captured);
-						innerCapture = captured;
-					}
+					// be captured. Recorded in the order walked, which IS the depth order the
+					// compiler emitted: this lambda's own view of the chain, taken now.
+					if (ibRunCaptureContext* captured = AsCaptureContext(p))
+						newFn->m_capturedFrames.emplace_back(captured);
 				}
-				newFn->m_captured.Reset(nearestCapture);
 				CopyValue(variable1, ibValue(newFn));
 				// Skip past the body — body opcodes are inert at
 				// module-init walk and reached only via OPER_CALL_LAMBDA
@@ -1991,7 +1983,7 @@ start_label:
 				// materialise; one indirection, no detour through
 				// m_parentBc->m_listFunc[funcIdx].
 				const bool useHeapFrame = fn->m_needsHeapFrame;
-				ibRunCapturePtr heapCtx;
+				ibRunCallFrame heapCtx;
 				// Declared with the slot stack but no width — SetLocalCount below
 				// leases through the pool it was given. The captured branch
 				// takes none: that frame is the one that outlives the call.
@@ -2930,7 +2922,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// ⚠ `m_ppArrayContext[0]` still points at the member frame and that is correct: depth 0 is read
 	// straight from `m_pRefLocVars` (procUnitLambda.h), so slot 0 of the list is unused in normal
 	// execution — the note there says so, and this relies on it rather than restating it.
-	ibRunCapturePtr spBlockFrame;
+	ibRunCallFrame spBlockFrame;
 	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
 	if (compileBlock) {
 		const ibByteCode* evalBc = runEvaluate->GetByteCode();

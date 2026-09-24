@@ -131,34 +131,31 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		return &m_parentBc->m_listFunc[m_funcIndex];
 	}
 
-	// ⭐⭐ ONE LINK, NOT THE WHOLE CHAIN. The frame this lambda was written in, taken at OPER_LFUNC
-	// materialise; the frames outside it are reached through ibRunCaptureContext::GetOuter(), each
-	// link holding the next. Depth k of the emitted code is CapturedAt(k) — k steps out — which is
-	// what the shim wires m_ppArrayContext[k + 1] to for the call duration.
+	// ⭐⭐ THE CHAIN AS THIS LAMBDA SAW IT, and that is why it is kept HERE. Filled at OPER_LFUNC
+	// materialise: [0] is the frame the lambda was written in, [1] the one outside it, down to the
+	// root — the depths the compiler emitted, counted at that moment. The shim wires
+	// m_ppArrayContext[k + 1] to CapturedAt(k) for the call duration.
 	//
-	// It was a VECTOR of shared_ptr to every ancestor: N strong references where one does the work,
-	// and the chain's shape restated at each capture site. Only frames a closure may take are in it
-	// (ibRunLifetime::Captured); an ordinary frame ends with its call and cannot be captured.
-	ibRunCapturePtr m_captured;
+	// 🛑 IT CANNOT LIVE ON THE FRAMES. A link in the frame (`m_outer`) was tried and crashed the
+	// live base: a frame is shared by every closure made under it, so a DEEPER capture lengthens the
+	// one chain, the layer list comes out longer than the code was compiled against, and a lambda
+	// reads the wrong layer — 0xcdcdcdcd in an operand, procUnit.cpp:1308, inside a Where lambda
+	// (2026-09-24). The depth is a fact about the LAMBDA, not about the frames it walks.
+	//
+	// Each entry is a hold, so the frames stay alive exactly as long as some lambda needs them;
+	// only frames a closure may take are in it (ibRunLifetime::Captured).
+	std::vector<ibRunCapturePtr> m_capturedFrames;
 
-	ibRunCaptureContext* GetCaptured() const { return m_captured.Get(); }
+	ibRunCaptureContext* GetCaptured() const {
+		return m_capturedFrames.empty() ? nullptr : m_capturedFrames.front().Get();
+	}
 
-	// k steps out from the frame this lambda was written in — null past the end of the chain.
+	// The k-th frame outwards, as this lambda recorded them — null past the end.
 	ibRunCaptureContext* CapturedAt(size_t k) const {
-		ibRunCaptureContext* frame = m_captured.Get();
-		for (size_t step = 0; step < k && frame != nullptr; ++step)
-			frame = frame->GetOuter();
-		return frame;
+		return (k < m_capturedFrames.size()) ? m_capturedFrames[k].Get() : nullptr;
 	}
 
-	// How many links the chain has — walked, because the chain IS the answer and nothing else
-	// keeps a count of it.
-	size_t CapturedDepth() const {
-		size_t depth = 0;
-		for (ibRunCaptureContext* frame = m_captured.Get(); frame != nullptr; frame = frame->GetOuter())
-			++depth;
-		return depth;
-	}
+	size_t CapturedDepth() const { return m_capturedFrames.size(); }
 
 	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames a
 	// closure took in order to survive the call that made them; a module body's frame needs no
@@ -265,12 +262,8 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 			// m_ppArrayContext[0] is unused in normal execution but kept for
 			// the bDelta=true case where slot=-1 lands here.
 			newList[0] = prevList ? prevList[0] : nullptr;
-			// Walked once, link by link, instead of indexing k times into a chain.
-			ibRunCaptureContext* link = m_captured.Get();
-			for (unsigned int k = 0; k < N; ++k) {
-				newList[k + 1] = link;
-				link = (link != nullptr) ? link->GetOuter() : nullptr;
-			}
+			for (unsigned int k = 0; k < N; ++k)
+				newList[k + 1] = m_capturedFrames[k].Get();
 			if (M != 0)
 				newList[N + 1] = m_moduleFrame;
 			for (unsigned int i = 1; i < origSize; ++i) {

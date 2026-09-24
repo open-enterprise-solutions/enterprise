@@ -2633,3 +2633,54 @@ TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("many"), v));
 	EXPECT_EQ(v.GetInteger(), 2);
 }
+
+// ===========================================================================
+// ⭐⭐ A FRAME'S SLOTS LET GO OF ONE ARRAY ONCE, and the walk that reads it is a
+// SECOND holder, not a second owner.
+//
+// AddressSanitizer, nightly of 2026-09-24: a heap-use-after-free inside
+// ibRunContextSmall::DestroyLocals — the SAME loop freed the object and then read
+// it. The 64-byte region was an ibValueArray minted by `New Array`
+// (ibValue::CreateObject, OPER_NEW), and the two readers were two slots of one
+// module frame: whoever walks an array holds it while the walk lasts, and the
+// counting has to survive both ends.
+//
+// It surfaced through ScriptCorpus.EveryScriptRuns — every script of the corpus in
+// one run, so the stack named the destructor and nothing about the shape that got
+// there. This is that shape alone: make an array, walk it, make a second one from
+// it, walk that. Under a sanitiser it either passes or names the place directly.
+// ===========================================================================
+
+TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var total public; var kept public;\n")
+		wxT("var arr; arr = New Array;\n")
+		wxT("arr.Add(10); arr.Add(20); arr.Add(30);\n")
+		wxT("total = 0;\n")
+		wxT("Foreach x In arr Do\n")
+		wxT("  total = total + x;\n")
+		wxT("EndDo;\n")
+		// A second array, made from the first by a pipeline that walks it — the
+		// iterator holds the source for the length of the fold, and the fold's own
+		// result is then walked in its turn.
+		wxT("var picked; picked = arr.Where(Function(v) Return v >= 20 EndFunction).ToArray();\n")
+		wxT("kept = 0;\n")
+		wxT("Foreach y In picked Do\n")
+		wxT("  kept = kept + 1;\n")
+		wxT("EndDo;\n")))
+		<< "the shape this test is about did not compile";
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("total"), v));
+	EXPECT_EQ(v.GetInteger(), 60) << "the walk itself must still be right";
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+
+	// The frame goes here, with both arrays in it. That is the moment the nightly
+	// caught: passing under a sanitiser is the whole assertion.
+}
