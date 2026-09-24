@@ -774,7 +774,7 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 					line = ResolveLineByValue(m_tableModel, createdValue);
 				}
 				else if (!m_dataViewSelected) {
-					ibValueFrame* ownerControl = m_formOwner->GetOwnerControl();
+					ibControlFrame* ownerControl = m_formOwner->GetOwnerControl();
 					if (ownerControl != nullptr && m_tableCurrentLine == nullptr) {
 						ibValue retValue; ownerControl->GetControlValue(retValue);
 						line = ResolveLineByValue(m_tableModel, retValue);

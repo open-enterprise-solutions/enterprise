@@ -351,8 +351,17 @@ public:
 		return const_cast<ibValueForm*>(this);
 	}
 
-	ibValueFrame* GetOwnerControl() const {
-		return dynamic_cast<ibValueFrame*>(m_controlOwner);
+	// ⭐⭐ WHAT IS HELD, NOT A NARROWER VIEW OF IT. The owner is kept as an ibControlFrame, and that is
+	// the interface its two readers ask through: the value it holds (GetControlValue) and the window
+	// key it was opened under (GetControlGuid) are both declared there.
+	//
+	// 🛑 IT USED TO dynamic_cast TO ibValueFrame, and everything that is not a full form control fell
+	// through the hole. A filter's cell is a RENDERER — ibDataViewValueRenderer + ibControlFrame — so
+	// the choice list it opened had nobody to ask which value it was replacing, and opened standing on
+	// nothing (Max, 2026-09-24: "the current row is what you get from the control's value"; "if there
+	// is no form, take what you can take").
+	ibControlFrame* GetOwnerControl() const {
+		return m_controlOwner;
 	}
 
 	/**

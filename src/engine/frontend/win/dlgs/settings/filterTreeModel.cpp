@@ -1,5 +1,7 @@
 #include "filterTreeModel.h"
 
+#include <algorithm>   // std::count — how many segments a field's text names (ibFieldText)
+
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 #include "backend/system/value/composition/valueComposerSettings.h"   // the pickers a cell offers
 
@@ -185,6 +187,20 @@ bool ibFilterTreeModel::HasValue(const ibDataViewItem& item, unsigned col) const
 	return col == kFilterColLeft;
 }
 
+// ⭐⭐ A FIELD READS AS ITS WHOLE PATH, dots included. `Recorder.Ref` is a value reached THROUGH a
+// reference, and a cell that says only `Ref` hides exactly the thing worth seeing — which of the two
+// it is (Max, 2026-09-25: "it must show the full path, so we see plainly that the value is obtained
+// through the dot"). The presentation is the readable spelling, in synonyms, and it is what is shown
+// whenever it names as many segments as the path does; a presentation that lost its prefix somewhere
+// on the way here would say less than the truth, so the PATH answers instead. The path is always
+// whole — it is what the query is built from.
+static wxString ibFieldText(const ibFilterOperandDescription& side)
+{
+	const size_t inPath = std::count(side.m_path.begin(), side.m_path.end(), wxT('.'));
+	const size_t inText = std::count(side.m_presentation.begin(), side.m_presentation.end(), wxT('.'));
+	return (!side.m_presentation.IsEmpty() && inText >= inPath) ? side.m_presentation : side.m_path;
+}
+
 void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
@@ -219,19 +235,15 @@ void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item,
 
 	switch (col) {
 	case kFilterColUse:  variant = line->m_use; break;
-	// EVERY CELL SHOWS ITS SIDE'S OWN TEXT. A field reads as its presentation, a
-	// number as a number, an enumeration member as its caption — one rule, so
-	// `Price > Cost`, `Amount > 100` and the comparison between them all read as
-	// what they are.
+	// EVERY CELL SHOWS ITS SIDE'S OWN TEXT. A field reads as its whole path (see
+	// ibFieldText), a number as a number, an enumeration member as its caption —
+	// one rule, so `Price > Cost`, `Amount > 100` and the comparison between them
+	// all read as what they are.
 	case kFilterColLeft:
-		variant = line->m_left.IsField()
-			? (line->m_left.m_presentation.IsEmpty() ? line->m_left.m_path : line->m_left.m_presentation)
-			: line->m_left.m_value.GetString();
+		variant = line->m_left.IsField() ? ibFieldText(line->m_left) : line->m_left.m_value.GetString();
 		break;
 	case kFilterColRight:
-		variant = line->m_right.IsField()
-			? (line->m_right.m_presentation.IsEmpty() ? line->m_right.m_path : line->m_right.m_presentation)
-			: line->m_right.m_value.GetString();
+		variant = line->m_right.IsField() ? ibFieldText(line->m_right) : line->m_right.m_value.GetString();
 		break;
 	case kFilterColComparison:
 		variant = ibValue::CreateEnumObject<ibValueEnumComparisonKind>(line->m_comparison).GetString();

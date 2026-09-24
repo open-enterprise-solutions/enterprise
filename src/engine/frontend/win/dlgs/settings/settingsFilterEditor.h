@@ -88,6 +88,25 @@ public:
 	const ibMetaData*  GetMetaData() const;
 	class ibValueCompositionField* ChooseField(wxWindow* parent, const wxString& held) const;
 
+	// ⭐⭐ WHICH ROW IS BEING EDITED — HELD HERE, BY THE WINDOW, exactly as a form's table lets its MODEL
+	// hold it (tableBoxColumnEvent.cpp: the runtime column's Select handler looks no row up at all — it
+	// asks its value and writes it, and the model knows where). A cell is a RENDERER: the grid makes and
+	// destroys it as it pleases, and a modal picker does both while it is up — so a row kept inside one
+	// is a row that goes stale precisely when it is needed. Kept out here it outlives every picker.
+	//
+	// 🛑 IT WAS KEPT IN THE CELL, IN THREE PLACES AT ONCE — its own copy, the grid's "current item", and
+	// the selection — each with a comment saying when the other two lie. After a picker closed, all
+	// three did: the next press on the button found no row and did nothing at all.
+	void SetEditedRow(const ibDataViewItem& row) { m_editedRow = row; }
+	ibDataViewItem GetEditedRow() const { return m_editedRow; }
+
+	// ⭐ A CONDITION OFTEN ARRIVES CARRYING ONLY THE PATH OF ITS FIELD — a saved setting read back,
+	// "filter by this cell", a list narrowed in code — and its TYPE is filled in by resolving that path
+	// through the field tree. Public because the CELL has to ask for it before it can say what its value
+	// may be: read before this runs, a row answers "no types at all" (2026-09-24). Idempotent — a side
+	// that already has its type is skipped.
+	void TypeFieldOperands();
+
 private:
 
 	// The value cell each side of a condition is edited through — a control-backed
@@ -104,9 +123,6 @@ private:
 	// the event loop (RefreshFilterTree posts it): expanding a row the view has not
 	// fetched yet does nothing.
 	void ExpandFilterTree();
-
-	// Give a condition that arrived without its type the type of the field it names (see the .cpp).
-	void TypeFieldOperands();
 
 	// The verbs below are raised by the toolbar and by the context menu alike, so
 	// there is one implementation and one set of rules about what is possible where
@@ -140,6 +156,7 @@ private:
 	// not a cell the reader is offered. See SetAuthoring.
 	class ibDataViewColumn* m_columnDisplayMode = nullptr;
 	bool               m_readOnly  = false;   // view only — see SetReadOnly
+	ibDataViewItem     m_editedRow;           // the row a cell is editing — see SetEditedRow
 	// Told on every structural change and every cell edit — see SetOnChanged. Null unless a host
 	// asked for it, so an editor nobody wired behaves exactly as it did before.
 	std::function<void()> m_onChanged;

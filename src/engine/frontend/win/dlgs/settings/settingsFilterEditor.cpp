@@ -12,6 +12,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/objCtor.h"
 #include "backend/system/value/valueType.h"                  // ibValueTypeDescription::AdjustValue
+#include "backend/metaCollection/partial/reference/reference.h"   // a stored reference is re-made by its identity — see SetOperand
 
 #include "frontend/win/ctrls/controlTextEditor.h"
 #include "frontend/visualView/ctrl/typeControl.h"
@@ -71,6 +72,12 @@ public:
 	// ASK THE ROW. The left side admits exactly one type — a composition field — and
 	// the right side admits whatever the chosen field lends it (the left side's type).
 	virtual ibTypeDescription& GetTypeDesc() const override {
+		// ⚠ THE ROW IS TYPED BEFORE IT IS ASKED. A condition often arrives carrying only the PATH of its
+		// field, and read raw it answers "no types at all" — which is how a cell came to say it admits
+		// nothing while the value already in it plainly had a type (2026-09-24). Idempotent.
+		if (m_editor != nullptr)
+			m_editor->TypeFieldOperands();
+
 		const ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			m_typeDesc = ibTypeDescription();
@@ -111,7 +118,8 @@ public:
 		wxRect labelRect,
 		const wxVariant& value) override {
 
-		m_row = m_item;   // THE row this editor belongs to, held across the modal picker
+		if (m_editor != nullptr)
+			m_editor->SetEditedRow(m_item);   // the window holds it — see ibFilterEditor::SetEditedRow
 
 		ibControlTextEditor* textEditor = new ibControlTextEditor;
 		textEditor->SetDVCMode(true);
@@ -158,6 +166,12 @@ public:
 		textEditor->Show(true);
 
 		textEditor->SetInsertionPointEnd();
+
+		// 🛑 AND NOTHING IS OPENED FROM HERE. A gate called OpensOnActivation stood below this, meant to
+		// let a cell with nothing typeable open its chooser on the same click. The grid makes an editor
+		// for its own reasons too — notably the instant after a value is written — so opening from here
+		// opened it forever, over a cell that read momentarily empty (measured 2026-09-24). The gate then
+		// sat unused with half a comment above it, which reads exactly like a thing that fires.
 		return textEditor;
 	}
 
@@ -166,6 +180,22 @@ public:
 		if (textEditor == nullptr)
 			return false;
 		const wxString text = textEditor->GetValue();
+
+		// 🛑⭐⭐ CLOSING AN EDITOR IS NOT AN EDIT. The grid takes the editor's TEXT whenever the editor goes
+		// away — and it goes away the instant a modal choice form opens. That text is the PRESENTATION of
+		// the value already standing in the cell, so handing it on rewrites the cell from its own label:
+		// with ONE admitted type the search below found the same reference again and nothing was lost,
+		// with a COMPOSITE one there is no single type to search by, the search failed, and the reference
+		// was replaced by its own text (Max, 2026-09-25: "when the choice form opens, the value is
+		// cleared" — and it is why one type worked while a composite did not).
+		//
+		// Nothing typed = nothing to write. What the person actually types differs from the label, and
+		// that road carries on below unchanged.
+		if (const ibFilterNodeDescription* item = GetSelectedItem()) {
+			const ibValue held = SideValue(item);
+			if (!held.IsEmpty() && held.GetString() == text)
+				return false;   // the model has nothing to take — what is held stands
+		}
 
 		// ⭐⭐ A TYPED TEXT IS LOOKED FOR, as a form's field and a table's cell look for it (FindValue:
 		// by code or by description, the best answer first). Handed on raw, "66" reached the condition
@@ -239,7 +269,20 @@ public:
 		// string, and turns "nothing" into the right kind of empty — the empty
 		// value of a single type, or Undefined when the cell is composite. That is
 		// why clearing is just this call with nothing in it.
-		SetSideValue(item, AdjustValue(varValue));
+		//
+		// 🛑 …BUT A VALUE THE ROW ALREADY ADMITS GOES STRAIGHT THROUGH. The adjustment answers "did not
+		// fit" with the EMPTY of the declared type, and where the cell admits several types there is no
+		// single empty to answer with, so it answers UNDEFINED — a clearing. On a composite condition
+		// that turned a perfectly good value into nothing every time it was re-chosen (Max, 2026-09-24:
+		// "you wipe the value because you see more than one type, and you decide it must be cleared —
+		// but there are cases where the value is already set, it fits by type, and it must simply go on
+		// into the current row").
+		const ibTypeDescription& admitted = GetTypeDesc();
+		const bool fits = !varValue.IsEmpty()
+			&& admitted.GetClsidCount() > 0
+			&& admitted.ContainType(varValue.GetClassType());
+
+		SetSideValue(item, fits ? varValue : AdjustValue(varValue));
 		return true;
 	}
 
@@ -257,19 +300,13 @@ public:
 
 private:
 
-	// THE ROW THIS CELL IS EDITING. Not the grid's SELECTION: the editor opens on
-	// the row that was clicked, and the selection may still be on another one (or
-	// may move while a modal picker is up). Reading and writing through the
-	// selection is what made the same click work on one row and do nothing on the
-	// next — the value was fetched from, and written to, a different line.
+	// ⭐ THE ROW THIS CELL IS EDITING — ONE SOURCE, and it is not this object. The window holds it
+	// (ibFilterEditor::SetEditedRow), because a cell is made and destroyed by the grid at will and a
+	// modal picker does both while it is up. It used to be asked of three places in turn — the cell's
+	// own copy, the grid's current item, the selection — each true at a different moment, so after a
+	// picker closed there was no right answer left and the next press did nothing at all.
 	ibDataViewItem EditedRow() const {
-		// m_row is captured when the editor is created. m_item alone is not enough:
-		// opening a MODAL picker takes the focus away, the editor finishes and the
-		// base clears m_item — so by the time the chosen value comes back there is
-		// no row left to write it to, and the pick "does nothing".
-		if (m_row.IsOk())
-			return m_row;
-		return m_item.IsOk() ? m_item : m_editor->GetFilterView()->GetSelection();
+		return m_editor != nullptr ? m_editor->GetEditedRow() : ibDataViewItem();
 	}
 
 	// The currently-selected CONDITION, or nullptr — a group row is not one, and
@@ -352,7 +389,24 @@ private:
 			return;
 		}
 		side = ibFilterOperandDescription();
-		side.m_value = value;
+
+		// ⭐⭐ A REFERENCE IS STORED BY ITS IDENTITY, NOT BY THE CHOOSER'S HANDLE. Copying an object value
+		// does not copy the object: ibValue::Copy's TYPE_VALUE arm turns the copy into a REFFER pointing
+		// at the SOURCE ibValue (compiler/value.cpp). So what would be kept here is a handle to whatever
+		// the chooser happened to be holding — and a chooser's value lives as long as its window, while
+		// this description has to outlive it. When the choice form's views went away the operand read
+		// back as Undefined with nothing having written it (measured 2026-09-25, journal `ui.filter`:
+		// one node, val.vt 200 -> 0 in 83 ms, no SET in between, `left` intact).
+		//
+		// Re-made through the registry it holds an object somebody owns. Identity is the metaobject plus
+		// the guid — the same two facts this operand is SERIALISED by, so nothing is being invented here:
+		// it is stored now the way it has always been stored on disk.
+		ibValueReferenceDataObject* ref = nullptr;
+		if (value.ConvertToValue(ref) && ref != nullptr && ref->GetMetaObjectRef() != nullptr)
+			side.m_value = ibValue(ibValueReferenceDataObject::Create(
+				ref->GetMetaObjectRef(), ref->GetGuid().GetGuid()));
+		else
+			side.m_value = value;
 	}
 
 	ibValue SideValue(const ibFilterNodeDescription* item) const {
@@ -441,6 +495,13 @@ private:
 		const ibDataViewItem row = EditedRow();
 		if (row.IsOk())
 			model->ValueChanged(row, m_side);
+
+		// 🛑 NO SELECTING AND NO FOCUS-GRABBING HERE. A Select + SetFocus posted onto the loop stood
+		// here, on the theory that a modal had left the grid without a current row. It had not: the
+		// probe read `selected=1 focused=1` while the row was plainly missing, because the row nobody
+		// could see was the one in the CHOICE LIST, which stands on the value the cell hands it. Focus
+		// is managed where the runtime manages it — ApplyCurrentLine, which takes it as a parameter
+		// (Max, 2026-09-24: "then set the focus where focus is managed by the runtime").
 	}
 
 	//events
@@ -472,15 +533,14 @@ private:
 			// The editor closes BEFORE the modal picker opens — see the row-value
 			// cell: a live editor keeps the mouse, and the picker's tree stops
 			// responding to the clicks that expand a reference.
-			const ibDataViewItem row = EditedRow();
 			wxWindow* parent = m_editor;
 			FinishSelecting();
 			const wxString held = (asField != nullptr) ? asField->GetPath() : wxString();
-			if (ibValueCompositionField* chosen = m_editor->ChooseField(parent, held)) {
-				m_row = row;
+			// …and nothing has to be put back afterwards: the row is the window's, and the window is
+			// still standing (SetEditedRow). This used to save it, restore it around the write and clear
+			// it again, because the cell's own copy did not survive the picker.
+			if (ibValueCompositionField* chosen = m_editor->ChooseField(parent, held))
 				SetControlValue(ibValue(chosen));
-				m_row = ibDataViewItem();
-			}
 			return;
 		}
 
@@ -532,9 +592,6 @@ private:
 		item->m_use = true;
 		FinishSelecting();
 	}
-
-private:
-	ibDataViewItem m_row;   // the row being edited — see EditedRow
 };
 
 // ===========================================================================
@@ -1105,6 +1162,9 @@ void ibFilterEditor::OnFilterMoveDown(wxCommandEvent&)
 
 void ibFilterEditor::OnFilterItemActivated(ibDataViewEvent& event)
 {
+	// The row a person just clicked is THE row being edited, said before the editor exists — so a cell
+	// that is made, destroyed and made again while a picker is up always has the same answer.
+	m_editedRow = event.GetItem();
 	if (m_view != nullptr)
 		m_view->EditItem(event.GetItem(), event.GetDataViewColumn());
 	event.Skip();

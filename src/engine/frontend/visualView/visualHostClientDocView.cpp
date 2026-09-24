@@ -264,7 +264,7 @@ ibValueForm* ibFormVisualDocument::FindFormByControlUniqueKey(const ibUniqueKey&
 					wxASSERT(visualDoc);
 					ibValueForm* valueForm = visualDoc->GetValueForm();
 					wxASSERT(valueForm);
-					ibValueFrame* ownerControl = valueForm->GetOwnerControl();
+					ibControlFrame* ownerControl = valueForm->GetOwnerControl();
 					if (ownerControl != nullptr) return formKey == ownerControl->GetControlGuid();
 					return false;
 				}
