@@ -425,6 +425,27 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	// `ibValueSystemFunction::ValueIsFilled` is written as `!IsEmpty()` and says so: Undefined, NULL, and
 	// an EMPTY reference (type chosen, no guid). So there is nothing to convert and no second reading to
 	// keep in step; the column says the question is about a reference, the value answers it.
+	// ⭐⭐ `UNDEFINED` IS THE TAG, AND ONLY THE TAG. The runtime's own empty value carries no class at all,
+	// and in a stored row that is exactly what a discriminator of 0 says: the column's type slot is unset,
+	// nothing was chosen (Max, 2026-09-24: "Undefined equals the value where 0 is written, where nothing
+	// was chosen — it is the tag 0 in a composite"). So it is asked of the DISCRIMINATOR and of nothing
+	// else — not of the key, which is the question an EMPTY REFERENCE asks below.
+	//
+	// 🛑 THE TWO ARE NOT ONE QUESTION, though both answer IsEmpty. An empty reference is a value OF A TYPE
+	// — "a Catalogue.Goods, but no particular one" — and it names that type in the row; `UNDEFINED` names
+	// none. Asked together, as they were until this word existed, a query could not tell them apart at all.
+	if (value.GetType() == ibValueTypes::TYPE_EMPTY && value.GetClassType() == 0) {
+		const std::vector<ibColumnSlot> tagLayout = DescribeColumnLayout(col);
+		if (!fields.empty() && !tagLayout.empty() && tagLayout.front().m_role == ibColumnRole::Discriminator) {
+			// …and NULL counts as 0: a column a restructuring added arrives `DEFAULT 0 NOT NULL`, but one
+			// that came without the default leaves NULL in every row older than itself.
+			return OrFold(
+				ibIsNull(ibColQ(mainQual, fields.front()), false),
+				ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields.front()),
+					ibConst(ibValue(static_cast<int>(ibFieldTypes_Empty)))));
+		}
+	}
+
 	const bool emptyReference = IsReferenceValued(col) && value.IsEmpty();
 
 	// ⭐⭐⭐ "NOT FILLED" IS A FACT ABOUT THE IDENTITY, NOT ABOUT THE TYPE. A reference spreads over
@@ -1163,6 +1184,49 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 // qualification replaces the single mainQual. A leaf condition whose column no leaf owns (e.g. a
 // row-key condition, which L4 never emits for a join) cannot be qualified — throw rather than DROP it,
 // because dropping a branch of an OR would silently WIDEN the filter (wrong rows). (docs §23)
+// ⭐⭐ A COMPUTED OUTPUT THAT ANSWERS WITH A COMPOSITE VALUE, RECOGNISED BY ITS SHAPE. A `CASE` whose arms
+// are all the SAME composite column — and, where an arm says nothing at all, a NULL or an UNDEFINED, which
+// abstains — answers with a value of that column's type. Such an output cannot ride ONE field: a reference
+// is a tag, a target type and a key, and reduced to its first value field it is the bytes of a guid with
+// nothing beside them to rebuild it from (technology journal, 2026-09-24: `THEN Acc.fld1115_RRRef … AS
+// out_A`). It is projected as the SPREAD instead, and the result is told so — the two sites ask THIS, so
+// what is projected and what is read back cannot drift apart.
+//
+// Null for anything else, and then the single-field road stands exactly as before: a mixed CASE, an
+// arithmetic, a window. Nothing this walk does not fully understand is half-served.
+const ibBackendQueryColumn* ExprSpreadColumn(const ibQueryColumnExpr* e)
+{
+	if (e == nullptr || e->m_kind != ibQueryColumnExprKind::Case)
+		return nullptr;
+
+	const ibBackendQueryColumn* spread = nullptr;
+	const auto arm = [&](const ibQueryColumnExprPtr& a) -> bool {
+		if (!a)
+			return true;   // no ELSE at all — nothing to disagree with
+		if (a->m_kind == ibQueryColumnExprKind::Const) {
+			const ibValueTypes vt = a->m_const.GetType();
+			return vt == ibValueTypes::TYPE_NULL || vt == ibValueTypes::TYPE_EMPTY;
+		}
+		if (a->m_kind != ibQueryColumnExprKind::Column || a->m_col == nullptr || !a->m_field.IsEmpty())
+			return false;
+		if (a->m_col->IsRawColumn() || a->m_col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed)
+			return false;   // one scalar field — the ordinary projection is already right for it
+		if (spread == nullptr) {
+			spread = a->m_col;
+			return true;
+		}
+		// Two arms of different spreads are two shapes, and a column is one.
+		return spread->GetTypeValueDesc().GetClsidList() == a->m_col->GetTypeValueDesc().GetClsidList();
+	};
+
+	for (const std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>& wt : e->m_cases)
+		if (!arm(wt.second))
+			return nullptr;
+	if (!arm(e->m_else))
+		return nullptr;
+	return spread;
+}
+
 // Does the predicate tree carry a reference dot-walk LEAF (a Compare/LIKE/BETWEEN leaf with m_path)?
 // Such a tree needs the dot-walk join machinery (BuildPageIR), not the plain mainQual lowering.
 bool PredicateHasPath(const ibQueryPredicatePtr& p)
@@ -2041,7 +2105,24 @@ ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, co
 		}
 
 		const ibQueryIR ir = BuildPageIR(spec, req, effective);
-		return ibDataQueryResult(q.ExecuteIR(ir, external), spec.m_queryable);
+		ibDataQueryResult result(q.ExecuteIR(ir, external), spec.m_queryable);
+
+		// …and where a computed output came back as a field SPREAD, the result is told so, from the same
+		// question the projection asked (ExprSpreadColumn) and with the same prefix it used. Asked twice
+		// rather than carried: the alias is all that travels between them, and a map threaded through the
+		// L2 IR would put an L3 column pointer in a tier that has no business holding one.
+		if (spec.m_selectExprs != nullptr) {
+			std::vector<ibDataQueryResult::ibComputedSpread> spreads;
+			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+				// ⚠ THE PREFIX IS THE AUTHOR'S NAME, NOT THE STATEMENT'S. The reader spells the statement's
+				// alias itself (`ibSqlAliasOf(prefix)`, the cursor source below), so handing it one already
+				// spelled would spell it twice and find nothing.
+				if (const ibBackendQueryColumn* col = ExprSpreadColumn(sc.m_expr.get()))
+					spreads.push_back({ sc.m_alias, sc.m_alias, col });
+			if (!spreads.empty())
+				result.SetComputedSpreads(std::move(spreads));
+		}
+		return result;
 	}
 
 // ⭐⭐ THE READ, AS A RELATION — the projection twin of BuildAggregateRelation.
@@ -4717,10 +4798,51 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				}
 			}
 			// computed columns (arithmetic / CASE) — lower the L3 expression tree, project AS its alias.
+			//
+			// ⭐⭐ …AND ONE THAT ANSWERS WITH A COMPOSITE VALUE IS PROJECTED AS THE SPREAD IT IS: the same
+			// expression once per physical field, under the alias as a PREFIX — the road every object
+			// output already travels, and the one the dot-walk dimension below spells out. As a single
+			// expression it reduced to the column's first VALUE field, which for a reference is the bytes
+			// of its key with no tag and no target type beside them (technology journal, 2026-09-24).
+			//
+			// 🛑 THE ARM THAT SAYS NOTHING IS BOUND, NOT INVENTED. Written by hand it puts a VALUE where
+			// SQL needs a bare NULL, the CASE mixes a blob arm with a numeric one, and the driver refuses
+			// WHOLE reads — "Error retrieving Next record" in a live application, not one wrong cell. Its
+			// fields come from the same bind door every write of this column goes through.
 			if (hasComputed)
-				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
-					projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
-						ibSqlAliasOf(sc.m_alias) });
+				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
+					const wxString              alias  = ibSqlAliasOf(sc.m_alias);
+					const ibBackendQueryColumn* spread = ExprSpreadColumn(sc.m_expr.get());
+					if (spread == nullptr) {
+						projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
+							alias });
+						continue;
+					}
+
+					const ibMetaData*           meta   = queryable != nullptr ? queryable->GetMetaData() : nullptr;
+					const wxString              base   = spread->GetPhysicalName();
+					const std::vector<wxString> fields = ColumnFieldNames(spread);
+
+					ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+					int position = 1;
+					BindWriteValue(capture, spread, meta, ibValue(), position);
+					const std::vector<ibQueryExprPtr>& absent = capture.CapturedValues();
+
+					for (size_t fi = 0; fi < fields.size(); ++fi) {
+						const wxString suffix = fields[fi].Mid(base.length());
+						const auto armOf = [&](const ibQueryColumnExprPtr& a) -> ibQueryExprPtr {
+							if (!a || a->m_kind != ibQueryColumnExprKind::Column || a->m_col == nullptr)
+								return (fi < absent.size() && absent[fi]) ? absent[fi] : ibConst(ibValue());
+							return ibColQ(mainQual, a->m_col->GetPhysicalName() + suffix);
+						};
+						std::vector<std::pair<ibQueryExprPtr, ibQueryExprPtr>> cases;
+						for (const std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>& wt : sc.m_expr->m_cases)
+							cases.emplace_back(ibMetaIRBuilder::BuildPredicateExpr(queryable, wt.first, mainQual),
+								armOf(wt.second));
+						projection.push_back(ibQueryProjItem{
+							ibCase(std::move(cases), armOf(sc.m_expr->m_else)), alias + suffix });
+					}
+				}
 
 			// dot-walk TOTALS dimensions — join the path, project the leaf's SCALAR value under the dimension's
 			// DISTINCT alias (dw.m_alias), so it never clashes with the main table's same-named field on a
@@ -5487,7 +5609,13 @@ public:
 	// base where Firebird returns the row for that very statement).
 	//
 	// ⚠ FOUND ONCE PER ALIAS — spelled, then looked up — and read by its index on every row after that.
-	ibValue Column(const wxString& alias) const override {
+	// ⭐ ONE DOOR, TWO SHAPES — and a CURSOR is where they really differ: a scalar output is one field read
+	// by its index, a composite one is the SPREAD below reassembled from `<alias>_TYPE` / `_RTRef` / … .
+	// Which it is, is what `col` says; nothing here guesses.
+	ibValue Column(const wxString& alias, const ibBackendQueryColumn* col = nullptr) const override {
+		if (col != nullptr)
+			return Spread(alias, col);
+
 		for (size_t i = 0; i < m_aliasColumns.size(); ++i)   // by index — see PhysicalNameOf
 			if (m_aliasColumns[i].first == alias)
 				return m_aliasColumns[i].second > 0 ? m_cursor.GetValue(m_aliasColumns[i].second) : ibValue();
@@ -5499,7 +5627,7 @@ public:
 	// `prefix` (<prefix>_TYPE/_RTRef/_RRRef/…) — reassemble the object value off those fields, exactly as a
 	// normal metadata column reads. A non-matching join (empty / broken ref) leaves the fields null, so the
 	// reassembly yields the type's empty value on its own.
-	ibValue Column(const wxString& prefix, const ibBackendQueryColumn* col) const override {
+	ibValue Spread(const wxString& prefix, const ibBackendQueryColumn* col) const {
 		if (col == nullptr)
 			return ibValue();
 		ibValue v;

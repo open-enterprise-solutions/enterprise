@@ -59,10 +59,10 @@ struct BACKEND_API ibChoiceHolder {
 class BACKEND_API ibChoiceLinkResolver {
 public:
 
-	// ⭐⭐ WHICH FIELDS CAN GIVE A TYPE, SAID ONCE — beside the reading that has to agree with it. Any field
-	// that has a type can: what `ResolveType` reads off it is a type description it holds, the `Type` a
-	// chosen kind declares, or simply the type of the value standing there. Only a field declared with
-	// no type at all has nothing to give. The designer offers exactly the fields that answer true.
+	// ⭐⭐ WHICH FIELDS CAN GOVERN, SAID ONCE. Any field that has a type can: whatever stands in it knows
+	// what it brings a value to — a type description by what it describes, a chosen kind by its own
+	// `Type`, anything else by its own class (ibValue::AdjustValue). Only a field declared with no type
+	// at all has nothing to give. The designer offers exactly the fields that answer true.
 	static bool CanGovern(const ibValueMetaObjectAttributeBase* field);
 
 	// ⭐⭐ THE FIELD A BINDING NAMES — asked of the BINDING and the holder it stands in, not of a column
@@ -73,24 +73,23 @@ public:
 	static const ibValueMetaObjectAttributeBase* FieldOf(const ibChoiceHolder& holder,
 		const ibBackendTypeSourceFactory* bound);
 
-	// The link's half: the type the governing field settles — a type description it holds, the type a
-	// chosen kind declares, or the type of what stands there — put in place of the field's governed type,
-	// or of the whole field when it names none. Nothing chosen settles nothing, and the field keeps its
-	// own contour.
-	static bool ResolveType(const ibValueMetaObjectAttributeBase* field, const ibChoiceHolder& holder,
-		ibChoiceCondition& condition);
-
-	// The parameters' half: one condition per row, over the field of the target the row names — by
+	// One condition per row, over the field of the target the row names — by
 	// whatever the row's source holds, empty included.
 	static bool ResolveParameters(const ibChoiceParametersDescription& params, const ibChoiceHolder& holder,
 		ibChoiceCondition& condition);
 
-	// ⭐⭐ BOTH HALVES, ASKED OF THE FIELD — in the order they are applied: the type decides WHICH list
-	// opens, the conditions narrow what is shown in it.
+	// ⭐⭐ WHAT NARROWS A CHOICE, ASKED OF THE FIELD — the parameters, which say what is shown in the list.
+	//
+	// 🛑 THE LINK BY TYPE IS NOT HERE, AND NOT BECAUSE IT WAS FORGOTTEN. It used to settle a TYPE into
+	// this condition, and that type narrowed nothing: the list reads the parameters and nothing else
+	// (valueDynamicList.cpp), and the control has already chosen which metaobject opens before it asks.
+	// A link by type decides what a field may HOLD, and that is answered where the value is written —
+	// once, by the one verb (Adjust below, ibValue::AdjustValue). Two machineries said one thing, and
+	// the one that said it to nobody is gone (Max, 2026-09-24: "tear it out").
 	//
 	// ⭐ THE FIELD IS HANDED OVER WHOLE, the same shape as Adjust below and for the same reason: the
-	// link and the parameters ARE the field's, so a caller that takes them off it and passes the pieces
-	// is doing the field's arithmetic in a window (Max, 2026-09-23, reading the type control).
+	// parameters ARE the field's, so a caller that takes them off it and passes the pieces is doing the
+	// field's arithmetic in a window (Max, 2026-09-23, reading the type control).
 	//
 	// A field of nullptr — a control bound to nothing, a filter cell, a script's value — carries no
 	// condition, which is the honest answer there rather than a refusal.

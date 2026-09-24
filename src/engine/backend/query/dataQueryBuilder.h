@@ -346,6 +346,23 @@ public:
 	// tomorrow gets it without knowing.
 	void SetComputedOverRow(std::vector<ibQueryColumnSelect> columns);
 
+	// ⭐⭐ …AND WHICH COMPUTED OUTPUTS CAME BACK AS A SPREAD RATHER THAN AS ONE FIELD. An expression that
+	// answers with a COMPOSITE value — `CASE WHEN … THEN Account ELSE … END` — cannot ride one column:
+	// a reference is a tag, a target type and a key, and reduced to its first value field it is the bytes
+	// of a guid with nothing to rebuild it from. So the projection writes it once per physical field under
+	// the alias as a PREFIX, exactly as every object output travels, and this says so.
+	//
+	// Held HERE for the same reason the computed-over-row columns are: every road ends in a result, and
+	// `GetColumn(alias)` is the one door a caller knocks on. Told this, that door reassembles the value
+	// through `GetColumn(prefix, col)` — the reader that already exists — so nothing above learns that an
+	// output was ever spread (2026-09-24).
+	struct ibComputedSpread {
+		wxString                    m_alias;    // the name a caller asks for
+		wxString                    m_prefix;   // …and where its fields were put
+		const ibBackendQueryColumn* m_col = nullptr;   // the column whose spread they are
+	};
+	void SetComputedSpreads(std::vector<ibComputedSpread> spreads);
+
 	// The door also stamps the totals config — the TotalBy dimension levels (in order) + the common
 	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
 	// the Selector). (docs/private/query-language-arc.md §22.1b)
@@ -402,6 +419,7 @@ private:
 	std::shared_ptr<ibDataResultSource> m_source;
 	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
 	std::vector<ibQueryColumnSelect> m_computedOverRow;      // …and the ones this result answers itself — see the setter
+	std::vector<ibComputedSpread>    m_computedSpreads;      // …and the ones that came back as a field spread
 	// Co-ownership of the sources built for the query (AdoptSources) — every column pointer above
 	// lives inside one of them, so they stay valid for exactly as long as this result does.
 	std::vector<std::shared_ptr<const ibBackendQueryable>> m_ownedSources;

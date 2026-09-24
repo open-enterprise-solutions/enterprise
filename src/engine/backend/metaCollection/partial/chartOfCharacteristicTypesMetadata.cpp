@@ -409,6 +409,36 @@ void ibValueMetaObjectChartOfCharacteristicTypes::OnRemoveMetaForm(ibValueMetaOb
 	}
 }
 
+// ⭐⭐ WHAT A KIND OF THIS CHART ALLOWS — the one reading of `Type` in the whole tree, and the only place
+// that knows a characteristic has one. Every road that narrows a value by a kind comes here: a subconto
+// written into an accounting register, a field filled under a link by type, a value set by a script.
+//
+// The element stands for a record of this chart; its `Type` is read by the id the chart declares for it,
+// so nothing is searched for and no wrong attribute can be picked.
+bool ibValueMetaObjectChartOfCharacteristicTypes::AdjustOutValue(const ibValueDataObject& element,
+	const ibValue& varValue, ibValue& out) const
+{
+	// 🛑 A CHART WITH NO `Type` OF ITS OWN GOVERNS NOTHING — and it says so by handing the question BACK
+	// to the base, not by refusing: a kind is then an ordinary reference and narrows to its own class.
+	// Refusing here would leave `out` unfilled, and the caller writes what it finds there.
+	const ibValueMetaObjectAttributePredefined* type = GetDataType();
+	if (type == nullptr)
+		return ibValueMetaObjectGenericData::AdjustOutValue(element, varValue, out);
+
+	// ⭐ A KIND THAT WAS NEVER TOLD A TYPE NARROWS NOTHING — the value comes back as it came, which is a
+	// different answer from the refusal above and has to be: the field's own contour is then the only
+	// bound, and that is what a subconto with an unfilled kind has always done.
+	ibValue declared;
+	if (!element.GetValueByMetaID(type->GetMetaID(), declared) || declared.IsEmpty()) {
+		out = varValue;
+		return true;
+	}
+
+	// And that value narrows the incoming one by itself: a type description takes what it describes,
+	// qualifiers and all (valueType.h). Nothing here knows that is what it is.
+	return declared.AdjustOutValue(varValue, out);
+}
+
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************

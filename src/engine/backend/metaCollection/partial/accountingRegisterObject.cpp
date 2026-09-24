@@ -186,26 +186,21 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 
 	m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), varKeyValue);
 
-	// The kind LIMITS: its own `Type` attribute IS a description of types, read straight off the
-	// reference by the id the chart of characteristic types declares for it.
-	ibValue kindType;
-	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
-	ibValueReferenceDataObject* kindRef = nullptr;
-	if (varKeyValue.ConvertToValue(kindRef) && kindRef != nullptr &&
-		kindRef->GetMetaObject()->ConvertToValue(chart) && chart != nullptr)
-		kindRef->GetValueByMetaID(chart->GetDataType()->GetMetaID(), kindType);
-
-	ibValueTypeDescription* limit = nullptr;
-	const bool limited = kindType.ConvertToValue(limit) && limit != nullptr;
-
-	// LOUD, because there is nothing to deduce from silence here: a kind that carries no type
-	// description means the value went in bounded by the column alone, and the kind's own rule was
-	// never applied. In a release build the posting still goes through — refusing would turn a
-	// metadata problem into lost data.
-	wxASSERT_MSG(limited, "account dimension: the kind carries no Type description, the limit is unknown");
-
-	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(),
-		limited ? slot->AdjustValue(varValue, limit->m_typeDesc) : slot->AdjustValue(varValue));
+	// ⭐⭐ THE KIND BRINGS THE VALUE, AND IT IS ASKED TO — one verb, the same one a link by type uses
+	// (ibValue::AdjustValue). This used to read the kind's `Type` here: two casts to find out what
+	// stood in the value, a third to read the description out of it, and the id of an attribute this
+	// file had no business knowing. All of that lives in the chart now, which is where the knowledge
+	// is; the posting says what it wants — "bound this by that" — and the chart does it, qualifiers
+	// and all. A kind that was told no type narrows nothing and says so in its own place.
+	//
+	// What comes back is a value of what the kind allows either way: the same one when it fits — the
+	// reference itself, nothing rebuilt — or the empty value of the type the kind declares when it does
+	// not. So the column is NOT adjusted on top of it: after the kind has spoken there is one option
+	// left, and a second pass would either change nothing or undo what the kind just decided, at the
+	// cost of another copy per dimension of every line (Max, 2026-09-24).
+	ibValue narrowed;
+	varKeyValue.AdjustOutValue(varValue, narrowed);
+	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), narrowed);
 	return true;
 }
 

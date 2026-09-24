@@ -302,6 +302,24 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
+bool ibValueTypeDescription::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	// A DESCRIPTION OF NOTHING NARROWS NOTHING, and the value passes as it came — the same answer the
+	// two-argument form above gives for it.
+	if (!m_typeDesc.IsOk()) {
+		out = varValue;
+		return true;
+	}
+
+	// ⚠ AND A VALUE THE DESCRIPTION DOES NOT NAME COMES BACK AS THE EMPTY VALUE OF WHAT IT DOES —
+	// `false` with a value of the right type in hand, never nothing. The narrowing is what the field
+	// then holds, and its TYPE is what a caller asking "what does this narrow to" reads off it, so the
+	// question is asked once (Max, 2026-09-24). The place that watches for a value going in and not
+	// coming out is ibChoiceLinkResolver::Adjust, which says so in the journal.
+	out = AdjustValue(m_typeDesc, varValue);
+	return m_typeDesc.ContainType(varValue.GetClassType());
+}
+
 bool ibValueTypeDescription::ContainType(const ibValue& cType) const
 {
 	ibValueType* valueType = CastValue<ibValueType>(cType);

@@ -917,6 +917,25 @@ wxString ibValueReferenceDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
+// ⭐⭐ A REFERENCE PASSES THE VERB ON, and that is the whole of its part. It holds the two things the
+// answer needs — the metaobject that GOVERNS it and the element it STANDS FOR — so it hands both over
+// and gives back whatever comes. It does not know what narrows a value, which attribute carries a type,
+// or that such a thing as a type description exists.
+//
+// 🛑 AND WHATEVER COMES BACK IS THE ANSWER — there is no second try here. The governor's `false` means
+// "the value did not fit", and it arrives WITH the narrowed value in `out`; reading it as "not mine" and
+// asking somebody else overwrote a correct empty goods reference with an undefined value, which is a
+// subconto quietly losing its type (measured 2026-09-24 on the ledger base). A metaobject that declares
+// no limit answers by its own class in its own place (genericData.h), so every road is already covered
+// before the question reaches here.
+bool ibValueReferenceDataObject::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	const ibValueMetaObjectGenericData* metaObject = GetSourceMetaObject();
+	return metaObject != nullptr
+		? metaObject->AdjustOutValue(*this, varValue, out)
+		: ibValue::AdjustOutValue(varValue, out);
+}
+
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************

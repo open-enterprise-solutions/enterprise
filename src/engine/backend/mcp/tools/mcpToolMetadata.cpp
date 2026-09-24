@@ -2853,18 +2853,26 @@ public:
 
 		// ---- the condition, as the control asks for it ------------------------------------------
 		const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(at.holder, field);
-		const ibTypeDescription& offered = condition.m_type.IsOk() ? condition.m_type : field->GetTypeValueDesc();
+
+		// ⭐ WHAT A LINK BY TYPE SETTLES, ASKED THE WAY A WRITE ASKS IT. A condition used to carry a
+		// settled type description computed here a second way; it narrowed no list and this report was
+		// its only reader, so it is gone. Bringing an EMPTY value through the link gives a value of
+		// whatever the link settles on, and its class is the answer (2026-09-24).
+		const ibClassID settled = field->GetTypeLink().IsOk()
+			? ibChoiceLinkResolver::Adjust(at.holder, field, ibValue()).GetClassType() : 0;
 
 		std::vector<ibDataValue> types;
 		std::vector<ibClassID> lists;
-		for (const ibClassID& clsid : offered.GetClsidList()) {
+		for (const ibClassID& clsid : field->GetTypeValueDesc().GetClsidList()) {
+			if (settled != 0 && clsid != settled)
+				continue;   // the link has decided this field's type; the rest is not on offer
 			types.push_back(ibDataValue::String(metaData->GetNameObjectFromID(clsid)));
 			if (IsReference(clsid))
 				lists.push_back(clsid);
 		}
 		result.AddField(wxT("types"), ibDataValue::Array(types));
-		result.SetValue(wxT("settled_by_link"), condition.m_type.IsOk());
-		result.SetValue(wxT("asks_type_first"), offered.GetClsidCount() > 1);
+		result.SetValue(wxT("settled_by_link"), settled != 0);
+		result.SetValue(wxT("asks_type_first"), types.size() > 1);
 
 		auto parameters = std::make_shared<ibDataNode>();
 		for (const std::pair<const wxString, ibValue>& parameter : condition.m_parameters)

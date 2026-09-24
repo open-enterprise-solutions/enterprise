@@ -287,6 +287,12 @@ public:
 	virtual wxString GetString() const;
 	virtual wxString GetClassName() const;
 
+	// ⭐ THE VERB GOES TO THE GOVERNOR. Asked to narrow a value, a reference hands the question to the
+	// metaobject that governs it, together with itself as the element — see the definition. Nothing
+	// about types is decided here.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const override;
+
+
 	friend class ibValue;
 
 private:

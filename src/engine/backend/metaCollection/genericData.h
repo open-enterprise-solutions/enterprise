@@ -10,6 +10,8 @@
 #include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
 
 class BACKEND_API ibSourceDataObject;
+class BACKEND_API ibValueDataObject;                       // the element a metaobject is asked to limit a value by (valueInfo.h)
+
 class BACKEND_API ibBackendControlFrame;
 class BACKEND_API ibValueManagerDataObject;
 class BACKEND_API ibValueSpreadsheetDocument;
@@ -134,7 +136,34 @@ public:
 		return 0;
 	}
 
-	//get data selector 
+	// ⭐⭐ NARROW A VALUE BY ONE OF MY ELEMENTS — the verb a reference passes on when it is asked to
+	// narrow one (ibValue::AdjustOutValue). A reference holds the metaobject that governs it and the
+	// element it stands for, so it hands both over and answers with what comes back.
+	//
+	// ⭐ AND WHAT COMES BACK IS A VALUE, never a description of types. A chart of characteristic types
+	// reads its own `Type` off the element and lets THAT bring the value — qualifiers and all, inside,
+	// where the schema belongs. Whoever asked never learns that such an attribute exists, and nothing
+	// that serialises crosses into the runtime's contract (Max, 2026-09-24).
+	//
+	// The element arrives as the plain data object (valueInfo.h): a thing whose values are read by
+	// metaID. That is all any override needs, so a record set line or a comparator answers here just
+	// as a reference does.
+	//
+	// 🛑 AND THE BASE ANSWERS TOO, rather than sending the caller somewhere else: a metaobject that
+	// declares no limit of its own narrows to ITS OWN CLASS, so `out` is filled on every road and the
+	// bool keeps ONE meaning — "the value is usable as it came". That is how two ordinary reference
+	// fields linked to each other work: put a counterparty in the first and the second offers
+	// counterparties. A catalogue of barcode kinds with a type attribute becomes a governing one by
+	// overriding this rather than by resembling a chart (Max, 2026-09-23: "a characteristic is simply a
+	// special case").
+	//
+	// 🛑 IT USED TO RETURN FALSE AND LET THE REFERENCE FALL BACK, and that cost a defect within the hour:
+	// a kind's `false` means "it did not fit" and comes WITH the narrowed value in `out`, so a fallback
+	// read it as "not mine", asked the base, and overwrote a correct empty goods reference with an
+	// undefined value. Two different falses in one seam (measured 2026-09-24 on the ledger base).
+	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const;
+
+	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}

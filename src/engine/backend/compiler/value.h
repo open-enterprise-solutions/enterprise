@@ -8,6 +8,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <map>
+#include <vector>
 #include <mutex>
 #include <thread>
 
@@ -1709,6 +1710,44 @@ public:
 	// no separate "empty element" surface on ibValue.
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator();
 #pragma endregion
+
+	// ⭐⭐ BRING THAT VALUE TO WHAT THIS ONE ALLOWS, AND SAY WHETHER YOU COULD — the whole of a link by
+	// type beyond "where to read it from", and a VERB rather than a question. Nobody has to learn what
+	// this value is: it takes the incoming value, brings it, and reports; which is how a subconto has
+	// always been written (accountingRegisterObject.cpp: the kind's own Type, then an adjustment).
+	//
+	// ⭐ THE SAME VERB THE TREE ALREADY USES FOR THIS OPERATION, with the `Out` in the middle for the shape
+	// it takes here: the factory's `AdjustValue` brings a value to what a FIELD declares and RETURNS it,
+	// this one brings it to what a VALUE allows and REPORTS.
+	//
+	// 🛑 AND IT CANNOT SIMPLY BE `AdjustValue`. A metaobject is BOTH an ibValue and an ibBackendTypeFactory
+	// (an attribute, a command, a constant, a chart of characteristic types), so one word in both bases is
+	// ambiguous in four classes at once — and the `using` declarations that quiet it are noise in the
+	// headers that would carry them. The factory keeps the plain name: twenty callers, and the script
+	// language offers it to configurations by it.
+	//
+	// 🛑 A BOOL AND AN OUT VALUE, NOT A RETURNED ONE, for two reasons (Max, 2026-09-24). A returned
+	// value CANNOT SAY WHICH ANSWER IT IS: "not admitted" and "admitted, and it is empty" came back
+	// identical, and the first has to empty the field while the second must not be mistaken for it. And
+	// it COPIES ONCE INSTEAD OF TWICE — `a.Adjust(b.Adjust(v))` copied the value at both hops, on a road
+	// a posting pass walks once per dimension of every line.
+	//
+	//   * true  — the narrowing went through; `out` holds the value AS IT CAME, the same reference passed
+	//             on, nothing rebuilt. A thing that narrows NOTHING answers here too, the same way.
+	//   * false — it did not fit, and `out` holds the EMPTY VALUE OF WHAT THIS ONE NARROWS TO. So `out` is
+	//             filled either way, and its type is the answer to "what does this narrow to" without a
+	//             second question being asked of anybody.
+	//
+	// 🛑 AND NOTHING ABOUT THE SCHEMA CROSSES THIS LINE. A type description is a value that
+	// SERIALISES — a thing of the schema — so handing one back from the runtime would make the schema
+	// part of the runtime's contract (Max, 2026-09-24). Here the schema stays inside whoever owns it:
+	// a kind applies its own Type, with its qualifiers, and the caller never sees either.
+	//
+	// Three answers, each from whoever knows it:
+	//   * an ordinary value narrows to ITS OWN CLASS (this default);
+	//   * a type description narrows to WHAT IT DESCRIBES, qualifiers included;
+	//   * a reference passes the question to the metaobject that governs it.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const;
 
 protected:
 

@@ -167,8 +167,14 @@ public:
 	// bare act of clicking the field.
 	virtual bool IsEmpty() const override { return m_typeDesc.GetClsidCount() == 0; }
 
-public:
+	// ⭐⭐ THE VERB THE RUNTIME ASKS OF EVERY VALUE, answered here by `AdjustValue` above, which this class
+	// has always had: a description narrows an incoming value to what it describes, qualifiers included.
+	// An ordinary value narrows to its own class (ibValue::AdjustOutValue), a reference passes the question
+	// on. One verb, three answers.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const override;
 
+public:
+ 
 	bool ContainType(const ibValue& cType) const;
 	ibValue AdjustValue() const;
 	ibValue AdjustValue(const ibValue& varValue) const;

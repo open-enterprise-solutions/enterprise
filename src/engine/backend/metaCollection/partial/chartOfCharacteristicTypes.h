@@ -51,6 +51,15 @@ public:
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
 
+	// ⭐⭐ A KIND OF THIS CHART LIMITS WHAT ITS VALUE MAY BE, and here that is said to the runtime. The
+	// element is read for its own `Type` — the same reading a posting makes for a subconto
+	// (accountingRegisterObject.cpp) — and that value does the limiting itself.
+	//
+	// ⭐ SO THERE IS NO CAST AND NO SCHEMA IN SIGHT. What sits in `Type` is an ibValueTypeDescription,
+	// and asked to narrow a value it answers with what it describes, qualifiers included (valueType.h).
+	// The same verb, one step further down the chain.
+	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const override;
+
 	//default constructor
 	ibValueMetaObjectChartOfCharacteristicTypes();
 	virtual ~ibValueMetaObjectChartOfCharacteristicTypes();

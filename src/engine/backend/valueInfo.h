@@ -17,7 +17,7 @@ struct ibReference {
 
 ///////////////////
 
-class ibValueDataObject {
+class BACKEND_API ibValueDataObject {
 public:
 
 	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}

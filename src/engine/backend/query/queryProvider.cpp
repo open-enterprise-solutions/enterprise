@@ -5827,10 +5827,12 @@ public:
 	ibValue Value(const ibBackendQueryColumn* col) const override {
 		return (m_row >= 0 && col != nullptr) ? m_table.GetCell(m_row, col->GetColumnId()) : ibValue();
 	}
-	using ibDataResultSource::Column;   // the prefix-and-column read keeps the base's answer
-	ibValue Column(const wxString& alias) const override {
+	// A COMPOSED TABLE HOLDS VALUES, NOT FIELDS — whatever was spread on the way here was reassembled
+	// before it was poured, so both shapes are one lookup by name and `col` has nothing to add. Said here
+	// rather than inherited, because the same sentence is false of a cursor (dbTableProvider.cpp).
+	ibValue Column(const wxString& name, const ibBackendQueryColumn* /*col*/ = nullptr) const override {
 		for (const ibQueryRamColumn& c : m_table.Columns())
-			if (c.m_name == alias) return m_table.GetCell(m_row, c.m_id);
+			if (c.m_name == name) return m_table.GetCell(m_row, c.m_id);
 		return ibValue();
 	}
 
@@ -5870,6 +5872,15 @@ ibValue  ibDataQueryResult::GetColumn(const wxString& alias)                    
 	for (const ibQueryColumnSelect& c : m_computedOverRow)
 		if (c.m_alias.IsSameAs(alias, false) && c.m_expr)
 			return EvalOverResultRow(c, *m_source);
+	// …then an output that came back as a SPREAD: a computed value of a composite type is projected field
+	// by field under a prefix, so it is reassembled by the reader that reassembles every other object
+	// output. Asked by name here, it looks like any other column — which is the whole point.
+	// …then an output that came back as a SPREAD: the result knows it, because the same question decided
+	// how to project it. The backing is only told WHICH shape to read — one door, and no caller anywhere
+	// has to know that an output was ever spread.
+	for (const ibComputedSpread& s : m_computedSpreads)
+		if (s.m_alias.IsSameAs(alias, false) && s.m_col != nullptr)
+			return m_source->Column(s.m_prefix, s.m_col);
 	return m_source->Column(alias);
 }
 ibValue  ibDataQueryResult::GetColumn(const wxString& prefix, const ibBackendQueryColumn* col) const { return m_source->Column(prefix, col); }
@@ -5888,6 +5899,11 @@ void ibDataQueryResult::SetMaterialiseColumns(std::vector<const ibBackendQueryCo
 void ibDataQueryResult::SetComputedOverRow(std::vector<ibQueryColumnSelect> columns)
 {
 	m_computedOverRow = std::move(columns);
+}
+
+void ibDataQueryResult::SetComputedSpreads(std::vector<ibComputedSpread> spreads)
+{
+	m_computedSpreads = std::move(spreads);
 }
 
 void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,

@@ -29,8 +29,7 @@
 //	way.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/typeDescription.h"   // a condition narrows a TYPE
-#include "backend/compiler/value.h"    // …and narrows ROWS by a parameter's runtime VALUE
+#include "backend/compiler/value.h"    // a condition narrows ROWS by a parameter's runtime VALUE
 #include "backend/uniqueKey.h"         // the key a form is opened under
 
 #include <map>
@@ -54,8 +53,12 @@ enum ibSelectMode {
 // changed.
 struct ibChoiceCondition {
 
-	// Empty: the field's own declared type stands.
-	ibTypeDescription m_type;
+	// 🛑 A SETTLED TYPE STOOD HERE AND NARROWED NOTHING. The resolver computed it — what the governing
+	// field settles the chosen field's type to — and the only reader it ever had was a report: a list is
+	// narrowed by the parameters below (valueDynamicList.cpp), and the control has already chosen which
+	// metaobject opens before it asks for a condition. What a field may HOLD is decided where the value
+	// is written, by the one verb (ibValue::AdjustValue), so the second machinery for it is gone
+	// (measured and removed 2026-09-24).
 
 	// ⭐⭐ THE CHOICE PARAMETERS, AS THE PAIRS THEY ARE — a field of what is being chosen, and the
 	// value it must equal. That is what an author wrote (`Owner ← Counterparty`) and what the list is

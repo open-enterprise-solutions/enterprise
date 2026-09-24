@@ -1718,6 +1718,35 @@ ibValue ibValue::GetValue(bool getThis) const
 	return *this;
 }
 
+// ⭐ AN ORDINARY VALUE NARROWS TO ITS OWN CLASS, and that is the whole of the default: a field governed
+// by this one may hold what THIS is, and nothing else. What came in comes back out untouched — there is
+// nothing to narrow it to beyond being of that class. The two values that mean something more — a type
+// description, and a reference whose metaobject governs it — say so by overriding; nobody else has to
+// know they exist.
+//
+// ⚠ THROUGH THE REFERENCE, as GetClassType above does it. A slot holds an object as TYPE_REFFER, so
+// asking the slot must reach the object, or every answer here would be "a reference" — the class of
+// the wrapper rather than of what stands in it.
+bool ibValue::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	if (m_pRef != nullptr && IsReference())
+		return m_pRef->AdjustOutValue(varValue, out);
+
+	const ibClassID& limit = GetClassType();
+	if (varValue.GetClassType() == limit) {
+		out = varValue;
+		return true;
+	}
+
+	// ⚠ …AND OTHERWISE THE EMPTY VALUE OF THE LIMIT, not nothing: whoever asked gets a value of the
+	// right type either way, so the type of the answer is the answer to "what does this narrow to"
+	// without a second question being asked (Max, 2026-09-24). A class the registry cannot make — a
+	// configuration whose metaobjects were described but not registered, a headless tool before it
+	// opens a base — is the undefined value, as it is everywhere else this asks.
+	out = IsRegisterCtor(limit) ? CreateObject(limit) : ibValue();
+	return false;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************

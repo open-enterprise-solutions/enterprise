@@ -1,9 +1,8 @@
 #include "choiceLinkResolver.h"
 
 #include "backend/metaData.h"
-#include "backend/metaCollection/partial/reference/reference.h"          // the reference a governing field holds
+#include "backend/metaCollection/partial/reference/reference.h"          // the metaobject a source answers with, complete
 #include "backend/metaCollection/attribute/metaAttributeObject.h"        // a field answers what governs it
-#include "backend/system/value/valueType.h"                              // ibValueTypeDescription
 #include "backend/srcDataObject.h"                                       // the path door every source answers
 #include "backend/backend_type.h"                                        // ibBackendTypeSourceFactory — the binding that names the field
 #include "backend/diagnostics/journal.h"                                 // ibJournal — see the note below
@@ -151,121 +150,6 @@ bool ibChoiceLinkResolver::CanGovern(const ibValueMetaObjectAttributeBase* field
 	return !field->IsEmptyTypeDesc();
 }
 
-namespace {
-
-// ⭐ WHAT THE GOVERNING VALUE SAYS, READ THE WAY THE REGISTER ALREADY READS IT. The accounting register has
-// been doing exactly this on WRITE since the day account dimensions were addressed by kind: the kind's
-// own `Type` attribute IS a description of types, reached by the id the chart declares for it
-// (accountingRegisterObject.cpp). This is that reading, where the CHOICE can ask it too — the same
-// answer at the moment a person fills the field and at the moment the value is stored.
-//
-// ⚠ `said` — the journal hears the answer at the moment somebody CHOOSES, not on every write. A posting
-// pass narrows a value per cell, and in Debug the journal is a file: a line per write was ten thousand
-// lines for ten thousand rows and a good part of their time (2026-09-24, the write bench).
-bool SettledType(const ibChoiceTypeLinkDescription& link, const ibChoiceHolder& holder, ibTypeDescription& settled,
-	bool said)
-{
-	ibValue governing;
-	if (!holder.GetValue(link.m_source, governing) || governing.IsEmpty()) {
-		// ⭐⭐ NOTHING IS CHOSEN THERE, SO NOTHING NARROWS — the link is as good as absent, and the field
-		// takes every type its own declaration admits: a characteristic, everything its chart declares
-		// (Max, 2026-09-23: "if the characteristic sees the linked field is empty, it accepts all the data
-		// types there are among the kinds of characteristics").
-		if (said)
-			ibJournalInfo(wxT("choice.type"), wxT("governing #%d holds nothing - the field takes its whole contour"),
-				link.m_source.GetLeaf());
-		return false;
-	}
-
-	// The field holds a type description outright.
-	ibValueTypeDescription* held = nullptr;
-	if (governing.ConvertToValue(held) && held != nullptr) {
-		settled = held->m_typeDesc;
-		return true;
-	}
-
-	// ⭐⭐ …AND THE THING THAT WAS CHOSEN NARROWS THE CONTOUR TO ONE ANSWER — WHATEVER IT IS. A reference
-	// standing in the governing field is asked for the field OF ITS OWN that holds a type description,
-	// and that is the answer: what this field may hold. A chart of characteristic types is one such kind,
-	// not the mechanism — a catalogue of barcode kinds with a type attribute is the same arrangement
-	// (Max, 2026-09-23: "a characteristic is simply a special case").
-	//
-	// ⚠ A kind that says nothing settles nothing: the field keeps its own contour.
-	ibValueReferenceDataObject* reference = nullptr;
-	if (!governing.ConvertToValue(reference) || reference == nullptr)
-		return false;
-
-	const ibValueMetaObjectGenericData* kind = reference->GetSourceMetaObject();
-	if (kind == nullptr)
-		return false;
-
-	for (const ibValueMetaObjectAttributeBase* field : kind->GetGenericAttributeArrayObject()) {
-		if (field->IsDeleted() || !field->GetTypeDesc().ContainType(g_valueTypeDescriptionCLSID))
-			continue;
-
-		ibValue declared;
-		reference->GetValueByMetaID(field->GetMetaID(), declared);
-
-		ibValueTypeDescription* limit = nullptr;
-		if (!declared.ConvertToValue(limit) || limit == nullptr || !limit->m_typeDesc.IsOk())
-			continue;   // this kind carries the field but has not been told a type: nothing to narrow by
-
-		if (said)
-			ibJournalInfo(wxT("choice.type"), wxT("governing #%d ('%s') declares %u type(s) through '%s'"),
-				link.m_source.GetLeaf(), kind->GetName(), limit->m_typeDesc.GetClsidCount(), field->GetName());
-
-		settled = limit->m_typeDesc;
-		return true;
-	}
-
-	// ⭐⭐ AND OTHERWISE THE TYPE IS THE TYPE OF WHAT IS THERE. Two ordinary COMPOSITE fields linked to
-	// each other: whoever put a catalogue reference in the first one sees the second offering that
-	// catalogue (Max, 2026-09-23). The two branches above are the cases where the value does not mean
-	// ITSELF: a type description means what it describes, and a kind means what it declares.
-	settled = ibTypeDescription(governing.GetClassType());
-	return true;
-}
-
-// ⭐⭐ WHICH PART OF THE FIELD THE LINK DECIDES (docs/private/choice-links.md § 6). A field that names no
-// governed type is decided whole. A composite field that names one gives up only THAT type to the link:
-// its other types stay as declared, with their own qualifiers — a value field of `Characteristic |
-// Units` governed through its characteristic still takes a unit whatever kind is chosen.
-ibTypeDescription ibMergeGoverned(const ibTypeDescription& contour, ibClassID governed, const ibTypeDescription& settled)
-{
-	if (governed == 0 || !contour.ContainType(governed))
-		return settled;
-
-	ibTypeDescription merged = settled;
-	for (const ibClassID& clsid : contour.GetClsidList()) {
-		if (clsid == governed || merged.ContainType(clsid))
-			continue;
-		merged.AppendMetaType(clsid);
-
-		// …and a primitive the settled type did not bring keeps the qualifier the field declared for it.
-		switch (ibValue::GetVTByID(clsid)) {
-		case ibValueTypes::TYPE_NUMBER: merged.m_typeData.m_number = contour.m_typeData.m_number; break;
-		case ibValueTypes::TYPE_DATE:   merged.m_typeData.m_date   = contour.m_typeData.m_date;   break;
-		case ibValueTypes::TYPE_STRING: merged.m_typeData.m_string = contour.m_typeData.m_string; break;
-		default: break;
-		}
-	}
-	return merged;
-}
-
-}
-
-bool ibChoiceLinkResolver::ResolveType(const ibValueMetaObjectAttributeBase* field, const ibChoiceHolder& holder,
-	ibChoiceCondition& condition)
-{
-	const ibChoiceTypeLinkDescription& link = field->GetTypeLink();
-	ibTypeDescription settled;
-	if (!link.IsOk() || !SettledType(link, holder, settled, true))
-		return false;
-
-	condition.m_type = ibMergeGoverned(field->GetTypeValueDesc(), link.m_governedType, settled);
-	return true;
-}
-
 // ⭐ ONE CONDITION PER ROW, over the field of the target the row names — and the condition is an ordinary
 // one. The filter tree has held a field against a value since it was written, so nothing here is a
 // special kind of condition: what is special is only where the value came from.
@@ -384,9 +268,6 @@ ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder,
 	if (field == nullptr)
 		return condition;
 
-	// IN THE ORDER THEY ARE APPLIED, and the order is not an implementation detail: the type decides
-	// WHICH list opens, the conditions narrow what is shown IN it.
-	ResolveType(field, holder, condition);
 	ResolveParameters(field->GetChoiceParameters(), holder, condition);
 	return condition;
 }
@@ -405,12 +286,26 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	if (!link.IsOk())
 		return field->AdjustValue(value);
 
-	// The same reading ResolveType makes, without a condition to carry it and without a journal line: this
-	// is a write, and the answer is only the type.
-	ibTypeDescription settled;
-	const ibValue adjusted = SettledType(link, holder, settled, false)
-		? field->AdjustValue(value, ibMergeGoverned(field->GetTypeValueDesc(), link.m_governedType, settled))
-		: field->AdjustValue(value);
+	// ⭐⭐ THE GOVERNING VALUE BRINGS THE VALUE, AND THAT IS THE WHOLE ANSWER — ibValue::AdjustValue, the
+	// same verb the accounting register's dimension uses for a subconto. Nothing here reads a type off
+	// anything: what stands in the governing field decides what it takes (a type description by what it
+	// describes, a reference through the metaobject that governs it, anything else by its own class), and
+	// what comes back is a value of that type, admitted or empty.
+	//
+	// 🛑 AND IT IS NOT NARROWED TWICE. The field's own adjustment used to be applied on top, and after the
+	// governing value has spoken there is only the ONE option left (Max, 2026-09-24): a second pass either
+	// changes nothing or destroys what the governor just decided, and it copies the value again on a road
+	// a posting pass walks once per cell.
+	//
+	// 🛑 IT ALSO REPLACED A SEARCH: this used to settle a TYPE — walking a kind's attributes for the first
+	// one that could hold a type description, two casts to get there — and then adjust by the merge of
+	// that with the field's declaration. All of it is gone; the one question is enough.
+	ibValue governing;
+	if (!holder.GetValue(link.m_source, governing) || governing.IsEmpty())
+		return field->AdjustValue(value);
+
+	ibValue adjusted;
+	governing.AdjustOutValue(value, adjusted);
 
 	// 🛑⭐ A VALUE THAT WENT IN AND DID NOT COME OUT — said out loud, because this is the shape the
 	// whole evening of 2026-09-23 took. Narrowing answers with the EMPTY value of the type it settled
