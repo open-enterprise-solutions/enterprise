@@ -264,25 +264,21 @@ public:
 		ibFilterNodeDescription* item = GetSelectedItem();
 		if (item == nullptr)
 			return false;
-		// ADJUSTED TO THE CELL'S TYPE ON THE WAY IN, exactly as a text control does
-		// it (textctrl.cpp): the factory rounds a number to its scale, trims a
-		// string, and turns "nothing" into the right kind of empty — the empty
-		// value of a single type, or Undefined when the cell is composite. That is
-		// why clearing is just this call with nothing in it.
+		// ⭐⭐ HANDED OVER AS IT CAME. The value is narrowed ONCE, by SetSideValue, and by the thing that
+		// has the right to narrow it: the FIELD on the left. Narrowing here as well was the same rule
+		// applied twice — this call went through the cell's own factory, which is the very same door
+		// (ibValueTypeDescription::AdjustValue), so a value was adjusted, handed on, and adjusted again.
 		//
-		// 🛑 …BUT A VALUE THE ROW ALREADY ADMITS GOES STRAIGHT THROUGH. The adjustment answers "did not
-		// fit" with the EMPTY of the declared type, and where the cell admits several types there is no
-		// single empty to answer with, so it answers UNDEFINED — a clearing. On a composite condition
-		// that turned a perfectly good value into nothing every time it was re-chosen (Max, 2026-09-24:
-		// "you wipe the value because you see more than one type, and you decide it must be cleared —
-		// but there are cases where the value is already set, it fits by type, and it must simply go on
-		// into the current row").
-		const ibTypeDescription& admitted = GetTypeDesc();
-		const bool fits = !varValue.IsEmpty()
-			&& admitted.GetClsidCount() > 0
-			&& admitted.ContainType(varValue.GetClassType());
-
-		SetSideValue(item, fits ? varValue : AdjustValue(varValue));
+		// 🛑 AND THE SECOND ONE ASKED THE WRONG DESCRIPTION. This cell answers GetTypeDesc with the LEFT
+		// FIELD's types whichever column it is, so a COMPARISON or a DISPLAY MODE — an enumeration member,
+		// neither of them a value of the field — was run through a description that cannot contain it.
+		//
+		// A test stood in front of it ("…but a value the row already admits goes straight through"),
+		// written when re-choosing a composite value cleared it. That clearing came from somewhere else
+		// — the grid handing back the editor's TEXT as the editor closed, see GetValueFromEditorCtrl —
+		// and the test only hid one road's half of it. The engine already answers this: a value of an
+		// admitted type comes back from AdjustValue unchanged.
+		SetSideValue(item, varValue);
 		return true;
 	}
 
