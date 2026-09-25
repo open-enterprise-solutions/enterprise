@@ -1801,25 +1801,6 @@
       "reviewed": true
     },
     {
-      "id": "fn.GetCommonTemplate",
-      "name_local": "GetCommonTemplate",
-      "name_en": "GetCommonTemplate",
-      "kind": "system_function",
-      "category_keys": [
-        "global_context",
-        "global_functions"
-      ],
-      "signature": "GetCommonTemplate(name : string)",
-      "description": "A common template by name — the spreadsheet a printed form is built from.",
-      "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "name — the common template's name.",
-      "return_descr": "The template.",
-      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.GetCommonForm"],
-      "reviewed": true
-    },
-    {
       "id": "fn.BeginTransaction",
       "name_local": "BeginTransaction",
       "name_en": "BeginTransaction",

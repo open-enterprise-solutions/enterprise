@@ -1801,25 +1801,6 @@
       "reviewed": true
     },
     {
-      "id": "fn.GetCommonTemplate",
-      "name_local": "GetCommonTemplate",
-      "name_en": "GetCommonTemplate",
-      "kind": "system_function",
-      "category_keys": [
-        "global_context",
-        "global_functions"
-      ],
-      "signature": "GetCommonTemplate(name : string)",
-      "description": "Спільний макет за іменем — табличний документ, з якого збирається друкована форма.",
-      "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "name — ім'я спільного макета.",
-      "return_descr": "Макет.",
-      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.GetCommonForm"],
-      "reviewed": true
-    },
-    {
       "id": "fn.BeginTransaction",
       "name_local": "BeginTransaction",
       "name_en": "BeginTransaction",
