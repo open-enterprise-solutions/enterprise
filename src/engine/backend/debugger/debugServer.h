@@ -236,10 +236,13 @@ private:
 	// in the frame that reaches the line (EnterDebugger).
 	std::map<wxString, std::map<unsigned int, wxString>> m_listBreakpoint;
 
+	// WHAT IS WATCHED HERE, AND FOR WHOM — refreshed at every stop by SendExpressions, which answers each
+	// asker in its own name. See ibWatchedExpression (debugDefs.h) for why the name is kept and not
+	// recovered.
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	std::map <unsigned long long, wxString> m_listExpression;
+	std::map <unsigned long long, ibWatchedExpression> m_listExpression;
 #else
-	std::map <unsigned int, wxString> m_listExpression;
+	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif
 
 	wxCriticalSection m_clearBreakpointsCS;

@@ -683,10 +683,13 @@ private:
 	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
 	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
+	// WHAT IS WATCHED, AND WHO ASKED FOR EACH — re-registered with the runtime after every reconnect
+	// (CommandId_GetArrayBreakpoint), which is the moment the name has to be said again and cannot be
+	// worked out. See ibWatchedExpression (debugDefs.h).
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	std::map <unsigned long long, wxString> m_listExpression;
+	std::map <unsigned long long, ibWatchedExpression> m_listExpression;
 #else 
-	std::map <unsigned int, wxString> m_listExpression;
+	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif  
 
 	bool	m_enterLoop, m_connectionSuccess;
