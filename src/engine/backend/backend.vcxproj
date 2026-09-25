@@ -184,6 +184,7 @@
     <ClInclude Include="fileSystem\fs.h" />
     <ClInclude Include="serialize\dataBuilder.h" />
     <ClInclude Include="serialize\jsonProvider.h" />
+    <ClInclude Include="serialize\jsonText.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\quicklz\quicklz.h" />
     <ClInclude Include="fileSystem\types.h" />
@@ -403,6 +404,7 @@
     <ClInclude Include="system\value\valueFile.h" />
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
+    <ClInclude Include="system\value\valueJson.h" />
     <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueOLE.h" />
@@ -626,6 +628,7 @@
     <ClCompile Include="fileSystem\fs.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
     <ClCompile Include="serialize\jsonProvider.cpp" />
+    <ClCompile Include="serialize\jsonText.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fileSystem\quicklz\quicklz.c" />
     <ClCompile Include="eventDispatcher.cpp" />
@@ -961,6 +964,7 @@
     <ClCompile Include="system\value\valueFile.cpp" />
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
+    <ClCompile Include="system\value\valueJson.cpp" />
     <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueOLE.cpp" />

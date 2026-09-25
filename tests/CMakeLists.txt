@@ -68,6 +68,7 @@ add_executable(oes_tests
     test_dataNode.cpp
     test_pointInTime.cpp
     test_jsonProvider.cpp
+    test_valueJson.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
@@ -90,6 +91,7 @@ add_executable(oes_tests
     test_queryConstructor.cpp
     test_queryNaming.cpp
     test_queryRoundTrip.cpp
+    test_jsonRoundTrip.cpp
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp

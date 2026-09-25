@@ -17,6 +17,7 @@
     "collections": "Collections",
     "value_table": "Value table (Table)",
     "http": "HTTP — requests to another system",
+    "json": "JSON — reading and writing",
     "runtime": "Runtime",
     "guide": "Guide"
   }
