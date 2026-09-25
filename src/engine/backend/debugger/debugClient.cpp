@@ -823,39 +823,56 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 				while (ibDebuggerClientConnection::IsConnected()) {
 
 					if (m_socketClient != nullptr && m_socketClient->WaitForRead(0, waitDebuggerTimeout)) {
-						m_socketClient->ReadMsg(&length, sizeof(unsigned int));
-						// short read on the length header — treat as disconnect
-						if (m_socketClient->LastCount() != sizeof(unsigned int)) {
-							leftBy = wxT("a short read on the length header");
-							break;
-						}
-						// guard against hostile/garbled server sending an absurd size
-						static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
-						if (length > kMaxDebugPacket) {
-							leftBy = wxT("a declared frame size past the 16 MiB ceiling");
-							break;
-						}
-						if (m_socketClient == nullptr) {
-							leftBy = wxT("the socket was taken out of its slot by another thread");
-							break;
-						}
-						// No second WaitForRead before the payload —
-						// the socket was created with wxSOCKET_BLOCK |
-						// wxSOCKET_WAITALL so ReadMsg blocks until
-						// every requested byte arrives. The previous
-						// WaitForRead(0, 50ms) gate timed out under
-						// network jitter / multi-tab debug traffic
-						// and skipped the payload while the length
-						// had already been consumed; the next outer
-						// iteration read the payload's first bytes
-						// as a fresh length header (huge value),
-						// tripped the kMaxDebugPacket guard, and
-						// detached. Symmetric fix to the server side.
-						wxMemoryBuffer bufferData(length);
-						m_socketClient->ReadMsg(bufferData.GetData(), length);
-						if (m_socketClient->LastCount() != length) {
-							leftBy = wxT("a short read on the payload");
-							break;
+						wxMemoryBuffer bufferData;
+						{
+							// 🛑⭐⭐ ONE THREAD AT A TIME MAY USE THIS SOCKET — and this end had nothing of
+							// the kind, while the far end had half of it (debugServer.h, m_socketMutex).
+							// wxSocketBase keeps its blocking FLAGS on the object: a read raises WAITALL
+							// for the length of its read and a write does the same for its write, each
+							// restoring what it found. Overlap them — the window's thread sending a step
+							// while this thread reads the answer to the last one — and one restores the
+							// other's flags mid-frame, so a read obliged to wait for every byte comes back
+							// SHORT, on a socket that is connected, healthy and not closed.
+							//
+							// The wait stays outside the lock: a reader must not hold the socket while
+							// nothing is arriving. Inside is one whole frame, and the dispatch below stays
+							// outside — it answers, and answering takes this same lock.
+							std::lock_guard<std::mutex> lk(m_socketMutex);
+
+							m_socketClient->ReadMsg(&length, sizeof(unsigned int));
+							// short read on the length header — treat as disconnect
+							if (m_socketClient->LastCount() != sizeof(unsigned int)) {
+								leftBy = wxT("a short read on the length header");
+								break;
+							}
+							// guard against hostile/garbled server sending an absurd size
+							static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
+							if (length > kMaxDebugPacket) {
+								leftBy = wxT("a declared frame size past the 16 MiB ceiling");
+								break;
+							}
+							if (m_socketClient == nullptr) {
+								leftBy = wxT("the socket was taken out of its slot by another thread");
+								break;
+							}
+							// No second WaitForRead before the payload —
+							// the socket was created with wxSOCKET_BLOCK |
+							// wxSOCKET_WAITALL so ReadMsg blocks until
+							// every requested byte arrives. The previous
+							// WaitForRead(0, 50ms) gate timed out under
+							// network jitter / multi-tab debug traffic
+							// and skipped the payload while the length
+							// had already been consumed; the next outer
+							// iteration read the payload's first bytes
+							// as a fresh length header (huge value),
+							// tripped the kMaxDebugPacket guard, and
+							// detached. Symmetric fix to the server side.
+							bufferData.SetBufSize(length);
+							m_socketClient->ReadMsg(bufferData.GetData(), length);
+							if (m_socketClient->LastCount() != length) {
+								leftBy = wxT("a short read on the payload");
+								break;
+							}
 						}
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
 							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
@@ -1333,6 +1350,13 @@ void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, un
 {
 	bool sent = false;
 
+	// ⭐⭐ THE SOCKET IS USED BY ONE THREAD AT A TIME. Two calls go out here, a header and then its
+	// payload, and they must not be split — by another sender, nor by the READER on the connection's own
+	// thread. The far end has held this lock for its writes all along (debugServer.h); this end held
+	// nothing, and the window's thread sending a step while the connection's thread read the answer to
+	// the last one is what left a read short on a live socket. See the read loop in EntryClient.
+	std::lock_guard<std::mutex> lk(m_socketMutex);
+
 #if _USE_NET_COMPRESSOR == 1
 	BYTE* dest = nullptr; unsigned int dest_sz = 0;
 	_compressLZ(&dest, &dest_sz, pointer, length);
@@ -1354,12 +1378,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, un
 	//
 	// Two facts are worth having and neither was recorded. WHICH THREAD — the journal's own column says
 	// that, and it is worth reading here: the pair of WriteMsg calls above is a header and then its
-	// payload, and nothing serialises them, while the far end's SendCommand does hold a mutex for exactly
-	// that reason (debugServer.h, m_sendMutex — *"header bytes from one sender mix with payload bytes from
-	// another and the designer parser drops the connection on the next garbled frame"*). AND WHETHER IT
-	// WENT AT ALL: a command dropped because IsConnected() said no leaves the person pressing a key that
-	// does nothing — which is what "the debugger fell off" looks like from the outside, before anything
-	// is closed.
+	// payload, and the lock that keeps them together is young (see above). AND WHETHER IT WENT AT ALL: a
+	// command dropped because IsConnected() said no leaves the person pressing a key that does nothing —
+	// which is what "the debugger fell off" looks like from the outside, before anything is closed.
 	ibJournalIf {
 		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
 		const auto hold = m_socketLock.Hold();

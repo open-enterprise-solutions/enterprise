@@ -310,6 +310,18 @@ class BACKEND_API ibDebuggerClient {
 		// thread ends a session while this connection's own thread closes the same socket.
 		mutable ibSocketLock m_socketLock;
 
+		// ⭐⭐ …AND ONE THREAD AT A TIME USES IT. A separate lock from the one above, deliberately: that
+		// one guards the SLOT and must never be held while waiting for bytes, or a Close would queue
+		// behind a read that is waiting for a frame nobody is sending. This one is held for exactly one
+		// frame in or out.
+		//
+		// 🛑 THERE WAS NONE. The window's thread sends a step while the connection's thread reads the
+		// answer to the last one, and wxSocketBase keeps its blocking FLAGS on the object — a read raises
+		// WAITALL for its own duration, a write does the same, and each restores what it found. Overlap
+		// them and a read obliged to wait for every byte comes back SHORT, on a socket that is connected
+		// and healthy. The far end has had this lock for its writes all along (debugServer.h).
+		std::mutex m_socketMutex;
+
 		wxString		m_confGuid;
 		wxString		m_md5Hash;
 		wxString		m_userName;

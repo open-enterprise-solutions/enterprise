@@ -100,15 +100,25 @@ class BACKEND_API ibDebuggerServer {
 		wxSocketServer* m_socketServer;
 		wxSocketBase* m_socket;
 
-		// Serialises wire writes. SendCommand does two consecutive
-		// WriteMsg calls (length header + payload); without a mutex,
-		// concurrent senders interleave their bytes and the designer
-		// sees a corrupted frame and drops the connection. Hot path
-		// when several web sessions hit breakpoints in parallel and
-		// each emits LeaveLoop on F5 destroy. Plain mutex — a write
-		// to the socket is already syscall-bound, lock contention is
-		// dwarfed by the I/O cost.
-		std::mutex m_sendMutex;
+		// ⭐⭐ ONE THREAD AT A TIME USES THE SOCKET — writing AND reading.
+		//
+		// Writes were the first half: SendCommand does two consecutive WriteMsg
+		// calls (length header + payload), and without a lock concurrent senders
+		// interleave their bytes — a hot path when several web sessions hit
+		// breakpoints in parallel and each emits LeaveLoop on F5 destroy.
+		//
+		// Reads are the other half, and cost a detach a day until 2026-09-25.
+		// wxSocketBase keeps its blocking FLAGS on the object: a read raises
+		// WAITALL for its duration and a write does the same for its own,
+		// restoring what it found. Overlap them and one restores the other's
+		// flags mid-frame, so a read obliged to wait for every byte returns
+		// short — on a socket that is connected and healthy. See the read loop
+		// in EntryClient for what that looked like in the journal.
+		//
+		// Plain mutex: socket I/O is syscall-bound, and contention is dwarfed by
+		// the cost of the call it guards. The WAIT for data is NOT held — only
+		// the frame that has begun to arrive.
+		std::mutex m_socketMutex;
 
 		friend class ibDebuggerServer;
 	};

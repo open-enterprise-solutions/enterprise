@@ -1074,51 +1074,71 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 
 		// 🔎 WHY THIS END STOPPED READING — the same word the designer's loop keeps for itself
 		// (debugClient.cpp), so the two journals can be read side by side: the end that printed its
-		// reason first is the end that ended the session. The absurd-size door matters most of all,
-		// because a garbled frame is what a header and a payload written by two threads at once look
-		// like from here (see SendCommand's mutex below, and the designer's, which has none).
+		// reason first is the end that ended the session.
 		const wxChar* leftBy = wxT("the loop's own condition - IsConnected() answered no, or the thread was told to stop");
 
 		while (!TestDestroy() && ibDebuggerServerConnection::IsConnected()) {
 			if (m_socket != nullptr && m_socket->WaitForRead(0, waitDebuggerTimeout)) {
 				unsigned int length = 0;
-				m_socket->ReadMsg(&length, sizeof(unsigned int));
-				// short read on the length header — treat as disconnect, don't parse garbage
-				if (m_socket->LastCount() != sizeof(unsigned int)) {
-					leftBy = wxT("a short read on the length header");
-					break;
-				}
-				// Reject absurd packet sizes (protects against hostile/garbled client
-				// sending 0xFFFFFFFF → 4 GiB wxMemoryBuffer allocation attempt → terminate).
-				static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u; // 16 MiB
-				if (length > kMaxDebugPacket) {
-					leftBy = wxT("a declared frame size past the 16 MiB ceiling");
-					break;
-				}
-				if (m_socket == nullptr) {
-					leftBy = wxT("the socket was taken out of its slot");
-					break;
-				}
-				// No second WaitForRead before reading the payload —
-				// the socket was created with wxSOCKET_BLOCK |
-				// wxSOCKET_WAITALL (see m_socketServer construction
-				// above; flags propagate to accepted sockets), so
-				// ReadMsg blocks until every requested byte is
-				// available. The previous WaitForRead(0, 50ms) gate
-				// could time out when the payload was delayed by
-				// even a few tens of ms (network jitter, contention
-				// from multi-tab debug traffic, designer scheduler
-				// hiccups). When that happened the length had already
-				// been consumed but the payload was skipped, so the
-				// next outer iteration read the payload's leading
-				// bytes as a fresh length header — almost always
-				// huge, tripping the kMaxDebugPacket guard, breaking
-				// out of the loop and detaching the debugger.
-				wxMemoryBuffer bufferData(length);
-				m_socket->ReadMsg(bufferData.GetData(), length);
-				if (m_socket->LastCount() != length) {
-					leftBy = wxT("a short read on the payload");
-					break;
+				wxMemoryBuffer bufferData;
+				{
+					// 🛑⭐⭐ ONE THREAD AT A TIME MAY USE THIS SOCKET — reading included, and that is what
+					// this lock is FOR now. wxSocketBase keeps its state per OBJECT, the blocking flags
+					// among it: ReadMsg raises WAITALL for the length of its read and WriteMsg does the
+					// same for its write, each restoring what it found. Let the two overlap and one
+					// restores the other's flags mid-frame, and a read that was obliged to wait for every
+					// byte comes back SHORT — on a socket that is connected, healthy and not closed.
+					//
+					// That is what it looked like (2026-09-25, both journals to the millisecond): the
+					// script thread writing the answer to one step — 81 + 28 + 620 bytes of leave, enter,
+					// locals and stack — while this thread read the next step's command, and the read gave
+					// up on "a short read on the payload". The session ended with two live sockets, which
+					// is exactly how "the debugger detaches by itself" reads from outside.
+					//
+					// The WAIT stays outside: a reader must not hold the socket while nothing is arriving.
+					// Inside is one whole frame, header and payload together — half a frame read under the
+					// lock and the other half outside is the same defect with more steps. And the DISPATCH
+					// stays outside too: it answers, and answering takes this same lock.
+					std::lock_guard<std::mutex> lk(m_socketMutex);
+
+					m_socket->ReadMsg(&length, sizeof(unsigned int));
+					// short read on the length header — treat as disconnect, don't parse garbage
+					if (m_socket->LastCount() != sizeof(unsigned int)) {
+						leftBy = wxT("a short read on the length header");
+						break;
+					}
+					// Reject absurd packet sizes (protects against hostile/garbled client
+					// sending 0xFFFFFFFF → 4 GiB wxMemoryBuffer allocation attempt → terminate).
+					static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u; // 16 MiB
+					if (length > kMaxDebugPacket) {
+						leftBy = wxT("a declared frame size past the 16 MiB ceiling");
+						break;
+					}
+					if (m_socket == nullptr) {
+						leftBy = wxT("the socket was taken out of its slot");
+						break;
+					}
+					// No second WaitForRead before reading the payload —
+					// the socket was created with wxSOCKET_BLOCK |
+					// wxSOCKET_WAITALL (see m_socketServer construction
+					// above; flags propagate to accepted sockets), so
+					// ReadMsg blocks until every requested byte is
+					// available. The previous WaitForRead(0, 50ms) gate
+					// could time out when the payload was delayed by
+					// even a few tens of ms (network jitter, contention
+					// from multi-tab debug traffic, designer scheduler
+					// hiccups). When that happened the length had already
+					// been consumed but the payload was skipped, so the
+					// next outer iteration read the payload's leading
+					// bytes as a fresh length header — almost always
+					// huge, tripping the kMaxDebugPacket guard, breaking
+					// out of the loop and detaching the debugger.
+					bufferData.SetBufSize(length);
+					m_socket->ReadMsg(bufferData.GetData(), length);
+					if (m_socket->LastCount() != length) {
+						leftBy = wxT("a short read on the payload");
+						break;
+					}
 				}
 				if (length > 0) {
 #ifdef __WXMSW__
@@ -2079,8 +2099,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::SendCommand(void* pointer, un
 	// LeaveLoop emissions when several tabs are F5'd at once). Without
 	// the lock, header bytes from one sender mix with payload bytes
 	// from another and the designer parser drops the connection on the
-	// next garbled frame.
-	std::lock_guard<std::mutex> lk(m_sendMutex);
+	// next garbled frame. The same lock holds off the READER while this
+	// writes — see the note on m_socketMutex.
+	std::lock_guard<std::mutex> lk(m_socketMutex);
 
 	// 🔎 WHAT THIS END PUT ON THE WIRE. Printed under the mutex, so the lines come out in the order the
 	// bytes did — which is the point: a step into a nested call makes several senders (the parked script's
