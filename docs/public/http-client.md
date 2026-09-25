@@ -17,7 +17,8 @@ exchange needs a program outside the platform.
 | `SecureConnection` | `([clientCertificate [, trustedCertificates]])` | `ClientCertificate`, `TrustedCertificates`, `VerifyServerCertificate` |
 | `CertificateFile` | `(path [, keyPassword])` | a PEM file: a certificate, or a certificate with its key |
 
-The help corpus (`syntaxHelper/*/http.json`, `tls.json`) has an article for every member.
+The help corpus (`syntaxHelper/*/http.json`, `tls.json`) has an article for every member. A body
+is text or bytes. JSON in it is read and written by [JSONReader / JSONWriter](json.md).
 
 ## What it guarantees
 
