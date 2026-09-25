@@ -304,8 +304,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # docs/private/ is private and not needed; wxWidgets is — see tests-linux.
-      - run: bash .github/fetch-wxwidgets.sh
+      # docs/private/ takes itself out (`update = none`), every other submodule is fetched — see tests-linux.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies
@@ -372,8 +372,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # docs/private/ is private and not needed; wxWidgets is — see tests-linux.
-      - run: bash .github/fetch-wxwidgets.sh
+      # docs/private/ takes itself out (`update = none`), every other submodule is fetched — see tests-linux.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies
