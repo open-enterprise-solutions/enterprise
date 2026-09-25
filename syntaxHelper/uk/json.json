@@ -10,6 +10,7 @@
       "kind": "collection",
       "class_id": 145156802521465377,
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -37,6 +38,7 @@
       "name_en": "CurrentValueType",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -60,6 +62,7 @@
       "name_en": "CurrentValue",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -82,6 +85,7 @@
       "name_en": "SetString",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -105,6 +109,7 @@
       "name_en": "Read",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -128,6 +133,7 @@
       "name_en": "Skip",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -150,6 +156,7 @@
       "name_en": "ReadValue",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -174,6 +181,7 @@
       "name_en": "Close",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -197,6 +205,7 @@
       "kind": "collection",
       "class_id": 212455710233442230,
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -224,6 +233,7 @@
       "name_en": "WriteStartObject",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -246,6 +256,7 @@
       "name_en": "WriteEndObject",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -268,6 +279,7 @@
       "name_en": "WriteStartArray",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -290,6 +302,7 @@
       "name_en": "WriteEndArray",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -312,6 +325,7 @@
       "name_en": "WritePropertyName",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -334,6 +348,7 @@
       "name_en": "WriteValue",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -358,6 +373,7 @@
       "name_en": "Close",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -381,6 +397,7 @@
       "kind": "enum_type",
       "class_id": 422981509789553766,
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -408,6 +425,7 @@
       "name_en": "None",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -432,6 +450,7 @@
       "name_en": "Null",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -456,6 +475,7 @@
       "name_en": "Boolean",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -479,6 +499,7 @@
       "name_en": "Number",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -503,6 +524,7 @@
       "name_en": "String",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -527,6 +549,7 @@
       "name_en": "PropertyName",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -552,6 +575,7 @@
       "name_en": "ObjectStart",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -577,6 +601,7 @@
       "name_en": "ObjectEnd",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -601,6 +626,7 @@
       "name_en": "ArrayStart",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -626,6 +652,7 @@
       "name_en": "ArrayEnd",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -652,6 +679,7 @@
       "kind": "enum_type",
       "class_id": 407844533207000529,
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -676,6 +704,7 @@
       "name_en": "Compact",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
@@ -699,6 +728,7 @@
       "name_en": "Indented",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "json"
       ],
