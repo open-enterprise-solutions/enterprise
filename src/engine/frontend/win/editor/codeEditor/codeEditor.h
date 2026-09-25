@@ -522,6 +522,13 @@ public:
 	void ShowAutoComplete(
 		const ibDebugAutoCompleteData& autoCompleteData);
 
+	// ⭐ THE VALUE THE RUNTIME ANSWERED WITH, for the word the mouse is on — the one door that puts it
+	// up, so the editor also KEEPS it: the system pops a tooltip on its own schedule and shows whatever
+	// text is in place then, so the same answer is laid back down on every movement across that word
+	// (LoadToolTip). An empty value takes the hint down, which is how a step clears what it made stale.
+	// Not wxWindow::SetToolTip, which is not virtual and says nothing about where the text came from.
+	void SetDebugValue(const wxString& value);
+
 	// ⚠ THE EDITOR'S OWN POSITION, NOT THE COMPILER'S. GetRealPosition counts CHARACTERS, which is
 	// what a caret means to the compiler; a window is placed by wxSTC's document position, which is
 	// a byte offset. Any non-ASCII above the caret pulls the two apart, and the tip is drawn that
@@ -657,6 +664,14 @@ private:
 	// The hint the breakpoint margin put up (OnMouseMove) - taken down when the mouse leaves the margin,
 	// so it does not stand over the text. Empty when the margin has none up.
 	wxString m_marginHint;
+
+	// The expression the debugger was last asked the value of (LoadToolTip) - so travelling across one
+	// word does not ask again and again. Empty when nothing has been asked.
+	wxString m_askedExpression;
+
+	// …and the answer, kept because the tooltip has to be laid down again on every movement for the
+	// system to find it there when it decides to show one. Empty until the answer arrives.
+	wxString m_askedValue;
 
 protected:
 	// The context menu's debugger part, for the line it was opened on - the designer adds the

@@ -224,6 +224,12 @@ void ibCodeEditor::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 	//if (!ibCodeEditor::GetSTCFocus()) 
 	// CodeEditor::SetSTCFocus(true);
 
+	// THE RUN LINE MOVED, so every value that was asked about belongs to a state that no longer exists —
+	// the question and its answer both go. This is the door a step comes through, and a step is exactly
+	// what makes an answer stale.
+	m_askedExpression.clear();
+	m_askedValue.clear();
+
 	MarkerDeleteAll(ibCodeEditor::BreakLine);
 
 	if (setBreakLine) MarkerAdd(lineBreakpoint - 1, ibCodeEditor::BreakLine);
@@ -489,6 +495,19 @@ int ibCodeEditor::GetRealPositionFromPoint(const wxPoint& pt)
 {
 	const wxString& codeText = GetTextRange(0, PositionFromPoint(pt));
 	return codeText.Length();
+}
+
+void ibCodeEditor::SetDebugValue(const wxString& value)
+{
+	// KEPT AS WELL AS SHOWN. The system decides on its own when to pop a tooltip and shows the text that
+	// is in place at that moment, so the same answer is laid down again on every movement across the word
+	// it belongs to (LoadToolTip) — and that is only possible if the editor still has it.
+	m_askedValue = value;
+
+	if (value.IsEmpty())
+		UnsetToolTip();
+	else
+		SetToolTip(value);
 }
 
 #include "frontend/win/dlgs/lineInput/lineInput.h"

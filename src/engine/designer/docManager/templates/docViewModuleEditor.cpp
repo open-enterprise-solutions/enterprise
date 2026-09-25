@@ -281,7 +281,8 @@ void ibModuleEditDocument::SetToolTip(const wxString& resultStr) {
 	ibCodeEditor* codeEditor = GetCodeEditor();
 	wxASSERT(codeEditor);
 	if (codeEditor != nullptr) {
-		codeEditor->SetToolTip(resultStr);
+		// The editor's own door, not the window's: it keeps the answer as well as showing it.
+		codeEditor->SetDebugValue(resultStr);
 	}
 }
 
