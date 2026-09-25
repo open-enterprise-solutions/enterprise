@@ -10,6 +10,7 @@
       "kind": "collection",
       "class_id": 212494550608706170,
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -38,6 +39,7 @@
       "name_en": "Open",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -61,6 +63,7 @@
       "name_en": "ReadLine",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -85,6 +88,7 @@
       "name_en": "Read",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -108,6 +112,7 @@
       "name_en": "LineCount",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -132,6 +137,7 @@
       "name_en": "GetLine",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -156,6 +162,7 @@
       "name_en": "Close",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -179,6 +186,7 @@
       "kind": "collection",
       "class_id": 209640218422438089,
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -205,6 +213,7 @@
       "name_en": "Open",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -228,6 +237,7 @@
       "name_en": "Write",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -252,6 +262,7 @@
       "name_en": "WriteLine",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -275,6 +286,7 @@
       "name_en": "Close",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -299,6 +311,7 @@
       "kind": "collection",
       "class_id": 146987204006577027,
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -324,6 +337,7 @@
       "name_en": "Size",
       "kind": "method",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -346,6 +360,7 @@
       "name_en": "Read",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -370,6 +385,7 @@
       "name_en": "Write",
       "kind": "procedure",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -394,6 +410,7 @@
       "kind": "enum_type",
       "class_id": 413303300201889308,
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -420,6 +437,7 @@
       "name_en": "UTF8",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -443,6 +461,7 @@
       "name_en": "UTF16",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -466,6 +485,7 @@
       "name_en": "ANSI",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -489,6 +509,7 @@
       "name_en": "OEM",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
@@ -512,6 +533,7 @@
       "name_en": "System",
       "kind": "system_enum",
       "category_keys": [
+        "value_types",
         "runtime",
         "text_files"
       ],
