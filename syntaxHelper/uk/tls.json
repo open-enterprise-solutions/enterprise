@@ -10,6 +10,7 @@
       "kind": "collection",
       "class_id": 179108361144881211,
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -37,6 +38,7 @@
       "name_en": "Path",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -61,6 +63,7 @@
       "kind": "collection",
       "class_id": 169100091633056753,
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -88,6 +91,7 @@
       "name_en": "ClientCertificate",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -112,6 +116,7 @@
       "name_en": "TrustedCertificates",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -136,6 +141,7 @@
       "name_en": "VerifyServerCertificate",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
@@ -160,6 +166,7 @@
       "name_en": "SecureConnection",
       "kind": "property",
       "category_keys": [
+        "value_types",
         "runtime",
         "http"
       ],
