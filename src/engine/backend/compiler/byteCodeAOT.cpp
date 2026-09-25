@@ -227,7 +227,14 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // 🛑 31 → 32 (2026-09-21): an ordering key's WAY rides its own `OPER_LINQ_KEEP` (m_param4.m_numArray, 1 =
 // descending), and `OPER_LINQ_RESULT` says only "by the keys" (2). A v31 blob wrote the way once, as 1 in the
 // RESULT, and a zero in every KEEP - read now, a descending query would come back ascending, quietly.
-constexpr uint16_t kAOTFormatVersion = 32;
+// 🛑 32 -> 33 (2026-09-24): a COMPARISON'S RESULT IS BOOLEAN AGAIN, so the instruction above it
+//    changes. "Is this a comparison" is a range over the operator numbers and it was asked after a
+//    declared type had already moved the opcode by a tier, so a typed comparison answered no and
+//    its result carried the OPERAND'S class - which made the If over it take the operand's tier and
+//    read the operand's field. Cached bytecode written by the old compiler holds that If; the new
+//    interpreter writes the comparison's answer with its tag, into another field, and the old If
+//    would read the one nobody wrote. And / Or answer a boolean by the same rule and move with it.
+constexpr uint16_t kAOTFormatVersion = 33;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

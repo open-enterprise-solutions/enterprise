@@ -4118,15 +4118,28 @@ delimOperation:
 					}
 				}
 
+				// ⭐ WHAT THIS OPERATOR ANSWERS, ASKED BEFORE THE TIER MOVES ITS NUMBER. CheckTypeDef
+				// below adds TYPE_DELTA1..4 to the opcode when the left side has a declared type, and
+				// the test for "is this a comparison" is a RANGE over the operator numbers - so asked
+				// afterwards it answered no about every typed comparison, and the answer's type came
+				// out as the operand's rather than Boolean. And / Or are asked here as well, for the
+				// same reason and with the same consequence: they sit outside that range, so `if (a And
+				// b)` over two typed Numbers read a number field nobody had written.
+				//
+				// What that cost: the If over it then took the operand's tier and read the operand's
+				// FIELD - m_fData for a number, m_bData for a boolean - which is a different field, not
+				// a different name for one (value.h: only the boolean, date, string and reference share
+				// a union; a number sits outside it). It worked only while the comparison wrote that
+				// same field and nothing else, which is exactly what the commit before this one had to
+				// stop doing to make a comparison's answer readable as a value.
+				const bool bAnswersBoolean = (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE)
+					|| code.m_numOper == OPER_AND || code.m_numOper == OPER_OR;
+
 				if (puVariable2.m_numArray != DEF_VAR_CONST && puVariable2.m_numArray != DEF_VAR_TEMP) { // constants are not checked - because they are typified by default
 					CheckTypeDef(puVariable3, puVariable2.m_clsid);
 				}
 
-				puVariable1.m_clsid = puVariable2.m_clsid;
-
-				if (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE) {
-					puVariable1.m_clsid = g_valueBooleanCLSID;
-				}
+				puVariable1.m_clsid = bAnswersBoolean ? g_valueBooleanCLSID : puVariable2.m_clsid;
 
 				code.m_param1 = puVariable1;
 				code.m_param2 = puVariable2;
