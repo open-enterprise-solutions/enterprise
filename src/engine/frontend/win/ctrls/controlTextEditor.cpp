@@ -371,7 +371,7 @@ void ibControlTextEditor::EnsureSlotMetrics() const
 	m_cachedSlotH = hFromFont > hMin ? hFromFont : hMin;
 }
 
-int ibControlTextEditor::GetMinimumUsableWidth() const
+int ibControlTextEditor::ComputeMinUsableWidth() const
 {
 	int labelW = 0;
 	if (!m_dvcMode) {
@@ -384,17 +384,21 @@ int ibControlTextEditor::GetMinimumUsableWidth() const
 	return labelW + labelGap + 2 + VisibleButtonCount() * BtnSlotWidth() + FromDIP(kMinimumTextWidth);
 }
 
-void ibControlTextEditor::KeepRoomForText()
+wxSize ibControlTextEditor::GetMinSize() const
 {
-	const int needed = GetMinimumUsableWidth();
+	wxSize size = wxWindow::GetMinSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
+}
 
-	const wxSize minSize = GetMinSize();
-	if (minSize.x > 0 && minSize.x < needed)
-		SetMinSize(wxSize(needed, minSize.y));
-
-	const wxSize maxSize = GetMaxSize();
-	if (maxSize.x > 0 && maxSize.x < needed)
-		SetMaxSize(wxSize(needed, maxSize.y));
+wxSize ibControlTextEditor::GetMaxSize() const
+{
+	// the same floor: a maximum below the minimum would undo it
+	wxSize size = wxWindow::GetMaxSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
 }
 
 wxSize ibControlTextEditor::DoGetBestClientSize() const

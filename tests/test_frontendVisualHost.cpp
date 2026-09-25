@@ -142,7 +142,7 @@ ibControlTextEditor* MakeSumField(wxWindow* parent, int width)
 
 } // namespace
 
-TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_IsRaisedToLeaveARoomToType)
+TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_MinSizeLeavesATextArea)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -154,12 +154,8 @@ TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_IsRaised
 	EXPECT_LT(TextAreaWidth(editor), editor->FromDIP(ibControlTextEditor::kMinimumTextWidth) / 2)
 		<< "72 pixels are not enough for a caption, two buttons and a text area";
 
-	editor->KeepRoomForText();
-
-	const int needed = editor->GetMinimumUsableWidth();
-	EXPECT_GT(needed, 72);
-	EXPECT_EQ(editor->GetMinSize().x, needed);
-	EXPECT_EQ(editor->GetMaxSize().x, needed);   // a maximum below the minimum would undo it
+	EXPECT_GT(editor->GetMinSize().x, 72);
+	EXPECT_EQ(editor->GetMaxSize().x, editor->GetMinSize().x);   // a maximum below the minimum would undo it
 
 	editor->SetSize(wxSize(editor->GetMinSize().x, 28));
 	editor->Layout();
@@ -171,7 +167,6 @@ TEST_F(VisualHostFix, TextEditor_FormWidthAlreadyWideEnough_IsLeftAsTheAuthorSet
 	if (!frameReady) GTEST_SKIP();
 
 	ibControlTextEditor* editor = MakeSumField(parent, 400);
-	editor->KeepRoomForText();
 
 	EXPECT_EQ(editor->GetMinSize().x, 400);
 	EXPECT_EQ(editor->GetMaxSize().x, 400);
@@ -184,7 +179,6 @@ TEST_F(VisualHostFix, TextEditor_NoWidthSetByTheForm_StaysUnset)
 	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);
 	editor->SetLabel(wxT("Сумма"));
 	editor->ShowSelectButton(true);
-	editor->KeepRoomForText();
 
 	EXPECT_LE(editor->GetMinSize().x, 0);   // the default best size already leaves room; nothing to force
 	EXPECT_LE(editor->GetMaxSize().x, 0);
@@ -194,12 +188,11 @@ TEST_F(VisualHostFix, TextEditor_MoreButtonsVisible_NeedMoreWidth)
 {
 	if (!frameReady) GTEST_SKIP();
 
-	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);
-	editor->SetLabel(wxT("Сумма"));
+	ibControlTextEditor* editor = MakeSumField(parent, 1);   // narrower than anything: the answer is the floor
 	editor->ShowSelectButton(false);
 	editor->ShowClearButton(false);
-	const int bare = editor->GetMinimumUsableWidth();
+	const int bare = editor->GetMinSize().x;
 	editor->ShowSelectButton(true);
 	editor->ShowClearButton(true);
-	EXPECT_GT(editor->GetMinimumUsableWidth(), bare);
+	EXPECT_GT(editor->GetMinSize().x, bare);
 }

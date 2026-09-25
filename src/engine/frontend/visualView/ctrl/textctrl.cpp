@@ -229,12 +229,6 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	}
 
 	UpdateWindow(textEditor);
-
-#ifndef OES_USE_WEB
-	// The width the form gave the field is honoured — unless the caption and buttons drawn inside it
-	// would leave no room to type, which a 72-pixel sum with a caption and two buttons did.
-	textEditor->KeepRoomForText();
-#endif
 }
 
 void ibValueTextCtrl::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
