@@ -84,8 +84,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # docs/private/ is private and not needed; wxWidgets is — see ci.yml.
-      - run: bash .github/fetch-wxwidgets.sh
+      # Every submodule .gitmodules names, and only those - see ci.yml.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - uses: ilammy/msvc-dev-cmd@v1
@@ -128,7 +128,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: bash .github/fetch-wxwidgets.sh
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies
@@ -176,7 +176,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: bash .github/fetch-wxwidgets.sh
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies

@@ -60,6 +60,34 @@ private:
 
 // ANSI and OEM are asked of the SYSTEM, not assumed: a base moved from one machine to another reads the
 // files of the machine it runs on. Elsewhere than Windows there is one such encoding - the locale's.
+bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, wxString& text)
+{
+	const unsigned char* const bytes = static_cast<const unsigned char*>(data);
+	size_t skip = 0;
+
+	// ⚠ A BYTE-ORDER MARK IS A MARK, NOT TEXT. Handed over, it becomes an invisible first character of the
+	// first line - and the first column of a CSV never equals the name it is compared with.
+	std::unique_ptr<wxMBConv> conv;
+	if (encoding == ibTextEncoding_UTF8 && size >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
+		skip = 3;
+	}
+	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+		skip = 2;
+	}
+	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+		skip = 2;
+		conv = std::make_unique<wxMBConvUTF16BE>();   // the mark says which end comes first
+	}
+	if (!conv)
+		conv = ibCreateTextConv(encoding);
+
+	text.clear();
+	if (size <= skip)
+		return true;                                          // nothing, or a mark and nothing: an empty text
+	text = wxString(static_cast<const char*>(data) + skip, *conv, size - skip);
+	return !text.empty();
+}
+
 std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
 {
 	switch (encoding) {
@@ -140,33 +168,10 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 	wxMemoryBuffer bytes;
 	ibValueBinaryData::ReadWholeFile(fileName, wxT("TextReader"), bytes);
 
-	const unsigned char* data = static_cast<const unsigned char*>(bytes.GetData());
-	size_t size = bytes.GetDataLen(), skip = 0;
-
-	// ⚠ A BYTE-ORDER MARK IS A MARK, NOT TEXT. Handed over, it becomes an invisible first character of the
-	// first line - and the first column of a CSV never equals the name it is compared with.
-	std::unique_ptr<wxMBConv> conv;
-	if (encoding == ibTextEncoding_UTF8 && size >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF) {
-		skip = 3;
-	}
-	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && data[0] == 0xFF && data[1] == 0xFE) {
-		skip = 2;
-	}
-	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && data[0] == 0xFE && data[1] == 0xFF) {
-		skip = 2;
-		conv = std::make_unique<wxMBConvUTF16BE>();   // the mark says which end comes first
-	}
-	if (!conv)
-		conv = ibCreateTextConv(encoding);
-
-	m_text.clear();
-	if (size > skip) {
-		m_text = wxString(static_cast<const char*>(bytes.GetData()) + skip, *conv, size - skip);
-		// Bytes that do not spell text in this encoding decode to NOTHING - and an empty text out of a file
-		// that is not empty would read as "the file has no lines", which is a different thing.
-		if (m_text.empty())
-			ibBackendCoreException::Error(_("TextReader: the file '%s' cannot be read in the encoding given"), fileName);
-	}
+	// Bytes that do not spell text in this encoding decode to NOTHING - and an empty text out of a file that
+	// is not empty would read as "the file has no lines", which is a different thing.
+	if (!ibTextFromBytes(bytes.GetData(), bytes.GetDataLen(), encoding, m_text))
+		ibBackendCoreException::Error(_("TextReader: the file '%s' cannot be read in the encoding given"), fileName);
 
 	// Where every line begins, found ONCE: ReadLine walks this index and GetLine jumps into it, so the two
 	// cannot disagree about what a line is. A break at the very end ENDS the last line - it opens none after it.

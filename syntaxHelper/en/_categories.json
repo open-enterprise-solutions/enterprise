@@ -16,6 +16,8 @@
     "value_types": "Value types",
     "collections": "Collections",
     "value_table": "Value table (Table)",
+    "http": "HTTP — requests to another system",
+    "runtime": "Runtime",
     "guide": "Guide"
   }
 }

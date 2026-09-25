@@ -66,6 +66,21 @@ class ibValueEnumTextEncoding : public ibValueEnumeration<ibTextEncoding> {
 	}
 };
 
+class ibValueEnumHttpMethod : public ibValueEnumeration<ibHttpMethod> {
+	public:
+	ibValueEnumHttpMethod() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Get, wxT("Get"), _("Get"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Post, wxT("Post"), _("Post"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Put, wxT("Put"), _("Put"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Patch, wxT("Patch"), _("Patch"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Delete, wxT("Delete"), _("Delete"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Head, wxT("Head"), _("Head"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Options, wxT("Options"), _("Options"));
+	}
+};
+
 class ibValueChars : public ibValueEnumeration<ibChars> {
 	public:
 	ibValueChars() : ibValueEnumeration() {}

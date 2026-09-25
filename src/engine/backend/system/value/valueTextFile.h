@@ -32,6 +32,12 @@ class wxMBConv;
 
 BACKEND_API std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding);
 
+// Bytes -> the text they spell in the encoding, the byte-order mark (UTF-8, UTF-16 either way round) read as
+// a mark and never handed over. False when bytes that are not empty spell nothing: what that means - a file
+// that cannot be read, an answer that is not text - is the caller's sentence. The one door for a file's
+// content and for a body that came over the wire.
+BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, wxString& text);
+
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
 class BACKEND_API ibValueTextReader : public ibValueStaticMembers<&ibValueTextReader_BindNames> {

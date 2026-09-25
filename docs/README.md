@@ -28,7 +28,7 @@ Arcs in progress, plans and anything that stays inside the organisation live in 
 submodule at `docs/private/`. It opens for members of the Open Enterprise Solutions organisation:
 
 ```
-git submodule update --init docs/private
+git submodule update --init --checkout docs/private
 ```
 
 For everyone else the directory stays empty, and links into it from code and from the documents

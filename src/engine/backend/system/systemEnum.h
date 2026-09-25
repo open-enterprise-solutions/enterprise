@@ -41,6 +41,19 @@ enum ibTextEncoding
 	ibTextEncoding_System
 };
 
+// What HTTPConnection.CallMethod is told to do - said with a member, not with a string a typo can change
+// (and a string is also how a second request gets written ahead of the real one).
+enum ibHttpMethod
+{
+	ibHttpMethod_Get = 1,
+	ibHttpMethod_Post,
+	ibHttpMethod_Put,
+	ibHttpMethod_Patch,
+	ibHttpMethod_Delete,
+	ibHttpMethod_Head,
+	ibHttpMethod_Options
+};
+
 enum ibChars {
 	eCR = 13,
 	eFF = 12,
