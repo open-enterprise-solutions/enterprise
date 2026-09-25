@@ -322,6 +322,13 @@ class BACKEND_API ibValueTabularSectionDataObject : public ibValueTabularSection
 class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSectionDataObjectBase {
 	public:
 
+	// ⭐⭐ A READ IS STILL PENDING — there are rows in the database that have not been fetched into this
+	// section yet. True from birth for an EXISTING object (a new one has nothing to read), true again
+	// when a load could not run, and false once the rows are here. Whoever hands the section out reads on
+	// it, exactly once (reference.cpp, GetPropVal).
+	//
+	// ⚠ ASKED ONCE FOR A REASON: LoadData begins by CLEARING the model, and a cleared model detaches
+	// every row already handed out — including the row a `foreach` is standing on.
 	bool IsReadAfter() const { return m_readAfter; }
 
 	ibValueTabularSectionDataObjectRef();

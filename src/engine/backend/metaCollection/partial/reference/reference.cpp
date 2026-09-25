@@ -1020,6 +1020,9 @@ bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPr
 		if (lPropAlias == eTable && GetValueByMetaID(id, pvarPropVal)) {
 			ibValueTabularSectionDataObjectRef* tabularSection = nullptr;
 			if (pvarPropVal.ConvertToValue(tabularSection)) {
+				// ONCE, WHILE THE READ IS STILL PENDING — the flag says whether the rows are here yet, and
+				// LoadData clears it. Reading again would begin by CLEARING the model and detach every row
+				// already handed out; see the note on IsReadAfter.
 				if (tabularSection->IsReadAfter()) {
 					if (!tabularSection->LoadData(m_objGuid, true)) {
 						pvarPropVal.Reset();

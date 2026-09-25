@@ -128,7 +128,16 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 	}
 	catch (...) { return false; }
 
-	m_readAfter = true;
+	// THE ROWS ARE HERE, SO NOTHING IS PENDING ANY MORE.
+	//
+	// 🛑 IT SAID `true`, and that is the flag the caller reads on (reference.cpp, GetPropVal): the read
+	// re-armed the very condition that starts it, so EVERY access to the field read the table again. And
+	// a read begins by CLEARING the model — which detaches every row already handed out, including the
+	// one a `foreach` is standing on. The script kept working only for as long as nobody else touched the
+	// field; a watch expression or a hover on it broke the script it was watching. Measured 2026-09-25:
+	// three re-reads from the debug connection's thread, and the next step died on `line.Item`
+	// ("Object field not readable (Item)", Document.GoodsSale.ManagerModule(37)).
+	m_readAfter = false;
 	return true;
 }
 
