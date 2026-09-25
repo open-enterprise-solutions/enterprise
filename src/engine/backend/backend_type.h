@@ -123,6 +123,17 @@ public:
 	static void GetTypesByFilter(ibSelectorDataType filterDataType, const class ibMetaData* metaData,
 		std::vector<ibClassID>& out);
 
+	// ⭐ THE FORMAT A TYPE DESCRIPTION GIVES — for a number `NFD=2` from Number(15,2), as many digits after the
+	// point as the type keeps, so the figures of a column line up; for a date the pattern its fractions keep
+	// (date, time, both). False for a type that gives none: nothing is written into `formatString`
+	// (docs/private/format-property.md).
+	static bool GetFormatFromTypeDesc(const ibTypeDescription& type, class ibFormatString& formatString);
+
+	// …AND THE FORMAT A VALUE IS SHOWN WITH: `format` when written, else the one `type` gives — for a table's
+	// column and an input field alike. A table is painted a column at a time, top to bottom, so the answer is
+	// kept per thread and read again only when the column asked is another one.
+	static const class ibFormatString& GetFormatFromColumn(const class ibTranslateString& format, const ibTypeDescription& type);
+
 	// ⭐⭐ A CHARACTERISTIC STANDS FOR ITS CHART'S TYPES — answered here, for EVERY holder of such a
 	// declaration: an attribute, a control bound to one, a filter cell, a form's own attribute. Body in
 	// backend_type.cpp.

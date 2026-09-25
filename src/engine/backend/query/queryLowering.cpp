@@ -2468,6 +2468,35 @@ private:
 	ibMetaID                  m_id;
 };
 
+// ⭐ A NUMBER WHOSE SCALE NOBODY CAN STATE — precision 0, the type system's "no limit": nothing is rounded to
+// it (valueType.cpp) and it is shown with the digits it has. What arithmetic and an average answer with. A bare
+// Number(10,0) claims a scale of none, and a report written through the type would show `1500.5` as `1501`.
+static ibTypeDescription UnboundedNumber()
+{
+	return ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(0, 0));
+}
+
+// ⭐ WHAT A FOLD ANSWERS WITH, given what it folds — asked alike by a SELECT's aggregate (TypeOfExpr) and a
+// TOTALS resource. A SUM is in the units of what it adds up (kopecks summed are kopecks), MIN / MAX are one of
+// the values they compared, COUNT counts. An AVERAGE divides, and no scale holds for a quotient.
+static ibTypeDescription TypeOfFold(ibQueryKeyword func, const ibTypeDescription& argType)
+{
+	switch (func) {
+	case ibQueryKeyword::Count:
+		return ibTypeDescription(g_valueNumberCLSID);
+	case ibQueryKeyword::Sum:
+		return argType.GetClsidCount() == 1 && argType.ContainType(ibValueTypes::TYPE_NUMBER)
+			? argType : UnboundedNumber();
+	case ibQueryKeyword::Avg:
+		return UnboundedNumber();
+	case ibQueryKeyword::Min:
+	case ibQueryKeyword::Max:
+		return argType;
+	default:
+		return ibTypeDescription();
+	}
+}
+
 // ⭐ WHAT A COMPUTED OUTPUT HOLDS — the type an expression ANSWERS WITH.
 //
 // A column brings its type with it; an expression has to be asked. Nobody was asking, so every
@@ -2513,7 +2542,7 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 		const bool lNum = l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_NUMBER);
 		const bool rNum = r.GetClsidCount() == 1 && r.ContainType(ibValueTypes::TYPE_NUMBER);
 		if (lNum && rNum)
-			return number;
+			return UnboundedNumber();
 		// A date SHIFTED by a number is still a date; a date TIMES anything is not a date, and two
 		// dates subtracted are not one either — neither is claimed here.
 		const bool shift = e.m_arith == ibQueryArithOp::Add || e.m_arith == ibQueryArithOp::Sub;
@@ -2542,19 +2571,7 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 	}
 
 	case ibQueryAstExprKind::Func:
-		// COUNT is a count; SUM / AVG fold numbers into a number. MIN / MAX yield one of the values
-		// they compared, so they answer with the argument's own type.
-		switch (e.m_func) {
-		case ibQueryKeyword::Count:
-		case ibQueryKeyword::Sum:
-		case ibQueryKeyword::Avg:
-			return number;
-		case ibQueryKeyword::Min:
-		case ibQueryKeyword::Max:
-			return e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription();
-		default:
-			return ibTypeDescription();
-		}
+		return TypeOfFold(e.m_func, e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription());
 
 	case ibQueryAstExprKind::ScalarCall: {
 		// 🛑 THE CALLS WERE NOT HERE, so every one of them went out untyped: `MONTH(Date)`,
@@ -3226,7 +3243,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					else
 						b.Aggregate(AggFn(e.m_func), argCols, alias, e.m_distinctArg);
 				}
-				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too: COUNT/SUM/AVG a number, MIN/MAX the argument's own
+				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too — see TypeOfFold
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
@@ -5921,9 +5938,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 	for (size_t i = 0; i < schema.size(); ++i) {
 		const ibMetaID id = static_cast<ibMetaID>(i + 1);
 		ids.push_back(id);
-		static const ibTypeDescription s_anyType;
-		table.AddColumn(id, schema[i].m_name,
-			schema[i].m_col != nullptr ? schema[i].m_col->GetTypeDesc() : s_anyType);
+		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc());
 	}
 
 	while (result.Next()) {
@@ -6963,6 +6978,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			const ibBackendQueryColumn* m_col = nullptr;   // null = COUNT(*)
 			wxString                    m_name;
 			bool                        m_distinct = false;
+			ibTypeDescription           m_type;            // what the figure is — TypeOfFold, as the fold's resources say
 		};
 		std::vector<PagedMeasure> pagedMeasures;
 		bool measuresArePlain = true;
@@ -7008,6 +7024,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				}
 				catch (const ibBackendException&) { measuresArePlain = false; break; }
 			}
+			m.m_type = TypeOfFold(agg->m_func, m.m_col != nullptr ? m.m_col->GetTypeDesc() : ibTypeDescription());
 			pagedMeasures.push_back(m);
 		}
 
@@ -7054,6 +7071,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 				OutputColumn mc; mc.m_name = m.m_name;
 				mc.m_role = ibQueryLowering::ibColumnRole::Measure;
+				mc.m_type = m.m_type;   // its own, not its column's — as the fold's resources carry it
 				if (m.m_col != nullptr) mc.m_col = m.m_col;
 				else { mc.m_alias = m.m_name; mc.m_byAlias = true; }
 				outSchema.push_back(mc);
@@ -7568,6 +7586,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
+		ibTypeDescription                     argType;           // the type of what it folds — see TypeOfFold; empty = unknown
 		if (!agg->m_star) {
 			// A bare identifier may name a SELECTed field (alias) before a metadata attribute.
 			const bool bareName = agg->m_arg->m_kind == ibQueryAstExprKind::Column && agg->m_arg->m_path.size() == 1;
@@ -7604,6 +7623,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// A selected field spelled its SOURCE way (`Catalog1.Parent`) — resolved against the
 			// sources. That it IS selected was settled above, before anything was built.
 			else col = ResolveColumnSingle(sources, *agg->m_arg);
+			// Taken before a repeat is moved to a column of its own below: that one is synthetic and says nothing.
+			if (col != nullptr)
+				argType = col->GetTypeDesc();
 
 			// ⭐ A SECOND AGGREGATE OVER THE SAME COLUMN NEEDS A COLUMN OF ITS OWN. The fold rolls
 			// each one IN PLACE — into the slot keyed by its input column — so `SUM(Amount)` and
@@ -7704,6 +7726,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 		OutputColumn oc; oc.m_name = outName;
 		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS aggregate — the report's resource
+		// ⭐ ITS OWN TYPE, not its column's: m_col is what it FOLDS, and a count of amounts is not an amount.
+		oc.m_type = TypeOfFold(agg->m_func, argType);
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
 		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*), or an area folded here — read by name
 		outSchema.push_back(oc);

@@ -231,6 +231,12 @@ public:
 	struct Format;
 	wxString ToString(const Format& fmt) const;
 
+	// …THE SAME TEXT, WRITTEN INTO `out` — the form a caller showing many values uses: one string reused
+	// row after row grows once, and an immediate-tier figure (every ordinary amount) is laid out on the
+	// stack, with no BigImpl, no vector and no temporary string. A report of a hundred thousand rows with a
+	// format on a column goes through here once per cell (docs/private/format-property.md).
+	void ToString(const Format& fmt, wxString& out) const;
+
 	// Rounding (round-half-away-from-zero).
 	ibNumber Round() const;          // to nearest integer
 	ibNumber Round(int n) const;     // to n decimal places (n >= 0)

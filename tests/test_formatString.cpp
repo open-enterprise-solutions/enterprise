@@ -127,6 +127,28 @@ TEST(FormatString, ADatePatternAndAnEmptyDate)
 	EXPECT_EQ(wxT("-"), ibFormatString::Parse(wxT("DF=dd.mm.yyyy; DE=-")).Apply(ibValue(ibValueTypes::TYPE_DATE)));
 }
 
+// The pattern is written straight into the text (formatString.cpp, WriteDate) and reads as the strftime
+// translation it replaced did: a short spelling is still two digits, `yy` is the year's last two, and a
+// run longer than its longest spelling leaves the rest as the letter.
+TEST(FormatString, EveryDateSpellingReadsAsItDid)
+{
+	const ibValue date(2026, 9, 5, 4, 3, 2);
+	EXPECT_EQ(wxT("05.09.26"), ibFormatString::Parse(wxT("DF=d.m.yy")).Apply(date));
+	EXPECT_EQ(wxT("2026-09-05 04:03:02"), ibFormatString::Parse(wxT("DF=yyyy-mm-dd HH:MM:SS")).Apply(date));
+	EXPECT_EQ(wxT("09.2026"), ibFormatString::Parse(wxT("DF=mm.yyyy")).Apply(date));
+	EXPECT_EQ(wxT("2026y"), ibFormatString::Parse(wxT("DF=yyyyy")).Apply(date));
+}
+
+// The out-argument form writes the same text over whatever the string held, and says whether there is any.
+TEST(FormatString, TheOutArgumentWritesTheSameText)
+{
+	wxString text(wxT("whatever was there"));
+	EXPECT_TRUE(ibFormatString::Parse(wxT("NFD=2; NGS= ")).Apply(Number(wxT("1234567.891")), text));
+	EXPECT_EQ(wxT("1 234 567.89"), text);
+	EXPECT_FALSE(ibFormatString::Parse(wxT("NZ=")).Apply(ibValue(0), text));
+	EXPECT_EQ(wxT(""), text);
+}
+
 // A value of any other type prints as its plain string, whatever the codes say.
 TEST(FormatString, AStringIsNotFormatted)
 {

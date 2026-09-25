@@ -98,11 +98,19 @@ public:
 	// The text read and written: `CODE=value` pairs separated by `;`. A value that is all space is a
 	// space (`NGS= ` groups digits with one), any other is trimmed.
 	static ibFormatString Parse(const wxString& text);
+	// …written into `formatString` in place, the codes the text names. False when it names none.
+	static bool Parse(const wxString& text, ibFormatString& formatString);
 	wxString Render() const;
 
 	// What Format(value, this) prints: a number, a date and a boolean each by their own codes, any
 	// other value as its plain string.
 	wxString Apply(const ibValue& value) const;
+
+	// …THE SAME TEXT, WRITTEN INTO `result` — the form a caller showing many values uses (a column of a
+	// report goes through here once per cell): a string reused row after row grows once, an ordinary
+	// amount is laid out on the stack (ibNumber::ToString) and a date straight from its pattern. False when
+	// the value shows as nothing.
+	bool Apply(const ibValue& value, wxString& result) const;
 
 	// A value that can be written at all: `;` ends a pair and `=` is not kept in one, so neither
 	// can stand in a text.

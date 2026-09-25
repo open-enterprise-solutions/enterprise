@@ -2951,6 +2951,9 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			// The attribute tells the declaration from what a value may be (a characteristic answers with
 			// its chart's list) — ask it rather than deciding here.
 			virtual const ibTypeDescription GetColumnTypeValue() const { return m_metaAttribute->GetTypeValueDesc(); }
+			virtual const ibFormatString& GetColumnFormat() const {
+				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+			}
 
 			// The attribute the column is.
 			const ibValueMetaObjectAttributeBase* GetAttribute() const { return m_metaAttribute; }

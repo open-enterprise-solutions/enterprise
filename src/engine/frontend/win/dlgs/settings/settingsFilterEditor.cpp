@@ -193,7 +193,10 @@ public:
 		// that road carries on below unchanged.
 		if (const ibFilterNodeDescription* item = GetSelectedItem()) {
 			const ibValue held = SideValue(item);
-			if (!held.IsEmpty() && held.GetString() == text)
+			// …compared with the text the CELL shows, which is the text the editor opened on (ibFilterValueText).
+			const wxString shown = m_side == kFilterColRight ? ibFilterValueText(held, item->m_left)
+				: m_side == kFilterColLeft ? ibFilterValueText(held, item->m_right) : held.GetString();
+			if (!held.IsEmpty() && shown == text)
 				return false;   // the model has nothing to take — what is held stands
 		}
 

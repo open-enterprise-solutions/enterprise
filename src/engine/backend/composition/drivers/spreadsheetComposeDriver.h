@@ -33,11 +33,13 @@
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/backend_spreadsheet.h"
+#include "backend/formatString.h"   // how a column writes its figures — see m_formats
 
 #include "backend/rowValues.h"   // a cross row's cells — sparse, column key index -> figures
 
 #include <deque>    // the cross rows — see m_crossRows
 #include <map>      // the column total's cells — see m_columnTotalCells
+#include <optional> // a column's format — see m_formats
 #include <vector>
 
 class BACKEND_API ibSpreadsheetComposeDriver : public ibCompositionDriver
@@ -133,6 +135,17 @@ private:
 	std::vector<bool>           m_shown;
 	wxString ColumnPath(size_t column) const {
 		return column < m_paths.size() ? m_paths[column] : wxString();
+	}
+
+	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (GetFormatFromTypeDesc), taken beside
+	// the titles: as many digits after the point as the column keeps, so a sum of kopecks reads `1500.00`
+	// and not `1500`. Empty where the type states nothing — an average, a product — and the value's own text
+	// is written. Nothing is cut before this: the figure travels whole to here.
+	std::vector<std::optional<ibFormatString>> m_formats;
+	wxString ColumnText(size_t column, const ibValue& value) const {
+		if (column < m_formats.size() && m_formats[column].has_value())
+			return m_formats[column]->Apply(value);
+		return value.GetString();
 	}
 
 	// ⭐⭐ WHAT A CELL WAS COMPOSED FROM, PACKED WHERE IT IS WRITTEN. The value a figure shows and
@@ -266,6 +279,8 @@ private:
 	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
 	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
 	void WriteCrossTable();
+	// What one level of a column key reads as in a header cell — the key of dimension level `dimLevel`.
+	wxString HeadingText(const std::vector<ibValue>& values, int dimLevel) const;
 	// THE COLUMNS IN PRINTING ORDER — the keys as they came, with each upper heading's subtotal
 	// inserted where that heading ends. Built once per table, because the header and every row have
 	// to agree about which column is which.

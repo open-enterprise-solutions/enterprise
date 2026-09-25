@@ -665,6 +665,27 @@ TEST(NumberFormat, FracDigitsZeroDropsThePoint) {
     EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1251"));
 }
 
+// The immediate tier is laid out on the stack (fnumber.cpp) and must round exactly as Round(n) does:
+// half away from zero, a carry that grows the integer part, no sign on a figure that rounded to zero.
+TEST(NumberFormat, TheImmediateTierRoundsLikeRound) {
+    ibNumber::Format fmt; fmt.fracDigits = 2;
+    EXPECT_EQ(ibNumber(wxString(wxT("9.995"))).ToString(fmt), wxT("10.00"));
+    EXPECT_EQ(ibNumber(wxString(wxT("-9.995"))).ToString(fmt), wxT("-10.00"));
+    EXPECT_EQ(ibNumber(wxString(wxT("0.005"))).ToString(fmt), wxT("0.01"));
+    EXPECT_EQ(ibNumber(wxString(wxT("-0.004"))).ToString(fmt), wxT("0.00"));
+}
+
+// The out-argument form writes the same text into the string it is handed, whatever that held before —
+// the form a column of a report reuses row after row.
+TEST(NumberFormat, TheOutArgumentWritesTheSameText) {
+    ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
+    wxString out(wxT("something longer that was there before"));
+    ibNumber(wxString(wxT("1234567.891"))).ToString(fmt, out);
+    EXPECT_EQ(out, wxT("1 234 567.89"));
+    ibNumber(5).ToString(fmt, out);
+    EXPECT_EQ(out, wxT("5.00"));
+}
+
 TEST(NumberFormat, FracDigitsWithGroups) {
     ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
     EXPECT_EQ(ibNumber(wxString(wxT("1234567.5"))).ToString(fmt), wxT("1 234 567.50"));

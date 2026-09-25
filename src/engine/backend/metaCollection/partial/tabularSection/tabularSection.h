@@ -92,6 +92,9 @@ public:
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
 			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
+			virtual const ibFormatString& GetColumnFormat() const {
+				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+			}
 
 			ibValueTabularSectionColumnInfo();
 			ibValueTabularSectionColumnInfo(ibValueMetaObjectAttributeBase* attribute);

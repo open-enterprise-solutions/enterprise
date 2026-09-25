@@ -7022,9 +7022,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	CalcDataViewWindowUnscrolledPosition(cw + gridOffset.x, ch + gridOffset.y, &right, &bottom, tableWindow);
 
 	// compute which items needs to be redrawn
+	//
+	// 🛑 UP TO THE LINE AT THE BOTTOM EDGE — `bottom` is a POSITION, like `top`, not a height. It read
+	// `GetLineAt(top + bottom)`, upstream's `update.y + update.height` with the height swapped for a second
+	// position, so the scroll counted twice: ninety rows down, a pass drew 101 rows for the 11 on screen,
+	// and every one of them went through the model, the format and the drawing (paint probe, 2026-09-26).
 	unsigned int item_start = GetLineAt(wxMax(0, top));
 	unsigned int item_count =
-		wxMin((int)(GetLineAt(wxMax(0, top + bottom)) - item_start + 1),
+		wxMin((int)(GetLineAt(wxMax(0, bottom)) - item_start + 1),
 			(int)(GetRowCount() - item_start));
 	unsigned int item_last = item_start + item_count;
 
@@ -7482,6 +7487,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 		int line_top = first_line_start;
 
+		cell->StartColumn(model, col->GetModelColumn());
 		for (unsigned int item = item_start; item < item_last; item++)
 		{
 			// get the cell value and set it into the renderer
@@ -7637,6 +7643,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 			line_top += line_height;
 		}
+		cell->FinishColumn();
 	}
 
 	// GROUP-row captions — drawn LAST, as ONE continuous span per row, so nothing (column rules, per-cell padding,

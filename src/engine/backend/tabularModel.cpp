@@ -445,6 +445,22 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetProp
 	return false;
 }
 
+#include "backend/backend_localization.h"   // ibTranslateString — a column here has no format written on it
+#include "backend/formatString.h"           // ibFormatString — what GetColumnFormat answers with
+
+const ibFormatString& ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetColumnFormat() const
+{
+	static const ibTranslateString s_none;
+	return ibBackendTypeConfigFactory::GetFormatFromColumn(s_none, GetColumnType());
+}
+
+const ibFormatString& ibValueModel::ibValueModelColumnCollection::GetColumnFormat(unsigned int col) const
+{
+	static const ibFormatString s_none;
+	const ibValueModelColumnInfo* column = GetColumnByID(col);
+	return column != nullptr ? column->GetColumnFormat() : s_none;
+}
+
 ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByID(unsigned int col) const
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {

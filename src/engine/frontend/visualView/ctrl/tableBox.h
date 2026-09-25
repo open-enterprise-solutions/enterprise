@@ -629,6 +629,9 @@ public:
 
 	///////////////////////////////////////////////////////////////////////
 
+	const ibTranslateString& GetFormat() const { return m_propertyFormat->GetValueAsFormatString(); }
+
+
 	// The tablebox this column belongs to. NOT simply the parent any more: a column
 	// may sit inside a column GROUP (and groups nest), so the table is looked for UP
 	// the tree. Everything that resolves a cell goes through here, which is why
@@ -731,6 +734,8 @@ private:
 	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("PasswordMode"), _("Password mode"), _("Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
 	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("MultilineMode"), _("Multiline mode"), _("Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."), false);
 	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInfo, wxT("Format"), _("Format"),
+		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), wxT(""));
 
 	ibPropertyTString* m_propertyFooterText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, wxT("FooterText"), _("Footer text"),
 		_("The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."), wxT(""));

@@ -1041,7 +1041,7 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 		else
 			m_sourceExplorer.AppendColumn(column.m_name,
 				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.m_col != nullptr ? column.m_col->GetTypeDesc() : ibTypeDescription());
+				column.GetTypeDesc());
 	}
 	return &m_sourceExplorer;
 }

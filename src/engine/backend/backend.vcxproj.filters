@@ -553,6 +553,9 @@
     <ClInclude Include="propertyManager\property\propertyString.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFormat.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyDataComposition.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>

@@ -7,6 +7,8 @@
 #include "backend/backend_core.h"
 #include "backend/backend_localization.h"
 
+#include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // the window both translated properties open
+
 // -----------------------------------------------------------------------
 // ibUStringProperty
 // -----------------------------------------------------------------------
@@ -80,11 +82,36 @@ public:
 
 protected:
 	virtual bool DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value) override;
+
+	// What edits one language's box through a window of its own — nothing for a caption.
+	virtual ibDialogTranslateConstructor::ibBoxEditor GetBoxEditor() const { return ibDialogTranslateConstructor::ibBoxEditor(); }
 private:
 
 	const class BACKEND_API ibPropertyObject* m_ownerProperty = nullptr;
 
 	WX_PG_DECLARE_PROPERTY_CLASS(wxTStringProperty);
+};
+
+// -----------------------------------------------------------------------
+// wxFormatStringProperty
+// -----------------------------------------------------------------------
+
+// THE FORMAT — a translated string whose every language holds a format string. The same cell and the
+// same window as a caption; what it adds is the `...` beside each language's box, which opens the
+// format string constructor over that language's string.
+class wxFormatStringProperty : public wxTStringProperty {
+public:
+	wxFormatStringProperty(const class BACKEND_API ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
+		const wxString& name = wxPG_LABEL,
+		const ibTranslateString& value = ibTranslateString()) :
+		wxTStringProperty(property, label, name, value)
+	{
+	}
+
+protected:
+	virtual ibDialogTranslateConstructor::ibBoxEditor GetBoxEditor() const override;
+private:
+	WX_PG_DECLARE_PROPERTY_CLASS(wxFormatStringProperty);
 };
 
 // -----------------------------------------------------------------------

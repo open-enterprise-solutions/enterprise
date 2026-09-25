@@ -360,6 +360,7 @@
     <ClInclude Include="propertyManager\property\propertyCommandSource.h" />
     <ClInclude Include="propertyManager\property\propertySource.h" />
     <ClInclude Include="propertyManager\property\propertyString.h" />
+    <ClInclude Include="propertyManager\property\propertyFormat.h" />
     <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
     <ClInclude Include="propertyManager\property\propertyType.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h" />

@@ -4,6 +4,8 @@
 
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 #include "backend/system/value/composition/valueComposerSettings.h"   // the pickers a cell offers
+#include "backend/backend_type.h"    // GetFormatFromTypeDesc — a value written as its field's type writes it
+#include "backend/formatString.h"
 
 // ===========================================================================
 //  ibFilterTreeNode — a row is a PATH; resolving it is walking that path
@@ -201,6 +203,14 @@ static wxString ibFieldText(const ibFilterOperandDescription& side)
 	return (!side.m_presentation.IsEmpty() && inText >= inPath) ? side.m_presentation : side.m_path;
 }
 
+wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescription& field)
+{
+	ibFormatString format;
+	if (field.IsField() && ibBackendTypeConfigFactory::GetFormatFromTypeDesc(field.m_type, format))
+		return format.Apply(value);
+	return value.GetString();
+}
+
 void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
@@ -236,14 +246,15 @@ void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item,
 	switch (col) {
 	case kFilterColUse:  variant = line->m_use; break;
 	// EVERY CELL SHOWS ITS SIDE'S OWN TEXT. A field reads as its whole path (see
-	// ibFieldText), a number as a number, an enumeration member as its caption —
-	// one rule, so `Price > Cost`, `Amount > 100` and the comparison between them
-	// all read as what they are.
+	// ibFieldText), a value as the field across the comparison writes it (see
+	// ibFilterValueText), an enumeration member as its caption — one rule, so
+	// `Price > Cost`, `Amount > 100.00` and the comparison between them all read as
+	// what they are.
 	case kFilterColLeft:
-		variant = line->m_left.IsField() ? ibFieldText(line->m_left) : line->m_left.m_value.GetString();
+		variant = line->m_left.IsField() ? ibFieldText(line->m_left) : ibFilterValueText(line->m_left.m_value, line->m_right);
 		break;
 	case kFilterColRight:
-		variant = line->m_right.IsField() ? ibFieldText(line->m_right) : line->m_right.m_value.GetString();
+		variant = line->m_right.IsField() ? ibFieldText(line->m_right) : ibFilterValueText(line->m_right.m_value, line->m_left);
 		break;
 	case kFilterColComparison:
 		variant = ibValue::CreateEnumObject<ibValueEnumComparisonKind>(line->m_comparison).GetString();

@@ -90,6 +90,14 @@ public:
 		std::shared_ptr<ibBackendQueryColumn> m_ownedCol;
 		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
 		ibColumnRole                m_role = ibColumnRole::Detail;
+
+		// ⭐ WHAT IT HOLDS, ASKED HERE — not worked out by each reader: m_type where the query states one (a
+		// fold's is the fold's — TypeOfFold), else the column it is read from; empty = unknown. A report, a
+		// field picker and a temp table's snapshot all ask it. Read off m_col alone, a resource is typed as
+		// what it FOLDS — COUNT(Amount) as an amount.
+		const ibTypeDescription& GetTypeDesc() const {
+			return m_type.IsOk() || m_col == nullptr ? m_type : m_col->GetTypeDesc();
+		}
 	};
 
 	// Resolve + build + run. Fills outSchema (in projection order). Throws

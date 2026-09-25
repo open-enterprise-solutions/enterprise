@@ -9,7 +9,6 @@
 
 #include "backend/tabularModelView.h"
 
-
 #include "backend/standardCommand.h"
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
@@ -18,15 +17,9 @@
 // broken: queryable.h now takes ibComparisonType/ibMetaID from tabularModelView.h (above), NOT tabularModel.h.
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer — ibValueModelStorage holds one BY VALUE
 
-// L3 Selector tree (folded from a flat snapshot) — mirrored into the RAM tree model by
-// ibValueModelRamTreeBase::PopulateFromTree. Full type only needed in tabularModel.cpp.
-class ibSelectorTree;
-
-
 // L3 navigation door a DB model vends over its own rows (the base GetSourceQueryable() return type).
 // Forward-declared here so tabularModel.h names the source-hook without pulling the query layer (no include
 // cycle). RAM models have NO queryable — the composer reads ibRamValueStorage directly.
-class ibBackendQueryable;
 class ibBackendQueryColumn;
 
 // The RAM value-storage — the RAM analog of a queryable (a flat/tree table that OWNS the live nodes). Defined
@@ -35,6 +28,9 @@ class ibRamValueStorage;
 
 // The row identity key returned by GetItemKey (value.h → uniqueKey.h pulled in tabularModel.cpp / the model .cpp's).
 class ibUniqueKey;
+
+// What a column's cells are shown with (GetColumnFormat, body in tabularModel.cpp).
+class ibFormatString;
 
 // WHERE THE CURSOR STANDS ACROSS — the column, as much of one as a command needs, and it is NOT an id.
 // A column may be bound to a HOP — a dotted path walked through a reference ("Product.Vendor.Name") — and a
@@ -60,7 +56,6 @@ struct ibDataViewCommandContext {
 	ibDataViewItem       m_anchor;
 	ibDataViewColumnItem m_column;
 };
-
 
 ///////////////////////////////////////////////////////////////////////////////////
 #define defaultCountPerPage 100
@@ -92,6 +87,9 @@ public:
 class ibVariantDataValue :
 	public wxVariantData {
 public:
+	// THE VALUE THE CELL HOLDS — for the reader that shows it: a table box's renderer writes it through its
+	// column's format and draws a boolean as a tick.
+	virtual const ibValue& GetValue() const = 0;
 protected:
 	ibVariantDataValue() : wxVariantData() {}
 };
@@ -136,6 +134,8 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 		{
 		}
 
+		virtual const ibValue& GetValue() const override { return m_cValue; }
+
 		virtual bool Eq(wxVariantData& data) const {
 			ibVariantDataValueImpl* srcData = dynamic_cast<ibVariantDataValueImpl*>(&data);
 			if (srcData != nullptr)
@@ -154,22 +154,11 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 			return true;
 		}
 
+		// ONE NAME, whatever the value holds — the one a reader checks before it casts the data to this class.
+		// A name per value type ("bool", "string") is wxWidgets' own, and a reader that trusts it casts to wx's
+		// data class (wxVariant::GetBool does).
 		virtual wxString GetType() const {
-			if (m_cValue.GetType() == ibValueTypes::TYPE_BOOLEAN)
-				return wxT("bool");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_NUMBER)
-				return wxT("number");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_DATE)
-				return wxT("date");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_STRING)
-				return wxT("string");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_VALUE)
-				return wxT("value");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_ENUM)
-				return wxT("enum");
-			else if (m_cValue.GetType() == ibValueTypes::TYPE_OLE)
-				return wxT("ole");
-			return wxT("string");
+			return wxT("value");
 		}
 
 	private:
@@ -384,6 +373,10 @@ public:
 			// re-deciding it. Read by whoever holds VALUES against the column: a filter's right-hand side.
 			virtual const ibTypeDescription GetColumnTypeValue() const { return GetColumnType(); }
 
+			// THE FORMAT A CELL OF THIS COLUMN IS SHOWN WITH — here the one its type gives; a column that is an
+			// attribute answers with the attribute's, the one written on it first.
+			virtual const ibFormatString& GetColumnFormat() const;
+
 			virtual int GetColumnWidth() const { return wxDVC_DEFAULT_WIDTH; }
 
 			virtual void SetColumnWidth(int width) {};
@@ -428,6 +421,10 @@ public:
 			ibValueModelColumnInfo* colInfo = GetColumnByID(col);
 			return colInfo != nullptr ? colInfo->GetColumnType() : ibTypeDescription();
 		}
+
+		// …AND THE FORMAT A CELL OF IT IS SHOWN WITH, by the same id and for the same reason — what a table
+		// box's renderer shows a column with when the column has no format of its own.
+		const ibFormatString& GetColumnFormat(unsigned int col) const;
 
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const = 0;
 		virtual unsigned int GetColumnCount() const = 0;

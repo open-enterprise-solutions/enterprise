@@ -177,6 +177,11 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
 	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
 
+	// ⭐ HOW THE FIELD IS SHOWN — its format strings, one per language (docs/private/format-property.md),
+	// asked the same way: of every attribute, answered by the kind that carries the property. Empty for
+	// a predefined field — its values are shown as its type has them.
+	virtual const ibTranslateString& GetFormat() const;
+
 	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
 	//  where the type description itself is declared, and therefore the only place that can answer
 	//  for every holder of one rather than for attributes alone.)
@@ -286,6 +291,10 @@ public:
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
 	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
 
+	// HOW THE FIELD IS SHOWN — its own property, which every control bound to it follows unless it
+	// has a format of its own.
+	virtual const ibTranslateString& GetFormat() const override { return m_propertyFormat->GetValueAsFormatString(); }
+
 private:
 
 	ibPropertyCategory* m_categoryType = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
@@ -295,6 +304,7 @@ private:
 	ibPropertyEnum<ibValueEnumIndexingMode>* m_propertyIndexingMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumIndexingMode>>(m_categoryAttribute, wxT("Indexing"), _("Indexing"), _("Whether the database keeps an index on the field. Index: searches and filters by it stop scanning the table. Index with additional ordering: the index also carries the object's main order, so a list filtered by the field pages without sorting. Don't index (the default): no index - cheaper writes."), ibIndexingMode::ibIndexingMode_DontIndex);
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
 	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, wxT("Select"), _("Select group and items"), _("For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."), ibSelectMode::ibSelectMode_Items);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryPresentation, wxT("Format"), _("Format"), _("How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."), wxT(""));
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyItemMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, wxT("ItemMode"), _("Item mode"), _("In a catalog with folders: which nodes carry the attribute - items (the default), folders, or both. A folder's form and its record show only the attributes that folders use; the column is shared, the value is just not asked of the other kind."), ibItemMode::ibItemMode_Item);
 

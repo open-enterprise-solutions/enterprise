@@ -301,6 +301,14 @@ protected:
 	// renderer is required
 	ibDataViewCtrl* GetView() const;
 
+public:
+	// ⭐ A COLUMN'S CELLS IN ONE PAINT PASS — told before the first and after the last (DrawTableContent), so what is
+	// the same for every cell of the column is found once and not per cell: the format a value renderer writes its
+	// cells through (ibDataViewValueRenderer). A PrepareForItem outside a pass — a tooltip, a width fit — comes
+	// without them. Declared LAST: a virtual added mid-class shifts the table under objects built without it.
+	virtual void StartColumn(const ibDataViewModel* WXUNUSED(model), unsigned WXUNUSED(column)) {}
+	virtual void FinishColumn() {}
+
 private:
 	// Called from {Called,Finish}Editing() and dtor to cleanup m_editorCtrl
 	void DestroyEditControl();

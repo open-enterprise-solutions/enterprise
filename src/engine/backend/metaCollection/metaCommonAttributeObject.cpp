@@ -212,6 +212,13 @@ ibTypeDescription& ibValueMetaObjectCommonAttributeColumn::GetTypeDesc() const
 	return s_emptyTypeDesc;
 }
 
+const ibTranslateString& ibValueMetaObjectCommonAttributeColumn::GetFormat() const
+{
+	if (const ibValueMetaObjectCommonAttribute* const src = GetSource())
+		return src->GetFormat();
+	return ibValueMetaObjectAttributeBase::GetFormat();
+}
+
 bool ibValueMetaObjectCommonAttributeColumn::OnDeleteMetaObject()
 {
 	// THE REFUSAL BELONGS HERE, and putting it one event earlier was a real bug worth
