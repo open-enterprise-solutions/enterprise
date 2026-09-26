@@ -206,6 +206,45 @@ TEST(FDate, TheBridgeCarriesAReadingByItsParts)
 	EXPECT_EQ(ibWallFromParts(1, 1, 1), ibWallOfDateTime(wxInvalidDateTime));
 }
 
+// A text spells a reading by its digits - the reference system's forms and ISO 8601 as the engines
+// write a TIMESTAMP - and nothing else: no clock, so the skipped hour reads as written, and no
+// rolling over, so a day the calendar does not have is refused.
+TEST(FDate, ATextSpellsAReadingByItsDigits)
+{
+	wxLongLong_t wall = 0;
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29 02:30:00"), wall));      EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29T02:30:00"), wall));      EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29 02:30"), wall));         EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29"), wall));               EXPECT_EQ(ibWallFromParts(2026, 3, 29), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29 02:30:45.1234"), wall)); EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30, 45, 123), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("2026-03-29 02:30:45.5"), wall));    EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30, 45, 500), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("0001-01-01 00:00:00"), wall));      EXPECT_EQ(ibWallFromParts(1, 1, 1), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("29.03.2026 2:30:00"), wall));       EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("5.3.2026"), wall));                 EXPECT_EQ(ibWallFromParts(2026, 3, 5), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("20260329"), wall));                 EXPECT_EQ(ibWallFromParts(2026, 3, 29), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("20260329023000"), wall));           EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), wall);
+	EXPECT_TRUE(ibWallOfText(wxT("9999-12-31 23:59:59.999"), wall));  EXPECT_EQ(ibWallFromParts(9999, 12, 31, 23, 59, 59, 999), wall);
+
+	const wxLongLong_t untouched = 42;
+	wall = untouched;
+	EXPECT_FALSE(ibWallOfText(wxT("2026-02-30"), wall));            // no such day
+	EXPECT_FALSE(ibWallOfText(wxT("2026-13-01"), wall));
+	EXPECT_FALSE(ibWallOfText(wxT("2026-03-29 24:00:00"), wall));
+	EXPECT_FALSE(ibWallOfText(wxT("2026-03-29 02:30:00+02"), wall));   // a zone is not a reading
+	EXPECT_FALSE(ibWallOfText(wxT("2026-3-29"), wall));              // ISO wants two digits
+	EXPECT_FALSE(ibWallOfText(wxT("29.03.26"), wall));
+	EXPECT_FALSE(ibWallOfText(wxT("29.03.2026 02:30"), wall));       // the reference form carries the seconds
+	EXPECT_FALSE(ibWallOfText(wxT("2026032"), wall));
+	EXPECT_FALSE(ibWallOfText(wxT("March 29, 2026"), wall));         // words are the free-form reader's
+	EXPECT_FALSE(ibWallOfText(wxEmptyString, wall));
+	EXPECT_EQ(untouched, wall);
+
+	static_assert(ibPartsAreADate(2024, 2, 29), "a leap day");
+	static_assert(!ibPartsAreADate(2023, 2, 29), "not in a common year");
+	static_assert(!ibPartsAreADate(2026, 4, 31) && !ibPartsAreADate(2026, 0, 1) && !ibPartsAreADate(2026, 1, 0), "");
+	static_assert(ibPartsAreADate(2026, 1, 1, 23, 59, 59, 999) && !ibPartsAreADate(2026, 1, 1, 24) && !ibPartsAreADate(2026, 1, 1, 0, 60), "");
+}
+
 // The parts know the day's place: weekday (Monday 1), day of the year, ISO week - and the days a
 // month has.
 TEST(FDate, ThePartsPlaceTheDayInItsWeekAndYear)

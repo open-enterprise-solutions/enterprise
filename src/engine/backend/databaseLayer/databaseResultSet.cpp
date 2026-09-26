@@ -58,7 +58,7 @@ bool ibDatabaseResultSet::GetResultBool(const wxString& strField)
 	return false;
 }
 
-wxDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
+wxLongLong_t ibDatabaseResultSet::GetResultDate(const wxString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
@@ -66,7 +66,7 @@ wxDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
 		return GetResultDate(nIndex);
 	}
 	
-	return wxDefaultDateTime;
+	return emptyDate;
 }
 
 void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer)

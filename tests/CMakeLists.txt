@@ -36,6 +36,7 @@ add_executable(oes_tests
     bench_string.cpp
     test_number.cpp
     test_fdate.cpp
+    test_driverDates.cpp
     test_formatString.cpp
     test_blockSyntaxLINQ.cpp
     test_byteCodeAOT.cpp
@@ -56,6 +57,7 @@ add_executable(oes_tests
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_firebirdBatchInsert.cpp
+    test_firebirdDates.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
     test_gitService.cpp

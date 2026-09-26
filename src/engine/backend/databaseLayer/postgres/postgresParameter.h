@@ -27,7 +27,7 @@ public:
 	ibDatabaseParameterPostgres(double dblValue);
 	ibDatabaseParameterPostgres(const ibNumber &dblValue);
 	ibDatabaseParameterPostgres(bool bValue);
-	ibDatabaseParameterPostgres(const wxDateTime& dateValue);
+	ibDatabaseParameterPostgres(const ibDateParts& date);   // a date by its parts (fdate.h)
 	ibDatabaseParameterPostgres(const void* pData, long nDataLength);
 
 	// dtor

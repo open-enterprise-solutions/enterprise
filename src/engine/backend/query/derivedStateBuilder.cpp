@@ -401,9 +401,9 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 				break;
 			}
 			case ibCanonicalKind::Date: {
-				const wxDateTime v = rows.GetResultDate(f.m_name);
+				const wxLongLong_t v = rows.GetResultDate(f.m_name);
 				value = ibConst(ibValue(v));
-				id += v.FormatISOCombined();
+				id += wxString::Format(wxT("%lld"), static_cast<long long>(v));
 				break;
 			}
 			case ibCanonicalKind::String: {

@@ -42,7 +42,7 @@ public:
 	void SetParam(int nPosition, const wxString& strValue);
 	void SetParam(int nPosition);
 	void SetParam(int nPosition, const void* pData, long nDataLength);
-	void SetParam(int nPosition, const wxDateTime& dateValue);
+	void SetParam(int nPosition, const ibDateParts& date);
 	void SetParam(int nPosition, bool bValue);
 
 	bool ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction);

@@ -310,7 +310,7 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 		n.GetBuffer(writer);
 		break;
 	}
-	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(static_cast<u64>(ibWallOfDateTime(result.GetResultDate(f)))); break;
+	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(static_cast<u64>(result.GetResultDate(f))); break;
 	case ibBackendColumnRawDB::RawType::String:  writer.w_stringZ(result.GetResultString(f)); break;
 	default: {   // Guid / Reference / Blob — bytes, as they are stored
 		wxMemoryBuffer buffer;
@@ -453,7 +453,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 	}
 	case ibFieldTypes_Date:
 		if (td.ContainType(ibValueTypes::TYPE_DATE))
-			writer.w_u64(static_cast<u64>(ibWallOfDateTime(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date)))));
+			writer.w_u64(static_cast<u64>(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date))));
 		else
 			writer.w_u64(emptyDate);
 		break;

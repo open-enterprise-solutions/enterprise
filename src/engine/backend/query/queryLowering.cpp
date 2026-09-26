@@ -199,8 +199,9 @@ static ibValue DateTimeOfParts(const int parts[6], const ibQueryAstExpr& e)
 {
 	const int year = parts[0], month = parts[1] > 0 ? parts[1] : 1, day = parts[2] > 0 ? parts[2] : 1;
 	const int hour = parts[3], minute = parts[4], second = parts[5];
-	if (month > 12 || day > static_cast<int>(ibDaysInMonth(year, static_cast<unsigned>(month)))
-		|| hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+	if (hour < 0 || minute < 0 || second < 0
+		|| !ibPartsAreADate(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
+		                    static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second)))
 		ThrowQueryException(e.m_line, e.m_col, _("DATETIME was given a date that does not exist"));
 	return ibValue(ibWallFromParts(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
 		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second)));

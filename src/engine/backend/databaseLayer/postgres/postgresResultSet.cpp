@@ -169,54 +169,24 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 	return bValue;
 }
 
-wxDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
+wxLongLong_t ibDatabaseResultSetPostgres::GetResultDate(int nField)
 {
-	wxDateTime dateValue = wxDefaultDateTime;
-	// TIMESTAMP results should be the same in binary or text results
-	if (m_bBinaryResults)
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (!dateValue.ParseDateTime(strDateValue))
-			{
-				if (dateValue.ParseDate(strDateValue))
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-	else
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (!dateValue.ParseDateTime(strDateValue))
-			{
-				if (dateValue.ParseDate(strDateValue))
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-
-	return dateValue;
+	// TIMESTAMP results are text in binary and text mode alike: the ISO spelling of the parts, which is
+	// the reading (fdate.h, ibWallOfText - a fraction of a second beyond the millisecond is finer than
+	// the reading and dropped). A spelling that is not ISO goes to wx's free-form reader and comes back
+	// through the bridge by its local parts. NULL is the empty date.
+	if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) == 1)
+		return emptyDate;
+	const wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+	wxLongLong_t wall = emptyDate;
+	if (ibWallOfText(strDateValue, wall))
+		return wall;
+	wxDateTime dateValue;
+	if (dateValue.ParseDateTime(strDateValue))
+		return ibWallOfDateTime(dateValue);
+	if (dateValue.ParseDate(strDateValue))
+		return ibWallOfDateTime(dateValue.GetDateOnly());
+	return emptyDate;
 }
 
 void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buffer)

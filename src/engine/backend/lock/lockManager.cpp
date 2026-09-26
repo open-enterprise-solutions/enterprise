@@ -358,7 +358,7 @@ std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 			r.namespaceName = rs.GetResultString(wxT("namespace"));
 			r.keyData       = rs.GetResultString(wxT("keyData"));
 			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
-			r.acquiredAt    = rs.GetResultDate(wxT("acquiredAt"));
+			r.acquiredAt    = ibDateTimeOfWall(rs.GetResultDate(wxT("acquiredAt")));
 			r.userName      = rs.GetResultString(wxT("userName"));
 			r.computer      = rs.GetResultString(wxT("computer"));
 			rows.push_back(std::move(r));

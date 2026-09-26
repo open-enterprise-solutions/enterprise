@@ -110,8 +110,10 @@ public:
 	virtual long long GetResultLong(int nField) = 0;
 	/// Retrieve a boolean from the result set by the 1-based field index
 	virtual bool GetResultBool(int nField) = 0;
-	/// Retrieve a wxDateTime from the result set by the 1-based field index
-	virtual wxDateTime GetResultDate(int nField) = 0;
+	/// Retrieve a date from the result set by the 1-based field index - the wall-clock reading of the
+	/// TIMESTAMP's parts (fdate.h), no clock consulted. NULL, and a field that is not a date, read as the
+	/// empty date; IsFieldNull says which of the two it was.
+	virtual wxLongLong_t GetResultDate(int nField) = 0;
 	/// Retrieve a BLOB from the result set by the 1-based field index
 	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer) = 0;
 	/// Retrieve a double from the result set by the 1-based field index
@@ -129,8 +131,8 @@ public:
 	virtual long long GetResultLong(const wxString& strField);
 	/// Retrieve a boolean from the result set by the result set column name
 	virtual bool GetResultBool(const wxString& strField);
-	/// Retrieve a wxDateTime from the result set by the result set column name
-	virtual wxDateTime GetResultDate(const wxString& strField);
+	/// Retrieve a date from the result set by the result set column name (see the index form)
+	virtual wxLongLong_t GetResultDate(const wxString& strField);
 	/// Retrieve a BLOB from the result set by the result set column name
 	virtual void* GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer);
 	/// Retrieve a double from the result set by the result set column name

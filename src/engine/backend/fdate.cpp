@@ -54,6 +54,86 @@ void ibWallToParts(wxLongLong_t wall, ibDateParts& parts) noexcept
 	                : week > weeksOf(parts.m_year) ? 1u : static_cast<unsigned>(week);
 }
 
+bool ibWallOfText(const wxString& text, wxLongLong_t& wall) noexcept
+{
+	const size_t length = text.length();
+	size_t at = 0;
+	const auto isDigit = [&](size_t i) { return i < length && text[i] >= wxT('0') && text[i] <= wxT('9'); };
+	// Up to `most` digits, at least `least`; the value read, the cursor past them.
+	const auto digits = [&](size_t least, size_t most, long long& value) -> bool {
+		size_t n = 0; value = 0;
+		while (n < most && isDigit(at)) {
+			value = value * 10 + static_cast<long long>(text[at].GetValue() - static_cast<wxUint32>(wxT('0')));
+			++at; ++n;
+		}
+		return n >= least;
+	};
+	const auto take = [&](wxChar c) -> bool {
+		if (at < length && text[at] == c) { ++at; return true; }
+		return false;
+	};
+	const auto settle = [&](long long y, long long mo, long long d, long long h, long long mi, long long s, long long ms) -> bool {
+		if (mo < 0 || d < 0 || h < 0 || mi < 0 || s < 0 || ms < 0
+			|| !ibPartsAreADate(y, static_cast<unsigned>(mo), static_cast<unsigned>(d), static_cast<unsigned>(h),
+			                    static_cast<unsigned>(mi), static_cast<unsigned>(s), static_cast<unsigned>(ms)))
+			return false;
+		wall = ibWallFromParts(static_cast<int>(y), static_cast<unsigned>(mo), static_cast<unsigned>(d), static_cast<unsigned>(h),
+			static_cast<unsigned>(mi), static_cast<unsigned>(s), static_cast<unsigned>(ms));
+		return true;
+	};
+	long long year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, millisecond = 0;
+
+	// A run of digits alone: yyyymmdd or yyyymmddhhmmss.
+	size_t run = 0;
+	while (isDigit(run)) ++run;
+	if (run == length && (run == 8 || run == 14)) {
+		const auto piece = [&](size_t from, size_t n) {
+			long long v = 0;
+			for (size_t i = from; i < from + n; ++i) v = v * 10 + static_cast<long long>(text[i].GetValue() - static_cast<wxUint32>(wxT('0')));
+			return v;
+		};
+		year = piece(0, 4); month = piece(4, 2); day = piece(6, 2);
+		if (run == 14) { hour = piece(8, 2); minute = piece(10, 2); second = piece(12, 2); }
+		return settle(year, month, day, hour, minute, second, 0);
+	}
+
+	// dd.mm.yyyy[ hh:mm:ss]
+	at = 0;
+	if (digits(1, 2, day) && take(wxT('.')) && digits(1, 2, month) && take(wxT('.')) && digits(4, 4, year)) {
+		if (at == length)
+			return settle(year, month, day, 0, 0, 0, 0);
+		while (take(wxT(' '))) {}
+		if (digits(1, 2, hour) && take(wxT(':')) && digits(1, 2, minute) && take(wxT(':')) && digits(1, 2, second) && at == length)
+			return settle(year, month, day, hour, minute, second, 0);
+		return false;
+	}
+
+	// yyyy-mm-dd[ hh:mm[:ss[.fraction]]]  (ISO 8601, `T` or a space between the halves)
+	at = 0;
+	if (digits(4, 4, year) && take(wxT('-')) && digits(2, 2, month) && take(wxT('-')) && digits(2, 2, day)) {
+		if (at == length)
+			return settle(year, month, day, 0, 0, 0, 0);
+		if (!(take(wxT(' ')) || take(wxT('T'))))
+			return false;
+		if (!(digits(2, 2, hour) && take(wxT(':')) && digits(2, 2, minute)))
+			return false;
+		if (take(wxT(':'))) {
+			if (!digits(2, 2, second))
+				return false;
+			if (take(wxT('.'))) {
+				// The first three digits of the fraction are the milliseconds; the rest is finer than the reading.
+				size_t n = 0; long long fraction = 0;
+				while (isDigit(at)) { if (n < 3) fraction = fraction * 10 + static_cast<long long>(text[at].GetValue() - static_cast<wxUint32>(wxT('0'))); ++at; ++n; }
+				if (n == 0) return false;
+				while (n < 3) { fraction *= 10; ++n; }
+				millisecond = fraction;
+			}
+		}
+		return at == length && settle(year, month, day, hour, minute, second, millisecond);
+	}
+	return false;
+}
+
 wxDateTime ibDateTimeOfWall(wxLongLong_t wall)
 {
 	ibDateParts p;

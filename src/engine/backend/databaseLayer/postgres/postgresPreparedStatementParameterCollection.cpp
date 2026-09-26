@@ -88,9 +88,9 @@ void ibPreparedStatementPostgresParameterCollection::SetParam(int nPosition, con
 	SetParam(nPosition, Parameter);
 }
 
-void ibPreparedStatementPostgresParameterCollection::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementPostgresParameterCollection::SetParam(int nPosition, const ibDateParts& date)
 {
-	ibDatabaseParameterPostgres Parameter(dateValue);
+	ibDatabaseParameterPostgres Parameter(date);
 	SetParam(nPosition, Parameter);
 }
 

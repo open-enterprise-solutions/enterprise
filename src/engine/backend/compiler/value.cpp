@@ -19,62 +19,21 @@ namespace {
 
 wxLongLong_t DateOfParts(int year, int month, int day, int hour, int minute, int second, int millisecond = 0)
 {
-	if (month < 1 || month > 12 || day < 1 || day > static_cast<int>(ibDaysInMonth(year, static_cast<unsigned>(month)))
-		|| hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 || millisecond < 0 || millisecond > 999)
+	if (month < 0 || day < 0 || hour < 0 || minute < 0 || second < 0 || millisecond < 0
+		|| !ibPartsAreADate(year, static_cast<unsigned>(month), static_cast<unsigned>(day), static_cast<unsigned>(hour),
+		                    static_cast<unsigned>(minute), static_cast<unsigned>(second), static_cast<unsigned>(millisecond)))
 		return emptyDate;
 	return ibWallFromParts(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
 		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second), static_cast<unsigned>(millisecond));
 }
 
-// A text as a date, by its digits: `dd.mm.yyyy hh:mm:ss` (the time optional, one or two digits a
-// piece), `yyyymmddhhmmss` and `yyyymmdd`. Any other text is handed to wxDateTime::ParseDateTime,
-// the free-form reader, and comes back through the bridge by its local parts. Read here by digits
-// rather than through wx's ParseFormat because wx builds an INSTANT out of what it parses, and a
-// time that does not exist on this machine's clock (02:30 on the morning the clocks go forward)
-// would come back an hour later than the text says.
+// A text as a date: by its digits first (ibWallOfText - the reference system's forms and ISO 8601, the
+// same door the drivers read a TIMESTAMP's text through), and any other text handed to
+// wxDateTime::ParseDateTime, the free-form reader, to come back through the bridge by its local parts.
 bool DateOfText(const wxString& text, wxLongLong_t& out)
 {
-	const size_t length = text.length();
-	size_t at = 0;
-	const auto digits = [&](size_t least, size_t most, int& value) -> bool {
-		size_t n = 0; value = 0;
-		while (at < length && n < most && text[at] >= wxT('0') && text[at] <= wxT('9')) {
-			value = value * 10 + static_cast<int>(text[at].GetValue() - static_cast<wxUint32>(wxT('0')));
-			++at; ++n;
-		}
-		return n >= least;
-	};
-	const auto sign = [&](wxChar c) -> bool {
-		if (at < length && text[at] == c) { ++at; return true; }
-		return false;
-	};
-	int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
-
-	// dd.mm.yyyy[ hh:mm:ss]
-	if (digits(1, 2, day) && sign(wxT('.')) && digits(1, 2, month) && sign(wxT('.')) && digits(4, 4, year)) {
-		if (at < length) {
-			while (at < length && text[at] == wxT(' ')) ++at;
-			if (!(digits(1, 2, hour) && sign(wxT(':')) && digits(1, 2, minute) && sign(wxT(':')) && digits(1, 2, second)))
-				at = length + 1;
-		}
-		if (at == length) {
-			out = DateOfParts(year, month, day, hour, minute, second);
-			return out != emptyDate || (year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0);
-		}
-	}
-
-	// yyyymmddhhmmss / yyyymmdd
-	at = 0;
-	int run = 0;
-	while (at < length && text[at] >= wxT('0') && text[at] <= wxT('9')) { ++at; ++run; }
-	if (at == length && (run == 8 || run == 14)) {
-		const auto piece = [&](size_t from, size_t n) { long v = 0; text.Mid(from, n).ToLong(&v); return static_cast<int>(v); };
-		year = piece(0, 4); month = piece(4, 2); day = piece(6, 2);
-		if (run == 14) { hour = piece(8, 2); minute = piece(10, 2); second = piece(12, 2); }
-		out = DateOfParts(year, month, day, hour, minute, second);
-		return out != emptyDate || (year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0);
-	}
-
+	if (ibWallOfText(text, out))
+		return true;
 	wxDateTime parsed;
 	if (!parsed.ParseDateTime(text))
 		return false;

@@ -125,28 +125,20 @@ bool ibDatabaseResultSetSQLite::GetResultBool(int nField)
 	return (nValue != 0);
 }
 
-wxDateTime ibDatabaseResultSetSQLite::GetResultDate(int nField)
+wxLongLong_t ibDatabaseResultSetSQLite::GetResultDate(int nField)
 {
 	// Don't use nField-1 here since GetResultString will take care of that
-	wxString strDate = GetResultString(nField);
+	const wxString strDate = GetResultString(nField);
+	// The text's digits are the reading (fdate.h) - ISO as the engine writes it, and the reference
+	// forms. Any other spelling goes to wx's free-form reader and comes back through the bridge by its
+	// local parts; NULL is an empty text, and reads as the empty date.
+	wxLongLong_t wall = emptyDate;
+	if (ibWallOfText(strDate, wall))
+		return wall;
 	wxDateTime date;
-	// First check for the 2-digit year format
-	if (date.ParseFormat(strDate, wxT("%m/%d/%y %H:%M:%S")))
-	{
-		return date;
-	}
-	else if (date.ParseDateTime(strDate))
-	{
-		return date;
-	}
-	else if (date.ParseDate(strDate))
-	{
-		return date;
-	}
-	else
-	{
-		return wxDefaultDateTime;
-	}
+	if (date.ParseDateTime(strDate) || date.ParseDate(strDate))
+		return ibWallOfDateTime(date);
+	return emptyDate;
 }
 
 double ibDatabaseResultSetSQLite::GetResultDouble(int nField)

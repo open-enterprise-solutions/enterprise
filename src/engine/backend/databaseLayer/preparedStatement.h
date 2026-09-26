@@ -14,7 +14,6 @@
 
 #include <wx/hashset.h>
 
-#include "backend/fdate.h"   // ibDateTimeOfWall - a date's reading handed to a driver by its parts
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
 #include "databaseStringConverter.h"
@@ -76,11 +75,10 @@ public:
 	}
 	/// Set the parameter at the 1-based position to a Blob value
 	virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength) = 0;
-	/// Set the parameter at the 1-based position to a date value - the wall-clock reading (fdate.h); the
-	/// driver receives the wxDateTime with those parts and writes the parts, so no clock is consulted
-	virtual void SetParamDate(int nPosition, const wxLongLong_t& dateValue) { SetParamDate(nPosition, ibDateTimeOfWall(dateValue)); }
-	/// Set the parameter at the 1-based position to a wxDateTime value
-	virtual void SetParamDate(int nPosition, const wxDateTime& dateValue) = 0;
+	/// Set the parameter at the 1-based position to a date - the wall-clock reading a date value holds
+	/// (fdate.h). The driver writes its PARTS into the engine's TIMESTAMP; no clock and no zone is
+	/// consulted on the way, so the reading the column shows is the reading the value held.
+	virtual void SetParamDate(int nPosition, wxLongLong_t dateValue) = 0;
 	/// Set the parameter at the 1-based position to a boolean value
 	virtual void SetParamBool(int nPosition, bool bValue) = 0;
 

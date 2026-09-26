@@ -42,7 +42,7 @@ public:
 	virtual void SetParamString(int nPosition, const wxString& strValue);
 	virtual void SetParamNull(int nPosition);
 	virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength);
-	virtual void SetParamDate(int nPosition, const wxDateTime& date);
+	virtual void SetParamDate(int nPosition, wxLongLong_t date);
 	virtual void SetParamBool(int nPosition, bool bValue);
 	virtual int GetParameterCount();
 

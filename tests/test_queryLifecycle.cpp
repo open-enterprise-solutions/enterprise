@@ -39,7 +39,7 @@ public:
 	void SetParamString(int, const wxString&) override {}
 	void SetParamNull(int) override {}
 	void SetParamBlob(int, const void*, long) override {}
-	void SetParamDate(int, const wxDateTime&) override {}
+	void SetParamDate(int, wxLongLong_t) override {}
 	void SetParamBool(int, bool) override {}
 	int  GetParameterCount() override { return 0; }
 	int  RunQuery() override { return 0; }
@@ -58,7 +58,7 @@ public:
 	wxString   GetResultString(int) override { return wxString(); }
 	long long  GetResultLong(int) override { return 0; }
 	bool       GetResultBool(int) override { return false; }
-	wxDateTime GetResultDate(int) override { return wxDateTime(); }
+	wxLongLong_t GetResultDate(int) override { return emptyDate; }
 	void*      GetResultBlob(int, wxMemoryBuffer&) override { return nullptr; }
 	double     GetResultDouble(int) override { return 0.0; }
 	ibNumber   GetResultNumber(int) override { return ibNumber(); }

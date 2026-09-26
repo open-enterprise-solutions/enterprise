@@ -1057,8 +1057,8 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 				for (size_t c = 0; c < figureResources.size(); ++c)
 					for (const ibValueMetaObjectResource* resource : figureResources[c])
 						item.m_figures[c] += rs.GetResultNumber(ibRegValueField(resource));
-				item.m_first = ibCalcCalendarDay(ibWallOfDateTime(rs.GetResultDate(firstField)));
-				item.m_last = ibCalcCalendarDay(ibWallOfDateTime(rs.GetResultDate(lastField)));
+				item.m_first = ibCalcCalendarDay(rs.GetResultDate(firstField));
+				item.m_last = ibCalcCalendarDay(rs.GetResultDate(lastField));
 				if (byAction) {
 					ibValue recorder, line;
 					ibDbTableProvider::GetValueAttribute(base->GetRegisterRecorder(), recorder, rs);

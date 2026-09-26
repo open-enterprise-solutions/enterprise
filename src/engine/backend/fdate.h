@@ -2,6 +2,7 @@
 #define __FDATE_H__
 
 #include <wx/defs.h>            // wxLongLong_t
+#include <wx/string.h>          // wxString - the text door
 #include <wx/datetime.h>        // wxDateTime - the bridge at the edges, below
 
 #include "backend/backend.h"    // BACKEND_API
@@ -23,12 +24,14 @@
 //   ibWallToParts    - milliseconds -> the parts, with the day's place in the week and the year
 //   ibDaysFromCivil  - year, month, day -> days since 1970-01-01, the integer heart of both
 //   ibDaysInMonth    - how many days a month has, the one calendar fact a validating door needs
+//   ibPartsAreADate  - whether parts name a day and a time the calendar has (a 30th of February does not)
+//   ibWallOfText     - the reading a text spells by its digits: the reference system's forms and ISO 8601
 // The twins of the SQL calendar functions (ibTruncateToPeriod and its family, databaseLayer.h)
 // count over these milliseconds so that a period folded in memory is the period the server folds.
 //
 // ⭐ THE BRIDGE TO wxDateTime, and where it stands. wx keeps an INSTANT - milliseconds of real time,
-// read through the machine's zone - and the engine still meets one at its edges: a driver hands a
-// TIMESTAMP over as a wxDateTime, a picker in a window holds one, a job schedule counts in them.
+// read through the machine's zone - and the engine still meets one at its edges: a picker in a
+// window holds one, a job schedule counts in them, the session registry's beats are compared in them.
 // The two functions at the end carry a reading across by its LOCAL PARTS and by nothing else: the
 // wall reading 10:30 becomes the wxDateTime whose local time is 10:30, on whichever machine, and
 // back. No difference of instants is ever taken between the two sides. The one place the bridge is
@@ -83,9 +86,26 @@ constexpr unsigned ibDaysInMonth(long long year, unsigned month) noexcept
 	     : (month >= 1 && month <= 12) ? 31u : 0u;
 }
 
+// Whether the parts name a day and a time the calendar has. The doors that make a date out of what a
+// person or a program handed over ask this first, so a 30th of February or a 25th hour is refused
+// (or is the empty date) rather than rolled over into the day after. Any year.
+constexpr bool ibPartsAreADate(long long year, unsigned month, unsigned day,
+	unsigned hour = 0, unsigned minute = 0, unsigned second = 0, unsigned millisecond = 0) noexcept
+{
+	return month >= 1 && month <= 12 && day >= 1 && day <= ibDaysInMonth(year, month)
+		&& hour <= 23 && minute <= 59 && second <= 59 && millisecond <= 999;
+}
+
 // The parts of a wall-clock reading. Defined for any number: a reading before year 1 or past 9999
 // gets the year the calendar gives it (0, -1, 10000), so a caller printing it sees where it is.
 BACKEND_API void ibWallToParts(wxLongLong_t wall, ibDateParts& parts) noexcept;
+
+// The reading a text spells, read by its DIGITS and nothing else: `dd.mm.yyyy[ hh:mm:ss]` (one or two
+// digits a piece, four for the year), `yyyymmdd`, `yyyymmddhhmmss`, and ISO 8601 as the engines write a
+// TIMESTAMP - `yyyy-mm-dd[ hh:mm[:ss[.fraction]]]`, a `T` allowed for the space. Any other text, and a
+// day the calendar does not have, is refused and `wall` is left alone. No clock is consulted, so 02:30 on
+// the morning a machine's clocks go forward reads as 02:30 (a parser that builds an instant moves it on).
+BACKEND_API bool ibWallOfText(const wxString& text, wxLongLong_t& wall) noexcept;
 
 // The bridge (see the top of the file): a reading as the wxDateTime with the same LOCAL parts, and
 // back. An invalid wxDateTime carries over as the empty date (0001-01-01 00:00:00) - the value has no

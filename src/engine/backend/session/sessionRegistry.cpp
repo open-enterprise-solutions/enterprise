@@ -1615,8 +1615,8 @@ void ibSessionRegistry::JobSweepStale()
 				continue;  // our own — heartbeat keeps lastActive fresh
 			}
 
-			const wxDateTime lastActive = rs.GetResultDate(wxT("lastActive"));
-			if (lastActive.IsValid() && lastActive.IsEarlierThan(cutoff))
+			const wxDateTime lastActive = ibDateTimeOfWall(rs.GetResultDate(wxT("lastActive")));
+			if (!rs.IsResultNull(wxT("lastActive")) && lastActive.IsEarlierThan(cutoff))
 				zombies.push_back(guid);
 			else
 				live.emplace_back(guid);
@@ -1713,7 +1713,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
 				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
 			while (rs.Next())
-				beats[rs.GetResultString(wxT("session"))] = rs.GetResultDate(wxT("lastActive"));
+				beats[rs.GetResultString(wxT("session"))] = ibDateTimeOfWall(rs.GetResultDate(wxT("lastActive")));
 			return true;
 		}
 		catch (...) { return false; }
@@ -1950,7 +1950,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 				while (rw.Next())
 					wide.push_back(WideRow{
 						static_cast<ibRunMode>(rw.GetResultInt("application")),
-						rw.GetResultDate  ("started"),
+						ibDateTimeOfWall(rw.GetResultDate("started")),
 						rw.GetResultString("userName"),
 						rw.GetResultString("computer"),
 						rw.GetResultString("session"),
@@ -1994,7 +1994,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 			fresh->AppendSession(
 				static_cast<ibRunMode>(rs.GetResultInt("application")),
 				0,  // kind filled in below for legacy-schema safety
-				rs.GetResultDate  ("started"),
+				ibDateTimeOfWall(rs.GetResultDate("started")),
 				rs.GetResultString("userName"),
 				rs.GetResultString("computer"),
 				rs.GetResultString("session"));

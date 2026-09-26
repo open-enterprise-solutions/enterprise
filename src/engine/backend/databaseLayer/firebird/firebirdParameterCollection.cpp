@@ -81,9 +81,9 @@ void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const void* 
 	ParameterAt(nPosition).Set(pData, nDataLength);
 }
 
-void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, const ibDateParts& date)
 {
-	ParameterAt(nPosition).Set(dateValue);
+	ParameterAt(nPosition).Set(date);
 }
 
 void ibDatabaseParameterFirebirdCollection::SetParam(int nPosition, bool bValue)
