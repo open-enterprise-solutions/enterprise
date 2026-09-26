@@ -39,10 +39,20 @@ namespace ibDataMover {
 
 // WRITE — read the wire TYPE tag + the active value, bind the column's full physical spread into
 // `statement` from `position` (1-based), advancing it.
+// `datesAreInstants`: the wire was written before 2026-09, when a date on it was an instant of the
+// dumping machine's clock; it is read through the bridge as the parts this machine's clock shows
+// for that instant (DateOfWire). A wire written since carries the reading itself.
 BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
-                                   const ibReaderMemory& reader, ibQueryStatement* statement, int& position);
+                                   const ibReaderMemory& reader, ibQueryStatement* statement, int& position,
+                                   bool datesAreInstants = false);
 BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
                                    const ibReaderMemory& reader, ibQueryStatement* statement);   // from position 1
+
+// A date off the wire as the reading the value holds (fdate.h): the number itself, or - from a dump
+// that carried instants - the parts this machine's clock shows for the instant, which are the parts
+// the dumper saw wherever this machine stands in the dumper's zone; the old empty literal is the
+// empty date either way.
+BACKEND_API wxLongLong_t DateOfWire(wxLongLong_t raw, bool wasAnInstant);
 
 // READ — write the column's compact wire form (tag + only the active type's value + reference pair)
 // off the row in `result`.
@@ -57,7 +67,8 @@ BACKEND_API bool Dump(const ibSchemaTable& table, ibWriterMemory& out);
 // Restore the per-row chunk blob in `rows` (already unwrapped from the caller's framing chunk) into
 // `table` — UPSERT when the structure has a unique key, else INSERT — binding each cell through the
 // codec. Returns false on a write error (the caller rolls the transaction back).
-BACKEND_API bool Restore(const ibSchemaTable& table, const ibReaderMemory& rows);
+// `datesAreInstants` - see BinaryToStatement: true for a dump made before the dates were readings.
+BACKEND_API bool Restore(const ibSchemaTable& table, const ibReaderMemory& rows, bool datesAreInstants = false);
 
 } // namespace ibDataMover
 

@@ -9,6 +9,81 @@
 #include <wx/datetime.h>
 #include <wx/longlong.h>
 
+// ⭐ THE TWO DOORS A DATE COMES IN THROUGH, and what they refuse.
+//
+// A date is a wall-clock reading (fdate.h): the parts, counted as milliseconds with no zone in them.
+// Parts a person or a program hands over are checked against the calendar before they become one -
+// a 30th of February or a 25th hour is the empty date here, not the day after the 29th and not
+// whatever a rolled-over clock would make of it.
+namespace {
+
+wxLongLong_t DateOfParts(int year, int month, int day, int hour, int minute, int second, int millisecond = 0)
+{
+	if (month < 1 || month > 12 || day < 1 || day > static_cast<int>(ibDaysInMonth(year, static_cast<unsigned>(month)))
+		|| hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 || millisecond < 0 || millisecond > 999)
+		return emptyDate;
+	return ibWallFromParts(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
+		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second), static_cast<unsigned>(millisecond));
+}
+
+// A text as a date, by its digits: `dd.mm.yyyy hh:mm:ss` (the time optional, one or two digits a
+// piece), `yyyymmddhhmmss` and `yyyymmdd`. Any other text is handed to wxDateTime::ParseDateTime,
+// the free-form reader, and comes back through the bridge by its local parts. Read here by digits
+// rather than through wx's ParseFormat because wx builds an INSTANT out of what it parses, and a
+// time that does not exist on this machine's clock (02:30 on the morning the clocks go forward)
+// would come back an hour later than the text says.
+bool DateOfText(const wxString& text, wxLongLong_t& out)
+{
+	const size_t length = text.length();
+	size_t at = 0;
+	const auto digits = [&](size_t least, size_t most, int& value) -> bool {
+		size_t n = 0; value = 0;
+		while (at < length && n < most && text[at] >= wxT('0') && text[at] <= wxT('9')) {
+			value = value * 10 + static_cast<int>(text[at].GetValue() - static_cast<wxUint32>(wxT('0')));
+			++at; ++n;
+		}
+		return n >= least;
+	};
+	const auto sign = [&](wxChar c) -> bool {
+		if (at < length && text[at] == c) { ++at; return true; }
+		return false;
+	};
+	int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+
+	// dd.mm.yyyy[ hh:mm:ss]
+	if (digits(1, 2, day) && sign(wxT('.')) && digits(1, 2, month) && sign(wxT('.')) && digits(4, 4, year)) {
+		if (at < length) {
+			while (at < length && text[at] == wxT(' ')) ++at;
+			if (!(digits(1, 2, hour) && sign(wxT(':')) && digits(1, 2, minute) && sign(wxT(':')) && digits(1, 2, second)))
+				at = length + 1;
+		}
+		if (at == length) {
+			out = DateOfParts(year, month, day, hour, minute, second);
+			return out != emptyDate || (year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0);
+		}
+	}
+
+	// yyyymmddhhmmss / yyyymmdd
+	at = 0;
+	int run = 0;
+	while (at < length && text[at] >= wxT('0') && text[at] <= wxT('9')) { ++at; ++run; }
+	if (at == length && (run == 8 || run == 14)) {
+		const auto piece = [&](size_t from, size_t n) { long v = 0; text.Mid(from, n).ToLong(&v); return static_cast<int>(v); };
+		year = piece(0, 4); month = piece(4, 2); day = piece(6, 2);
+		if (run == 14) { hour = piece(8, 2); minute = piece(10, 2); second = piece(12, 2); }
+		out = DateOfParts(year, month, day, hour, minute, second);
+		return out != emptyDate || (year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0);
+	}
+
+	wxDateTime parsed;
+	if (!parsed.ParseDateTime(text))
+		return false;
+	out = ibWallOfDateTime(parsed);
+	return true;
+}
+
+} // namespace
+
 
 //**********************************************************************
 //*                       Value implementation                         *
@@ -115,25 +190,21 @@ ibValue::ibValue(ibBackendValue* pParam)
 	DEBUG_VALUE_CREATE();
 }
 
+// ⭐⭐ A DATE IS A WALL-CLOCK READING (fdate.h): the parts a calendar and a clock show, counted as
+// milliseconds with no zone in them. A wxDateTime is an INSTANT read through the machine's zone, so
+// it comes in and goes out by its LOCAL PARTS and by nothing else (ibWallOfDateTime / ibDateTimeOfWall)
+// - the reading 10:30 is the wxDateTime whose local time is 10:30, on whichever machine.
 ibValue::ibValue(const wxDateTime& cParam)
 	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
 {
-	const wxLongLong& llData = cParam.GetValue();
-	m_dData = llData.GetValue();
+	m_dData = ibWallOfDateTime(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
 	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
 {
-	wxDateTime dataVal(nDay, (wxDateTime::Month)(nMonth - 1), nYear, nHour, nMinute, nSecond);
-	if (dataVal.IsValid()) {
-		const wxLongLong& llData = dataVal.GetValue();
-		m_dData = llData.GetValue();
-	}
-	else {
-		m_dData = emptyDate;   // no such day is the empty date, not whatever the storage held
-	}
+	m_dData = DateOfParts(nYear, nMonth, nDay, nHour, nMinute, nSecond);   // no such day is the empty date
 	DEBUG_VALUE_CREATE();
 }
 
@@ -426,8 +497,7 @@ void ibValue::operator = (const wxDateTime& cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_DATE;
-	const wxLongLong& llData = cParam.GetValue();
-	m_dData = llData.GetValue();
+	m_dData = ibWallOfDateTime(cParam);
 }
 
 void ibValue::operator = (wxLongLong_t cParam)
@@ -609,28 +679,9 @@ bool ibValue::SetDate(const wxString& strDate)
 
 	Reset();
 
-	wxDateTime strTime; wxLongLong_t dData = emptyDate;
-	if (!strDate.IsEmpty()) {
-		if (strTime.ParseFormat(strDate, "%d.%m.%Y %H:%M:%S")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseFormat(strDate, "%Y%m%d%H%M%S")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseFormat(strDate, "%Y%m%d")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseDateTime(strDate)) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else {
-			return false;
-		}
-	}
+	wxLongLong_t dData = emptyDate;
+	if (!strDate.IsEmpty() && !DateOfText(strDate, dData))
+		return false;
 
 	m_typeClass = ibValueTypes::TYPE_DATE;
 	m_dData = dData;
@@ -822,8 +873,9 @@ wxString ibValue::GetString() const
 	case ibValueTypes::TYPE_STRING:
 		return m_pStr ? m_pStr->ToWxString() : wxString(wxEmptyString);
 	case ibValueTypes::TYPE_DATE: {
-		const wxDateTime& dateTime = wxLongLong(m_dData);
-		return dateTime.Format("%d.%m.%Y %H:%M:%S");
+		ibDateParts p;
+		ibWallToParts(m_dData, p);
+		return wxString::Format(wxT("%02u.%02u.%04d %02u:%02u:%02u"), p.m_day, p.m_month, p.m_year, p.m_hour, p.m_minute, p.m_second);
 	}
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
@@ -867,21 +919,11 @@ wxLongLong_t ibValue::GetDate() const
 		return emptyDate;
 	}
 	case ibValueTypes::TYPE_STRING: {
-		const wxString sData = m_pStr ? m_pStr->ToWxString() : wxString();
-		wxDateTime dateTime;
-		if (dateTime.ParseFormat(sData, "%d.%m.%Y %H:%M:%S")) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		else if (dateTime.ParseFormat(sData, "%Y%m%d%H%M%S")) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		else if (dateTime.ParseDateTime(sData)) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		return emptyDate;
+		// The same reading SetDate gives the text - one door for "this text as a date". (This one used
+		// to skip the eight-digit form the setter took, so `"20260315"` was a date when assigned and
+		// the empty date when read.)
+		wxLongLong_t dData = emptyDate;
+		return m_pStr != nullptr && DateOfText(m_pStr->ToWxString(), dData) ? dData : emptyDate;
 	}
 	case ibValueTypes::TYPE_DATE:
 		return m_dData;
@@ -912,131 +954,59 @@ void ibValue::ShowValue()
 		return m_pRef->ShowValue();
 }
 
-// THE WALL-CLOCK READING of a held date: the calendar day it shows, counted from 1970-01-01, and the
-// time on that day — as milliseconds of a calendar in which every day is 86400 seconds long. The two
-// day-number conversions are the civil-calendar algorithms (proleptic Gregorian), exact for any year.
-namespace {
-
-long long ibDaysFromCivil(long long year, unsigned month, unsigned day)
-{
-	year -= month <= 2 ? 1 : 0;
-	const long long era = (year >= 0 ? year : year - 399) / 400;
-	const unsigned yoe = static_cast<unsigned>(year - era * 400);
-	const unsigned doy = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
-	const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-	return era * 146097 + static_cast<long long>(doe) - 719468;
-}
-
-void ibCivilFromDays(long long days, int& year, unsigned& month, unsigned& day)
-{
-	days += 719468;
-	const long long era = (days >= 0 ? days : days - 146096) / 146097;
-	const unsigned doe = static_cast<unsigned>(days - era * 146097);
-	const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-	const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-	const unsigned mp = (5 * doy + 2) / 153;
-	day   = doy - (153 * mp + 2) / 5 + 1;
-	month = mp < 10 ? mp + 3 : mp - 9;
-	year  = static_cast<int>(static_cast<long long>(yoe) + era * 400 + (month <= 2 ? 1 : 0));
-}
-
-constexpr long long kMsPerDay = 86400000LL;
-
-long long ibWallOf(wxLongLong_t date)
-{
-	const wxDateTime::Tm tm = wxDateTime(wxLongLong(date)).GetTm();
-	const long long days = ibDaysFromCivil(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday);
-	return days * kMsPerDay
-		+ ((tm.hour * 60LL + tm.min) * 60LL + tm.sec) * 1000LL + tm.msec;
-}
-
-wxLongLong_t ibDateOfWall(long long wall)
-{
-	long long days = wall / kMsPerDay, rest = wall % kMsPerDay;
-	if (rest < 0) { rest += kMsPerDay; --days; }
-	int year = 0; unsigned month = 1, day = 1;
-	ibCivilFromDays(days, year, month, day);
-	const long long seconds = rest / 1000;
-	const wxDateTime moment(static_cast<wxDateTime::wxDateTime_t>(day), static_cast<wxDateTime::Month>(month - 1), year,
-		static_cast<wxDateTime::wxDateTime_t>(seconds / 3600), static_cast<wxDateTime::wxDateTime_t>(seconds / 60 % 60),
-		static_cast<wxDateTime::wxDateTime_t>(seconds % 60), static_cast<wxDateTime::wxDateTime_t>(rest % 1000));
-	return moment.GetValue().GetValue();
-}
-
-} // namespace
-
+// A number of seconds moves a date along the wall, where every day is 86 400 of them and no hour is
+// ever skipped or repeated: the reading IS the calendar (fdate.h), so a shift and a span are plain
+// arithmetic on it. (When the reading was an instant, both went through the machine's calendar to
+// get the same answer across a clock change; there is nothing left to go through.)
 wxLongLong_t ibValue::ShiftDate(wxLongLong_t date, wxLongLong_t milliseconds)
 {
-	// A shift that leaves the years a date can be (a date minus another date read as a number of
-	// seconds, say) names no calendar day — the arithmetic it always had answers for it, rather than
-	// a wxDateTime built out of range.
-	static const long long kFirst = ibDaysFromCivil(1, 1, 1) * kMsPerDay;
-	static const long long kLast  = ibDaysFromCivil(10000, 1, 1) * kMsPerDay;
-	const long long wall = ibWallOf(date) + milliseconds;
-	if (wall < kFirst || wall >= kLast)
-		return date + milliseconds;
-	return ibDateOfWall(wall);
+	return date + milliseconds;
 }
 
 wxLongLong_t ibValue::DateSpan(wxLongLong_t later, wxLongLong_t earlier)
 {
-	return ibWallOf(later) - ibWallOf(earlier);
+	return later - earlier;
+}
+
+wxDateTime ibValue::GetDateTime() const
+{
+	return ibDateTimeOfWall(GetDate());
 }
 
 void ibValue::FromDate(int& nYear, int& nMonth, int& nDay) const
 {
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
+	ibDateParts p;
+	ibWallToParts(GetDate(), p);
+	nYear = p.m_year;
+	nMonth = static_cast<int>(p.m_month);
+	nDay = static_cast<int>(p.m_day);
 }
 
 void ibValue::FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const
 {
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
-	nHour = dateTime.GetHour();
-	nMinute = dateTime.GetMinute();
-	nSecond = dateTime.GetSecond();
+	ibDateParts p;
+	ibWallToParts(GetDate(), p);
+	nYear = p.m_year;
+	nMonth = static_cast<int>(p.m_month);
+	nDay = static_cast<int>(p.m_day);
+	nHour = static_cast<unsigned short>(p.m_hour);
+	nMinute = static_cast<unsigned short>(p.m_minute);
+	nSecond = static_cast<unsigned short>(p.m_second);
 }
 
 void ibValue::FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const
 {
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	// ⚠ THIS SAID `- 1`, WHERE ITS TWO SIBLINGS ABOVE SAY `+ 1`. wxDateTime
-	// numbers months from zero, so January came back as -1 — and the month was
-	// then cast straight back into a wxDateTime to derive everything else, which
-	// made that rebuilt date DECEMBER OF THE PREVIOUS YEAR. Measured on
-	// 2024-01-01: day of year 335, week 49. Every caller of this overload —
-	// GetDayOfWeek / GetDayOfYear / GetWeekOfYear, and BegOfWeek / EndOfWeek,
-	// which build their result out of nMonth — was wrong, and quietly: the
-	// figures look like dates, so nothing raises.
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
-
-	// And ASK THE DATE, rather than rebuilding one from the parts just taken off
-	// it. The rebuild was what turned one wrong month into three wrong answers.
-	DayOfYear = dateTime.GetDayOfYear();
-
-	// ISO numbering: Monday = 1 … Sunday = 7. wx numbers Sunday 0 … Saturday 6,
-	// and the old `GetWeekDay() - 1` with a `< 1 → 7` floor gave Monday and
-	// Sunday the SAME number while shifting every other day down by one.
-	const int wxWeekDay = static_cast<int>(dateTime.GetWeekDay());
-	DayOfWeek = (wxWeekDay == static_cast<int>(wxDateTime::Sun)) ? 7 : wxWeekDay;
-
-	// wx knows the calendar rule; the hand-rolled `1 + (DayOfYear - 1) / 7` did
-	// not — it counted seven-day blocks from January 1st, which is not what a
-	// week number is in any calendar anybody reconciles against.
-	WeekOfYear = static_cast<int>(dateTime.GetWeekOfYear(wxDateTime::Monday_First));
+	// The day's place in the week (ISO: Monday = 1 ... Sunday = 7), in the year and in the ISO week
+	// numbering are read off the same parts as the date - one calendar, so BegOfWeek / EndOfWeek and
+	// GetWeekOfYear cannot disagree with the query engine's WEEKDAY / WEEK over the same value.
+	ibDateParts p;
+	ibWallToParts(GetDate(), p);
+	nYear = p.m_year;
+	nMonth = static_cast<int>(p.m_month);
+	nDay = static_cast<int>(p.m_day);
+	DayOfWeek = static_cast<int>(p.m_weekDay);
+	DayOfYear = static_cast<int>(p.m_yearDay);
+	WeekOfYear = static_cast<int>(p.m_isoWeek);
 }
 
 bool ibValue::IsEmpty() const

@@ -19,6 +19,7 @@ extern BACKEND_API const char* GetBuildStamp();
 #include "guid.h"
 #include "clsid.h"
 #include "fnumber.h"
+#include "fdate.h"
 #include "fstring.h"
 #include "typeconv.h"
 #include "stringUtils.h"
@@ -40,7 +41,18 @@ constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 //*                                 Special structures                                      *
 //*******************************************************************************************
 
-#define emptyDate -62135604000000ll
+// ⭐⭐ THE EMPTY DATE IS 0001-01-01 00:00:00 AS THE WALL READS IT (fdate.h) - one number on every machine.
+//
+// It used to be a literal, -62135604000000: the INSTANT of that midnight on a machine two hours east of
+// Greenwich, because a date was an instant read through the machine's clock and the literal was taken
+// off one such machine. On any other clock the same midnight was a different number, so `Date(1,1,1)`
+// was not empty there, a date written by one machine read as a different one on the next, and the
+// empty date stored by a base in one zone was a date in another (measured 2026-09-25: an empty date
+// written under UTC read as 02:00 of the same morning on a UTC+2 client). A date is now a wall-clock
+// reading with no zone in it, so this is the same number wherever it is computed, and the 1 is what
+// the parts say rather than what a clock said once.
+constexpr wxLongLong_t emptyDate = ibWallFromParts(1, 1, 1);
+static_assert(emptyDate == -62135596800000ll, "the empty date is the wall reading of 0001-01-01 00:00:00");
 
 // ⭐⭐ THE MEMBER NUMBER THAT MEANS "NO MEMBER" — the enumeration's emptyDate.
 //

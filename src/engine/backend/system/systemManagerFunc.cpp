@@ -54,7 +54,7 @@ wxLongLong_t ibValueSystemFunction::Date(int year, int month, int day, int hour,
 
 	const wxDateTime::Month wxMonth = static_cast<wxDateTime::Month>(wxDateTime::Jan + (month - 1));
 
-	if (day < 1 || day > (int)wxDateTime::GetNumberOfDays(wxMonth, year))
+	if (day < 1 || day > static_cast<int>(ibDaysInMonth(year, static_cast<unsigned>(month))))
 		ibBackendCoreException::Error(_("Date: %s has no day %s"),
 			wxDateTime::GetMonthName(wxMonth) + wxString::Format(wxT(" %d"), year),
 			wxString::Format(wxT("%d"), day));
@@ -63,11 +63,10 @@ wxLongLong_t ibValueSystemFunction::Date(int year, int month, int day, int hour,
 		ibBackendCoreException::Error(_("Date: '%s' is not a time of day"),
 			wxString::Format(wxT("%d:%02d:%02d"), hour, minute, second));
 
-	const wxDateTime built(static_cast<unsigned short>(day), wxMonth, year,
-		static_cast<unsigned short>(hour), static_cast<unsigned short>(minute),
-		static_cast<unsigned short>(second));
-
-	return built.GetValue().GetValue();
+	// The reading of these parts (fdate.h) - the same number on every machine, `Date(1, 1, 1)` the
+	// empty date among them.
+	return ibWallFromParts(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
+		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second));
 }
 
 wxString ibValueSystemFunction::String(const ibValue& cValue)
@@ -375,12 +374,8 @@ wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 //--- Date and time:
 ibValue ibValueSystemFunction::CurrentDate()
 {
-	wxDateTime timeNow = wxDateTime::Now();
-	wxLongLong m_llValue = timeNow.GetValue();
-
-	ibValue valueNow = ibValueTypes::TYPE_DATE;
-	valueNow.m_dData = m_llValue.GetValue();
-	return valueNow;
+	// The machine's clock, read as what it shows - the local parts - through the bridge (fdate.h).
+	return ibValue(wxDateTime::Now());
 }
 
 ibValue ibValueSystemFunction::WorkingDate() {
@@ -408,7 +403,7 @@ ibValue ibValueSystemFunction::AddMonth(const ibValue& cData, int nMonthAdd)
 	// ⚠ A DAY THE TARGET MONTH DOES NOT HAVE IS ITS LAST ONE: the 31st of January plus a month is the
 	// 28th of February. Built as the 31st it was no date at all, and the value came back holding
 	// whatever its storage held (ibValue's date constructor keeps nothing from an invalid one).
-	const int lastDay = wxDateTime::GetNumberOfDays(static_cast<wxDateTime::Month>(nMonth - 1), nYear);
+	const int lastDay = static_cast<int>(ibDaysInMonth(nYear, static_cast<unsigned>(nMonth)));
 	if (nDay > lastDay)
 		nDay = lastDay;
 	// …and the time of day travels with the date: a month after 10:30 is 10:30.
@@ -471,16 +466,13 @@ ibValue ibValueSystemFunction::EndOfYear(const ibValue& cData)
 // "back two seconds" — landing the previous evening at 23:59:58, whatever day
 // was asked about. EndOfMonth gets away with the same idiom only because
 // AddMonth drops the time of day first, which is not a rule to rely on twice.
-// Stepping in wxDateSpan::Days is calendar arithmetic and says what it means.
+// Stepping in whole days of the wall (fdate.h) is calendar arithmetic and says what it means.
 ibValue ibValueSystemFunction::BegOfWeek(const ibValue& cData)
 {
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 
-	wxDateTime day(static_cast<unsigned short>(nDay),
-		static_cast<wxDateTime::Month>(nMonth - 1), nYear);
-	day -= wxDateSpan::Days(DayOfWeek - 1);
-	return ibValue(day.GetYear(), day.GetMonth() + 1, day.GetDay());
+	return ibValue(ibWallFromParts(nYear, static_cast<unsigned>(nMonth), static_cast<unsigned>(nDay)) - (DayOfWeek - 1) * ibWallMsPerDay);
 }
 
 ibValue ibValueSystemFunction::EndOfWeek(const ibValue& cData)
@@ -488,10 +480,7 @@ ibValue ibValueSystemFunction::EndOfWeek(const ibValue& cData)
 	int nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear;
 	cData.FromDate(nYear, nMonth, nDay, DayOfWeek, DayOfYear, WeekOfYear);
 
-	wxDateTime day(static_cast<unsigned short>(nDay),
-		static_cast<wxDateTime::Month>(nMonth - 1), nYear);
-	day += wxDateSpan::Days(7 - DayOfWeek);
-	return ibValue(day.GetYear(), day.GetMonth() + 1, day.GetDay(), 23, 59, 59);
+	return ibValue(ibWallFromParts(nYear, static_cast<unsigned>(nMonth), static_cast<unsigned>(nDay), 23, 59, 59) + (7 - DayOfWeek) * ibWallMsPerDay);
 }
 
 ibValue ibValueSystemFunction::BegOfDay(const ibValue& cData)

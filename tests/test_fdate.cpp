@@ -18,6 +18,8 @@
 
 #include <wx/datetime.h>
 
+#include <cstdio>    // snprintf - the text of a reading in a failure message
+#include <string>
 #include <vector>
 
 // ---------------------------------------------------------------- the number
@@ -81,15 +83,6 @@ unsigned DaysIn(int y, unsigned m)
 	return m == 2 && IsLeap(y) ? 29u : days[m - 1];
 }
 
-const ibTotalsPeriod kUnits[] = {
-	ibTotalsPeriod::Second, ibTotalsPeriod::Minute, ibTotalsPeriod::Hour, ibTotalsPeriod::Day, ibTotalsPeriod::Week,
-	ibTotalsPeriod::TenDays, ibTotalsPeriod::Month, ibTotalsPeriod::Quarter, ibTotalsPeriod::HalfYear, ibTotalsPeriod::Year,
-};
-const ibDatePart kParts[] = {
-	ibDatePart::Year, ibDatePart::Quarter, ibDatePart::Month, ibDatePart::DayOfYear, ibDatePart::Day,
-	ibDatePart::Week, ibDatePart::WeekDay, ibDatePart::Hour, ibDatePart::Minute, ibDatePart::Second,
-};
-
 } // namespace
 
 // -------------------------------------------------------------- the parts
@@ -144,10 +137,12 @@ TEST(FDate, TheDayCountAgreesWithWxOnAGridOfDates)
 
 // ------------------------------------------------------------- the twins
 
-// Every date of a leap year at noon, every unit, every part: the wall-clock twin answers what the
-// wxDateTime twin answers. Noon, so that nothing here can cross the hour a clock changes on the
-// machine running the test (the two forms are MEANT to differ there, and that is not on this grid).
-TEST(FDate, TheWallClockTwinsAnswerWhatTheWxTwinsAnswer)
+// Every date of a leap year at noon, and the turns of two years: the calendar twins answer what wx's
+// own calendar answers where wx has a word - the month and year steps (wxDateSpan, which clamps the
+// day as DATEADD does), the week's Monday, the ISO week, the weekday, the day of the year. Noon, so
+// that nothing here can cross the hour a clock changes on the machine running the test: the reading
+// is asked through wx's LOCAL parts, and a skipped hour is the one place those are not a mirror.
+TEST(FDate, TheCalendarAgreesWithWxWhereWxIsAsked)
 {
 	std::vector<ibDateParts> grid;
 	for (unsigned month = 1; month <= 12; ++month)
@@ -159,27 +154,79 @@ TEST(FDate, TheWallClockTwinsAnswerWhatTheWxTwinsAnswer)
 	for (unsigned day = 25; day <= 31; ++day) grid.push_back({ 2024, 12, day, 12, 0, 0, 0 });
 	for (unsigned day = 1;  day <= 10; ++day) grid.push_back({ 2025, 1,  day, 12, 0, 0, 0 });
 
-	const ibDateParts anchorParts = { 2024, 1, 15, 12, 0, 0, 0 };
-	const wxDateTime anchorWx = Wx(2024, 1, 15, 12);
-	const wxLongLong_t anchorWall = Wall(anchorParts);
-
 	for (const ibDateParts& p : grid) {
 		const wxDateTime dt = Wx(p.m_year, p.m_month, p.m_day, p.m_hour);
 		const wxLongLong_t wall = Wall(p);
 		ASSERT_EQ(wall, WallOf(dt)) << Text(p);
-		for (const ibTotalsPeriod unit : kUnits) {
-			const int u = static_cast<int>(unit);
-			EXPECT_EQ(WallOf(ibTruncateToPeriod(dt, unit)), ibTruncateToPeriod(wall, unit)) << Text(p) << " truncate unit " << u;
-			EXPECT_EQ(WallOf(ibNextPeriodStart(dt, unit)), ibNextPeriodStart(wall, unit)) << Text(p) << " next unit " << u;
-			EXPECT_EQ(WallOf(ibEndOfPeriod(dt, unit)), ibEndOfPeriod(wall, unit)) << Text(p) << " end unit " << u;
-			for (const long count : { 1L, -1L, 3L, -3L })
-				EXPECT_EQ(WallOf(ibDateAddUnits(dt, unit, count)), ibDateAddUnits(wall, unit, count)) << Text(p) << " add " << count << " unit " << u;
-			EXPECT_EQ(ibDateDiffUnits(anchorWx, dt, unit), ibDateDiffUnits(anchorWall, wall, unit)) << Text(p) << " diff unit " << u;
-			EXPECT_EQ(ibDateDiffUnits(dt, anchorWx, unit), ibDateDiffUnits(wall, anchorWall, unit)) << Text(p) << " diff back unit " << u;
+		for (const long count : { 1L, -1L, 3L, -3L, 11L, -13L }) {
+			EXPECT_EQ(WallOf(dt + wxDateSpan::Months(static_cast<int>(count))), ibDateAddUnits(wall, ibTotalsPeriod::Month, count)) << Text(p) << " months " << count;
+			EXPECT_EQ(WallOf(dt + wxDateSpan::Years(static_cast<int>(count))),  ibDateAddUnits(wall, ibTotalsPeriod::Year,  count)) << Text(p) << " years " << count;
+			EXPECT_EQ(WallOf(dt + wxDateSpan::Days(static_cast<int>(count))),   ibDateAddUnits(wall, ibTotalsPeriod::Day,   count)) << Text(p) << " days " << count;
+			EXPECT_EQ(WallOf(dt + wxDateSpan::Weeks(static_cast<int>(count))),  ibDateAddUnits(wall, ibTotalsPeriod::Week,  count)) << Text(p) << " weeks " << count;
 		}
-		for (const ibDatePart part : kParts)
-			EXPECT_EQ(ibReadDatePart(dt, part), ibReadDatePart(wall, part)) << Text(p) << " part " << static_cast<int>(part);
+		const int wd = static_cast<int>(dt.GetWeekDay());
+		const long isoWeekDay = wd == wxDateTime::Sun ? 7L : static_cast<long>(wd);
+		EXPECT_EQ(isoWeekDay, ibReadDatePart(wall, ibDatePart::WeekDay)) << Text(p);
+		EXPECT_EQ(static_cast<long>(dt.GetDayOfYear()), ibReadDatePart(wall, ibDatePart::DayOfYear)) << Text(p);
+		EXPECT_EQ(static_cast<long>(dt.GetWeekOfYear(wxDateTime::Monday_First)), ibReadDatePart(wall, ibDatePart::Week)) << Text(p);
+		EXPECT_EQ(WallOf((dt - wxDateSpan::Days(static_cast<int>(isoWeekDay) - 1)).GetDateOnly()), ibTruncateToPeriod(wall, ibTotalsPeriod::Week)) << Text(p);
+		EXPECT_EQ(WallOf(wxDateTime(1, dt.GetMonth(), dt.GetYear())), ibTruncateToPeriod(wall, ibTotalsPeriod::Month)) << Text(p);
+		EXPECT_EQ(WallOf(wxDateTime(1, wxDateTime::Jan, dt.GetYear())), ibTruncateToPeriod(wall, ibTotalsPeriod::Year)) << Text(p);
+		EXPECT_EQ(WallOf(dt.GetDateOnly()), ibTruncateToPeriod(wall, ibTotalsPeriod::Day)) << Text(p);
 	}
+}
+
+// ------------------------------------------------------------- the bridge
+
+// A reading crosses to wxDateTime by its local parts and comes back the same reading; an invalid
+// wxDateTime comes over as the empty date. Asked at noon and at midnight, on days of every season,
+// so the machine's own clock change is not on the grid (it is the one thing the bridge cannot mirror).
+TEST(FDate, TheBridgeCarriesAReadingByItsParts)
+{
+	const ibDateParts readings[] = {
+		{ 1, 1, 1, 0, 0, 0, 0 }, { 1899, 12, 31, 23, 59, 59, 999 }, { 1969, 12, 31, 12, 0, 0, 0 }, { 1970, 1, 1, 0, 0, 0, 0 },
+		{ 2024, 2, 29, 12, 0, 0, 0 }, { 2026, 1, 15, 0, 0, 0, 0 }, { 2026, 7, 15, 12, 30, 45, 250 }, { 2026, 10, 25, 12, 0, 0, 0 },
+		{ 9999, 12, 31, 23, 59, 59, 999 },
+	};
+	for (const ibDateParts& p : readings) {
+		const wxLongLong_t wall = Wall(p);
+		const wxDateTime dt = ibDateTimeOfWall(wall);
+		ASSERT_TRUE(dt.IsValid()) << Text(p);
+		const wxDateTime::Tm tm = dt.GetTm();
+		EXPECT_EQ(p.m_year, tm.year) << Text(p);
+		EXPECT_EQ(p.m_month, static_cast<unsigned>(tm.mon) + 1) << Text(p);
+		EXPECT_EQ(p.m_day, static_cast<unsigned>(tm.mday)) << Text(p);
+		EXPECT_EQ(p.m_hour, static_cast<unsigned>(tm.hour)) << Text(p);
+		EXPECT_EQ(p.m_minute, static_cast<unsigned>(tm.min)) << Text(p);
+		EXPECT_EQ(p.m_second, static_cast<unsigned>(tm.sec)) << Text(p);
+		EXPECT_EQ(p.m_millisecond, static_cast<unsigned>(tm.msec)) << Text(p);
+		EXPECT_EQ(wall, ibWallOfDateTime(dt)) << Text(p);
+	}
+	EXPECT_EQ(ibWallFromParts(1, 1, 1), ibWallOfDateTime(wxDateTime()));
+	EXPECT_EQ(ibWallFromParts(1, 1, 1), ibWallOfDateTime(wxInvalidDateTime));
+}
+
+// The parts know the day's place: weekday (Monday 1), day of the year, ISO week - and the days a
+// month has.
+TEST(FDate, ThePartsPlaceTheDayInItsWeekAndYear)
+{
+	EXPECT_EQ(4u, Parts(0).m_weekDay);                                            // 1970-01-01, a Thursday
+	EXPECT_EQ(1u, Parts(ibWallFromParts(2024, 1, 1)).m_weekDay);                  // a Monday
+	EXPECT_EQ(7u, Parts(ibWallFromParts(2024, 9, 1)).m_weekDay);                  // a Sunday
+	EXPECT_EQ(1u, Parts(ibWallFromParts(1, 1, 1)).m_weekDay);                     // year 1 opened on a Monday
+	EXPECT_EQ(366u, Parts(ibWallFromParts(2024, 12, 31, 23)).m_yearDay);
+	EXPECT_EQ(60u, Parts(ibWallFromParts(2024, 2, 29)).m_yearDay);
+	EXPECT_EQ(53u, Parts(ibWallFromParts(2021, 1, 3)).m_isoWeek);                 // still week 53 of 2020
+	EXPECT_EQ(1u, Parts(ibWallFromParts(2024, 12, 30)).m_isoWeek);                // already week 1 of 2025
+	EXPECT_EQ(52u, Parts(ibWallFromParts(2023, 12, 31)).m_isoWeek);
+	EXPECT_EQ(53u, Parts(ibWallFromParts(2020, 12, 31)).m_isoWeek);
+	EXPECT_EQ(1u, Parts(ibWallFromParts(2026, 1, 1)).m_isoWeek);                  // a Thursday
+	EXPECT_EQ(53u, Parts(ibWallFromParts(2027, 1, 1)).m_isoWeek);                 // a Friday: week 53 of 2026
+	static_assert(ibDaysInMonth(2024, 2) == 29, "a leap year");
+	static_assert(ibDaysInMonth(1900, 2) == 28, "a century that is not");
+	static_assert(ibDaysInMonth(2000, 2) == 29, "a century that is");
+	static_assert(ibDaysInMonth(2026, 4) == 30 && ibDaysInMonth(2026, 12) == 31, "");
+	static_assert(ibDaysInMonth(2026, 13) == 0 && ibDaysInMonth(2026, 0) == 0, "no such month");
 }
 
 // The rules, stated on their own so a change to BOTH twins at once could not slip through the

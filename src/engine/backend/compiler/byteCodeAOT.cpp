@@ -234,7 +234,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    read the operand's field. Cached bytecode written by the old compiler holds that If; the new
 //    interpreter writes the comparison's answer with its tag, into another field, and the old If
 //    would read the one nobody wrote. And / Or answer a boolean by the same rule and move with it.
-constexpr uint16_t kAOTFormatVersion = 33;
+constexpr uint16_t kAOTFormatVersion = 34;   // 34: a date constant is a wall-clock reading (fdate.h), not an instant
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

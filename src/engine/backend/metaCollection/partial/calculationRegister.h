@@ -696,8 +696,8 @@ struct ibCalcBaseRecord
 {
 	ibValue              m_line;
 	ibValue              m_type;
-	wxDateTime           m_from, m_to;
-	wxDateTime           m_registration;
+	wxLongLong_t         m_from = emptyDate, m_to = emptyDate;   // dates' readings (fdate.h); the empty date is "not set"
+	wxLongLong_t         m_registration = emptyDate;
 	std::vector<ibValue> m_dimensions;
 };
 

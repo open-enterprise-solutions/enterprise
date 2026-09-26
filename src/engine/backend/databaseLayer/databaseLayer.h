@@ -178,51 +178,41 @@ enum class ibDatePart
 	Second
 };
 
-// The RAM twin of the dialect's truncation expression: same answer, computed in C++ for the paths
-// that cannot push down (a multi-source read materialises its leaves and folds them here).
+// ⭐⭐ THE RAM TWINS OF THE DIALECT'S CALENDAR, over a date's reading - the wall-clock milliseconds a
+// date value holds (fdate.h), with no zone in them. A TIMESTAMP is a wall-clock reading and the
+// engines fold it as one; these count the same way, so a period folded in memory is the period the
+// server folds on any machine, including one whose clock goes forward an hour in March.
 //
-// The two MUST agree exactly, or a query answers differently depending on whether it happened to
-// co-locate — a difference that shows up as totals that reconcile in one deployment and not in
-// another. So this walks the calendar (month lengths, leap years) rather than approximating with
-// fixed-length arithmetic, exactly as the SQL expressions do.
-BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
+// The two roads MUST agree exactly, or a query answers differently depending on whether it happened
+// to push down - a difference that shows up as totals that reconcile in one deployment and not in
+// another. So these walk the calendar (month lengths, leap years, the ten-day bucket that ends a
+// month) rather than approximating with fixed-length arithmetic, exactly as the SQL expressions do.
 
-// The start of the NEXT period after the one holding `moment` — the first instant a stored row of
+// The period holding the reading, at its start: the dialect's truncation expression.
+BACKEND_API wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
+
+// The start of the NEXT period after the one holding the reading - the first instant a stored row of
 // that grain no longer covers. A read whose lower boundary falls inside a grain cannot use that
-// grain's stored row (it holds the part before the boundary too), so it starts at this instant and
-// takes the head from the movements instead. Calendar-walking for the same reason as the truncation:
-// months differ in length, and the ten-day bucket ending a month is not ten days long.
-BACKEND_API wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit);
+// grain's stored row (it holds the part before the boundary too), so it starts here and takes the
+// head from the movements instead.
+BACKEND_API wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit);
 
-// The LAST instant the period holding `moment` still covers — `ENDOFPERIOD(x, Month)`. Written as
-// the start of the next period less one second, and said here ONCE so the RAM road and the SQL one
-// cannot disagree about whether the boundary belongs to the period (it does).
-BACKEND_API wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
+// The LAST second the period holding the reading still covers - `ENDOFPERIOD(x, Month)`. Written as
+// the start of the next period less one second, and said ONCE so the RAM road and the SQL one cannot
+// disagree about whether the boundary belongs to the period (it does).
+BACKEND_API wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
 
-// Move a date by whole units, calendar-aware — `DATEADD(x, Month, 3)`. Adding a month to the 31st of
+// Move a date by whole units, calendar-aware - `DATEADD(x, Month, 3)`. Adding a month to the 31st of
 // a 31-day month lands on the last day of a shorter one, which is what a person means by "a month
 // later" and what fixed-length arithmetic gets wrong.
-BACKEND_API wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count);
-
-// How many WHOLE units lie between two moments — `DATEDIFF(a, b, Day)`. Negative when `to` is
-// earlier, zero when they fall in the same unit.
-BACKEND_API long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit);
-
-// One piece of a date as a number — `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
-// m_datePart expression, and it must agree with it to the digit.
-BACKEND_API long ibReadDatePart(const wxDateTime& moment, ibDatePart part);
-
-// ⭐⭐ THE SAME CALENDAR OVER A WALL-CLOCK READING (fdate.h) - milliseconds with no zone in them, the
-// number a date value is. A TIMESTAMP is a wall-clock reading and the engines fold it as one; these
-// count the same way, so a period folded in memory is the period the server folds on any machine,
-// including one whose clock goes forward an hour in March: an hour added here is an hour on the wall,
-// not an hour of real time. The wxDateTime forms above read the machine's clock through wx and are
-// what the callers still take; a caller that holds the reading itself takes these.
-BACKEND_API wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
-BACKEND_API wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit);
-BACKEND_API wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
 BACKEND_API wxLongLong_t ibDateAddUnits(wxLongLong_t wall, ibTotalsPeriod unit, long count);
+
+// How many WHOLE units lie between two readings - `DATEDIFF(a, b, Day)`. Negative when `to` is
+// earlier, zero when they fall in the same unit.
 BACKEND_API long ibDateDiffUnits(wxLongLong_t from, wxLongLong_t to, ibTotalsPeriod unit);
+
+// One piece of a date as a number - `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
+// m_datePart expression, and it must agree with it to the digit.
 BACKEND_API long ibReadDatePart(wxLongLong_t wall, ibDatePart part);
 
 struct ibDialectDictionary

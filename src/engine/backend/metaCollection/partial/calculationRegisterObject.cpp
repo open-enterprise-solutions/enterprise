@@ -81,9 +81,9 @@ bool ibValueRecordSetObjectCalculationRegister::ibValueCalculationLine::CallAsFu
 	GetValueByMetaID(reg->GetBasePeriodStart()->GetMetaID(), from);
 	GetValueByMetaID(reg->GetBasePeriodEnd()->GetMetaID(), to);
 	GetValueByMetaID(reg->GetRegistrationPeriod()->GetMetaID(), registered);
-	record.m_from = from.GetDateTime();
-	record.m_to = to.GetDateTime();
-	record.m_registration = registered.GetDateTime();
+	record.m_from = from.GetDate();
+	record.m_to = to.GetDate();
+	record.m_registration = registered.GetDate();
 	for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions) {
 		ibValue value;
 		GetValueByMetaID(pairing.m_own->GetMetaID(), value);

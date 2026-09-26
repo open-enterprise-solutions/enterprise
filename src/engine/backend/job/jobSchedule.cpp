@@ -156,10 +156,16 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 
 namespace {
 
-// One version byte in front. It is not decoration: a job ROW written by a later build must load
-// in an earlier one rather than fail, so the reader stops where its knowledge ends and every
-// unread field keeps its default — and every default here reads as "not restricted".
-constexpr std::uint8_t kScheduleBufferVersion = 1;
+// One version byte in front. It is not decoration: a job ROW written by a later build with the
+// SAME meaning of the fields must load in an earlier one rather than fail, so the reader stops
+// where its knowledge ends and every unread field keeps its default - and every default here
+// reads as "not restricted". A byte the reader does not know is refused as a whole.
+// 2 (2026-09): a date travels as a wall-clock reading (fdate.h); under 1 it was an instant - ms of
+// real time, the wxDateTime epoch - and a version-1 blob is read as one, exactly. The other way
+// round a build before this one refuses a version-2 blob and keeps its defaults: rolling back
+// loses stored schedules to their defaults.
+constexpr std::uint8_t kScheduleBufferVersion = 2;
+constexpr std::uint8_t kScheduleBufferInstants = 1;
 
 void PutU32(wxMemoryBuffer& out, std::uint32_t value)
 {
@@ -178,16 +184,17 @@ void PutS64(wxMemoryBuffer& out, std::int64_t value)
 	PutU32(out, static_cast<std::uint32_t>((static_cast<std::uint64_t>(value) >> 32) & 0xFFFFFFFFull));
 }
 
-// A date the blob can hold: milliseconds since the wxDateTime epoch, 0 for an invalid one. An
-// invalid date is the struct's own "unbounded", so it survives the round trip as itself.
+// A date the blob can hold: the wall-clock reading of its local parts (fdate.h - the same number
+// wherever the blob is read), 0 for an invalid one. An invalid date is the struct's own
+// "unbounded", so it survives the round trip as itself.
 std::int64_t DateToTicks(const wxDateTime& date)
 {
-	return date.IsValid() ? date.GetValue().GetValue() : 0;
+	return date.IsValid() ? static_cast<std::int64_t>(ibWallOfDateTime(date)) : 0;
 }
 
 wxDateTime TicksToDate(std::int64_t ticks)
 {
-	return ticks != 0 ? wxDateTime(wxLongLong(ticks)) : wxDateTime();
+	return ticks != 0 ? ibDateTimeOfWall(static_cast<wxLongLong_t>(ticks)) : wxDateTime();
 }
 
 // The cursor the reader walks with — every Take* refuses past the end, so a truncated blob
@@ -252,7 +259,8 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 		return false;
 
 	BufferCursor cursor{ static_cast<const std::uint8_t*>(data), length, 1 };
-	if (cursor.m_data[0] != kScheduleBufferVersion)
+	const std::uint8_t version = cursor.m_data[0];
+	if (version != kScheduleBufferVersion && version != kScheduleBufferInstants)
 		return false;   // a version this build does not know — leave the caller's value alone
 
 	// Read into a FRESH description: a partial blob then yields defaults for what it did not
@@ -266,10 +274,13 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 		return true;
 	};
 
-	const auto takeDate = [&cursor](wxDateTime& target) {
+	const auto takeDate = [&cursor, version](wxDateTime& target) {
 		std::int64_t ticks = 0;
 		if (!cursor.Take(ticks)) return false;
-		target = TicksToDate(ticks);
+		// A version-1 blob holds the instant itself, which is what the holder keeps: no bridge to cross.
+		target = version == kScheduleBufferInstants
+			? (ticks != 0 ? wxDateTime(wxLongLong(ticks)) : wxDateTime())
+			: TicksToDate(ticks);
 		return true;
 	};
 

@@ -20,7 +20,7 @@ static void ibBindParam(ibPreparedStatement* stmt, int pos, const ibValue& v)
 	switch (v.GetType()) {
 	case TYPE_BOOLEAN: stmt->SetParamBool(pos, v.GetBoolean());   break;
 	case TYPE_NUMBER:  stmt->SetParamNumber(pos, v.GetNumber());  break;
-	case TYPE_DATE:    stmt->SetParamDate(pos, v.GetDateTime());  break;
+	case TYPE_DATE:    stmt->SetParamDate(pos, v.GetDate());      break;
 	case TYPE_STRING:  stmt->SetParamString(pos, v.GetString());  break;
 	case TYPE_NULL:
 	case TYPE_EMPTY:

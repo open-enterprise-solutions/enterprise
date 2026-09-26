@@ -152,7 +152,7 @@ std::vector<ibSettingsEntry> ibSettingsStorage::List(ibSettingsCategory category
 
 			const ibValue changed = rs.GetValue(2);
 			if (!changed.IsNull() && !changed.IsEmpty())
-				entry.m_changed = wxDateTime(wxLongLong(changed.GetDate()));
+				entry.m_changed = changed.GetDateTime();
 
 			entries.push_back(entry);
 		}

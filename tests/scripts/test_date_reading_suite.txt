@@ -1,0 +1,42 @@
+// The date is a wall-clock reading - 2026-09-26
+//
+// Date(1, 1, 1) IS THE EMPTY DATE, on every machine. A date used to be an instant read through the
+// machine's clock, and the empty date the instant of that midnight on a clock two hours east of
+// Greenwich - so on a server in UTC the idiom a script brings along from the reference system,
+// `d = Date(1, 1, 1)` for "no date", silently stopped holding. A date is now the reading a calendar
+// and a clock show, with no zone in it. This suite runs on the CI runners, which stand in UTC, and
+// CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
+
+var none = Date(1, 1, 1);
+if (ValueIsFilled(none)) { Raise("Date(1, 1, 1) is filled"); }
+
+var next = Date(1, 1, 1, 0, 0, 1);
+if (ValueIsFilled(next) <> True) { Raise("a second past the empty date is not filled"); }
+if (next = none) { Raise("a second past the empty date equals it"); }
+
+var second = Date(1, 1, 2);
+if (ValueIsFilled(second) <> True) { Raise("the second day of year 1 is not filled"); }
+if (second - none <> 86400) { Raise("the second day of year 1 is not a day after the first: " + (second - none)); }
+
+// The morning the clocks go forward in most of Europe: 02:30 exists on the wall, an hour after it
+// is 03:30, and the day is 86 400 seconds long - whatever the machine running this thinks of it.
+var gap = Date(2026, 3, 29, 2, 30, 0);
+if ("" + gap <> "29.03.2026 02:30:00") { Raise("02:30 did not hold: " + gap); }
+if ("" + (gap + 3600) <> "29.03.2026 03:30:00") { Raise("an hour after 02:30 is not 03:30: " + (gap + 3600)); }
+var day = Date(2026, 3, 29);
+if ("" + (day + 86400) <> "30.03.2026 00:00:00") { Raise("a day after the 29th is not the 30th: " + (day + 86400)); }
+if (Date(2026, 3, 30) - day <> 86400) { Raise("the 30th is not a day after the 29th: " + (Date(2026, 3, 30) - day)); }
+if (Date("29.03.2026 02:30:00") <> gap) { Raise("the text of 02:30 did not read back as 02:30"); }
+
+// A day the calendar does not have is refused, not rolled over.
+var refused = False;
+var bad = Undefined;
+try { bad = Date(2026, 2, 30); } except { refused = True; }
+if (refused <> True) { Raise("the 30th of February was accepted"); }
+
+// The week and the year, ISO-numbered, off the same reading.
+if (GetDayOfWeek(Date(2024, 1, 1)) <> 1) { Raise("2024-01-01 is a Monday"); }
+if (GetWeekOfYear(Date(2021, 1, 3)) <> 53) { Raise("2021-01-03 is in week 53 of 2020"); }
+if (GetDayOfYear(Date(2024, 12, 31)) <> 366) { Raise("2024 has 366 days"); }
+if ("" + BegOfWeek(gap) <> "23.03.2026 00:00:00") { Raise("the Monday of that week: " + BegOfWeek(gap)); }
+if ("" + EndOfWeek(gap) <> "29.03.2026 23:59:59") { Raise("the last second of that Sunday: " + EndOfWeek(gap)); }

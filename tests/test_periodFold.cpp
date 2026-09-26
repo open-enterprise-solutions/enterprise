@@ -26,12 +26,26 @@
 
 namespace {
 
-wxDateTime Day(int y, int m, int d, int hh = 0, int mm = 0, int ss = 0)
+// A date as the engine keeps it (fdate.h) - the reading of these parts.
+wxLongLong_t Day(int y, int m, int d, int hh = 0, int mm = 0, int ss = 0)
 {
-    return wxDateTime(d, static_cast<wxDateTime::Month>(m - 1), y, hh, mm, ss);
+    return ibWallFromParts(y, static_cast<unsigned>(m), static_cast<unsigned>(d),
+        static_cast<unsigned>(hh), static_cast<unsigned>(mm), static_cast<unsigned>(ss));
 }
 
-wxString Ymd(const wxDateTime& d) { return d.Format(wxT("%Y-%m-%d")); }
+wxString Ymd(wxLongLong_t d)
+{
+    ibDateParts p;
+    ibWallToParts(d, p);
+    return wxString::Format(wxT("%04d-%02u-%02u"), p.m_year, p.m_month, p.m_day);
+}
+
+wxString Hms(wxLongLong_t d)
+{
+    ibDateParts p;
+    ibWallToParts(d, p);
+    return wxString::Format(wxT("%02u:%02u:%02u"), p.m_hour, p.m_minute, p.m_second);
+}
 
 } // namespace
 
@@ -74,11 +88,11 @@ TEST(PeriodTruncate, TenDaysCapsTheLastPeriod) {
 }
 
 TEST(PeriodTruncate, SubDayUnitsShearTheirTail) {
-    const wxDateTime t = Day(2026, 7, 28, 14, 37, 52);
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Day).Format(wxT("%H:%M:%S")),    wxT("00:00:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Hour).Format(wxT("%H:%M:%S")),   wxT("14:00:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Minute).Format(wxT("%H:%M:%S")), wxT("14:37:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Second).Format(wxT("%H:%M:%S")), wxT("14:37:52"));
+    const wxLongLong_t t = Day(2026, 7, 28, 14, 37, 52);
+    EXPECT_EQ(Hms(ibTruncateToPeriod(t, ibTotalsPeriod::Day)),    wxT("00:00:00"));
+    EXPECT_EQ(Hms(ibTruncateToPeriod(t, ibTotalsPeriod::Hour)),   wxT("14:00:00"));
+    EXPECT_EQ(Hms(ibTruncateToPeriod(t, ibTotalsPeriod::Minute)), wxT("14:37:00"));
+    EXPECT_EQ(Hms(ibTruncateToPeriod(t, ibTotalsPeriod::Second)), wxT("14:37:52"));
 }
 
 // Truncation must be IDEMPOTENT — re-truncating an already-truncated value to
@@ -87,8 +101,8 @@ TEST(PeriodTruncate, SubDayUnitsShearTheirTail) {
 TEST(PeriodTruncate, IsIdempotent) {
     for (const ibTotalsPeriod u : { ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::TenDays,
                                     ibTotalsPeriod::Month, ibTotalsPeriod::Quarter, ibTotalsPeriod::Year }) {
-        const wxDateTime once  = ibTruncateToPeriod(Day(2026, 7, 28, 9, 15, 1), u);
-        const wxDateTime twice = ibTruncateToPeriod(once, u);
+        const wxLongLong_t once  = ibTruncateToPeriod(Day(2026, 7, 28, 9, 15, 1), u);
+        const wxLongLong_t twice = ibTruncateToPeriod(once, u);
         EXPECT_EQ(Ymd(once), Ymd(twice));
     }
 }

@@ -67,6 +67,7 @@ add_executable(oes_tests
     test_roleComposition.cpp
     test_rolePolicyFold.cpp
     test_dataNode.cpp
+    test_dataMover.cpp
     test_pointInTime.cpp
     test_jsonProvider.cpp
     test_valueJson.cpp

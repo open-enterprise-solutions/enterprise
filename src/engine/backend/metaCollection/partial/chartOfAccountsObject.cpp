@@ -236,7 +236,7 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case enWrite: WriteObject(); return true;
 	case enDelete: DeleteObject(); return true;
 	case enPointInTime:
-		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetReference());
+		pvarRetValue = new ibValuePointInTime(emptyDate, GetReference());   // a moment with no date: the empty date, the smallest there is
 		return true;
 	case enModified: pvarRetValue = m_objModified; return true;
 	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;

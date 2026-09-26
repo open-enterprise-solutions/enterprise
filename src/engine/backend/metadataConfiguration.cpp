@@ -602,6 +602,16 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 {
 	ibReaderMemory reader(buffer);
 
+	// The form of the dates in the rows (chunk 3, DumpDataToBuffer): a dump made before 2026-09 has
+	// no such chunk and carried instants of the dumping machine's clock; the mover reads those
+	// through the bridge. A dump made since carries the readings themselves.
+	bool datesAreInstants = true;
+	wxMemoryBuffer bufferForm;
+	if (reader.r_chunk(3, bufferForm)) {
+		ibReaderMemory readerForm(bufferForm);
+		datesAreInstants = readerForm.r_u32() < 2;
+	}
+
 	//common data
 	wxMemoryBuffer bufferData;
 
@@ -618,7 +628,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 			wxMemoryBuffer tableBuffer;
 			if (readerData.r_chunk(table.m_id, tableBuffer)) {
 				ibReaderMemory rows(tableBuffer);
-				if (!ibDataMover::Restore(table, rows))
+				if (!ibDataMover::Restore(table, rows, datesAreInstants))
 					return false;
 			}
 		}
@@ -674,6 +684,12 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	ibWriterMemory writerSequence;
 	if (SaveSequenceToBuffer(writerSequence))
 		writer.w_chunk(2, writerSequence.buffer());
+
+	// The form of the dates in chunk 1: 2 = wall-clock readings (fdate.h, since 2026-09). A dump
+	// without this chunk carried instants, and RestoreDataFromBuffer reads it as one.
+	ibWriterMemory writerForm;
+	writerForm.w_u32(2);
+	writer.w_chunk(3, writerForm.buffer());
 
 	buffer = writer.buffer();
 	return true;

@@ -69,7 +69,7 @@ inline ibRegBound ibReadRegisterBound(const ibValue& given)
 
 	ibValuePointInTime* moment = nullptr;
 	if (given.ConvertToValue(moment) && moment != nullptr) {
-		if (moment->m_date.IsValid())
+		if (!moment->IsEmpty())
 			bound.m_date = ibValue(moment->m_date);
 		bound.m_recorder = moment->m_reference;
 		return bound;
@@ -426,16 +426,16 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	// rehearsal ledger, 107 where 100 stood — 09:59:59 read 100). An INCLUDED upper edge and an EXCLUDED
 	// lower edge are therefore partial grains too; an excluded upper edge and an included lower one take
 	// that grain wholly out or wholly in, and stay with the stored rows.
-	const auto reachesInside = [&](const ibRegBound& b, bool upperEnd, wxDateTime& moment) {
+	const auto reachesInside = [&](const ibRegBound& b, bool upperEnd, wxLongLong_t& moment) {
 		if (b.m_date.GetType() != TYPE_DATE)
 			return false;
-		moment = b.m_date.GetDateTime();
+		moment = b.m_date.GetDate();
 		if (b.HasRecorder() || ibTruncateToPeriod(moment, grain) != moment)
 			return true;
 		return upperEnd ? !b.m_excluding : b.m_excluding;
 	};
 
-	wxDateTime upperMoment, lowerMoment;
+	wxLongLong_t upperMoment = emptyDate, lowerMoment = emptyDate;
 	const bool cutUpper = reachesInside(upper, /*upperEnd*/ true, upperMoment);
 	const bool cutLower = reachesInside(lower, /*upperEnd*/ false, lowerMoment);
 
@@ -476,19 +476,19 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 // registers, the chart around it take their share. A daily balance over nine months (273 periods) refused on a
 // base with a thousand movements (2026-09-17), where the RAM road answers the same rows.
 inline constexpr size_t ibRegMaxServerCalendar = 200;
-inline std::vector<wxDateTime> ibRegCalendarOf(const ibValue& from, const ibValue& to, ibTotalsPeriod unit,
+inline std::vector<wxLongLong_t> ibRegCalendarOf(const ibValue& from, const ibValue& to, ibTotalsPeriod unit,
                                                size_t maxPeriods = ibRegMaxServerCalendar)
 {
-	std::vector<wxDateTime> periods;
+	std::vector<wxLongLong_t> periods;
 	if (from.GetType() != TYPE_DATE || to.GetType() != TYPE_DATE)
 		return periods;
-	const wxDateTime last = to.GetDateTime();
-	for (wxDateTime period = ibTruncateToPeriod(from.GetDateTime(), unit); period.IsValid() && !period.IsLaterThan(last);) {
+	const wxLongLong_t last = to.GetDate();
+	for (wxLongLong_t period = ibTruncateToPeriod(from.GetDate(), unit); period <= last;) {
 		periods.push_back(period);
 		if (maxPeriods != 0 && periods.size() > maxPeriods)
 			return {};
-		const wxDateTime next = ibNextPeriodStart(period, unit);
-		if (!next.IsValid() || !next.IsLaterThan(period))
+		const wxLongLong_t next = ibNextPeriodStart(period, unit);
+		if (next <= period)
 			break;   // a unit that does not advance would loop forever
 		period = next;
 	}
@@ -498,10 +498,10 @@ inline std::vector<wxDateTime> ibRegCalendarOf(const ibValue& from, const ibValu
 // The calendar as a RELATION — one row per period under `periodField`, laid one under the other; a one-row
 // select needs no table (the dialect supplies its own, RDB$DATABASE on Firebird). Joined to every key of a
 // reading, it is the grid a running balance walks.
-inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<wxDateTime>& periods, const wxString& periodField)
+inline ibQueryRelPtr ibRegCalendarRelation(const std::vector<wxLongLong_t>& periods, const wxString& periodField)
 {
 	ibQueryRelPtr calendar;
-	for (const wxDateTime& start : periods) {
+	for (const wxLongLong_t start : periods) {
 		const ibQueryRelPtr row = ibProject(nullptr, { { ibCast(ibConst(ibValue(start)), ibTypeDate()), periodField } });
 		calendar = calendar ? ibUnionAll(calendar, row) : row;
 	}
@@ -550,7 +550,7 @@ struct ibRegRunningFigure {
 // 🛑 The key set is the opening read and not a DISTINCT over a union of both reads: rendered on Firebird, that
 // DISTINCT merged into the union's first arm and the statement failed at BLR level (measured 2026-09-16).
 inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQueryRelPtr& turnRead,
-                                      const std::vector<wxDateTime>& periods, const wxString& periodField,
+                                      const std::vector<wxLongLong_t>& periods, const wxString& periodField,
                                       const std::vector<wxString>& keyNames, const std::vector<wxString>& passThrough,
                                       const std::vector<ibRegRunningFigure>& running, const wxString& alias)
 {
@@ -820,8 +820,8 @@ inline void ibRegWhereKeyValue(ibDataQueryBuilder& q, const TRegister* reg,
 {
 	const ibTotalsPeriod unit = reg->GetPeriodicityUnit();
 	if (unit != ibTotalsPeriod::Second && reg->IsRegisterPeriod(object->GetMetaID())
-		&& value.GetType() == TYPE_DATE && value.GetDateTime().IsValid()) {
-		const wxDateTime start = ibTruncateToPeriod(value.GetDateTime(), unit);
+		&& value.GetType() == TYPE_DATE) {
+		const wxLongLong_t start = ibTruncateToPeriod(value.GetDate(), unit);
 		q.WhereCompare(object->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, ibValue(start));
 		q.WhereCompare(object->GetQueryColumn(), ibQueryFilterOp::Less, ibValue(ibNextPeriodStart(start, unit)));
 	}

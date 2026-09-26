@@ -630,8 +630,8 @@ bool ValueForPath(const ibCompositionDescription& composition, const wxString& p
 		case ibDataKind::Number: value = ibValue(given->AsNumber()); break;
 		case ibDataKind::Bool:   value = ibValue(given->AsBool()); break;
 		case ibDataKind::Date: {
-			const s64 ms = given->AsDate();
-			value = ibValue(ms != 0 ? wxDateTime(wxLongLong(ms)) : wxDateTime());
+			const s64 ms = given->AsDate();   // the wall-clock reading; 0 is "no date"
+			value = ms != 0 ? ibValue(static_cast<wxLongLong_t>(ms)) : ibValue(ibValueTypes::TYPE_DATE);
 			break;
 		}
 		default: value = ibValue(text); break;

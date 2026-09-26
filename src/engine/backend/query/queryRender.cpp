@@ -61,18 +61,17 @@ wxString RenderLiteral(const ibValue& value)
 		return Kw(ibQueryKeyword::Null);
 	case ibValueTypes::TYPE_DATE:
 	{
-		const wxDateTime date = value.GetDateTime();
-		if (!date.IsValid())
-			return Kw(ibQueryKeyword::Null);
+		ibDateParts date;
+		ibWallToParts(value.GetDate(), date);
 		// DATETIME(y, m, d[, h, mi, s]) — the form the lexer parses. The time half
 		// is written only when it carries something, so a plain date stays plain.
-		if (date.GetHour() == 0 && date.GetMinute() == 0 && date.GetSecond() == 0) {
-			return wxString::Format(wxT("DATETIME(%d, %d, %d)"),
-				date.GetYear(), date.GetMonth() + 1, date.GetDay());
+		if (date.m_hour == 0 && date.m_minute == 0 && date.m_second == 0) {
+			return wxString::Format(wxT("DATETIME(%d, %u, %u)"),
+				date.m_year, date.m_month, date.m_day);
 		}
-		return wxString::Format(wxT("DATETIME(%d, %d, %d, %d, %d, %d)"),
-			date.GetYear(), date.GetMonth() + 1, date.GetDay(),
-			date.GetHour(), date.GetMinute(), date.GetSecond());
+		return wxString::Format(wxT("DATETIME(%d, %u, %u, %u, %u, %u)"),
+			date.m_year, date.m_month, date.m_day,
+			date.m_hour, date.m_minute, date.m_second);
 	}
 	// ⭐ THE RUNTIME'S EMPTY VALUE, WRITTEN AS ITSELF. It used to be printed as `NULL`, which is the
 	// database's absence and a different thing — and printing it so made a round trip lose it: the text

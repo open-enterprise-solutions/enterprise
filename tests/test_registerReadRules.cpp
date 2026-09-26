@@ -242,7 +242,7 @@ TEST(RegisterBound, AMomentYieldsTheDateAndTheDocument)
     ibValue recorder;
     recorder.SetString(wxT("a document"));   // any non-empty value: the bound only carries it
 
-    const ibValuePtr<ibValuePointInTime> moment(new ibValuePointInTime(when, recorder));
+    const ibValuePtr<ibValuePointInTime> moment(new ibValuePointInTime(ibWallOfDateTime(when), recorder));
     const ibRegBound bound = ibReadRegisterBound(*moment);
 
     EXPECT_EQ(when, bound.m_date.GetDateTime());
@@ -275,7 +275,7 @@ TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
     ibValue recorder;
     recorder.SetString(wxT("a document"));
 
-    const ibValuePtr<ibValuePointInTime> moment(new ibValuePointInTime(when, recorder));
+    const ibValuePtr<ibValuePointInTime> moment(new ibValuePointInTime(ibWallOfDateTime(when), recorder));
     const ibValuePtr<ibValueBoundary> excluding(new ibValueBoundary(*moment, ibBoundaryKind_Excluding));
 
     const ibRegBound bound = ibReadRegisterBound(*excluding);

@@ -223,8 +223,10 @@ public:
 	// which binds a blob, not a node tree. Same door, second spelling: the node form stays the
 	// metadata format, this is the data one, and both are here so neither can be written twice.
 	//
-	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64 ms since
-	// the wxDateTime epoch; 0 = invalid / unbounded). VERSIONED because a row outlives a release:
+	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64: the
+	// wall-clock reading of their local parts (fdate.h) since version 2, ms since the wxDateTime
+	// epoch - an instant - in version 1, which is still read; 0 = invalid / unbounded). VERSIONED
+	// because a row outlives a release:
 	// a reader older than the blob stops at the fields it knows, and every field it did not read
 	// keeps its default — which here always means "not restricted".
 	static void WriteBuffer(wxMemoryBuffer& out, const ibJobScheduleDescription& schedule);

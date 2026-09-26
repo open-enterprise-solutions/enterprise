@@ -77,11 +77,13 @@ void EncodeValue(std::vector<std::uint8_t>& buf, const ibValue& v)
 		break;
 	case ibValueTypes::TYPE_DATE:
 		buf.push_back(static_cast<std::uint8_t>(FieldTag::Date));
-		// wxDateTime::FormatISOCombined gives "YYYY-MM-DDTHH:MM:SS"
-		// — locale-independent, sortable, exact. ibValue::GetDate
-		// returns wxLongLong_t (raw ticks); use GetDateTime() for the
-		// wxDateTime wrapper that has the formatter.
-		AppendString(buf, v.GetDateTime().FormatISOCombined());
+		// "YYYY-MM-DDTHH:MM:SS" off the date's own parts (fdate.h) — locale-independent,
+		// sortable, exact, and the same text for the same date on every machine.
+		{
+			ibDateParts p;
+			ibWallToParts(v.GetDate(), p);
+			AppendString(buf, wxString::Format(wxT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+		}
 		break;
 	case ibValueTypes::TYPE_REFFER: {
 		// The dominant case for record-locking — a ref to a Catalog

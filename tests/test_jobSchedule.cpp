@@ -336,6 +336,36 @@ TEST(JobSchedule, Buffer_RoundTripsEveryField)
 	EXPECT_EQ(dst.m_activeTo,     src.m_activeTo);
 }
 
+// A blob written under version 1 (before 2026-09) holds instants - ms of real time - where version 2
+// holds wall-clock readings; a version-1 blob reads its dates as the instants they are, exactly, and
+// an empty one stays empty. The version-1 blob here is the version-2 one with its byte lowered: the
+// numbers stay, their meaning changes with the byte, which is what the byte is for.
+TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
+{
+	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
+	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
+	src.m_activeFrom   = At(2026, wxDateTime::Jan, 1);
+	ASSERT_FALSE(src.m_activeTo.IsValid());
+
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
+	ASSERT_GT(blob.GetDataLen(), 0u);
+	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
+	ASSERT_EQ(2u, bytes[0]) << "written under version 2";
+	bytes[0] = 1;
+
+	ibJobScheduleDescription dst;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
+	// The stored number is the reading of the anchor's parts; under version 1 it is an instant.
+	EXPECT_EQ(wxDateTime(wxLongLong(static_cast<wxLongLong_t>(ibWallOfDateTime(src.m_periodAnchor)))), dst.m_periodAnchor);
+	EXPECT_EQ(wxDateTime(wxLongLong(static_cast<wxLongLong_t>(ibWallOfDateTime(src.m_activeFrom)))), dst.m_activeFrom);
+	EXPECT_FALSE(dst.m_activeTo.IsValid());
+	EXPECT_EQ(src.m_intervalSeconds, dst.m_intervalSeconds);
+
+	bytes[0] = 3;
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst)) << "a version this build does not know";
+}
+
 TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
 {
 	// An empty date is a legitimate value — "no validity range" — and it must not come back as
