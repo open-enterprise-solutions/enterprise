@@ -184,14 +184,48 @@ set(OES_SRC_DIR      "${CMAKE_SOURCE_DIR}/src")
 set(OES_ENGINE_DIR   "${OES_SRC_DIR}/engine")
 set(OES_3RDPARTY_DIR "${OES_SRC_DIR}/3rdparty")
 
-# A submodule that was not fetched is said here rather than three hundred lines later, as a header that
-# cannot be opened. The same is done for wxWidgets below and for Mbed TLS where it is added.
-if(NOT EXISTS "${OES_3RDPARTY_DIR}/cpp-httplib/httplib.h")
+# ⭐ A SUBMODULE THE BUILD NEEDS IS FETCHED BY THE BUILD. `oes_require_submodule(<dir under 3rdparty> <a file in
+# it>)` is asked for every one of them - cpp-httplib here, Mbed TLS and wxWidgets where they are added - and a
+# missing one is fetched on the spot, with everything under it, before anything reads it.
+#
+# 🛑 IT USED TO STOP AND SAY WHAT TO RUN, and a build whose checkout fetched less than the tree now needs
+# stopped there with it: the nightly is started from the workflow file of the default branch, which still
+# fetched wxWidgets alone, so the night after the HTTP stack came in ended at configure on every platform -
+# "cpp-httplib submodule not found" (2026-09-26). The tree knows what it needs; the checkout does not.
+#
+# Tried again with a longer wait, as .github/fetch-submodules.sh does: GitHub answers a clone with 503 now and
+# then. Only a tree that cannot be fetched at all - no git, not a checkout, no network - still stops here,
+# saying where the submodule was looked for.
+function(oes_require_submodule name marker)
+    set(dir "${OES_3RDPARTY_DIR}/${name}")
+    if(EXISTS "${dir}/${marker}")
+        return()
+    endif()
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        foreach(attempt 1 2 3)
+            message(STATUS "Fetching the ${name} submodule (attempt ${attempt} of 3)")
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive -- "src/3rdparty/${name}"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                RESULT_VARIABLE fetched)
+            if(fetched EQUAL 0 AND EXISTS "${dir}/${marker}")
+                return()
+            endif()
+            if(attempt LESS 3)
+                math(EXPR wait "${attempt} * 30")
+                execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep "${wait}")
+            endif()
+        endforeach()
+    endif()
     message(FATAL_ERROR
-        "cpp-httplib submodule not found at ${OES_3RDPARTY_DIR}/cpp-httplib.\n"
+        "${name} submodule not found at ${dir}, and it could not be fetched.\n"
         "Run: git submodule update --init --recursive"
     )
-endif()
+endfunction()
+
+# Said here rather than three hundred lines later, as a header that cannot be opened.
+oes_require_submodule(cpp-httplib httplib.h)
 
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
@@ -221,12 +255,7 @@ endif()
 # two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
 # keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
 # backend, which carries them as PUBLIC.
-if(NOT EXISTS "${OES_3RDPARTY_DIR}/mbedtls/CMakeLists.txt")
-    message(FATAL_ERROR
-        "Mbed TLS submodule not found at ${OES_3RDPARTY_DIR}/mbedtls.\n"
-        "Run: git submodule update --init --recursive"
-    )
-endif()
+oes_require_submodule(mbedtls CMakeLists.txt)
 # ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
 # library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
 # PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
@@ -367,13 +396,8 @@ set(wxBUILD_SAMPLES  OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
-# Ensure the submodule directory exists
-if(NOT EXISTS "${OES_3RDPARTY_DIR}/wxWidgets/CMakeLists.txt")
-    message(FATAL_ERROR
-        "wxWidgets submodule not found at ${OES_3RDPARTY_DIR}/wxWidgets.\n"
-        "Run: git submodule update --init --recursive"
-    )
-endif()
+# Ensure the submodule directory exists (fetched when it does not - see oes_require_submodule)
+oes_require_submodule(wxWidgets CMakeLists.txt)
 
 add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets")
 

@@ -90,6 +90,11 @@ git submodule update --init --recursive
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
+**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib and Mbed TLS are each checked
+before use, and one that is not there is fetched with `git submodule update --init --recursive` for
+that path (three attempts); only a tree with no git, or no network, stops with the command to run. A
+checkout that fetched less than the tree needs - an older workflow, a partial clone - still builds.
+
 **Take them all; the private one takes itself out.** `docs/private` is a **private** repository
 (`enterprise-docs`) that nothing in the build reads, and a bare `--init --recursive` used to fail on
 it for anyone outside the organisation, before a single file was compiled. It now carries
