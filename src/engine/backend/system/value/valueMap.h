@@ -22,6 +22,9 @@
 //     carries only the fixed METHODS and is built once; the keys never touch it.
 class BACKEND_API ibValueContainer : public ibValueDynamicMembers {
 	public:
+protected:
+	// What a string key is - see m_keyKind.
+	enum class ibKeyKind { Value, Name };
 private:
 	// A METHOD NUMBER IS A POSITION in the member table, so the order here is the
 	// order BindContainerNames appends in -- and enGet sits before the three a
@@ -49,7 +52,7 @@ private:
 	//   length alone and folds only the characters that differ.
 	//
 	//   in a CONTAINER a string key is a VALUE like any other: "fr" and "FR" are two keys, exactly as
-	//   `"fr" = "FR"` is False, and a key is reached through `[key]`, never through a dot.
+	//   `"fr" = "FR"` is False — through `[key]`, Get and the dot alike.
 	//
 	//   anything that is not a string compares AS A VALUE in both, through ibValue's own ORDERING — a
 	//   reference by its guid, a number by its magnitude — so `1` and "1" are different keys, as they
@@ -57,7 +60,7 @@ private:
 	//   place (CompareValueLS), so those two are ONE key here while `Undefined = Null` is False.
 	//
 	// Set once by the constructor and never changed: the index is built under it.
-	const bool m_keysAreNames;
+	const ibKeyKind m_keyKind;
 
 	// THE INDEX HOLDS POSITIONS, NOT A SECOND COPY OF THE KEY. It used to be
 	// keyed by the ibValue itself, so every insert copied the key — and a string
@@ -77,8 +80,8 @@ private:
 	long FindWithHash(const ibValue& key, size_t hash) const;
 
 protected:
-	// A Structure's constructor: its string keys are field NAMES (see m_keysAreNames).
-	ibValueContainer(bool readOnly, bool keysAreNames);
+	// A Structure's constructor: its string keys are field NAMES (see m_keyKind).
+	ibValueContainer(bool readOnly, ibKeyKind keyKind);
 
 	// -1 when absent; the entry index otherwise. The single lookup primitive the
 	// key-facing methods share.
@@ -147,12 +150,7 @@ public:
 	// only methods, so FindProp returns a key's entry index (or -1), and
 	// Get/SetPropVal read / write that entry. GetNProps / GetPropName expose the
 	// keys to introspection (debugger, inspectors) without maintaining a live
-	// surface: they read the store on demand. What GetPropName answers is the
-	// key's TEXT; how an entry is REACHED is AccessorOf, below.
-	//
-	// FindProp is the DOT, and only a Structure has one: a Container's key is a
-	// value, and `c.Name` could not name a reference or a number anyway. So on a
-	// Container FindProp always misses and `c.Name` raises "not found".
+	// surface: they read the store on demand.
 	virtual long FindProp(const ibString& strPropName) const override;
 	virtual long GetNProps() const override { return (long)m_entries.size(); }
 	virtual const ibString& GetPropName(const long lPropNum) const override;
@@ -164,12 +162,6 @@ public:
 	// (A key is never scope-local, so the base's IsPropScoped is already right.)
 	virtual bool IsPropReadable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
 	virtual bool IsPropWritable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
-
-	// The text that READS entry lPropNum - a field name in a Structure, the subscript in a
-	// Container - or empty when nothing written can reach it. Its one caller is the debugger's
-	// watch, where the name of a row is also the expression the row is opened by; valueMap.cpp
-	// says why that is a question of its own and not what GetPropName answers.
-	wxString AccessorOf(const long lPropNum) const;
 
 	// The FIXED method surface — methods only, no keys. Type-invariant given the
 	// read-only flag, bound once in the ctor and never rebuilt on a mutation.
@@ -216,12 +208,12 @@ protected:
 class BACKEND_API ibValueStructure : public ibValueContainer {
 	public:
 
-	ibValueStructure() : ibValueContainer(false, true) {}
-	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true, true) {
+	ibValueStructure() : ibValueContainer(false, ibKeyKind::Name) {}
+	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true, ibKeyKind::Name) {
 		for (auto& strBVal : structureValues) ibValueContainer::SetAt(strBVal.first, strBVal.second);
 	}
 
-	ibValueStructure(bool readOnly) : ibValueContainer(readOnly, true) {}
+	ibValueStructure(bool readOnly) : ibValueContainer(readOnly, ibKeyKind::Name) {}
 
 	// `New Structure("Field1, Field2, ...", value1, value2, ...)` —
 	// named-column ctor: first arg is comma-separated field-name list,

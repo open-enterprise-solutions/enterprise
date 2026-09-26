@@ -4,24 +4,20 @@
 // The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
 //
 //   1. A Container's string key is the string it is: "ab" and "AB" are two keys, as "ab" = "AB" is False.
-//   2. A Container has no dot: c.Name raises even when the key "Name" is there; [key] reaches it.
+//   2. The dot reads a Container's key as written: c.Name reaches the key "Name", c.name misses it.
 //   3. A Structure's key is a field NAME: it folds case and is reached through a dot.
 //   4. A LINQ group by a string key splits "fr" from "FR". The groups live in LINQ's own collection,
 //      ordered by the language's comparison, so this was already so; it is here because a Container
 //      and a group must not answer the same question about two strings differently.
-//   5. The subscript that reaches a key is text this language reads: a quote inside a string key is
-//      doubled. It is the form the watch prints for such an entry (AccessorOf, not GetPropName -
-//      that one answers the key's own text), so the row it shows is a row it can open again.
+//   5. A key with a quote inside is reached by the subscript, the quote doubled in the literal.
 //   6. Get answers the value bound to a key, or Undefined when nothing is - without raising, which
 //      is what [key] does, and without a second argument, which is what Property needs.
-//   7. A key NAMES its entry, and a name is what a caller that wants a name gets: ToTable over
-//      containers builds the columns of its answer from those names, and a column called
-//      ["Amount"] would be a column no script could address.
+//   7. A key NAMES its entry: ToTable over containers builds the columns of its answer from those
+//      names.
 //   8. Undefined and Null are keys a script can WRITE - the lexer makes them values before
-//      anything else - and they are ONE key, the value ordering putting them in one place. The
-//      watch writes such a row the same way, which is why they are here. A boolean key is reached
-//      by Get and Property but NOT by a subscript: `c[True]` compiles and answers Undefined,
-//      having no boolean case among the typed array opcodes, so the watch does not write one.
+//      anything else - and they are ONE key, the value ordering putting them in one place. A
+//      boolean key is reached by a subscript as by Get and Property: `c[True]` compiles to the
+//      boolean-typed array opcode, which runs since the typed-operand change.
 // ============================================================================
 
 // 1
@@ -47,16 +43,17 @@ Message("container keys: " + c.Count());
 // 2
 var named = New Container;
 named.Insert("Name", 7);
-var dotRaised = False;
+if (named.Name <> 7) { Raise("named.Name: " + named.Name); }
+var otherCaseRaised = False;
 var viaDot = Undefined;
 try {
-	viaDot = named.Name;
+	viaDot = named.name;
 } except {
-	dotRaised = True;
+	otherCaseRaised = True;
 }
-if (Not dotRaised) { Raise("a Container's key was reached through a dot: " + viaDot); }
+if (Not otherCaseRaised) { Raise("a Container's key was reached through a dot in another case: " + viaDot); }
 if (named["Name"] <> 7) { Raise("named[Name]: " + named["Name"]); }
-Message("container dot refused");
+Message("container dot reads the key as written");
 
 // 3
 var s = New Structure("Name", 7);
@@ -128,6 +125,7 @@ if (typed[Undefined] <> "nothing") { Raise("typed[Undefined]: " + typed[Undefine
 if (typed[Null] <> "nothing") { Raise("Undefined and Null were expected to be one key"); }
 if (typed[7] <> "seven") { Raise("typed[7]: " + typed[7]); }
 if (typed.Get(True) <> "yes") { Raise("typed.Get(True): " + typed.Get(True)); }
+if (typed[True] <> "yes") { Raise("typed[True]: " + typed[True]); }
 var boolFound = Undefined;
 if (Not typed.Property(True, boolFound)) { Raise("a boolean key was expected to be there"); }
 if (boolFound <> "yes") { Raise("Property(True): " + boolFound); }

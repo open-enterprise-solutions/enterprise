@@ -41,7 +41,7 @@ inline wchar_t FoldChar(const wchar_t c)
 //   different keys now, and deliberately: the language's own comparison says so everywhere else.
 size_t ibValueContainer::HashOf(const ibValue& key) const
 {
-	if (m_keysAreNames && key.GetType() == ibValueTypes::TYPE_STRING) {
+	if (m_keyKind == ibKeyKind::Name && key.GetType() == ibValueTypes::TYPE_STRING) {
 		const ibString text = key.GetString();        // the key's text shared, not copied
 		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
@@ -88,7 +88,7 @@ long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 			continue;                                        // text never matches a non-text key
 		if (isText) {
 			const ibString candText = candidate.GetString();   // shared, not copied
-			if (m_keysAreNames ? FoldedEquals(candText, keyText) : candText == keyText)
+			if (m_keyKind == ibKeyKind::Name ? FoldedEquals(candText, keyText) : candText == keyText)
 				return (long)at;
 		}
 		else if (candidate.CompareValueLS(key) == 0) {
@@ -206,11 +206,11 @@ bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, i
 //*                            ibValueContainer                         *
 //**********************************************************************
 
-ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_keysAreNames(false) {
+ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
 	m_members.Bind(&BindContainerNames, this);
 }
 
-ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_keysAreNames(false) {
+ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
 	m_members.Bind(&BindContainerNames, this);
 	// SetAt, not Insert: should the source map hold two keys this store calls one, a
 	// build keeps the last rather than throwing.
@@ -218,11 +218,11 @@ ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerVa
 		ibValueContainer::SetAt(cntVal.first, cntVal.second);
 }
 
-ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keysAreNames(false) {
+ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
 	m_members.Bind(&BindContainerNames, this);
 }
 
-ibValueContainer::ibValueContainer(bool readOnly, bool keysAreNames) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keysAreNames(keysAreNames) {
+ibValueContainer::ibValueContainer(bool readOnly, ibKeyKind keyKind) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
 	m_members.Bind(&BindContainerNames, this);
 }
 
@@ -254,18 +254,12 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 }
 
 // ---- the key surface, straight off the store --------------------------------
-// FindProp is the `structure.field` resolver: a hash probe, not a member-table
+// FindProp is the `container.key` resolver: a hash probe, not a member-table
 // scan. GetNProps / GetPropName / Get / SetPropVal are the index side of the
 // same store, used by the interpreter after FindProp and by introspection.
-//
-// A CONTAINER HAS NO DOT. Its keys are values — a reference or a number cannot be
-// written after a dot, and a string key is the string it is, not a name — so
-// `c.Name` misses and raises "not found"; a key is reached through `[key]`.
 
 long ibValueContainer::FindProp(const ibString& strPropName) const
 {
-	if (!m_keysAreNames)
-		return wxNOT_FOUND;
 	return IndexOf(ibValue(strPropName));
 }
 
@@ -278,96 +272,6 @@ const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 	// lend (and FindProp cannot reach it by name either).
 	const ibValue& key = m_entries[lPropNum].first;
 	return key.m_typeClass == ibValueTypes::TYPE_STRING ? key.m_sData : s_absent;
-}
-
-// HOW AN ENTRY IS REACHED, which is not what it is NAMED and is why this is a door of its own.
-// GetPropName answers the key's text, and a caller that wants a NAME wants exactly that: a LINQ
-// projection over containers names the columns of its answer with it (procUnitLINQ.cpp), and a
-// column called ["Amount"] is a column no script can address.
-//
-// What is reached is the other question, and only the debugger's watch asks it. A row there is
-// named the way it is written, because the name, joined to the parent, is the expression the
-// watch evaluates AGAIN at the next stop - a value cannot be held across one, and an expression
-// is the only handle that survives it.
-//
-// EMPTY WHEN NOTHING WRITTEN CAN REACH IT, and the caller's part of that bargain is to stop
-// offering to open such a row. Two ways a key can be unwritable: it is of a kind with no literal
-// - a date (the lexer has one, `IsDate`, and the compiler calls it nowhere), a reference, an
-// object - or it is a string the lexer will not read back in one piece, which is a string holding
-// a line break: inside a literal those are legal only in the continuation form, where the next
-// line opens with `|` (translateCode.cpp ~805).
-wxString ibValueContainer::AccessorOf(const long lPropNum) const
-{
-	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
-		return wxEmptyString;
-
-	struct Written {
-		// A NAME is what may follow a dot: ASCII letters, digits and underscores, not starting
-		// with a digit. A Structure's field is whatever string was inserted, and nothing makes it
-		// an identifier - a spreadsheet's Areas are keyed by an area's free-text label - so
-		// `s.some label` is a field the dot cannot reach and the subscript reaches instead.
-		static bool AsName(const wxString& text) {
-			if (text.IsEmpty())
-				return false;
-			for (size_t at = 0; at < text.length(); ++at) {
-				const wxUniChar ch = text[at];
-				const bool letter = (ch >= wxT('A') && ch <= wxT('Z'))
-					|| (ch >= wxT('a') && ch <= wxT('z')) || ch == wxT('_');
-				const bool digit = (ch >= wxT('0') && ch <= wxT('9'));
-				if (letter || (digit && at > 0))
-					continue;
-				return false;
-			}
-			return true;
-		}
-		// A string literal holds anything but a line break; a quote inside it is doubled, which is
-		// how the lexer reads one back (translateCode.cpp ~848).
-		static wxString AsText(const wxString& text) {
-			if (text.Find(wxT('\n')) != wxNOT_FOUND || text.Find(wxT('\r')) != wxNOT_FOUND)
-				return wxEmptyString;
-			wxString quoted = text;
-			quoted.Replace(wxT("\""), wxT("\"\""));
-			return wxT("[\"") + quoted + wxT("\"]");
-		}
-	};
-
-	const ibValue& key = m_entries[lPropNum].first;
-
-	if (m_keysAreNames) {
-		const wxString strName = key.GetString();
-		return Written::AsName(strName) ? strName : Written::AsText(strName);
-	}
-
-	switch (key.GetType()) {
-	case ibValueTypes::TYPE_STRING:
-		return Written::AsText(key.GetString());
-	case ibValueTypes::TYPE_NUMBER: {
-		// Its own text, and the separator is a point whatever the locale says (fnumber.cpp). A
-		// magnitude past the decoded range comes out in exponent form, which the number lexer
-		// does not read - rare, and the row simply stops opening.
-		const wxString strNumber = key.GetString();
-		if (strNumber.Find(wxT('E')) != wxNOT_FOUND || strNumber.Find(wxT('e')) != wxNOT_FOUND)
-			return wxEmptyString;
-		return wxT("[") + strNumber + wxT("]");
-	}
-	// WRITTEN AS THEMSELVES. The lexer turns Undefined and Null into values before anything else
-	// does (translateCode.cpp ~1174), so they are keys a script can write - and they reach the same
-	// entry, the ordering putting the two in one place.
-	case ibValueTypes::TYPE_EMPTY:
-		return wxT("[Undefined]");
-	case ibValueTypes::TYPE_NULL:
-		return wxT("[Null]");
-	// AND TRUE / FALSE ARE NOT, although the lexer makes values of them too. A subscript whose
-	// index is BOOLEAN-typed is compiled to OPER_GET_ARRAY + TYPE_DELTA4 (CorrectTypeDef,
-	// compileCode.cpp ~2969), and the interpreter has no such case: the switch has the number,
-	// string and date variants and falls through for this one, so `c[True]` answers Undefined
-	// without raising and `c[True] = v` writes nothing. Naming a row by an expression that reads
-	// as "nothing is here" would be worse than not offering to open it, so these keys say the
-	// same as a date does - until that opcode exists, when one line brings them back.
-	default:
-		break;
-	}
-	return wxEmptyString;
 }
 
 bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

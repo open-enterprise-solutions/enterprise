@@ -229,77 +229,44 @@ TEST(ValueContainer, NonAsciiKeysThatDifferOnlyInCaseAreTwoKeys) {
     EXPECT_EQ(out.GetInteger(), 2);
 }
 
-// A CONTAINER HAS NO DOT. Its keys are values — a reference or a number cannot
-// be spelled after a dot — so FindProp, which is what `c.Name` asks, misses for
-// every key, and the interpreter raises "not found". The key is still there for
-// `[key]`, Property and iteration.
-TEST(ValueContainer, AKeyIsNotAProperty) {
+// THE DOT READS A KEY AS WRITTEN. `c.Name` asks FindProp, which is the same lookup as `[key]`: the
+// key "Name" is there, and "name" is another key that is not.
+TEST(ValueContainer, TheDotFindsAKeyAsWritten) {
     ibValueContainer c;
     c.Insert(Key(wxT("Name")), ibValue(ibNumber(1)));
-    EXPECT_EQ(c.FindProp(wxT("Name")), wxNOT_FOUND);
+    EXPECT_EQ(c.FindProp(wxT("Name")), 0);
+    EXPECT_EQ(c.FindProp(wxT("name")), wxNOT_FOUND);
     ibValue out;
     EXPECT_TRUE(c.Property(Key(wxT("Name")), out));
 }
 
-// TWO QUESTIONS, NOT ONE. What an entry is NAMED is its key's text, and a caller that wants a name
-// wants exactly that: a LINQ projection over containers names the columns of its answer with
-// GetPropName, and a column called ["Amount"] is a column no script can address.
-//
-// What REACHES an entry is the other question, and only the debugger's watch asks it - the name of
-// a row there is also the expression the row is opened by. A quote inside a string key is doubled,
-// which is how the lexer reads one back (translateCode.cpp ~848); the script suite writes that same
-// form by hand and reaches the entry with it, which is the other half of this.
-TEST(ValueContainer, AnEntryIsNamedByItsKeyAndReachedByASubscript) {
-    ibValueContainer c;
-    c.Insert(Key(wxT("Name")), Num(1));
-    c.Insert(Num(42), Num(2));
-    c.Insert(Key(wxT("he said \"hi\"")), Num(3));
-
-    EXPECT_EQ(c.GetPropName(0), wxString(wxT("Name")));
-    EXPECT_EQ(c.GetPropName(1), wxString(wxT("42")));
-
-    EXPECT_EQ(c.AccessorOf(0), wxString(wxT("[\"Name\"]")));
-    EXPECT_EQ(c.AccessorOf(1), wxString(wxT("[42]")));
-    EXPECT_EQ(c.AccessorOf(2), wxString(wxT("[\"he said \"\"hi\"\"\"]")));
-
-    // And a name is not a dot: the key is still no property of the container.
-    EXPECT_EQ(c.FindProp(c.GetPropName(0)), wxNOT_FOUND);
-}
-
-// UNDEFINED AND NULL ARE KEYS A SCRIPT CAN WRITE. The lexer turns them into values before anything
-// else looks at them (translateCode.cpp ~1174), so a row keyed by one of them opens like any
-// other. They reach the SAME entry, the value ordering putting the two in one place, which is why
-// they cannot both be inserted here.
-TEST(ValueContainer, AKeyWrittenAsAConstantIsReachedByIt) {
-    ibValueContainer c;
-    c.Insert(ibValue(), Num(1));                 // Undefined
-    EXPECT_EQ(c.AccessorOf(0), wxString(wxT("[Undefined]")));
-
-    ibValueContainer nulled;
-    ibValue nothing; nothing.SetType(ibValueTypes::TYPE_NULL);
-    nulled.Insert(nothing, Num(1));
-    EXPECT_EQ(nulled.AccessorOf(0), wxString(wxT("[Null]")));
-}
-
-// AND A KEY THAT CANNOT BE WRITTEN SAYS SO by answering nothing, which is what stops the watch
-// offering to open a row it could never ask for again. Three ways here: a kind with no literal (a
-// date, a reference); a string the lexer will not read back in one piece, which is one holding a
-// line break; and a boolean, which the lexer DOES have a literal for - `c[True]` compiles - but
-// which the interpreter answers Undefined to, having no OPER_GET_ARRAY + TYPE_DELTA4 case for a
-// boolean-typed index. A row named by an expression that reads as "nothing is here" is worse than
-// a row that does not open.
-TEST(ValueContainer, AKeyThatCannotBeWrittenHasNoAccessor) {
+// WHAT AN ENTRY IS NAMED is its key's text, and a caller that wants a name wants exactly that: a
+// LINQ projection over containers names the columns of its answer with GetPropName. The walk hands
+// back every key, of any kind, as itself and in the order it was inserted.
+TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
     ibValueContainer c;
     ibValue date; date.SetType(ibValueTypes::TYPE_DATE);
     ibValue yes;  yes.SetBoolean(wxT("True"));
-    c.Insert(date, Num(1));
-    c.Insert(Key(wxT("two\nlines")), Num(2));
-    c.Insert(yes, Num(3));
+    c.Insert(Key(wxT("Name")), Num(1));
+    c.Insert(Num(42), Num(2));
+    c.Insert(date, Num(3));
+    c.Insert(yes, Num(4));
 
-    EXPECT_TRUE(c.AccessorOf(0).IsEmpty());
-    EXPECT_TRUE(c.AccessorOf(1).IsEmpty());
-    EXPECT_TRUE(c.AccessorOf(2).IsEmpty());
-    EXPECT_FALSE(c.GetPropName(1).IsEmpty()) << "the row still says which entry it is";
+    EXPECT_EQ(c.GetPropName(0), wxString(wxT("Name")));
+    EXPECT_EQ(c.GetPropName(1), wxString(wxT("42")));
+    EXPECT_EQ(c.FindProp(c.GetPropName(0)), 0) << "a string key is found again by its name";
+
+    const std::shared_ptr<ibValueIteratorState> iterator = c.CreateIterator();
+    ASSERT_NE(iterator, nullptr);
+    ibValue pair, key, value;
+    for (int at = 0; at < 4; at++) {
+        ASSERT_TRUE(iterator->MoveNext(pair)) << "element " << at;
+        ASSERT_TRUE(pair.GetPropVal(pair.FindProp(wxT("Key")), key));
+        ASSERT_TRUE(pair.GetPropVal(pair.FindProp(wxT("Value")), value));
+        EXPECT_EQ(value.GetInteger(), at + 1) << "element " << at << " is the one inserted " << at;
+    }
+    EXPECT_EQ(key.GetType(), ibValueTypes::TYPE_BOOLEAN) << "a key of any kind comes back as itself";
+    EXPECT_FALSE(iterator->MoveNext(pair));
 }
 
 // GET IS THE THIRD QUESTION. Property answers whether a key is there, and hands the value back

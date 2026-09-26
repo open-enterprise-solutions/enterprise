@@ -14,7 +14,6 @@
 #endif
 
 #include <chrono>                             // steady_clock — how long a sandbox run actually took
-#include <vector>
 
 #include "backend/logger/logger.h"            // the screenshot is written down before it is handed over
 
@@ -29,7 +28,6 @@
 #include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
 #include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
 #include "backend/compiler/byteCode.h"        // ...and what arrives for it to run is compiled code
-#include "backend/system/value/valueMap.h"    // a container names a row by the subscript that reads it
 #include "backend/composition/composeRunSchema.h"  // …and a report is run here, where the data is
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
@@ -1380,35 +1378,10 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				//count of attribute
 				commandChannel.w_u32((unsigned int)nPropsVisible);
 
-				// A CONTAINER'S ENTRY IS NOT A NAME, and the two questions below part here. Its key is a
-				// value, reached through [key] and never after a dot, so FindProp misses every one of
-				// them - and this loop used to look each entry up BY ITS NAME, which turned a container's
-				// whole contents into rows saying "<not found>".
-				//
-				// Asked of the container instead: read by position, which is the index its GetPropVal
-				// takes, and name the row the way it is REACHED, because that name, joined to the
-				// parent, is the expression the watch evaluates again at the next stop. A key nothing
-				// written can reach - a date, a reference - keeps its text for the row and loses its
-				// expander: offering to open it would send an expression that does not compile.
-				//
-				// Everywhere else the name is still put BACK through FindProp rather than trusted as a
-				// position. A module manager numbers its reads by frame slot and its names by the member
-				// table (ibProcUnit::FindProp / GetPropVal), and those are not one numbering - the read
-				// lands in an unchecked array.
-				const ibValueContainer* const container =
-					dynamic_cast<const ibValueContainer*>(vResult.GetRef());
-
 				//send varables
 				for (long i = 0; i < vResult.GetNProps(); i++) {
 					if (vResult.IsPropScoped(i)) continue;
-					wxString strPropName = vResult.GetPropName(i);
-					bool bCanOpen = true;
-					if (container != nullptr) {
-						const wxString strAccessor = container->AccessorOf(i);
-						bCanOpen = !strAccessor.IsEmpty();
-						if (bCanOpen) strPropName = strAccessor;
-					}
-					const long lPropNum = container != nullptr ? i : vResult.FindProp(strPropName);
+					const wxString& strPropName = vResult.GetPropName(i); const long lPropNum = vResult.FindProp(strPropName);
 					if (lPropNum != wxNOT_FOUND) {
 
 						wxString strPropValue;
@@ -1446,7 +1419,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 									strPropType = wxT("<error>");
 								}
 								//count of attribute
-								propCount = bCanOpen ? vAttribute.GetNProps() : 0;
+								propCount = vAttribute.GetNProps();
 							}
 						}
 						catch (const ibBackendException& err) {
@@ -1816,31 +1789,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				commandChannel.w_stringZ(strKeyWord);
 				commandChannel.w_s32(currPos);
 
-				// ONLY WHAT A DOT CAN REACH. This list is what the editor offers after one, and a
-				// Container publishes its KEYS here: a key is a value, FindProp misses every one of
-				// them, and a name offered but not found raises the moment it is typed (OPER_GET_A
-				// resolves a member through FindProp too). The question is asked of the value and
-				// only of a container, because a Structure is one as well and ITS fields are names.
-				// Nothing else is narrowed here: a module manager answers FindProp from its exports
-				// while its member table also carries the names bound around it, and whether those
-				// belong in this list is a question of its own, asked with a parked session.
-				//
-				// This is also the only completion that sees a LIVE value -- the editor's own and
-				// the assistant's walk the code at design time (ibCaretWalk reads instructions, it
-				// does not run them), where a container has no entries to offer in the first place.
-				const ibValueContainer* const container =
-					dynamic_cast<const ibValueContainer*>(vResult.GetRef());
-				std::vector<wxString> listOffered;
+				commandChannel.w_u32(vResult.GetNProps());
+				//send varables 
 				for (long i = 0; i < vResult.GetNProps(); i++) {
 					const wxString& strAttributeName = vResult.GetPropName(i);
-					if (container != nullptr && vResult.FindProp(strAttributeName) == wxNOT_FOUND)
-						continue;
-					listOffered.push_back(strAttributeName);
-				}
-				commandChannel.w_u32((unsigned int)listOffered.size());
-				//send varables 
-				for (const wxString& strAttributeName : listOffered)
 					commandChannel.w_stringZ(strAttributeName);
+				}
 
 				commandChannel.w_u32(vResult.GetNMethods());
 				//send functions 

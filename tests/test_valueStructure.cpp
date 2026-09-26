@@ -72,7 +72,7 @@ TEST(ValueStructure, ClearEmpties) {
 // A script reaches a structure's field through a dot and does not care how it
 // was typed: `s.Name` and `s.name` are one field. That is the difference from a
 // Container, whose string keys are values and are compared as written
-// (test_valueContainer.cpp) — and it is why only a Structure answers FindProp.
+// (test_valueContainer.cpp).
 // ===========================================================================
 
 TEST(ValueStructure, FieldNamesFoldCase) {
@@ -111,7 +111,7 @@ TEST(ValueStructure, NonAsciiFieldNamesFoldCase) {
     EXPECT_TRUE(s.Property(Field(wxT("\u043A\u043B\u044E\u0447")), out));     // all lower
 }
 
-// The dot is a Structure's: FindProp finds a field by its name, in any case.
+// The dot folds a field's name too: FindProp finds a field by its name, in any case.
 TEST(ValueStructure, AFieldIsAProperty) {
     ibValueStructure s;
     s.Insert(Field(wxT("Name")), ibValue(ibNumber(7)));
@@ -122,25 +122,24 @@ TEST(ValueStructure, AFieldIsAProperty) {
     EXPECT_EQ(out.GetInteger(), 7);
 }
 
-// ...and a field is NAMED by its name and REACHED by it too - the two questions that part on a
-// Container (test_valueContainer.cpp) are one here, because a field name is written after a dot.
+// ...and a field is NAMED by its name and REACHED by it too: what GetPropName answers, FindProp
+// finds again - which is how the debugger's watch reads a row it listed.
 TEST(ValueStructure, AFieldIsNamedAndReachedByItsName) {
     ibValueStructure s;
     s.Insert(Field(wxT("Name")), ibValue(ibNumber(7)));
     EXPECT_EQ(s.GetPropName(0), wxString(wxT("Name")));
-    EXPECT_EQ(s.AccessorOf(0),  wxString(wxT("Name")));
     EXPECT_EQ(s.FindProp(s.GetPropName(0)), 0);
 }
 
-// ...unless the name is not one. A field is whatever string was inserted, and nothing makes it an
-// identifier: a spreadsheet document's Areas are keyed by an area's free-text label. `s.some label`
-// is a field no dot can reach, so the subscript reaches it - which is what the watch must write.
-TEST(ValueStructure, AFieldNameThatIsNotANameIsReachedBySubscript) {
+// ...even when the name is not one a script could write after a dot. A field is whatever string was
+// inserted - a spreadsheet document's Areas are keyed by an area's free-text label - and FindProp
+// still answers for it; a script reaches it through the subscript.
+TEST(ValueStructure, AFieldNameThatIsNotAnIdentifierIsStillFoundByIt) {
     ibValueStructure s;
     s.Insert(Field(wxT("some label")), ibValue(ibNumber(7)));
     s.Insert(Field(wxT("2nd")), ibValue(ibNumber(8)));
-    EXPECT_EQ(s.AccessorOf(0), wxString(wxT("[\"some label\"]")));
-    EXPECT_EQ(s.AccessorOf(1), wxString(wxT("[\"2nd\"]")));
+    EXPECT_EQ(s.FindProp(wxT("some label")), 0);
+    EXPECT_EQ(s.FindProp(wxT("2nd")), 1);
     ibValue out;
     ASSERT_TRUE(s.Property(Field(wxT("some label")), out)) << "and the subscript form does reach it";
     EXPECT_EQ(out.GetInteger(), 7);
