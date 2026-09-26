@@ -3075,6 +3075,27 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 	return WrapSelectAsQueryable(*src.m_subquery, params, owner);   // FROM (SELECT …) AS alias
 }
 
+// ⭐ THE NAME THE SELECTION GAVE A FIELD IS A NAME TO SORT BY — `SELECT G.Description AS D … ORDER BY D`.
+// Only a fold could be sorted by its name (the aggregate branch in PopulateBuilder, 2026-09-04); every
+// other alias was looked for among the SOURCE's attributes, where it never is, and came back "unknown
+// attribute 'D' on source 'G'" (2026-09-26). A bare name that is the explicit alias of a projection that
+// does not fold stands for that projection's expression, and the sort then treats it as if it had been
+// written out — a column, a walk, a computed sort. The alias wins over an attribute of the same name, as
+// an output name does in SQL. A fold keeps its own road: by the output name, after the grouping.
+//
+// ⚠ EVERY ROAD THAT READS AN ORDER BY ASKS THIS — the read, the grouped levels, the prune. The name check
+// already let an output name through (CheckNames), so the check said yes and the run said no.
+const ibQueryAstExprPtr& SortTargetOf(const ibQuerySelect& ast, const ibQueryAstExprPtr& written)
+{
+	if (!written || written->m_kind != ibQueryAstExprKind::Column || written->m_path.size() != 1)
+		return written;
+	for (const ibQueryProjection& p : ast.m_projections)
+		if (p.m_expr && !p.m_alias.IsEmpty() && p.m_alias.IsSameAs(written->m_path.front(), false)
+		    && !ibQueryMentionsAggregate(p.m_expr))
+			return p.m_expr;
+	return written;
+}
+
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
 // (1 = single source, >1 = JOIN) drives column resolution. explicitProjection (a subquery's inner
@@ -3723,7 +3744,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// it instead, but either way the sort keys on the leaf column.
 	const bool allowOrderDotWalk = allowDotWalk || computedPrimary;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const ibQueryAstExpr& oe = *o.m_expr;
+		const ibQueryAstExpr& oe = *SortTargetOf(ast, o.m_expr);
 		// ORDER BY <expression> — a CASE / arithmetic ("sort by a condition") or a bare constant (value(...) /
 		// &parameter): lower it to an EXPRESSION sort. Single DB source only (like the computed WHERE side); a
 		// computed sort is no keyset key, so the text-query full read is the user. A plain column / dot-walk keeps
@@ -5555,7 +5576,7 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_groupBy.end());
 
 	ast.m_orderBy.erase(std::remove_if(ast.m_orderBy.begin(), ast.m_orderBy.end(),
-		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, o.m_expr)); }), ast.m_orderBy.end());
+		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); }), ast.m_orderBy.end());
 
 	ast.m_indexBy.erase(std::remove_if(ast.m_indexBy.begin(), ast.m_indexBy.end(),
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_indexBy.end());
@@ -7049,9 +7070,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		bool sortIsTheDimension = true;
 		if (pathCols.size() == 1 && pathCols.back() != nullptr) {
 			for (const ibQueryOrderItem& o : ast.m_orderBy) {
-				if (!o.m_expr || IsComputedExprAst(*o.m_expr)) { sortIsTheDimension = false; break; }
+				const ibQueryAstExprPtr& sortBy = SortTargetOf(ast, o.m_expr);
+				if (!sortBy || IsComputedExprAst(*sortBy)) { sortIsTheDimension = false; break; }
 				std::vector<const ibBackendQueryColumn*> orderCols;
-				try { orderCols = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+				try { orderCols = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
 				catch (const ibBackendException&) { sortIsTheDimension = false; break; }
 				if (orderCols.size() != 1 || orderCols.front() != pathCols.back()) { sortIsTheDimension = false; break; }
 			}
@@ -7872,10 +7894,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			continue;
 		for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
 			const ibQueryOrderItem& o = ast.m_orderBy[oi];
-			if (orderConsumed[oi] || !o.m_expr || IsComputedExprAst(*o.m_expr))
+			const ibQueryAstExprPtr& sortBy = SortTargetOf(ast, o.m_expr);
+			if (orderConsumed[oi] || !sortBy || IsComputedExprAst(*sortBy))
 				continue;
 			std::vector<const ibBackendQueryColumn*> oc;
-			try { oc = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+			try { oc = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
 			catch (const ibBackendException&) { continue; }
 			if (oc.size() == 1 && oc.front() == ls.m_col) {
 				levelAscending[li] = o.m_ascending;
@@ -7910,7 +7933,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const ibQueryOrderItem& o = ast.m_orderBy[oi];
 		if (!o.m_expr)
 			continue;
-		const ibQueryAstExpr& oe = *o.m_expr;
+		const ibQueryAstExpr& oe = *SortTargetOf(ast, o.m_expr);
 		if (IsComputedExprAst(oe)
 		    || oe.m_kind == ibQueryAstExprKind::Param
 		    || oe.m_kind == ibQueryAstExprKind::Value
