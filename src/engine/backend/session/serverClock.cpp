@@ -31,10 +31,28 @@ wxLongLong_t ibServerClock::Offset()
 	return s_offsetMs.load(std::memory_order_relaxed);
 }
 
-bool ibServerClock::Refresh(ibDatabaseLayer& layer, const wxString& zone)
+bool ibServerClock::Read(ibDatabaseLayer& layer, wxLongLong_t& reading)
 {
 	const ibDialectDictionary& dialect = layer.GetDialect();
 	if (dialect.m_localTimestamp.IsEmpty())
+		return false;   // the dialect has no word for its server's clock
+	if (layer.HasSessionTimeZone() && layer.GetSessionTimeZone().IsEmpty())
+		return false;   // the session stands in no named zone: its clock reads UTC or the server's own, nobody's here
+	wxString sql = wxT("SELECT ") + dialect.m_localTimestamp + wxT(" AS server_now");
+	if (!dialect.m_selectFromDual.IsEmpty())
+		sql += wxT(" FROM ") + dialect.m_selectFromDual;
+	try {
+		reading = layer.GetSingleResultDate(sql, 1);
+	}
+	catch (const ibBackendException&) {
+		return false;
+	}
+	return reading != emptyDate;
+}
+
+bool ibServerClock::Refresh(ibDatabaseLayer& layer, const wxString& zone)
+{
+	if (layer.GetDialect().m_localTimestamp.IsEmpty())
 		return false;   // the dialect has no word for its server's clock - the machine's stands
 
 	// In the base's zone, or not at all (the header): a server that reads its clock in the
@@ -50,19 +68,9 @@ bool ibServerClock::Refresh(ibDatabaseLayer& layer, const wxString& zone)
 		}
 	}
 
-	wxString sql = wxT("SELECT ") + dialect.m_localTimestamp + wxT(" AS server_now");
-	if (!dialect.m_selectFromDual.IsEmpty())
-		sql += wxT(" FROM ") + dialect.m_selectFromDual;
-
 	wxLongLong_t server = emptyDate;
-	try {
-		server = layer.GetSingleResultDate(sql, 1);
-	}
-	catch (const ibBackendException&) {
+	if (!Read(layer, server))
 		return false;   // the question failed; the difference measured before still stands
-	}
-	if (server == emptyDate)
-		return false;
 
 	// The two readings compared at the resolution the server answered in: a server that says its
 	// clock to the second (Firebird's reading through struct tm, SQLite's datetime()) is set against

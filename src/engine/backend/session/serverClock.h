@@ -14,12 +14,12 @@ class ibDatabaseLayer;
 // client's, and the client follows the server).
 //
 // The clock is not asked for every date. It is measured: once the base is up, and once a minute
-// from the session registry's heartbeat, this process asks the base what its server's local time
-// is (the dialect's word for it - LOCALTIMESTAMP on Firebird and PostgreSQL, the process's own
-// local time on SQLite, which has no server) and keeps the DIFFERENCE from the machine's clock.
-// Now() is then the machine's clock plus that difference, as a wall-clock reading: the server's
-// local time, on a client in any zone. Until a measurement succeeds the difference is zero and
-// Now() is the machine's own clock, which is what it always was.
+// from the session registry's thread, this process asks the base what its server's local time is
+// (the dialect's word for it - LOCALTIMESTAMP on Firebird and PostgreSQL, the process's own local
+// time on SQLite, which has no server) and keeps the DIFFERENCE from the machine's clock. Now() is
+// then the machine's clock plus that difference, as a wall-clock reading: the server's local time,
+// on a client in any zone. Until a measurement succeeds the difference is zero and Now() is the
+// machine's own clock, which is what it always was.
 //
 // ⭐ MEASURED IN THE BASE'S ZONE, OR NOT AT ALL. A server with a session zone reads its clock in
 // whatever zone the session stands in - UTC on a Firebird attach, the server's own on PostgreSQL -
@@ -28,7 +28,8 @@ class ibDatabaseLayer;
 // session/regionalSettings.h), and through a connection standing in that zone: Refresh puts the
 // connection it is given into the zone first. The difference is one of two wall readings, so a
 // change of the clocks on either side between two measurements shows in Now() for at most the
-// minute to the next one.
+// minute to the next one - which is why what must not be an hour off between two clients (the
+// session registry's liveness) reads the server directly, through Read, where it compares.
 class BACKEND_API ibServerClock {
 public:
 
@@ -37,6 +38,11 @@ public:
 
 	// Server minus this machine, in milliseconds, as of the last successful Refresh; 0 before one.
 	static wxLongLong_t Offset();
+
+	// The server's clock read now through `layer`, in the zone the connection stands in. False when
+	// the dialect has no word for its clock, when a driver with a session zone stands in none (UTC
+	// on a Firebird attach: nobody's clock for this base), or when the question failed.
+	static bool Read(ibDatabaseLayer& layer, wxLongLong_t& reading);
 
 	// Ask `layer` what its server's local time is - in `zone`, the base's - and remember the
 	// difference. A driver with a session zone is asked only when `zone` names one, and `layer` is

@@ -174,8 +174,12 @@ TEST(ServerClockZone, ClearingTheZoneReturnsNowToTheMachine)
 	wxInitializer wx;
 	FrozenZonedBase base;
 	ASSERT_TRUE(base.Open(wxT(":memory:")));
+	wxLongLong_t reading = emptyDate;
+	EXPECT_FALSE(ibServerClock::Read(base, reading)) << "a session standing in no named zone reads nobody's clock";
 	ASSERT_TRUE(ibServerClock::Refresh(base, wxT("Europe/Kyiv")));
 	ASSERT_NE(0, ibServerClock::Offset()) << "the frozen clock stands years from this machine's";
+	EXPECT_TRUE(ibServerClock::Read(base, reading)) << "in the zone, the server is read";
+	EXPECT_EQ(ibWallFromParts(2030, 1, 1, 12), reading);
 	EXPECT_FALSE(ibServerClock::Refresh(base, wxEmptyString));
 	EXPECT_EQ(0, ibServerClock::Offset());
 	ASSERT_TRUE(ibServerClock::Refresh(base, wxT("Europe/Kyiv")));

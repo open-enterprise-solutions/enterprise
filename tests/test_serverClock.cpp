@@ -100,3 +100,26 @@ TEST(ServerClock, ADialectWithoutAWordForItsClockLeavesTheDifferenceAlone)
 	EXPECT_EQ(0, ibServerClock::Offset());
 	EXPECT_LT(Apart(ibValueSystemFunction::CurrentDate().GetDate(), MachineNow()), 5000);
 }
+
+// The clock is READ through a connection, in the zone it stands in - the one reading the measurement
+// takes and the session registry compares liveness by: SQLite's is this machine's, a frozen dialect's is
+// its moment, a dialect with no word cannot be read.
+TEST(ServerClock, TheClockIsReadThroughTheConnection)
+{
+	ClockScope scope;
+	wxLongLong_t reading = emptyDate;
+	ibDatabaseLayerSQLite base;
+	ASSERT_TRUE(base.Open(wxT(":memory:")));
+	ASSERT_TRUE(ibServerClock::Read(base, reading));
+	EXPECT_LT(Apart(reading, MachineNow()), 5000);
+
+	FrozenClockBase frozen;
+	ASSERT_TRUE(frozen.Open(wxT(":memory:")));
+	ASSERT_TRUE(ibServerClock::Read(frozen, reading));
+	EXPECT_LT(Apart(reading, ibWallFromParts(2030, 1, 1, 12)), 5000);
+
+	WordlessBase wordless;
+	ASSERT_TRUE(wordless.Open(wxT(":memory:")));
+	EXPECT_FALSE(ibServerClock::Read(wordless, reading));
+	EXPECT_EQ(0, ibServerClock::Offset()) << "a read measures nothing";
+}

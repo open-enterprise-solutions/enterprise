@@ -75,6 +75,18 @@ void LogSession(const std::string& msg)
 // the moment it moves.
 constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
 constexpr unsigned kBeatsPerClockRefresh = 60;   // the base's regional settings are read again, and the clock measured, this often (regionalSettings.h)
+
+// ⭐⭐ LIVENESS IS DECIDED BY ONE CLOCK - the server's, read through this thread's own connection in the zone it
+// stands in, where it is compared. A stamp one client writes and another compares must not pass through two
+// machines' offsets: for the minute after the base's zone changes its clocks those stand an hour apart, and a
+// live peer would look an hour silent - and lose its rows and its locks - to whoever re-measured first. Where
+// the server cannot be read this way (a driver with no word for its clock; a session standing in no named zone,
+// whose clock reads UTC and is nobody's) each client's own "now" stands, as it always did.
+wxLongLong_t ServerNowOn(ibDatabaseLayer& conn)
+{
+	wxLongLong_t reading = emptyDate;
+	return ibServerClock::Read(conn, reading) ? reading : ibServerClock::Now();
+}
 constexpr int  kSilentBeats       = 10;
 // …the same silence in the seconds lastActive is compared in.
 constexpr int  kSilentSeconds     = static_cast<int>(
@@ -1597,7 +1609,7 @@ void ibSessionRegistry::JobSweepStale()
 	// from Active Users within ~10 s of their last heartbeat.
 	constexpr int kStaleCutoffSec = kSilentSeconds;
 
-	wxDateTime cutoff = ibDateTimeOfWall(ibServerClock::Now());
+	wxDateTime cutoff = ibDateTimeOfWall(ServerNowOn(*m_writeConn));   // the server's reading, as the heartbeats are
 	(void)cutoff.Subtract(wxTimeSpan(0, 0, kStaleCutoffSec));
 
 	std::vector<wxString> zombies;
@@ -1673,7 +1685,7 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
-		const wxDateTime now = ibDateTimeOfWall(ibServerClock::Now());
+		const wxDateTime now = ibDateTimeOfWall(ServerNowOn(*m_writeConn));   // the server's reading: the clock every peer compares by
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
@@ -1736,8 +1748,8 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 	const wxTimeSpan silence(0, 0, kSilentSeconds);
 	std::set<wxString> silent;   // stood still until its last beat was older than the silence
 	for (;;) {
-		// Settled by age where the age already says it — the sweep's own rule, asked now.
-		const wxDateTime at = ibDateTimeOfWall(ibServerClock::Now());
+		// Settled by age where the age already says it — the sweep's own rule, asked now, by the server's reading.
+		const wxDateTime at = ibDateTimeOfWall(ServerNowOn(*m_writeConn));
 		for (auto it = still.begin(); it != still.end(); ) {
 			const wxDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
 			if (beat.IsValid() && at - beat >= silence) {
