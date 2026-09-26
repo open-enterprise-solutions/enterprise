@@ -1,9 +1,11 @@
 // =============================================================================
-// OES Enterprise — the order of an object among its siblings (ibMetaData::MoveMetaObject).
+// OES Enterprise — the order of an object among its siblings.
 //
 // The order of an object's children is data: the sections of a configuration come out in the
-// navigation panel in the order the tree holds them. Only the designer's drag could change it; the
-// door is now on the metadata, and the MCP verb metadata_move is a thin shell over it.
+// navigation panel in the order the tree holds them. The door is the metaobject's own
+// ChangeChildPosition — it moves, marks the configuration modified and announces `Moved`. The MCP verb
+// metadata_move puts an object where another of its kind stands (the position of that one), which is
+// what the designer's up and down do with the neighbouring row.
 //
 // DB-FREE AND UI-FREE, like test_metadataPasteIdentity: a fresh ibMetaDataConfigurationFile (public
 // ctor, never "run"), sections created with runObject=false.
@@ -71,6 +73,12 @@ struct SectionsFix {
 	}
 };
 
+// Where `other` stands, `object` goes — what metadata_move and the designer's up / down ask the door.
+bool PutAt(ibValueMetaObject* object, ibValueMetaObject* other) {
+	ibValueMetaObject* const parent = object->GetParent();
+	return parent->ChangeChildPosition(object, parent->GetChildPosition(other));
+}
+
 std::vector<wxString> Names(std::initializer_list<const wxChar*> list) {
 	std::vector<wxString> names;
 	for (const wxChar* n : list) names.push_back(n);
@@ -79,87 +87,64 @@ std::vector<wxString> Names(std::initializer_list<const wxChar*> list) {
 
 } // namespace
 
-TEST(MoveMetaObject, TheFixture_HoldsTheSectionsInTheOrderTheyWereMade)
+TEST(MetaObjectOrder, TheFixture_HoldsTheSectionsInTheOrderTheyWereMade)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
 }
 
-TEST(MoveMetaObject, Before_TheLastPutInFrontOfTheFirst_BecomesFirst)
+TEST(MetaObjectOrder, TheLast_PutWhereTheFirstStands_BecomesFirst)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 
-	bool changed = false;
-	EXPECT_TRUE(f.cfg.MoveMetaObject(f.D, f.A, /*before*/ true, &changed));
-	EXPECT_TRUE(changed);
+	EXPECT_TRUE(PutAt(f.D, f.A));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("D"), wxT("A"), wxT("B"), wxT("C") }));
 }
 
-TEST(MoveMetaObject, After_TheFirstPutBehindTheLast_BecomesLast)
+TEST(MetaObjectOrder, TheFirst_PutWhereTheLastStands_BecomesLast)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 
-	bool changed = false;
-	EXPECT_TRUE(f.cfg.MoveMetaObject(f.A, f.D, /*before*/ false, &changed));
-	EXPECT_TRUE(changed);
+	EXPECT_TRUE(PutAt(f.A, f.D));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("B"), wxT("C"), wxT("D"), wxT("A") }));
 }
 
-// The sibling stood AFTER the object, so it is one place earlier by the time the object is put back:
-// "before C" for A is between B and C, not between C and D.
-TEST(MoveMetaObject, Before_ASiblingFurtherOn_LandsJustInFrontOfIt)
+// Up and down are the neighbour's position: one place each way.
+TEST(MetaObjectOrder, UpAndDown_AreTheNeighboursPosition)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 
-	EXPECT_TRUE(f.cfg.MoveMetaObject(f.A, f.C, /*before*/ true));
-	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("B"), wxT("A"), wxT("C"), wxT("D") }));
+	EXPECT_TRUE(PutAt(f.C, f.B));   // C up
+	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("C"), wxT("B"), wxT("D") }));
+
+	EXPECT_TRUE(PutAt(f.C, f.B));   // C down again
+	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
 }
 
-TEST(MoveMetaObject, After_ASiblingFurtherBack_LandsJustBehindIt)
+// Already where it was asked to be: an answer of yes, and nothing changed, nothing announced, nothing
+// left modified.
+TEST(MetaObjectOrder, AlreadyThere_IsYesButChangesNothingAndSaysNothing)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
-
-	EXPECT_TRUE(f.cfg.MoveMetaObject(f.D, f.A, /*before*/ false));
-	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("D"), wxT("B"), wxT("C") }));
-}
-
-// Already where it was asked to be: an answer of yes, and nothing changed, nothing announced.
-TEST(MoveMetaObject, AlreadyThere_IsYesButChangesNothingAndSaysNothing)
-{
-	SectionsFix f;
-	ASSERT_NE(nullptr, f.D);
+	f.cfg.Modify(false);
 
 	StageRecorder recorder;
 	f.cfg.AddNotifier(&recorder);
 
-	bool changed = true;
-	EXPECT_TRUE(f.cfg.MoveMetaObject(f.B, f.A, /*before*/ false, &changed));   // B is already behind A
-	EXPECT_FALSE(changed);
+	EXPECT_TRUE(PutAt(f.B, f.B));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
 	EXPECT_EQ(recorder.Count(ibMetaDataNotifier::ibMetaStage::Moved), 0u);
+	EXPECT_FALSE(f.cfg.IsModified()) << "a move that moved nothing changed nothing";
 
 	f.cfg.RemoveNotifier(&recorder);
 }
 
-// How a whole list is arranged: each one goes after the one before it.
-TEST(MoveMetaObject, ChainingAfter_ArrangesAWholeListInTheOrderAsked)
-{
-	SectionsFix f;
-	ASSERT_NE(nullptr, f.D);
-
-	const std::vector<ibValueMetaObject*> wanted = { f.C, f.A, f.D, f.B };
-	for (size_t i = 1; i < wanted.size(); ++i)
-		ASSERT_TRUE(f.cfg.MoveMetaObject(wanted[i], wanted[i - 1], /*before*/ false)) << "step " << i;
-
-	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("C"), wxT("A"), wxT("D"), wxT("B") }));
-}
-
-TEST(MoveMetaObject, AMove_IsAnnouncedOnceAsMovedOfTheObjectThatMoved)
+TEST(MetaObjectOrder, AMove_IsAnnouncedOnceAsMovedOfTheObjectThatMoved)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
@@ -167,7 +152,7 @@ TEST(MoveMetaObject, AMove_IsAnnouncedOnceAsMovedOfTheObjectThatMoved)
 	StageRecorder recorder;
 	f.cfg.AddNotifier(&recorder);
 
-	ASSERT_TRUE(f.cfg.MoveMetaObject(f.D, f.A, true));
+	ASSERT_TRUE(PutAt(f.D, f.A));
 
 	EXPECT_EQ(recorder.Count(ibMetaDataNotifier::ibMetaStage::Moved), 1u);
 	ASSERT_FALSE(recorder.objects.empty());
@@ -176,55 +161,48 @@ TEST(MoveMetaObject, AMove_IsAnnouncedOnceAsMovedOfTheObjectThatMoved)
 	f.cfg.RemoveNotifier(&recorder);
 }
 
-TEST(MoveMetaObject, AMove_MarksTheConfigurationModified)
+TEST(MetaObjectOrder, AMove_MarksTheConfigurationModified)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 	f.cfg.Modify(false);
 
-	ASSERT_TRUE(f.cfg.MoveMetaObject(f.D, f.A, true));
+	ASSERT_TRUE(PutAt(f.D, f.A));
 	EXPECT_TRUE(f.cfg.IsModified()) << "a changed order has to be saved like any other change";
 }
 
 // ---- refusals -----------------------------------------------------------------------------------
 
-TEST(MoveMetaObject, PlacedRelativeToItself_IsRefusedAndNothingMoves)
+TEST(MetaObjectOrder, APositionPastTheChildren_IsRefusedAndNothingMoves)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
 
-	bool changed = true;
-	EXPECT_FALSE(f.cfg.MoveMetaObject(f.B, f.B, true, &changed));
-	EXPECT_FALSE(changed);
+	EXPECT_FALSE(f.root->ChangeChildPosition(f.B, f.root->GetChildCount()));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
 }
 
-TEST(MoveMetaObject, TwoObjectsThatAreNotSiblings_AreRefusedAndNothingMoves)
+TEST(MetaObjectOrder, AReadOnlyConfiguration_RefusesTheMoveAndSaysNothing)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
-	ibValueMetaObject* nested = f.Make(wxT("Inner"), f.A);   // a section INSIDE A
-	ASSERT_NE(nullptr, nested);
+	f.cfg.Modify(false);
+	f.cfg.SetReadOnly(true);
 
-	bool changed = true;
-	EXPECT_FALSE(f.cfg.MoveMetaObject(nested, f.B, true, &changed)) << "Inner sits under A, B under the root";
-	EXPECT_FALSE(changed);
-	EXPECT_FALSE(f.cfg.MoveMetaObject(f.B, nested, false, &changed));
+	StageRecorder recorder;
+	f.cfg.AddNotifier(&recorder);
+
+	EXPECT_FALSE(PutAt(f.D, f.A));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
-}
+	EXPECT_EQ(recorder.Count(ibMetaDataNotifier::ibMetaStage::Moved), 0u);
+	EXPECT_FALSE(f.cfg.IsModified());
 
-TEST(MoveMetaObject, TheRootAndNothing_AreRefused)
-{
-	SectionsFix f;
-	ASSERT_NE(nullptr, f.D);
-
-	EXPECT_FALSE(f.cfg.MoveMetaObject(f.root, f.A, true)) << "the root has no siblings";
-	EXPECT_FALSE(f.cfg.MoveMetaObject(nullptr, f.A, true));
-	EXPECT_FALSE(f.cfg.MoveMetaObject(f.A, nullptr, true));
+	f.cfg.RemoveNotifier(&recorder);
+	f.cfg.SetReadOnly(false);
 }
 
 // Children of ONE object keep their own order when a sibling of theirs is reordered elsewhere.
-TEST(MoveMetaObject, ReorderingOneLevel_LeavesTheOrderOfAnotherAlone)
+TEST(MetaObjectOrder, ReorderingOneLevel_LeavesTheOrderOfAnotherAlone)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
@@ -232,10 +210,10 @@ TEST(MoveMetaObject, ReorderingOneLevel_LeavesTheOrderOfAnotherAlone)
 	ibValueMetaObject* y = f.Make(wxT("Y"), f.A);
 	ASSERT_NE(nullptr, y);
 
-	ASSERT_TRUE(f.cfg.MoveMetaObject(f.D, f.A, true));
+	ASSERT_TRUE(PutAt(f.D, f.A));
 	EXPECT_EQ(SectionsFix::Order(f.A), Names({ wxT("X"), wxT("Y") }));
 
-	ASSERT_TRUE(f.cfg.MoveMetaObject(y, x, true));
+	ASSERT_TRUE(PutAt(y, x));
 	EXPECT_EQ(SectionsFix::Order(f.A), Names({ wxT("Y"), wxT("X") }));
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("D"), wxT("A"), wxT("B"), wxT("C") }));
 }

@@ -759,16 +759,6 @@ public:
 	// success either way.
 	bool RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* objParent = nullptr);
 
-	// ⭐ PUT AN OBJECT NEXT TO ONE OF ITS SIBLINGS. The order of an object's children is data — the order
-	// of the sections in the navigation panel, of the forms under an object, of what a person reads down
-	// the tree — and until now only a drag in the designer could change it. `before` puts `object` in
-	// FRONT of `sibling`, otherwise BEHIND it; both must sit under the same parent.
-	//
-	// Answers whether the object NOW STANDS where it was asked to — true also when it already did, and
-	// then `*changed` stays false and nothing is announced. False is a refusal: a read-only
-	// configuration, an object placed relative to itself, or two objects that are not siblings.
-	bool MoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* sibling, bool before, bool* changed = nullptr);
-
 #pragma region __array_h__
 
 	//any

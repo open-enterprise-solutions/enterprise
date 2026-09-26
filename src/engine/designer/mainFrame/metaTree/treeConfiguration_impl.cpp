@@ -306,6 +306,47 @@ wxTreeItemId ibMetaTreeBase::FindItemByMetaObject(const wxTreeItemId& from,
 	return wxTreeItemId();
 }
 
+// Two rows of one group by their objects' places in the metadata. Asks, changes nothing.
+int ibMetaTreeBase::CompareItemsByPosition(const wxTreeItemId& item1, const wxTreeItemId& item2) const
+{
+	ibValueMetaObject* const object1 = GetMetaObject(item1);
+	ibValueMetaObject* const object2 = GetMetaObject(item2);
+	ibValueMetaObject* const parent = object1 != nullptr ? object1->GetParent() : nullptr;
+	if (parent == nullptr || object2 == nullptr || object2->GetParent() != parent)
+		return 0;
+
+	const unsigned int position1 = parent->GetChildPosition(object1), position2 = parent->GetChildPosition(object2);
+	return position1 < position2 ? -1 : position1 > position2 ? 1 : 0;
+}
+
+// The sort button: the group's objects by name, each put where the object at its place in the group
+// stands now. The door announces every move, and `Moved` brings the rows along.
+void ibMetaTreeBase::SortItemsByName(const wxTreeItemId& parentItem)
+{
+	std::vector<ibValueMetaObject*> objects;
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId row = m_treeCtrl->GetFirstChild(parentItem, cookie); row.IsOk(); row = m_treeCtrl->GetNextChild(parentItem, cookie)) {
+		if (ibValueMetaObject* const object = GetMetaObject(row))
+			objects.push_back(object);
+	}
+	if (objects.empty() || objects.front()->GetParent() == nullptr)
+		return;
+
+	ibValueMetaObject* const parent = objects.front()->GetParent();
+	std::vector<ibValueMetaObject*> sorted = objects;
+	std::stable_sort(sorted.begin(), sorted.end(), [](ibValueMetaObject* a, ibValueMetaObject* b) {
+		return wxStrcmp(a->GetName(), b->GetName()) < 0;
+	});
+
+	for (size_t i = 0; i < sorted.size(); ++i) {
+		std::sort(objects.begin(), objects.end(), [parent](ibValueMetaObject* a, ibValueMetaObject* b) {
+			return parent->GetChildPosition(a) < parent->GetChildPosition(b);
+		});
+		if (objects[i] != sorted[i])
+			parent->ChangeChildPosition(sorted[i], parent->GetChildPosition(objects[i]));
+	}
+}
+
 // ⭐⭐ THE WHOLE CYCLE, IN ONE PLACE, FOR ALL THREE TREES. Create, load, save, rename, delete —
 // and copy and paste, which are a create and a rename arriving through a different door. A watcher
 // answers each of them once, here, so a tree cannot know about an edit that reached it by one road
@@ -352,14 +393,6 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 		FillData();
 		return;
 
-	// A CHILD CHANGED ITS PLACE — the same objects in another order, so no pointer the tree holds went
-	// stale and nothing has to close. The rows are read again from the metadata, which is where the
-	// order lives.
-	case ibMetaDataNotifier::ibMetaStage::Moved:
-		ClearTree();
-		FillData();
-		return;
-
 	// GOING, ALL OF IT. The editors opened over this metadata close — once, here, instead of once
 	// per object inside every OnAfterCloseMetaObject on the way out. The rows are not touched: the
 	// tree is either about to be given another metadata (which refills it) or about to die.
@@ -394,6 +427,17 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 				m_treeCtrl->Delete(item);   // …and the row itself goes, with its subtree
 			}
 			UpdateChoiceSelection();
+		}
+		return;
+
+	// THE ANSWER TO A MOVE, whoever made it — this tree's buttons or metadata_move from outside. The rows
+	// of the object's group go back into the metadata's order (SortChildren, CompareItemsByPosition); they
+	// are not rebuilt, so what was open stays open and the selection stays.
+	case ibMetaDataNotifier::ibMetaStage::Moved:
+		if (object != nullptr && m_treeCtrl != nullptr) {
+			const wxTreeItemId item = FindItemByMetaObject(object);
+			if (item.IsOk())
+				m_treeCtrl->SortChildren(m_treeCtrl->GetItemParent(item));
 		}
 		return;
 
@@ -955,51 +999,11 @@ void ibConfigurationTree::UpItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& nextItem = m_metaTreeCtrl->GetPrevSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && nextItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(nextItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == nextItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* nextObject = GetMetaObject(nextItem);
+	if (metaObject != nullptr && nextObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos + 2,
-				m_metaTreeCtrl->GetItemText(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemData(nextItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibMetaTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibMetaTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(dst, coockie);
-				}
-				};
-
-			swap(tree, nextItem, newId);
-
-			m_metaTreeCtrl->SetItemData(nextItem, nullptr);
-			m_metaTreeCtrl->Delete(nextItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject));
 	}
 
 	m_metaTreeCtrl->Thaw();
@@ -1015,51 +1019,11 @@ void ibConfigurationTree::DownItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& prevItem = m_metaTreeCtrl->GetNextSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && prevItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(prevItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == prevItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* prevObject = GetMetaObject(prevItem);
+	if (metaObject != nullptr && prevObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos - 1,
-				m_metaTreeCtrl->GetItemText(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemData(prevItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibMetaTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibMetaTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(dst, coockie);
-				}
-				};
-
-			swap(tree, prevItem, newId);
-
-			m_metaTreeCtrl->SetItemData(prevItem, nullptr);
-			m_metaTreeCtrl->Delete(prevItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject));
 	}
 
 	m_metaTreeCtrl->Thaw();
@@ -1076,7 +1040,7 @@ void ibConfigurationTree::SortItem()
 		const wxTreeItemId& parentItem =
 			m_metaTreeCtrl->GetItemParent(selection);
 		if (parentItem.IsOk()) {
-			m_metaTreeCtrl->SortChildren(parentItem);
+			SortItemsByName(parentItem);
 		}
 	}
 	m_metaTreeCtrl->Thaw();

@@ -200,19 +200,11 @@ const ibArg& ArgId()
 	return s_a;
 }
 
-const ibArg& ArgMoveBefore()
+const ibArg& ArgPosition()
 {
-	static const ibArg s_a(wxT("before"), ibArg::Kind::Whole,
-		ibMcpText("The NodeId of the SIBLING to put the object in FRONT of - an object under the same "
-			  "parent. Give this or `after`, not both."));
-	return s_a;
-}
-
-const ibArg& ArgMoveAfter()
-{
-	static const ibArg s_a(wxT("after"), ibArg::Kind::Whole,
-		ibMcpText("The NodeId of the SIBLING to put the object BEHIND - an object under the same "
-			  "parent. Give this or `before`, not both."));
+	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
+		ibMcpText("Where the object goes among the objects of its kind under the same parent, counted "
+			  "from 0 - the place in `order`."), /*required*/ true);
 	return s_a;
 }
 
@@ -1657,17 +1649,16 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Change the place of an object among its siblings - the order of the sections in "
-			"the navigation panel, of the forms under an object, of what the tree shows. Say where with "
-			"`before` or `after`: the NodeId of a sibling to put it in front of or behind (both must sit "
-			"under the same parent). To arrange a whole list, put each object after the one before it. "
-			"Answers with `order`, the siblings of the same kind as they now stand. The order is part of "
-			"what config_save keeps and config_apply hands to the running application.");
+		return ibMcpText("Change the place of an object among its siblings of the same kind - the order of "
+			"the sections in the navigation panel, of the forms under an object, of what the tree shows. "
+			"`position` is its place in that list, from 0. Answers with `order`, the siblings of the same "
+			"kind as they now stand. The order is part of what config_save keeps and config_apply hands to "
+			"the running application.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgMoveBefore(), ArgMoveAfter() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgPosition() };
 		return s_arguments;
 	}
 
@@ -1683,31 +1674,10 @@ public:
 			return false;
 		}
 
-		const bool hasBefore = params.FindField(ArgMoveBefore().Name()) != nullptr;
-		const bool hasAfter  = params.FindField(ArgMoveAfter().Name()) != nullptr;
-		if (hasBefore == hasAfter) {
-			refusal = ibMcpText("Say where with exactly one of `before` and `after` - the NodeId of the "
-				"sibling to stand in front of or behind. Nothing was moved.");
-			return false;
-		}
-
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked);
 		if (object == nullptr) {
 			refusal = wxString::Format(
 				ibMcpText("Nothing in this configuration has id %i."), (int)asked);
-			return false;
-		}
-
-		const s32 besideId = hasBefore ? (s32)ArgMoveBefore().Whole(params) : (s32)ArgMoveAfter().Whole(params);
-		ibValueMetaObject* sibling = besideId > 0 ? ibFindMetaObjectById(metaData, (ibMetaID)besideId) : nullptr;
-		if (sibling == nullptr) {
-			refusal = wxString::Format(
-				ibMcpText("Nothing in this configuration has id %i to stand next to."), (int)besideId);
-			return false;
-		}
-
-		if (object == sibling) {
-			refusal = ibMcpText("An object cannot be placed next to itself. Nothing was moved.");
 			return false;
 		}
 
@@ -1718,23 +1688,34 @@ public:
 			return false;
 		}
 
-		if (sibling->GetParent() != parent) {
+		// The objects of its kind — what `position` counts. The children of a parent are of every kind at
+		// once; the object takes the place of the one standing at that position among its own.
+		std::vector<ibValueMetaObject*> kind;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			ibValueMetaObject* child = parent->GetChild(idx);
+			if (child->GetClassType() == object->GetClassType() && !child->IsDeleted())
+				kind.push_back(child);
+		}
+
+		const s32 position = (s32)ArgPosition().Whole(params);
+		if (position < 0 || position >= (s32)kind.size()) {
 			refusal = wxString::Format(
-				ibMcpText("'%s' and '%s' are not siblings - they sit under different parents, and this "
-					  "verb only changes the order under one. Nothing was moved."),
-				object->GetName(), sibling->GetName());
+				ibMcpText("Position %i is past the objects of this kind - there are %i, counted from 0. "
+					  "Nothing was moved."), (int)position, (int)kind.size());
 			return false;
 		}
 
-		bool changed = false;
-		if (!metaData->MoveMetaObject(object, sibling, hasBefore, &changed)) {
+		// The parent's door moves it, marks the configuration modified and announces `Moved` — or
+		// refuses a read-only one, and nothing has moved.
+		const unsigned int from = parent->GetChildPosition(object);
+		if (!parent->ChangeChildPosition(object, parent->GetChildPosition(kind[position]))) {
 			refusal = ibMcpText("The configuration refused the move - it is read-only. Nothing was moved.");
 			return false;
 		}
 
 		result.SetValue(wxT("name"), object->GetName());
 		result.AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
-		result.AddField(wxT("moved"), ibDataValue::Bool(changed));
+		result.AddField(wxT("moved"), ibDataValue::Bool(parent->GetChildPosition(object) != from));
 
 		// WHAT THE ORDER IS NOW, of the objects of the same kind - the answer to "did that put it where
 		// I meant", without a second call to read the tree.
