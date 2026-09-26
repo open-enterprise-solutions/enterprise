@@ -59,6 +59,20 @@ ibString ibValueTypeDescription::GetString() const
 
 #include "backend/system/systemManager.h"
 
+// A DESCRIPTION ALLOWS WHAT ONE OF ITS TYPES ALLOWS — each asked by its own gate
+// (ibCtorAbstractType::AllowValue), so a family answers for its members and a characteristic for the
+// types of its chart.
+static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
+{
+	for (const ibClassID& declared : typeDescription.GetClsidList()) {
+		const ibCtorAbstractType* gate = source != nullptr
+			? source->GetAvailableCtor(declared) : ibValue::GetAvailableCtor(declared);
+		if (gate != nullptr && gate->AllowValue(clsid))
+			return true;
+	}
+	return false;
+}
+
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription,
 	const ibMetaData* metaData)
 {
@@ -137,11 +151,28 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		return varValue;
 	}
 
+	// The same rule as the overload above: the metadata handed in, else the active one - and with neither
+	// (a headless tool before it opens a base, a test) what the value registry can make by itself.
+	const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
+
+	// ⭐ NOT NAMED IS NOT REFUSED. A declared type may admit a class that is not its own — a family
+	// (`AnyRef`, `DocumentRef`) its members, a characteristic the types of its chart — and the type's own
+	// gate says so: AllowValue, the question the interpreter asks a typed variable (OPER_SET_TYPE). A value
+	// a declared type admits passes as it is.
+	//
+	// 🛑 IT WAS NOT ASKED HERE (#157). A reference written into an attribute declared `DocumentRef` is a
+	// `DocumentRef.Other`, not the family's own id, so the search above missed and the branch below built
+	// the family's empty value in its place. A value the declared types do not admit — a catalog's
+	// reference there — still becomes empty, as it does in a composite declaration.
+	//
+	// The empty value is not put to the gates — every one lets it through — and becomes below the empty
+	// value of what is declared (0, an empty date, an empty reference).
+	const ibClassID clsid = varValue.GetClassType();
+	if (clsid != g_valueUndefinedCLSID && AllowValue(typeDescription, clsid, source))
+		return varValue;
+
 	if (typeDescription.GetClsidCount() == 1) {
 
-		// The same rule as the overload above: the metadata handed in, else the active one - and with neither
-		// (a headless tool before it opens a base, a test) what the value registry can make by itself.
-		const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
 		if (source != nullptr ? source->IsRegisterCtor(typeDescription.GetFirstClsid())
 			: ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())) {
 
@@ -323,8 +354,13 @@ bool ibValueTypeDescription::AdjustOutValue(const ibValue& varValue, ibValue& ou
 	// then holds, and its TYPE is what a caller asking "what does this narrow to" reads off it, so the
 	// question is asked once (Max, 2026-09-24). The place that watches for a value going in and not
 	// coming out is ibChoiceLinkResolver::Adjust, which says so in the journal.
+	//
+	// A value one of the declared types ADMITS came out as it went in, and says so — the same gate
+	// AdjustValue passed it by.
 	out = AdjustValue(m_typeDesc, varValue);
-	return m_typeDesc.ContainType(varValue.GetClassType());
+	const ibClassID clsid = varValue.GetClassType();
+	return m_typeDesc.ContainType(clsid)
+		|| (clsid != g_valueUndefinedCLSID && AllowValue(m_typeDesc, clsid, activeMetaData));
 }
 
 bool ibValueTypeDescription::ContainType(const ibValue& cType) const
