@@ -216,6 +216,38 @@ endfunction()
 
 oes_discover_tests(oes_tests)
 
+# ⭐⭐ THE SAME DATES UNDER THREE CLOCKS. A date is a wall-clock reading with no zone in it (fdate.h),
+# and that is a claim about EVERY machine - which one run, on whichever clock the runner happens to
+# stand on, does not test. The C runtime reads TZ in its POSIX spelling on every platform (on Windows
+# too, and only that spelling: a name like Europe/Kyiv is read as UTC with the American summer rule,
+# and the rule written after a summer name is read on Linux and macOS but ignored on Windows, which
+# applies the American one), so the date suites run again under UTC, two hours east of it with a
+# summer name, and one hour east with one - three clocks that disagree about every reading and about
+# which hour of which March morning does not exist. The hour itself is checked by a test that sets a
+# clock of its own (DriverDates.TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt).
+set(oes_date_suites
+    "ValueTest.*Date*:ValueTest.TheEmptyDate*:ValueTest.AText*:FDate.*:DriverDates.*:DataNode.TheOldEmptyDate*:DataNode.AFormatOneNode*:DataMover.*:JobSchedule.Buffer_ReadsAVersionOne*:PointInTime.*:*ScriptCorpusRun*date_reading*")
+foreach(clock IN ITEMS "utc;UTC0" "east;EET-2EEST,M3.5.0/3,M10.5.0/4" "west;CET-1CEST,M3.5.0/2,M10.5.0/3")
+    list(GET clock 0 zone_name)
+    list(GET clock 1 zone_rule)
+    add_test(NAME oes_dates_under_${zone_name} COMMAND oes_tests "--gtest_filter=${oes_date_suites}")
+    set_tests_properties(oes_dates_under_${zone_name} PROPERTIES ENVIRONMENT "TZ=${zone_rule}")
+endforeach()
+
+# ⭐ A BASE WRITTEN UNDER ONE CLOCK AND READ UNDER ANOTHER - two processes, the writer under UTC and
+# the reader two hours east: the empty date written by the one must be the empty date to the other,
+# and every other reading must come back as it went in. This is the measurement of 2026-09-26 that
+# found the old model out, kept as a test.
+set(oes_cross_zone_base "${CMAKE_BINARY_DIR}/cross-zone-base.sqlite")
+add_test(NAME oes_cross_zone_write COMMAND oes_tests --gtest_filter=CrossZoneBase.*)
+set_tests_properties(oes_cross_zone_write PROPERTIES
+    ENVIRONMENT "TZ=UTC0;OES_CROSS_ZONE_BASE=${oes_cross_zone_base};OES_CROSS_ZONE_STEP=write"
+    FIXTURES_SETUP oes_cross_zone_base)
+add_test(NAME oes_cross_zone_read COMMAND oes_tests --gtest_filter=CrossZoneBase.*)
+set_tests_properties(oes_cross_zone_read PROPERTIES
+    ENVIRONMENT "TZ=EET-2EEST,M3.5.0/3,M10.5.0/4;OES_CROSS_ZONE_BASE=${oes_cross_zone_base};OES_CROSS_ZONE_STEP=read"
+    FIXTURES_REQUIRED oes_cross_zone_base)
+
 # ---------------------------------------------------------------------------
 # Lightweight string-layer tests — ibString/fstring only.
 #
