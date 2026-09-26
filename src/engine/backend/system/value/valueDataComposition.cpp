@@ -837,7 +837,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		auto side = [](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
 				? (operand.m_presentation.IsEmpty() ? operand.m_path : operand.m_presentation)
-				: operand.m_value.GetString();
+				: operand.m_value.GetString().ToWxString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + wxT(" ")
 			+ ibValue::CreateEnumObject<ibValueEnumComparisonKind>(node.m_comparison).GetString()
@@ -956,10 +956,10 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 {
 	// COMPOSE changes what is SHOWN, not what is stored — live even on a view-only form.
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Compose, wxT("Compose"), _("Compose"),
-		ibPictureDescription(g_picGenerateCLSID), true).SetModify(false));
+		ibPictureDescription(g_picComposeCLSID), true).SetModify(false));
 	commands.push_back(ibCommandItem());   // separator — "show it" is not "arrange it"
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Settings, wxT("Settings"), _("Settings"),
-		ibPictureDescription(g_picStructureCLSID), false).SetModify(false));
+		ibPictureDescription(g_picComposerSettingsCLSID), false).SetModify(false));
 	// ⭐ AND THE VARIANTS — the settings the author NAMED, offered as a menu. A verb of the
 	// composition like the two above: picking one sets the reader's setting and nothing is stored
 	// as "the active variant" (ibDialogComposerSettings::ShowVariantPicker). Shows what is READ, so
@@ -973,7 +973,7 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 	// all seven.
 	commands.push_back(ibCommandItem());   // separator — the author's named arrangements are their own group
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Variants, wxT("Variants"), _("Variants"),
-		ibPictureDescription(g_picSelectCLSID), true).SetModify(false));
+		ibPictureDescription(g_picVariantsCLSID), true).SetModify(false));
 
 	commands.push_back(ibCommandItem());   // separator — …and the reader's own shelf is another
 
@@ -981,9 +981,9 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 	// with the configuration, a saved setting is what THIS person arranged and kept. Both show what
 	// is READ — nothing in the base's data changes — so they stay live on a view-only form.
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_RestoreSettings, wxT("RestoreSettings"), _("Restore settings"),
-		ibPictureDescription(g_picSelectCLSID), true).SetModify(false));
+		ibPictureDescription(g_picRestoreSettingsCLSID), true).SetModify(false));
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_SaveSettings, wxT("SaveSettings"), _("Save settings"),
-		ibPictureDescription(g_picSaveCLSID), true).SetModify(false));
+		ibPictureDescription(g_picSaveSettingsCLSID), true).SetModify(false));
 
 	// …then whatever the SOURCE offers, after a rule.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor()) {
@@ -1041,7 +1041,7 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 		else
 			m_sourceExplorer.AppendColumn(column.m_name,
 				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.m_col != nullptr ? column.m_col->GetTypeDesc() : ibTypeDescription());
+				column.GetTypeDesc());
 	}
 	return &m_sourceExplorer;
 }

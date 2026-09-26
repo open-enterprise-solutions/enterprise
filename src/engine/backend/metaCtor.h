@@ -38,7 +38,7 @@ public:
 	}
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
-	virtual ibValue* CreateObject() const { return nullptr; }
+	virtual ibValue CreateObject() const { return wxEmptyValue; }
 
 	// EMPTY PASSES (class id 0), as everywhere: a declaration says what a value
 	// IS when there is one, not that there is one.
@@ -117,7 +117,7 @@ public:
 		}
 	}
 
-	virtual ibValue* CreateObject() const { return new T(); }
+	virtual ibValue CreateObject() const { return new T(); }
 
 private:
 	ibCtorMetaAnyReference* m_anyReference = nullptr;

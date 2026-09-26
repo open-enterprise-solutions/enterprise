@@ -33,6 +33,7 @@
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box
 #include <wx/tokenzr.h>   // wxStringTokenize — prefix bisection
 
+#include <cctype>   // std::isalnum — a run case is named after its file
 #include <cstdio>
 
 // =============================================================================
@@ -117,6 +118,12 @@ wxString ReadWhole(const wxString& strPath)
 std::vector<wxString> CorpusFiles()
 {
 	std::vector<wxString> listFile;
+
+	// Asked BEFORE wxDir opens it: the run cases are generated from this list at
+	// registration, before any fixture has set the log target, and a wxDir that
+	// cannot open its directory says so through wxLog.
+	if (!wxDir::Exists(ScriptDir()))
+		return listFile;
 
 	wxDir dir(ScriptDir());
 	if (!dir.IsOpened())
@@ -284,62 +291,65 @@ TEST_F(ScriptCorpus, EveryScriptCompiles)
 // context variable is a required binding, and the no-binder Execute overload
 // raises "Required binding not provided" before the first opcode. codeRunner
 // does exactly what this does: Compile, CreateBinder, Execute.
+//
+// ⭐ ONE CASE PER SCRIPT, because a sanitiser ends the PROCESS. While the whole
+// corpus ran as one case, ASan's report named ~ibProcUnit and nothing about the
+// file it came from — the abort left before the case could say — and the one
+// crash hid what every other script would have answered (heap-use-after-free,
+// the ASan + UBSan run of 34715afe, 2026-09-24). ctest runs each case in a
+// process of its own, so a case per file names the file and leaves the others
+// their own verdict.
 // =============================================================================
-TEST_F(ScriptCorpus, EveryScriptRuns)
+struct ScriptCorpusRun : ScriptCorpus, ::testing::WithParamInterface<wxString> {};
+
+TEST_P(ScriptCorpusRun, RunsToTheEnd)
 {
-	const std::vector<wxString> listFile = CorpusFiles();
-	ASSERT_FALSE(listFile.empty());
+	const wxString& strPath = GetParam();
+	const wxString  strName = wxFileName(strPath).GetFullName();
 
-	size_t numRan = 0, numCompiled = 0;
-	wxString strFailures;
+	const wxString strText = ReadWhole(strPath);
+	if (strText.IsEmpty())
+		GTEST_SKIP() << "unreadable; EveryScriptCompiles reports it";
 
-	for (const wxString& strPath : listFile) {
+	ibCorpusHost host;
+	ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
 
-		const wxString strText = ReadWhole(strPath);
-		if (strText.IsEmpty())
-			continue;
+	wxString strError;
+	if (!CompileEitherDialect(compiler, host, strText, strError))
+		GTEST_SKIP() << "does not compile; EveryScriptCompiles reports it";   // not this case's question
 
-		ibCorpusHost host;
-		ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
-
-		wxString strError;
-		if (!CompileEitherDialect(compiler, host, strText, strError))
-			continue;   // reported by the case above; not this one's question
-
-		numCompiled++;
-
-		wxString strRunError;
-		try {
-			ibByteBinder binder = compiler.CreateBinder();
-			ibProcUnit   unit;
-			unit.Execute(compiler.m_cByteCode, binder);
-		} catch (const ibBackendException& err) {
-			strRunError = err.GetErrorDescription();
-		} catch (...) {
-			strRunError = wxT("unknown exception");
-		}
-
-		if (!strRunError.IsEmpty()) {
-			strFailures << wxT("\n  ") << wxFileName(strPath).GetFullName()
-			            << wxT(" — ") << strRunError;
-			continue;
-		}
-
-		numRan++;
-
-		// A module that ran and said nothing either has no Message in it — one
-		// file is deliberately compile-only — or never reached the ones it has.
-		// Reported rather than asserted: which of the two it is belongs to the
-		// case that checks WHAT was printed, and that case is not written yet.
-		if (host.GetMessages().empty())
-			std::printf("[silent] %s\n",
-				(const char*)wxFileName(strPath).GetFullName().ToUTF8());
+	wxString strRunError;
+	try {
+		ibByteBinder binder = compiler.CreateBinder();
+		ibProcUnit   unit;
+		unit.Execute(compiler.m_cByteCode, binder);
+	} catch (const ibBackendException& err) {
+		strRunError = err.GetErrorDescription();
+	} catch (...) {
+		strRunError = wxT("unknown exception");
 	}
 
-	EXPECT_EQ(numRan, numCompiled)
-		<< numRan << " of " << numCompiled << " compiled scripts ran; failed:"
-		<< strFailures.ToStdString();
+	ASSERT_TRUE(strRunError.IsEmpty())
+		<< strName.ToStdString() << ": " << strRunError.ToStdString();
+
+	// A module that ran and said nothing either has no Message in it — one
+	// file is deliberately compile-only — or never reached the ones it has.
+	// Reported rather than asserted: which of the two it is belongs to the
+	// case that checks WHAT was printed, and that case is not written yet.
+	if (host.GetMessages().empty())
+		std::printf("[silent] %s\n", (const char*)strName.ToUTF8());
 }
+
+// Named after the file, so a failure reads as the script it is:
+// Corpus/ScriptCorpusRun.RunsToTheEnd/test_aggregations_selector.
+INSTANTIATE_TEST_SUITE_P(Corpus, ScriptCorpusRun, ::testing::ValuesIn(CorpusFiles()),
+	[](const ::testing::TestParamInfo<wxString>& info) {
+		std::string strName = wxFileName(info.param).GetName().ToStdString();
+		for (char& ch : strName)
+			if (!std::isalnum(static_cast<unsigned char>(ch)))
+				ch = '_';
+		return strName;
+	});
 
 TEST_F(ScriptCorpus, EveryScriptDeclaresWhatItUses)
 {

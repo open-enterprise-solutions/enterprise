@@ -12,7 +12,7 @@
 // These tests pin the contract that fixed it: ibBackendException IS a
 // std::exception, what() says the same thing GetErrorDescription() does, and the
 // varieties stay separately catchable — because a caller's whole reason to catch
-// one and not another is that they mean different things (docs/exceptions.md).
+// one and not another is that they mean different things (docs/private/exceptions.md).
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -85,7 +85,7 @@ TEST(BackendException, VarietiesAreCaughtByTheirOwnType) {
 		FAIL() << "Error() must throw";
 	}
 	catch (const ibBackendInterruptException&) {
-		SUCCEED();   // the user stopping the program is NOT an error — see docs/exceptions.md
+		SUCCEED();   // the user stopping the program is NOT an error — see docs/private/exceptions.md
 	}
 	catch (const ibBackendException&) {
 		FAIL() << "an interrupt must be distinguishable from a failure";

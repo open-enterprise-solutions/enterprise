@@ -17,7 +17,7 @@
 // Footprint probe — reports the real sizeof on this build/platform.
 // Not an assertion (the number is informational); run the suite and read
 // the printed line. Used to measure the ibValue memory-reduction arc
-// (Phase 0 baseline → after each phase). See docs/value-audit.md.
+// (Phase 0 baseline → after each phase). See docs/private/value-audit.md.
 // ===========================================================================
 
 TEST(ValueTest, SizeofReport) {
@@ -28,6 +28,40 @@ TEST(ValueTest, SizeofReport) {
               << "  sizeof(ibNumber)=" << sizeof(ibNumber)
               << "  sizeof(wxString)=" << sizeof(wxString) << std::endl;
     SUCCEED();
+}
+
+// ===========================================================================
+// One word for every kind — a string and a number live in the union
+// ===========================================================================
+
+TEST(ValueUnion, ACopyOfAStringSharesItsText) {
+    const ibValue original(wxT("a text longer than the short-string buffer"));
+    const ibValue copy(original);
+    EXPECT_EQ(original.GetString().wc_str(), copy.GetString().wc_str());   // the same characters
+}
+
+TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
+    ibValue v(true);
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // a boolean's byte is not read as a number
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = wxT("text");
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = ibNumber(wxString(wxT("765.3456754567765443343")));
+    v.SetType(ibValueTypes::TYPE_STRING);       // nor a heap-tier number
+    EXPECT_TRUE(v.GetString().IsEmpty());
+}
+
+TEST(ValueUnion, KindChangesOnTheLetRoad) {
+    const ibValue number(ibNumber(wxString(wxT("765.3456754567765443343"))));
+    const ibValue text(wxT("text"));
+    const ibValue flag(true);
+    ibValue slot;
+    for (const ibValue* source : { &number, &text, &flag, &number, &flag, &text }) {
+        CopyValue(slot, *source);
+        EXPECT_EQ(slot.GetType(), source->GetType());
+        EXPECT_TRUE(slot.GetString() == source->GetString());
+    }
 }
 
 // ===========================================================================
@@ -266,7 +300,7 @@ TEST(ValueTest, SetTypeChangesType) {
 // from GetMetaObject()) silently bound to operator=(bool) — const ptr -> bool —
 // and turned the object into a Boolean. The new operator=(const ibValue*) stores
 // it as TYPE_CONST_REFFER: weak (no ref-count, Reset never deletes), read-only,
-// but read paths delegate to the object. See docs/value-const-reffer.md.
+// but read paths delegate to the object. See docs/private/value-const-reffer.md.
 // ===========================================================================
 
 namespace {
@@ -278,7 +312,7 @@ public:
     explicit ConstRefProbe(bool* deletedFlag)
         : ibValue(ibValueTypes::TYPE_VALUE, false), m_deleted(deletedFlag) {}
     ~ConstRefProbe() override { if (m_deleted) *m_deleted = true; }
-    wxString GetString() const override { return wxT("PROBE"); }
+    ibString GetString() const override { return wxT("PROBE"); }
 private:
     bool* m_deleted;
 };

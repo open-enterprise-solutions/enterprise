@@ -40,6 +40,10 @@ ibValueMetaObject* ibDataProcessorTree::CreateItem(bool showValue)
 		GetMetaIdentifier()
 	);
 
+	// A form whose kind the person refused is taken away again — see ibConfigurationTree::CreateItem.
+	if (createdObject != nullptr && createdObject->IsDeleted())
+		createdObject = nullptr;
+
 	if (createdObject != nullptr) {
 
 		ibPropertyObject* prev_selected = objectInspector->GetSelectedObject();
@@ -224,52 +228,13 @@ void ibDataProcessorTree::UpItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& nextItem = m_metaTreeCtrl->GetPrevSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && nextItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(nextItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == nextItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* nextObject = GetMetaObject(nextItem);
+	if (metaObject != nullptr && nextObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos + 2,
-				m_metaTreeCtrl->GetItemText(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemImage(nextItem),
-				m_metaTreeCtrl->GetItemData(nextItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibDataProcessorTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibDataProcessorTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(dst, coockie);
-				}
-				};
-
-			swap(tree, nextItem, newId);
-
-			m_metaTreeCtrl->SetItemData(nextItem, nullptr);
-			m_metaTreeCtrl->Delete(nextItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(nextObject));
 	}
+
 	m_metaTreeCtrl->Thaw();
 }
 
@@ -282,52 +247,13 @@ void ibDataProcessorTree::DownItem()
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	const wxTreeItemId& prevItem = m_metaTreeCtrl->GetNextSibling(selection);
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	if (metaObject != nullptr && prevItem.IsOk()) {
-		const wxTreeItemId& parentItem = m_metaTreeCtrl->GetItemParent(prevItem);
-		wxTreeItemIdValue coockie; wxTreeItemId nextId = m_metaTreeCtrl->GetFirstChild(parentItem, coockie);
-		size_t pos = 0;
-		do {
-			if (nextId == prevItem)
-				break;
-			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
-		} while (nextId.IsOk());
+	ibValueMetaObject* prevObject = GetMetaObject(prevItem);
+	if (metaObject != nullptr && prevObject != nullptr) {
+		// The door moves it and announces `Moved`; the rows follow that (MetaObjectChanged).
 		ibValueMetaObject* parentObject = metaObject->GetParent();
-		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
-		if (parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject))) {
-			wxTreeItemId newId = m_metaTreeCtrl->InsertItem(parentItem,
-				pos - 1,
-				m_metaTreeCtrl->GetItemText(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemImage(prevItem),
-				m_metaTreeCtrl->GetItemData(prevItem)
-			);
-
-			auto tree = m_metaTreeCtrl;
-			std::function<void(ibDataProcessorTreeCtrl*, const wxTreeItemId&, const wxTreeItemId&)> swap = [&swap](ibDataProcessorTreeCtrl* tree, const wxTreeItemId& dst, const wxTreeItemId& src) {
-				wxTreeItemIdValue coockie; wxTreeItemId nextId = tree->GetFirstChild(dst, coockie);
-				while (nextId.IsOk()) {
-					wxTreeItemId newId = tree->AppendItem(src,
-						tree->GetItemText(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemImage(nextId),
-						tree->GetItemData(nextId)
-					);
-					if (tree->HasChildren(nextId)) {
-						swap(tree, nextId, newId);
-					}
-					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(dst, coockie);
-				}
-				};
-
-			swap(tree, prevItem, newId);
-
-			m_metaTreeCtrl->SetItemData(prevItem, nullptr);
-			m_metaTreeCtrl->Delete(prevItem);
-
-			//m_metaTreeCtrl->Expand(newId);
-		}
+		parentObject->ChangeChildPosition(metaObject, parentObject->GetChildPosition(prevObject));
 	}
+
 	m_metaTreeCtrl->Thaw();
 }
 
@@ -342,7 +268,7 @@ void ibDataProcessorTree::SortItem()
 		const wxTreeItemId& parentItem =
 			m_metaTreeCtrl->GetItemParent(selection);
 		if (parentItem.IsOk()) {
-			m_metaTreeCtrl->SortChildren(parentItem);
+			SortItemsByName(parentItem);
 		}
 	}
 	m_metaTreeCtrl->Thaw();

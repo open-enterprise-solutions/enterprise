@@ -10,6 +10,7 @@
 #include "backend/propertyManager/property/propertyDynamicList.h"  // ibPropertyDynamicList — the "Settings" → "Open" action
 #include "backend/propertyManager/property/propertyBoolean.h"  // ibPropertyBoolean — the "arbitrary query" flag
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyString — the custom query text
+#include "backend/createRequest.h"   // ibCreateRequest — what narrows a list, handed in at CREATION
 #include "backend/query/queryLowering.h"              // ibQueryLowering::OutputColumn — what the arbitrary query produces
 
 class ibBackendQueryable;
@@ -227,7 +228,12 @@ public:
 	// Key on the dynamic LIST comes from the METAOBJECT through the source descriptor (the node has no metaobject
 	// id): the key = the family-correct identity (record → reference guid, register → composite key). GetGuid()
 	// above is the LIST's own query-table identity — a different thing.
-	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+	virtual ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+
+	// The row's STATE PICTURE — the same bridge as the key: the row's cells handed to the source descriptor, which
+	// knows which of them say the state. Asked by the control once per row. A custom query has no source to ask,
+	// and its rows show none.
+	virtual ibPictureID GetRowPicture(const ibDataViewItem& item) const override;
 
 	// Selection-restore lookup (after a child-form save changes/creates a row): the identity VALUE →
 	// a stub carrying the ROW-KEY, matched against the fetched batch by m_rowKey. The row-key is built by the
@@ -286,6 +292,9 @@ private:
 	// Rebuild the columns + composer from the current source (the Source property's
 	// queryable). Called when the source is (re)set / picked / loaded.
 	void RebuildSource();
+
+	// The row's values — what the source descriptor's GetItemKey / GetSelectValue read (see the .cpp).
+	ibRowMetaValues GetRowValues(ibValueModel::ibComposerNode* node) const;
 
 	// DROP THE FILTER / SORT / GROUPING LINES whose field the list no longer has — run after every
 	// rebuild, so removing the arbitrary query takes its columns' settings with it. By RESOLUTION,
@@ -362,17 +371,17 @@ private:
 // Number, an enum its Order, a register its Period). The sort becomes an ordinary serialised, user-editable setting
 // (removable), NOT a runtime re-applied default. null col → no sort. (Flat sources.) `view` seeds the default view —
 // a SELECT form passes ibDynamicListView_Choice so the generated form inherits choice mode (serialised, removable).
-BACKEND_API ibValueDynamicList* ibCreateList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view = ibDynamicListView_Normal);
 
 // Create a HIERARCHY list — folder-FIRST sort (folderCol DESC: folders on top) THEN presentation sort. The
 // metaobject passes its IsFolder + presentation (Description) columns. Folders are a SORT setting now, not a
 // structural GetFolderColumn; the tree itself comes from the queryable's hierarchy (parent) column. `view` seeds the
 // default view — a SELECT form passes ibDynamicListView_Choice (choice mode, serialised and user-removable).
-BACKEND_API ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
 
 // Create a FOLDER-SELECT list — presentation sort + a fixed `IsFolder = true` FILTER (only folders). The metaobject
 // passes its IsFolder + presentation columns (folder-select is a filter setting, no GetFolderColumn). `view` seeds the
 // default view — the folder-select call site passes ibDynamicListView_Choice (choice mode, serialised, user-removable).
-BACKEND_API ibValueDynamicList* ibCreateFolderList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
 
 #endif // __VALUE_DYNAMIC_LIST_H__

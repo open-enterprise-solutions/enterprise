@@ -158,8 +158,8 @@ bool ibValueMetaObject::Init(ibValue** paParams, const long lSizeArray)
 		if (parent == nullptr)
 			return true;
 		// Check acceptance BEFORE attaching: with owning children a rejected node
-		// would already sit in the parent's vector when CreateObjectRef wxDELETEs
-		// it on Init failure → double free. Reject first, attach only if accepted.
+		// would already sit in the parent's vector when Init reports the failure —
+		// kept alive there, a child nobody asked for. Reject first, attach only if accepted.
 		if (!parent->FilterChild(GetClassType()))
 			return false;
 		SetParent(parent);
@@ -239,10 +239,30 @@ void ibValueMetaObject::SetName(const wxString& strName)
 		m_metaData->InvalidateCtorNames();
 }
 
+// ⭐⭐ THE DOOR FOR THE ORDER OF A METAOBJECT'S CHILDREN — the designer's up/down and sort, the MCP
+// verb metadata_move, anything that reorders. The order is data: the sections in the navigation panel,
+// the forms under an object, what a person reads down the tree. `pos` is where the child ENDS UP.
+//
+// 🛑 IT MARKED THE CONFIGURATION MODIFIED BEFORE ASKING, and said nothing: a refused move and a move to
+// where the child already stood both left "modified" behind, while a move nobody announced left every
+// watcher's picture of the order stale — the designer's tree shuffled its own rows by hand, and a move
+// from anywhere else was not drawn at all. Now a move that happened is marked and announced (`Moved`),
+// once, here, and the rows follow the announcement.
 bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned int pos)
 {
+	if (m_metaData == nullptr || !m_metaData->IsEditable())   // the rule lives in the door, as for Create
+		return false;
+
+	const unsigned int from = GetChildPosition(object);
+	if (!ibPropertyObjectHelper::ChangeChildPosition(object, pos))
+		return false;
+
+	if (pos == from)
+		return true;   // it already stands there — nothing moved, so nothing is said
+
 	m_metaData->Modify(true);
-	return ibPropertyObjectHelper::ChangeChildPosition(object, pos);
+	m_metaData->MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Moved, object);
+	return true;
 }
 
 wxString ibValueMetaObject::GetModuleName() const

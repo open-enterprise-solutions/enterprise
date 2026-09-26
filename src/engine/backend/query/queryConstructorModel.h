@@ -23,7 +23,7 @@
 //      answers to one question, so the shell asks the SOURCE which it is rather than branching on
 //      a type — and a source kind added later needs no new branch up in the dialog.
 //
-// See docs/query-constructor.md §4 / §5a / §5b.
+// See docs/private/query-constructor.md §4 / §5a / §5b.
 //
 ////////////////////////////////////////////////////////////////////////////
 

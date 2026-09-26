@@ -178,26 +178,59 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
 	ibDeclareLookupIndex(table, tableName + wxT("_KL"), keyCols);
 }
 
+std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+	const std::function<bool(size_t fields, size_t bytes)>& fits)
+{
+	const auto measure = [](const ibBackendQueryColumn* col, size_t& fields, size_t& bytes) {
+		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
+		fields = slots.size();
+		bytes = 0;
+		for (const ibColumnSlot& field : slots)
+			bytes += ibIndexFieldByteWidth(field.m_type);
+	};
+
+	// The closing column is paid for FIRST: what is cut to make room is a trailing column before it, never it.
+	// One that does not fit even alone closes nothing, and the leading columns are taken as they always were.
+	size_t fields = 0, bytes = 0;
+	if (closing != nullptr) {
+		measure(closing, fields, bytes);
+		if (fits && !fits(fields, bytes)) {
+			closing = nullptr;
+			fields = bytes = 0;
+		}
+	}
+
+	std::vector<const ibBackendQueryColumn*> lookup;
+	for (const ibBackendQueryColumn* col : cols) {
+		if (col == closing)
+			continue;
+		size_t colFields = 0, colBytes = 0;
+		measure(col, colFields, colBytes);
+		if (fits && !fits(fields + colFields, bytes + colBytes))
+			break;
+		lookup.push_back(col);
+		fields += colFields;
+		bytes += colBytes;
+	}
+	if (closing != nullptr)
+		lookup.push_back(closing);
+	return lookup;
+}
+
 void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
-                          const std::vector<const ibBackendQueryColumn*>& cols)
+                          const std::vector<const ibBackendQueryColumn*>& cols,
+                          const ibBackendQueryColumn* closing)
 {
 	// ⚠ ASKED THROUGH L2-2, never read off a dialect from here. A dictionary is the level below's to
 	// read; this floor knows that it wants "as many leading columns as an index will hold" and nothing
 	// about which engine answers. BOTH ceilings — the count alone let a key of wide strings through to a
 	// CREATE INDEX the engine refused (see ibKeyNeedsHash).
-	std::vector<const ibBackendQueryColumn*> lookup;
-	size_t fields = 0, bytes = 0;
-	for (const ibBackendQueryColumn* col : cols) {
-		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
-		size_t width = 0;
-		for (const ibColumnSlot& field : slots)
-			width += ibIndexFieldByteWidth(field.m_type);
-		if (db_query != nullptr && !ibIndexKeyFits(*db_query, fields + slots.size(), bytes + width))
-			break;
-		lookup.push_back(col);
-		fields += slots.size();
-		bytes += width;
-	}
+	std::function<bool(size_t, size_t)> fits;
+	if (db_query != nullptr)
+		fits = [](size_t fields, size_t bytes) { return ibIndexKeyFits(*db_query, fields, bytes); };
+
+	const std::vector<const ibBackendQueryColumn*> lookup = ibFitLookupColumns(cols, closing, fits);
 	if (!lookup.empty())
 		table.Index(indexName, lookup, /*unique*/ false);
 }
@@ -515,7 +548,7 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 // that ever puts it there is this batch — which on Firebird runs DEFERRED, past the DDL commit. A failure
 // in that second phase loses rows the diff can never mention again: both configurations agree the value
 // exists, so every later apply computes "nothing changed" and the row stays missing for good. That is the
-// data half of the hole docs/schema-authority.md § 4.3 patches for structure with a TableExists guard —
+// data half of the hole docs/private/schema-authority.md § 4.3 patches for structure with a TableExists guard —
 // and data needs no guard, because an upsert is idempotent: repeating it IS the repair, and it decides
 // nothing from what the database happens to hold, so the diff remains the sole authority.
 // The declared rows are a handful per table (enum values, predefined items), so re-asserting them costs
@@ -728,7 +761,7 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHo
 	if (!schema.RunOrDefer(sourceTable, t.m_name, [spec, was, hasOld, holder]() {
 			ibSchemaBuilder deferred(holder);
 			ibApplyMaterialization(deferred.Connection(), spec, hasOld ? &was : nullptr);
-			return true;   // a refusal RAISES from L2-2 (docs/exceptions.md §5a)
+			return true;   // a refusal RAISES from L2-2 (docs/private/exceptions.md §5a)
 		}))
 		ibBackendCoreException::Error(
 			_("Failed to install the totals maintenance for %s - the restructuring was rolled back"),
@@ -764,17 +797,18 @@ bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& tar
 			return false;                                   // new table
 
 		// Columns by MODEL ID, the same key the differ matches on; a column present on one side only is an
-		// add or a drop, and a matched pair differs when its type set does — which is exactly the condition
-		// DiffColumnInto tests before it emits anything. Adding a type to a COMPOSITE attribute that already
-		// carries a reference lands here as "same type set is not same" only when the physical layout really
-		// moves; when it does not, the type descriptions compare equal and the table stays unchanged.
+		// add or a drop, and a matched pair differs when what it may HOLD does (GetTypeValueDesc) — which
+		// is exactly the condition DiffColumnInto tests before it emits anything. Adding a type to a
+		// COMPOSITE attribute that already carries a reference lands here as "same type set is not same"
+		// only when the physical layout really moves; when it does not, the type descriptions compare
+		// equal and the table stays unchanged.
 		if (old->m_columns.size() != cur.m_columns.size())
 			return false;
 		for (const ibSchemaColumn& c : cur.m_columns) {
 			const ibSchemaColumn* o = FindColumn(old->m_columns, c.m_id);
 			if (o == nullptr || o->m_column == nullptr || c.m_column == nullptr)
 				return false;
-			if (!(o->m_column->GetTypeDesc() == c.m_column->GetTypeDesc()))
+			if (!(o->m_column->GetTypeValueDesc() == c.m_column->GetTypeValueDesc()))
 				return false;
 		}
 

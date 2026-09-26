@@ -1,96 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_radio_button_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 62 1",
-	"  c None",
-	"n c #F7F7F6",
-	"V c #F7F7F7",
-	"x c #B6B7C7",
-	"8 c #2AB51C",
-	"f c #99E680",
-	"o c #343466",
-	"j c #A6D59D",
-	": c #8787A1",
-	". c #696989",
-	"B c #F3F4F3",
-	"u c #E9E9E9",
-	"< c #66C25B",
-	"a c #66C25C",
-	"X c #472E75",
-	"w c #ADADBE",
-	"$ c #6C6D8D",
-	"t c #4BCB32",
-	"- c #D3D3D3",
-	"k c #6BE047",
-	"O c #9797A8",
-	"C c #9797B0",
-	"2 c #DBDBDA",
-	"@ c #BDBDC2",
-	"1 c #A5D39B",
-	"y c #91E07A",
-	"9 c #47C82F",
-	"z c #F2F2F3",
-	"5 c #9898A8",
-	"M c #8989A3",
-	"m c #7A7A9B",
-	"i c #DCDCE0",
-	"A c #AFAFC0",
-	"v c #B5E0A9",
-	"q c #E4E4E4",
-	"b c #F3F3F2",
-	"s c #41C52B",
-	"S c #7B7B9C",
-	"r c #30B921",
-	"p c #BFBFC5",
-	"Z c #747495",
-	"c c #DEDEDD",
-	"= c #CFCFD0",
-	"6 c #009900",
-	"& c #C8C8C8",
-	"; c #D7D7D7",
-	"d c #59D43B",
-	", c #57B751",
-	"3 c #DFDFDF",
-	"g c #EEEEEE",
-	"h c #DFDFE4",
-	"> c #89BF87",
-	"0 c #B3DFA7",
-	"e c #1AAB12",
-	"+ c #BABAC0",
-	"l c #C7EFB7",
-	"N c #ECEBEC",
-	"# c #9C9CAC",
-	"% c #7E7E97",
-	"* c #CCCDCD",
-	"4 c #727393",
-	"7 c #11A40B",
-	/* pixels */
-	"                ",
-	"                ",
-	"      .XX.      ",
-	"    o.O+@#$o    ",
-	"   o%&&*=-;:o   ",
-	"   .&&>,<1234   ",
-	"  .5*>67890qw.  ",
-	"  X@*,7ertyuiX  ",
-	"  Xp-a8rsdfghX  ",
-	"  .#;j9tdklzx.  ",
-	"   $2cvyflbnm   ",
-	"   oMquNzBVCo   ",
-	"    oZAihxSo    ",
-	"      .XX.      ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_radioButton_png = "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";
 
 wxIcon ibValueRadioButton::GetIcon() const
 {
-	return wxIcon(s_radio_button_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_radioButton_png, wxSize(16, 16));
 }
 
 wxIcon ibValueRadioButton::GetIconGroup()
 {
-	return wxIcon(s_radio_button_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_radioButton_png, wxSize(16, 16));
 }

@@ -11,7 +11,7 @@
 // This harness drives the REAL door (ibDataQueryBuilder) over two hand-built computed queryables — no DB,
 // no session: holder = null, every read routes through ComputeRows. The "reference" is a column whose value
 // equals the target's PRIMARY KEY value (JoinRamTables matches by value), so no real reference metadata is
-// needed to exercise the mechanism. (docs/query-engine-layers.md — computed source; query-language-arc §22.)
+// needed to exercise the mechanism. (docs/private/query-engine-layers.md — computed source; query-language-arc §22.)
 // =============================================================================
 
 #include <gtest/gtest.h>

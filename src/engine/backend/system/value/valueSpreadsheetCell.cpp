@@ -147,7 +147,7 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	}
 	case eTextOrient:
 	{
-		pvarPropVal = ibValue::CreateAndConvertEnumObjectRef<ibValueEnumSpreadsheetOrient>(
+		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumSpreadsheetOrient>(
 			static_cast<ibSpreadsheetOrientation>(m_spreadsheetDoc->GetCellTextOrient(m_row, m_col)));
 		return true;
 	}
@@ -160,7 +160,7 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	{
 		int horizontal;
 		m_spreadsheetDoc->GetCellAlignment(m_row, m_col, &horizontal, nullptr);
-		pvarPropVal = ibValue::CreateAndConvertEnumObjectRef<ibValueEnumSpreadsheetHorizontalAlignment>(
+		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(
 			static_cast<ibSpreadsheetAlignmentHorz>(horizontal));
 		return true;
 	}
@@ -168,7 +168,7 @@ bool ibValueSpreadsheetDocumentArea::GetPropVal(const long lPropNum, ibValue& pv
 	{
 		int vertical;
 		m_spreadsheetDoc->GetCellAlignment(m_row, m_col, nullptr, &vertical);
-		pvarPropVal = ibValue::CreateAndConvertEnumObjectRef<ibValueEnumSpreadsheetVerticalAlignment>(
+		pvarPropVal = ibValue::CreateEnumObject<ibValueEnumSpreadsheetVerticalAlignment>(
 			static_cast<ibSpreadsheetAlignmentVert>(vertical));
 		return true;
 	}

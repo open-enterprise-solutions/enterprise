@@ -97,7 +97,7 @@ public:
 	// (frame → wxObject) map, and calls HandleRequest(kind, value) on
 	// it — polymorphic, no subclass-specific branches here. Each
 	// ibWebXxx handles the kinds it understands. Drains on this
-	// thread, rebuilds the visual tree. See docs/web/event-dispatcher.md.
+	// thread, rebuilds the visual tree. See docs/private/web/event-dispatcher.md.
 	bool Dispatch(int controlId, const wxString& kind, const wxString& value);
 
 	// Legacy kind-specific entry points. Thin shims over Dispatch —

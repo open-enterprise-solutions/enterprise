@@ -84,8 +84,8 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # docs/private/ is private and not needed; wxWidgets is — see ci.yml.
-      - run: bash .github/fetch-wxwidgets.sh
+      # Every submodule .gitmodules names, and only those - see ci.yml.
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - uses: ilammy/msvc-dev-cmd@v1
@@ -128,7 +128,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: bash .github/fetch-wxwidgets.sh
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies
@@ -146,30 +146,10 @@ jobs:
 
       # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE, as the Windows kit does: a file base is an embedded Firebird, and
       # no Linux distribution ships version 5 (Ubuntu 22.04 and Debian 12 have 3, which cannot open these
-      # bases). The official build, PINNED — the same release whichever night it is. Its tree finds its own
-      # libraries through `$ORIGIN/../lib`, so it is laid out as it is, in `_fb/`, and the engine loads
-      # `_fb/lib/libfbclient.so.2` by path (firebirdInterface.cpp).
-      #
-      # The one library the kit does not carry is libtommath, which Ubuntu does not install by default; it is
-      # taken from the runner's own package and put beside the kit's libraries. The plugins the Windows kit
-      # leaves out (profiler, trace, UDR) are left out here too, and firebird.conf is the Windows kit's own —
-      # SuperClassic, so two programs can open one base.
+      # bases). The official build, PINNED — the same release whichever night it is. The kit is built by the
+      # script CI's Firebird job uses too, so the tests run on what the package ships.
       - name: Firebird 5 kit
-        run: |
-          set -euo pipefail
-          curl -fsSL -o fb5.tar.gz "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/Firebird-5.0.4.1812-0-linux-x64.tar.gz"
-          tar xzf fb5.tar.gz
-          mkdir -p fb5root fbkit
-          tar xzf Firebird-5.0.4.1812-0-linux-x64/buildroot.tar.gz -C fb5root
-          fb=fb5root/opt/firebird
-          cp -a "$fb/lib" "$fb/plugins" "$fb/intl" "$fb/tzdata" "$fb/firebird.msg" "$fb/security5.fdb" "$fb/plugins.conf" fbkit/
-          rm -rf fbkit/plugins/udr fbkit/plugins/libDefault_Profiler.so fbkit/plugins/libfbtrace.so \
-                 fbkit/plugins/libudr_engine.so fbkit/plugins/udr_engine.conf
-          cp src/engine/backend/databaseLayer/firebird/engine/dll/firebird.conf fbkit/
-          apt-get download libtommath1
-          dpkg-deb -x libtommath1_*.deb tommath
-          cp -a tommath/usr/lib/x86_64-linux-gnu/libtommath.so.1* fbkit/lib/
-          ls -la fbkit fbkit/lib fbkit/plugins
+        run: bash .github/firebird-kit-linux.sh
 
       - name: Package
         run: bash .github/nightly/package-linux.sh build/linux-release/bin oes-nightly-linux-x64.tar.gz
@@ -196,7 +176,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - run: bash .github/fetch-wxwidgets.sh
+      - run: bash .github/fetch-submodules.sh
         shell: bash
 
       - name: Install build dependencies

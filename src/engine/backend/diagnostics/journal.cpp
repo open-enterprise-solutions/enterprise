@@ -295,13 +295,21 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 		// 2026-08-22). The mark is about the FILE; the echo is about the PERSON, and they are not
 		// the same decision.
 		//
-		// Errors and warnings do keep their dialogs: those callsites were wxLogError / wxLogWarning
-		// before the migration, and taking their dialog away would be the silent-removal this layer
-		// exists to prevent.
+		// 🛑⭐ AND NEITHER DOES A WARNING (Max, 2026-09-23: "when it is a warning, no window — take
+		// the sending to the widgets away"). It kept wxLogWarning on the argument that those
+		// callsites had been wxLogWarning before the migration and their dialog must not be removed
+		// silently. Reading the 56 of them settles it the other way: an fsync that failed on a
+		// Firebird lease, a bytecode cache that could not be read, a replication peer on another
+		// version, a sweep backlog that would not answer — every one is engine plumbing addressed to
+		// whoever opens the file, and none is a sentence to stop a person mid-keystroke with. The
+		// first diagnostic written on the choice road proved it by putting a modal in front of
+		// somebody who was testing something else entirely.
+		//
+		// ⚠ AN ERROR STILL DOES. That one says the thing the person asked for did not happen, which
+		// they have to be told whether or not anybody ever opens the journal.
 		switch (mark) {
-		case ibJournalMark::Error:   wxLogError  (wxT("%s"), message); break;
-		case ibJournalMark::Warning: wxLogWarning(wxT("%s"), message); break;
-		default:                     wxLogDebug  (wxT("%s"), line.Left(line.Len() - 1)); break;
+		case ibJournalMark::Error:   wxLogError(wxT("%s"), message); break;
+		default:                     wxLogDebug(wxT("%s"), line.Left(line.Len() - 1)); break;
 		}
 	}
 

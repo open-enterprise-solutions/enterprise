@@ -329,6 +329,6 @@ BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind
 //   * ibDataRamComposer  (RAM) — filters + sorts the source's LIVE rows IN PLACE (no text, no SQL), then walks
 //                            them to the driver. Source = the RAM value-storage queryable (ComputeRows).
 // The model holds the base via GetModelComposer() and never cares which — list/table/tree is decided by
-// the settings, DB-vs-RAM by the realisation. (See docs/ram-composer-decoupling.md.)
+// the settings, DB-vs-RAM by the realisation. (See docs/private/ram-composer-decoupling.md.)
 
 #endif

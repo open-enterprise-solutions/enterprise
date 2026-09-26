@@ -26,6 +26,38 @@ TEST(NumberLayout, AlignofIs8) {
     EXPECT_EQ(alignof(ibNumber), 8u);
 }
 
+// All-zero bits are the number 0 — what lets ibValue keep a number in its union.
+TEST(NumberLayout, ZeroBitsAreZero) {
+    alignas(ibNumber) unsigned char word[sizeof(ibNumber)] = {};
+    const ibNumber& zero = *reinterpret_cast<const ibNumber*>(word);
+    EXPECT_TRUE(zero.IsZero());
+    EXPECT_EQ(zero.ToString(), wxT("0"));
+}
+
+// ===========================================================================
+// The heap tier is shared — a copy is one more owner, a write gets its own
+// ===========================================================================
+
+TEST(NumberShared, WriteToACopyLeavesTheOriginal) {
+    const ibNumber original(wxString(wxT("765.3456754567765443343")));   // 22 digits → heap
+    ibNumber copy(original);
+    copy += ibNumber(1);
+    EXPECT_EQ(original.ToString(), wxT("765.3456754567765443343"));
+    EXPECT_EQ(copy.ToString(), wxT("766.3456754567765443343"));
+
+    ibNumber assigned;
+    assigned = original;
+    assigned = ibNumber(0);                                              // back to immediate
+    EXPECT_EQ(original.ToString(), wxT("765.3456754567765443343"));
+}
+
+TEST(NumberShared, ItselfOnBothSides) {
+    ibNumber n(wxString(wxT("765.3456754567765443343")));
+    n = n;
+    n += n;
+    EXPECT_EQ(n.ToString(), wxT("1530.6913509135530886686"));
+}
+
 // ===========================================================================
 // Constructors and immediate/heap split
 // ===========================================================================
@@ -663,6 +695,27 @@ TEST(NumberFormat, FracDigitsPadsToAFixedWidth) {
 TEST(NumberFormat, FracDigitsZeroDropsThePoint) {
     ibNumber::Format fmt; fmt.fracDigits = 0;
     EXPECT_EQ(ibNumber(wxString(wxT("1250.5"))).ToString(fmt), wxT("1251"));
+}
+
+// The immediate tier is laid out on the stack (fnumber.cpp) and must round exactly as Round(n) does:
+// half away from zero, a carry that grows the integer part, no sign on a figure that rounded to zero.
+TEST(NumberFormat, TheImmediateTierRoundsLikeRound) {
+    ibNumber::Format fmt; fmt.fracDigits = 2;
+    EXPECT_EQ(ibNumber(wxString(wxT("9.995"))).ToString(fmt), wxT("10.00"));
+    EXPECT_EQ(ibNumber(wxString(wxT("-9.995"))).ToString(fmt), wxT("-10.00"));
+    EXPECT_EQ(ibNumber(wxString(wxT("0.005"))).ToString(fmt), wxT("0.01"));
+    EXPECT_EQ(ibNumber(wxString(wxT("-0.004"))).ToString(fmt), wxT("0.00"));
+}
+
+// The out-argument form writes the same text into the string it is handed, whatever that held before —
+// the form a column of a report reuses row after row.
+TEST(NumberFormat, TheOutArgumentWritesTheSameText) {
+    ibNumber::Format fmt; fmt.fracDigits = 2; fmt.groupSep = wxT(' '); fmt.groupSize = 3;
+    wxString out(wxT("something longer that was there before"));
+    ibNumber(wxString(wxT("1234567.891"))).ToString(fmt, out);
+    EXPECT_EQ(out, wxT("1 234 567.89"));
+    ibNumber(5).ToString(fmt, out);
+    EXPECT_EQ(out, wxT("5.00"));
 }
 
 TEST(NumberFormat, FracDigitsWithGroups) {

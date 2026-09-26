@@ -1,0 +1,190 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.CertificateFile",
+      "name_local": "CertificateFile",
+      "name_en": "CertificateFile",
+      "kind": "collection",
+      "class_id": 179108361144881211,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New CertificateFile(path : string [, password : string])",
+      "description": "A PEM FILE, NAMED — a certificate, or a certificate together with its private key. The value holds two things and reads neither: the path, and the password that opens the key. What is INSIDE the file is the TLS library's business, read when a connection is made and not here.\n\nTHE FILE HAS TO BE THERE NOW. A path that names nothing, and an empty one, are refused where the value is made — \"CertificateFile: there is no file '<path>'\" — so a mistyped path is found at the desk rather than at the bank's door. `New CertificateFile()` with no argument at all is refused too (\"Error initializing object 'CertificateFile'\"): a certificate file with no file is not one.\n\nWHAT IS IN IT IS SAID LATER, AND BY THIS FILE'S NAME. A file that is not a PEM, or a key the password does not open, is refused at the first request made through it — \"HTTPConnection: the certificate file '<path>' could not be read - not a PEM, or the key's password is wrong\" for the certificate this side shows, \"...the trusted certificates could not be read from the certificate file '<path>' - not a PEM\" for the one it trusts. A connection can hold two of these files, which is why the sentence names one of them; and it is said again at every request after it, not once.\n\nThe password is given once and never read back — only Path comes back out of the value. A CertificateFile belongs to no connection: one can be shared by several SecureConnection values.",
+      "syntax_block": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");                // whom to trust\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");  // a certificate AND its key\nMessage(mine.Path);",
+      "syntax_block_ves": "trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");                // whom to trust\nmine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");  // a certificate AND its key\nMessage(mine.Path);",
+      "parameters": "path — the file, as the file system names it. It has to be there when the value is made, and it is the name a later refusal carries.\npassword — opens the private key held in the file; left out, the file is taken to hold no key that needs one. Given once and never read back.",
+      "return_descr": "CertificateFile — the path and the password it was made with.",
+      "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar secure = New SecureConnection(mine, trust);      // show mine, trust that authority alone\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                      // no port given: 443, once it is secure\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // ...the certificate file 'C:\\certs\\client.pem' could not be read...\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.CertificateFile.Path",
+        "cls.SecureConnection",
+        "cls.SecureConnection.ClientCertificate",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.CertificateFile.Path",
+      "name_local": "Path",
+      "name_en": "Path",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "CertificateFile.Path",
+      "description": "The path the file was made with, as it was given — READ-ONLY. A CertificateFile cannot be pointed at another file once it exists: make another one and hang that on the SecureConnection.\n\nThis is also the name the engine puts in a refusal when the library cannot read the file, so what a script logs and what the person is told are the same string. The password is published nowhere: nothing reads it back out of the value.",
+      "syntax_block": "var file = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nMessage(file.Path);   // C:\\certs\\bank-ca.pem",
+      "parameters": "",
+      "return_descr": "String — the path.",
+      "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar secure = New SecureConnection();\nsecure.TrustedCertificates = trust;\nMessage(secure.TrustedCertificates.Path);   // it comes back the same",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.CertificateFile",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.SecureConnection.ClientCertificate"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "collection",
+      "class_id": 169100091633056753,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New SecureConnection([clientCertificate : CertificateFile [, trustedCertificates : CertificateFile]])",
+      "description": "WHAT AN HTTPConnection CARRIES TO SPEAK https. Three things and no library in them: which certificate to show (ClientCertificate), whom to trust (TrustedCertificates), and whether to check the server at all (VerifyServerCertificate). What they mean on the wire is the connection's business.\n\nMADE BARE — `New SecureConnection()` — it shows nothing, trusts what the PLATFORM trusts (the Windows certificate store, the macOS keychain, /etc/ssl/certs on Linux, read by the TLS library itself) and checks the server. That is the setting to want, and it costs one line.\n\nBoth arguments are optional, and each is a CertificateFile or Undefined; anything else is refused by the property's own name — \"SecureConnection: ClientCertificate is a CertificateFile, or Undefined\". A property nobody set reads back as Undefined.\n\nBY ITSELF IT DOES NOTHING: it is hung on a connection — `connection.SecureConnection = secure` — and the connection asks it at EVERY request rather than remembering what it said. So two connections can share one, and one changed in place (`secure.VerifyServerCertificate = False`) is obeyed by the next request, not the next session.\n\nA build with no TLS backend still has the type and refuses to use it: \"HTTPConnection: this build has no TLS - a secure connection cannot be made\".",
+      "syntax_block": "var secure = New SecureConnection();                   // the platform's trust, and the check on\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                        // ...= Undefined for plain http://",
+      "syntax_block_ves": "secure = New SecureConnection();                   // the platform's trust, and the check on\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nbank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                    // ...= Undefined for plain http://",
+      "parameters": "clientCertificate — the certificate this side shows, as a CertificateFile holding it and its key; left out or Undefined, nothing is shown.\ntrustedCertificates — the authority to trust, as a CertificateFile; left out or Undefined, the platform's own certificate store.",
+      "return_descr": "SecureConnection — nothing shown, the platform's trust, the check on.",
+      "example": "var secure = New SecureConnection();                 // trust the platform, check the server\nvar shop = New HTTPConnection(\"api.example\");\nshop.SecureConnection = secure;\nMessage(shop.Port);                                  // 443: nobody gave a port\n\nvar bank = New HTTPConnection(\"api.bank.example\");   // ...and this one trusts one authority alone\nbank.SecureConnection = New SecureConnection(\n    New CertificateFile(\"C:\\certs\\client.pem\", \"key password\"),\n    New CertificateFile(\"C:\\certs\\bank-ca.pem\"));\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // the certificate is not trusted, not for this host, unreadable...\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection.ClientCertificate",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.ClientCertificate",
+      "name_local": "ClientCertificate",
+      "name_en": "ClientCertificate",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.ClientCertificate",
+      "description": "The certificate THIS side shows when the server asks for one — a CertificateFile holding the certificate AND its private key in the one file, the key's password being that file's second argument. Undefined, which is what it is unless set, means nothing is shown, and a server that insists on a client certificate then refuses the connection.\n\nRead and written. Written with anything that is not a CertificateFile or Undefined it raises \"SecureConnection: ClientCertificate is a CertificateFile, or Undefined\" — a string that looks like a path included, since a path is not a file somebody has looked for.\n\nA file the library cannot read is said at the FIRST REQUEST, by name: \"HTTPConnection: the certificate file '<path>' could not be read - not a PEM, or the key's password is wrong\". It is said again at every request after it — the connection's transport is thrown away with the refusal, so nothing goes on quietly with half a setting.",
+      "syntax_block": "secure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nsecure.ClientCertificate = Undefined;   // show nothing",
+      "parameters": "",
+      "return_descr": "CertificateFile, or Undefined when nothing is shown.",
+      "example": "var secure = New SecureConnection();\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar till = New HTTPConnection(\"api.till.example\");\ntill.SecureConnection = secure;\nvar response = till.Post(New HTTPRequest(\"/v1/shift\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.CertificateFile",
+        "cls.SecureConnection.TrustedCertificates",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.TrustedCertificates",
+      "name_local": "TrustedCertificates",
+      "name_en": "TrustedCertificates",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.TrustedCertificates",
+      "description": "WHOM TO TRUST — a CertificateFile holding the authority's certificate. Undefined, which is what it is unless set, means the platform's own store: the Windows certificate store, the macOS keychain, /etc/ssl/certs on Linux, read by the TLS library itself.\n\nNAMING A FILE REPLACES THAT STORE, it does not add to it — the library reads the system's certificates only when no file of your own is named. That is the right answer for a bank or a cash register whose certificate is signed by its own authority: name the authority's file and KEEP THE CHECK ON, rather than reaching for VerifyServerCertificate = False.\n\nRead and written; anything that is not a CertificateFile or Undefined raises \"SecureConnection: TrustedCertificates is a CertificateFile, or Undefined\".\n\nA named file that is not a PEM is said at the first request, by name: \"...was not answered: the trusted certificates could not be read from the certificate file '<path>' - not a PEM\". A server this trust does not cover is a DIFFERENT sentence: \"the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate; name the authority's file in TrustedCertificates\".",
+      "syntax_block": "secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.TrustedCertificates = Undefined;   // back to the platform's own store",
+      "parameters": "",
+      "return_descr": "CertificateFile, or Undefined when the platform's store is what is trusted.",
+      "example": "var secure = New SecureConnection();\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;\n// a certificate signed by anybody else is refused, however good it is",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.VerifyServerCertificate",
+      "name_local": "VerifyServerCertificate",
+      "name_en": "VerifyServerCertificate",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.VerifyServerCertificate",
+      "description": "WHETHER THE SERVER IS CHECKED AT ALL. True unless said, and False drops the check — BOTH halves of it: the chain (who signed this certificate, and is it still good) and the host name (is this certificate for the host that was asked for). One switch drives both, and there is no way to keep one and drop the other.\n\nWhat it does NOT drop is the encryption, and that is exactly what makes it dangerous: the line is still ciphered, so an answer from anybody at all reads like an answer from the right one. A thing for a test stand against a server whose certificate signs itself, and never for a bank. What to reach for instead is TrustedCertificates — name the authority's file and keep the check on. With the check off, a file named in TrustedCertificates is never read, so a bad one goes unnoticed until it is turned back on.\n\nTRUE OR FALSE, AND NOTHING ELSE: a number or a string raises \"SecureConnection: VerifyServerCertificate is True or False\", because `1` or `\"yes\"` taken for true would switch a check off by a typo.\n\nWith the check on, two different sentences can come back from a request, and they mean different things: \"the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate...\" (the chain) and \"the server's certificate is not for this host name\" (the name).",
+      "syntax_block": "secure.VerifyServerCertificate = False;   // a test stand only\nif (Not secure.VerifyServerCertificate) {\n    Message(\"the server is not being checked\");\n}",
+      "parameters": "",
+      "return_descr": "Boolean — True unless it was set to False.",
+      "example": "var secure = New SecureConnection();\nMessage(secure.VerifyServerCertificate);   // True: nobody said otherwise\n\n// A test stand whose certificate signs itself. In production, name the authority instead:\n//   secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\stand-ca.pem\");\nsecure.VerifyServerCertificate = False;\nvar stand = New HTTPConnection(\"stand.local\");\nstand.SecureConnection = secure;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPConnection.SecureConnection",
+      "description": "https, AS A PROPERTY. A SecureConnection hung here makes every request this connection sends a secure one; Undefined, which is what it is unless set, is plain http://. Anything else raises \"HTTPConnection: SecureConnection is a SecureConnection value, or Undefined for plain http://\".\n\nTHE SCHEME NEVER GOES IN THE HOST. `New HTTPConnection(\"https://api.bank.example\")` is refused where the host is given, and the refusal points here: \"the host is a name - 'api.example' - not an address: the path goes into the request's ResourceAddress, and 'https' is the SecureConnection property\".\n\nTHE PORT FOLLOWS IT. A port nobody gave is 443 while this property holds a SecureConnection, and 80 again when it is taken away; a port that WAS given is the port, secure or not.\n\nIt is asked at every request rather than remembered, so one SecureConnection can be shared by two connections and a value changed in place is obeyed by the next request.",
+      "syntax_block": "connection.SecureConnection = New SecureConnection();\nconnection.SecureConnection = Undefined;   // plain http:// again\nMessage(connection.Port);                  // 443 with one, 80 without - unless a port was given",
+      "parameters": "",
+      "return_descr": "SecureConnection, or Undefined for plain http://.",
+      "example": "var bank = New HTTPConnection(\"api.bank.example\");   // NOT \"https://api.bank.example\"\nMessage(bank.Port);                                  // 80\nbank.SecureConnection = New SecureConnection();\nMessage(bank.Port);                                  // 443\n\nvar response = bank.Get(New HTTPRequest(\"/v1/balance\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.SecureConnection",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "guide.http"
+      ],
+      "reviewed": false
+    }
+  ]
+}

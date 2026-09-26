@@ -19,6 +19,16 @@
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpCategory.h"
 #include "backend/syntaxHelper/helpEntry.h"
+#include "backend/syntaxHelper/helpLoader.h"
+#include "backend/syntaxHelper/helpLoadError.h"
+
+#include <wx/file.h>
+#include <wx/filename.h>
+#include <wx/stdpaths.h>
+#include <wx/utils.h>
+
+#include <algorithm>
+#include <string>
 
 namespace {
 
@@ -132,4 +142,129 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 	ASSERT_NE(dates, nullptr);
 	EXPECT_EQ(dates->displayName, wxT("Даты и периоды"))
 		<< "the configuration's own name did not overlay the platform's";
+}
+
+// =============================================================================
+// The hidden class id — an article's join key to the runtime value it describes
+// =============================================================================
+
+namespace {
+
+// A locale directory holding one bucket, in a folder of its own under the temp directory.
+wxString WriteHelpBucket(const std::string& bucket)
+{
+	const wxString root = wxStandardPaths::Get().GetTempDir() + wxFileName::GetPathSeparator()
+		+ wxString::Format(wxT("oes_help_classid_%ld"), (long)wxGetProcessId());
+	const wxString locale = root + wxFileName::GetPathSeparator() + wxT("en");
+	wxFileName::Mkdir(locale, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	wxFile out(locale + wxFileName::GetPathSeparator() + wxT("types.json"), wxFile::write);
+	out.Write(bucket.data(), bucket.size());
+	out.Close();
+	return root;
+}
+
+bool SaysSomethingAbout(const std::vector<ibHelpLoadError>& errors, const wxString& id)
+{
+	return std::any_of(errors.begin(), errors.end(), [&id](const ibHelpLoadError& e) {
+		return e.severity == ibHelpLoadSeverity::kWarning && e.message.Contains(id);
+	});
+}
+
+} // namespace
+
+// An article on a runtime value names its class by the id the registry holds, and the loader asks the
+// REGISTRY about it - so the article is joined to the value by id, not by a localised name, and an article
+// whose class was removed or renamed says so at load instead of pointing at nothing.
+TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
+{
+	const std::string tableId = std::to_string(value_to_clsid("VL_TABL"));
+	const wxString root = WriteHelpBucket(
+		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
+		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + tableId + R"( },)"
+		R"({ "id": "cls.Nothing",  "name_local": "Nothing", "name_en": "Nothing", "kind": "collection", "class_id": 12345 },)"
+		R"({ "id": "cls.Misnamed", "name_local": "Array",   "name_en": "Array",   "kind": "collection", "class_id": )" + tableId + R"( },)"
+		R"({ "id": "cls.Text",     "name_local": "Text",    "name_en": "Text",    "kind": "collection", "class_id": "VL_TABL" },)"
+		R"({ "id": "kw.Plain",     "name_local": "Plain",   "name_en": "Plain",   "kind": "keyword" })"
+		R"(] })");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+	// What a bucket's entries are told is kept INSIDE the corpus (LoadErrors) - result.errors carries only what
+	// happened around the load (a locale fallen back, a construction that failed); helpLoader.cpp says why.
+	const std::vector<ibHelpLoadError>& said = loaded.corpus->LoadErrors();
+
+	const ibHelpEntry* table = loaded.corpus->FindById(wxT("cls.Table"));
+	ASSERT_NE(table, nullptr);
+	EXPECT_EQ(table->classId, value_to_clsid("VL_TABL")) << "the tag resolves to the class the registry holds";
+	EXPECT_FALSE(SaysSomethingAbout(said, wxT("cls.Table")));
+
+	const ibHelpEntry* nothing = loaded.corpus->FindById(wxT("cls.Nothing"));
+	ASSERT_NE(nothing, nullptr) << "a wrong join key does not cost the article its prose";
+	EXPECT_EQ(nothing->classId, 0u);
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Nothing"))) << "an id nothing is registered under is said";
+
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Misnamed")))
+		<< "an article about Array that points at the Table class is said";
+
+	const ibHelpEntry* text = loaded.corpus->FindById(wxT("cls.Text"));
+	ASSERT_NE(text, nullptr);
+	EXPECT_EQ(text->classId, 0u) << "a class id is a number; a tag in its place is not read as one";
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Text")));
+
+	const ibHelpEntry* plain = loaded.corpus->FindById(wxT("kw.Plain"));
+	ASSERT_NE(plain, nullptr);
+	EXPECT_EQ(plain->classId, 0u) << "an article about no class carries none";
+}
+
+// THE VOCABULARY, PINNED FROM THE CORPUS'S SIDE. The shipped corpus writes kind words the loader did
+// not know - property, method, procedure, system_procedure - and an unknown word fell through to
+// kKeyword in silence, so 37 English articles (and 74 more across the other two locales) described a
+// member of a class and answered `help_read` with "keyword". Nothing failed, which is why it lasted.
+// Two rules here, and the second is what makes the first stay true: a word the corpus uses arrives as
+// its own kind, and a word NOBODY knows is said out loud instead of passing for a keyword.
+TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
+{
+	const wxString root = WriteHelpBucket(
+		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
+		R"({ "id": "cls.Table.Columns",      "name_local": "Columns", "name_en": "Columns", "kind": "property" },)"
+		R"({ "id": "cls.Table.Find",         "name_local": "Find",    "name_en": "Find",    "kind": "method" },)"
+		R"({ "id": "cls.Table.Clear",        "name_local": "Clear",   "name_en": "Clear",   "kind": "procedure" },)"
+		R"({ "id": "fn.Message",             "name_local": "Message", "name_en": "Message", "kind": "system_procedure" },)"
+		R"({ "id": "enum.TextEncoding",      "name_local": "TextEncoding", "name_en": "TextEncoding", "kind": "enum_type" },)"
+		R"({ "id": "enum.TextEncoding.Utf8", "name_local": "Utf8",    "name_en": "Utf8",    "kind": "system_enum" },)"
+		R"({ "id": "kw.Invented",            "name_local": "Invented","name_en": "Invented","kind": "nonesuch" },)"
+		R"({ "id": "kw.Silent",              "name_local": "Silent",  "name_en": "Silent" })"
+		R"(] })");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+	const std::vector<ibHelpLoadError>& said = loaded.corpus->LoadErrors();
+
+	// kOperator stands for "no article at all" here: none of the entries above claims it, so a
+	// missing article cannot be mistaken for a kind that was read.
+	auto kindOf = [&loaded](const wxChar* id) {
+		const ibHelpEntry* e = loaded.corpus->FindById(wxString(id));
+		return e != nullptr ? e->kind : ibHelpKind::kOperator;
+	};
+
+	EXPECT_EQ(kindOf(wxT("cls.Table.Columns")), ibHelpKind::kProperty);
+	EXPECT_EQ(kindOf(wxT("cls.Table.Find")), ibHelpKind::kMethod);
+	EXPECT_EQ(kindOf(wxT("cls.Table.Clear")), ibHelpKind::kProcedure);
+	EXPECT_EQ(kindOf(wxT("fn.Message")), ibHelpKind::kSystemProcedure);
+	EXPECT_EQ(kindOf(wxT("enum.TextEncoding")), ibHelpKind::kEnumType)
+		<< "the head of an enum family is not a collection";
+	EXPECT_EQ(kindOf(wxT("enum.TextEncoding.Utf8")), ibHelpKind::kSystemEnum);
+
+	EXPECT_EQ(kindOf(wxT("kw.Invented")), ibHelpKind::kKeyword)
+		<< "an unknown word still loads the prose";
+	EXPECT_TRUE(SaysSomethingAbout(said, wxT("kw.Invented")))
+		<< "...and says which article it could not classify";
+
+	EXPECT_EQ(kindOf(wxT("kw.Silent")), ibHelpKind::kKeyword);
+	EXPECT_FALSE(SaysSomethingAbout(said, wxT("kw.Silent")))
+		<< "a MISSING kind is the documented default, not a mistake to report";
 }

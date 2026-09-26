@@ -67,8 +67,8 @@ struct BACKEND_API ibLinqBlockTotal {
 // The method a total calls, in the language's spelling - `Sum`, `Count`, …
 BACKEND_API wxString ibLinqTotalName(ibLinqTotal total);
 
-// One key of the order. The language sets the direction per `OrderBy` clause (linq.md 0.5), so keys
-// of one direction in a row share a clause and a change of direction opens the next one.
+// One key of the order, with its own way: the language writes the direction after the key it belongs
+// to (linq.md 0.5), so all the keys share one `OrderBy` - `OrderBy a, b Descending, c`.
 struct BACKEND_API ibLinqBlockOrder {
 	wxString m_expression;
 	bool     m_descending = false;

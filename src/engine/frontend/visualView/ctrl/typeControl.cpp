@@ -8,20 +8,25 @@
 #include <wx/calctrl.h>
 #include <wx/timectrl.h>
 #include <wx/popupwin.h>
+#include <wx/button.h>
+#include <wx/stattext.h>
+#include <wx/sizer.h>
 
 
 #include <map>
+#include <functional>
 
 #include "frontend/win/ctrls/dynamicBorder.h"
 #include "frontend/visualView/ctrl/frame.h"
 #include "frontend/win/dlgs/typeSelector.h"          // the shared type picker — second caller
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
+#include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
+#include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the CONTOUR that narrows the picker
 #include "backend/metaCollection/partial/reference/reference.h"          // a reference built on a predefined guid
 #include "frontend/win/dlgs/selectPredefined.h"      // the designer's declared-value window — one call, no widgets here
 
 #include "backend/appData.h"                                             // DesignerMode — the two roads part here
-#include "backend/system/systemManager.h"                                // Message — "nothing is declared" is an answer
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	const ibValueMetaObject* choiceForm, wxWindow* parent)
@@ -54,14 +59,23 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData(), parent))
 			return true;
 
+		// ⭐⭐ WAS A WINDOW ACTUALLY RAISED? Asked of the same fact the type picker asks it of — it shows
+		// nothing when fewer than two types are admitted (ShowSelectType), and a cell that admits one
+		// has no question to put. Nothing ran an event loop, so nothing destroyed the editor, and the
+		// value can be chosen in this very call. It is only the MODAL that forces the call to end, and
+		// only a composite cell raises one; every other cell was paying that second click for a window
+		// it never saw (Max, 2026-09-25: "why does one have to click the three dots twice in the filter
+		// again?").
+		const bool asksTheUser = factory->GetTypeDesc().GetClsidCount() > 1;
+
 		const ibClassID clsid = factory->GetDataType();
 		const ibMetaData* metaData = factory->GetMetaData();
 		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
 			return false;   // the user closed the type choice
 		current = metaData->CreateObject(clsid);
-		ownerValue->SetControlValue(current);
+		ownerValue->SetControlValue(current);   // the cell now stands on its settled type
 
-		// AND THE CHOICE ENDS HERE. Settling the type is a MODAL question, and a modal runs an event
+		// AND THE CHOICE ENDS HERE WHEN IT WAS ASKED. Settling the type is a MODAL question, and a modal runs an event
 		// loop of its own: while it is up the grid finishes editing this cell and destroys the editor
 		// control - which is the window handed to us as `parent`. Carrying on in the same call opened
 		// the value chooser parented to freed memory, and it died inside wxGetTopLevelParent with a
@@ -71,7 +85,8 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 		// time there is a live editor to hang it on. No window pointer outlives a modal here, which is
 		// the rule rather than this one repair - the previous line ("keep going, the editor opens now,
 		// not on a second click") described a convenience the lifetime does not allow.
-		return true;
+		if (asksTheUser)
+			return true;
 	}
 
 	// THE VALUE OF THAT TYPE: the built-in quick choice first (it knows a boolean,
@@ -99,7 +114,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			// variable) passes no filter and gets the whole shape, which is the honest answer.
 			std::vector<ibClassID> contour;
 			if (const ibValueMetaObjectAttributeBase* attr =
-				dynamic_cast<const ibValueMetaObjectAttributeBase*>(factory->GetSourceAttributeObject())) {
+				ibChoiceLinkResolver::FieldOf(factory->GetChoiceHolder(), factory)) {
 				if (const ibValueMetaObjectChartOfCharacteristicTypes* chart =
 					dynamic_cast<const ibValueMetaObjectChartOfCharacteristicTypes*>(attr->GetParent()))
 					contour = chart->GetTypesOfCharacteristics().GetClsidList();
@@ -153,8 +168,23 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 			// a form control bound to one attribute — is already standing on its type, so the value
 			// it holds is the whole offer. Asked ABOVE, before the quick choice, so an enumeration
 			// takes this road too.
-			return metaObject->ProcessChoice(ownerValue,
-				choiceForm != nullptr ? choiceForm->GetName() : wxString(), factory->GetSelectMode());
+
+			// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
+			// the FIELD being filled, and WHERE the values its link names are read. The second is the
+			// control's own answer — the form's source for a control on a form, the row being edited
+			// for a table column — so the list is narrowed by exactly what the person can see beside
+			// the field they are filling.
+			const ibChoiceHolder holder = factory->GetChoiceHolder();
+			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
+				ibChoiceLinkResolver::FieldOf(holder, factory));
+
+			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
+			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
+			// condition with nothing in it, and the list asks the same question of both.
+			const ibFormRequest request(
+				choiceForm != nullptr ? choiceForm->GetName() : wxString(),
+				ibCreateRequest(factory->GetSelectMode(), condition));
+			return metaObject->ProcessChoice(ownerValue, request);
 		}
 	}
 	return false;
@@ -165,6 +195,295 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	ibValueTypes valType = ibValue::GetVTByID(clsid);
 
 	if (valType == ibValueTypes::TYPE_NUMBER) {
+		// A NUMBER IS WORKED OUT MORE OFTEN THAN IT IS LOOKED UP, so its "..." opens a pocket calculator the way
+		// a date's opens a calendar: the field's value on the display, a figure keyed in or calculated, and OK
+		// puts the result into the field. It counts in ibNumber, the exact decimal the field holds, so 0.1 + 0.2
+		// is 0.3; left to right like any pocket calculator ("12 + 3 *" finishes 12 + 3 first).
+		class wxPopupCalculatorWindow : public wxPopupTransientWindow {
+			enum ibCalcOp { ibCalcOp_None, ibCalcOp_Add, ibCalcOp_Subtract, ibCalcOp_Multiply, ibCalcOp_Divide };
+			// What the display stands for: the last result, the figure being typed, or a division by zero.
+			enum ibCalcState { ibCalcState_Result, ibCalcState_Typing, ibCalcState_Error };
+
+			wxStaticText* m_operation = nullptr;
+			wxStaticText* m_display = nullptr;
+			ibControlFrame* m_ownerValue = nullptr;
+
+			wxString m_entry;            // the figure being typed, exactly as typed ("0.", "12.50")
+			ibNumber m_accumulator;      // the left side of the open operation, or the last result
+			ibCalcOp m_pending = ibCalcOp_None;
+			ibCalcState m_state = ibCalcState_Result;
+		public:
+
+			wxPopupCalculatorWindow(ibControlFrame* ownerValue, wxWindow* parent, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS) :
+				wxPopupTransientWindow(parent, style), m_ownerValue(ownerValue) {
+
+				SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_FRAMEBK));
+
+				wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+				const int gap = FromDIP(3);
+
+				// The open operation, small, above the figure it is waiting for.
+				m_operation = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+					wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+				m_operation->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+				mainSizer->Add(m_operation, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
+
+				m_display = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+					wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
+				wxFont big = m_display->GetFont();
+				big.SetPointSize(big.GetPointSize() + 6);
+				m_display->SetFont(big);
+				mainSizer->Add(m_display, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxBOTTOM, gap * 2));
+
+				const wxSize keySize(FromDIP(48), FromDIP(34));
+				wxFlexGridSizer* keySizer = new wxFlexGridSizer(4, gap, gap);
+				const auto key = [&](const wxString& label, std::function<void()> action) {
+					wxButton* button = new wxButton(this, wxID_ANY, label, wxDefaultPosition, keySize);
+					button->Bind(wxEVT_BUTTON, [this, action](wxCommandEvent&) { action(); ShowState(); });
+					keySizer->Add(button, wxSizerFlags().Expand());
+				};
+				key(wxT("C"), [this] { Reset(ibNumber(0)); });
+				key(wxT("⌫"), [this] { Backspace(); });
+				key(wxT("±"), [this] { Negate(); });
+				key(OperatorSign(ibCalcOp_Divide), [this] { Operator(ibCalcOp_Divide); });
+				for (int row = 2; row >= 0; --row) {
+					for (int col = 0; col < 3; ++col) {
+						const int digit = row * 3 + col + 1;
+						key(wxString::Format(wxT("%d"), digit), [this, digit] { Digit(digit); });
+					}
+					const ibCalcOp op = row == 2 ? ibCalcOp_Multiply : row == 1 ? ibCalcOp_Subtract : ibCalcOp_Add;
+					key(OperatorSign(op), [this, op] { Operator(op); });
+				}
+				key(wxT("0"), [this] { Digit(0); });
+				key(wxT("."), [this] { Point(); });
+				key(wxT("="), [this] { Equals(); });
+
+				wxButton* OKButton = new wxButton(this, wxID_OK, wxEmptyString, wxDefaultPosition, keySize);
+				OKButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &wxPopupCalculatorWindow::OnOKButtonClicked, this);
+				keySizer->Add(OKButton, wxSizerFlags().Expand());
+
+				mainSizer->Add(keySizer, wxSizerFlags().Expand().Border(wxALL, gap * 2));
+				wxPopupTransientWindow::SetSizerAndFit(mainSizer);
+
+				// Keys typed on the keyboard work as well as the ones clicked - a sum is keyed in far more
+				// often than it is clicked in.
+				Bind(wxEVT_CHAR_HOOK, &wxPopupCalculatorWindow::OnCharHook, this);
+				for (wxWindow* child : GetChildren())
+					child->Bind(wxEVT_CHAR_HOOK, &wxPopupCalculatorWindow::OnCharHook, this);
+			}
+
+			virtual void Popup(wxWindow* focus = nullptr) override {
+				ibValue vSelected; m_ownerValue->GetControlValue(vSelected);
+				wxPoint pos = m_parent->GetScreenPosition();
+				pos.x += (m_parent->GetSize().x - GetSize().x + 2);
+				pos.y += (m_parent->GetSize().y);
+				wxPopupTransientWindow::SetPosition(pos);
+				Reset(vSelected.GetType() == ibValueTypes::TYPE_NUMBER ? vSelected.GetNumber() : ibNumber(0));
+				ShowState();
+				wxPopupTransientWindow::Popup(focus);
+				SetFocus();
+			}
+
+		private:
+
+			// Start from a value - the one in the field. The next digit replaces it, as on any calculator
+			// that shows a result, while an operator carries on from it.
+			void Reset(const ibNumber& initial) {
+				m_entry.clear();
+				m_accumulator = initial;
+				m_pending = ibCalcOp_None;
+				m_state = ibCalcState_Result;
+			}
+
+			void BeginEntry() {
+				m_entry.clear();
+				m_state = ibCalcState_Typing;
+			}
+
+			void Digit(int digit) {
+				if (m_state == ibCalcState_Error)
+					Reset(ibNumber(0));
+				if (m_state != ibCalcState_Typing)
+					BeginEntry();
+				// A leading zero is not kept ("007" is 7), and typing has a length: the field it ends up in
+				// is a number of a declared size, not an unbounded string of digits.
+				if (m_entry == wxT("0"))
+					m_entry.clear();
+				else if (m_entry == wxT("-0"))
+					m_entry = wxT("-");
+				int digits = 0;
+				for (const wxUniChar c : m_entry)
+					if (c >= wxT('0') && c <= wxT('9'))
+						++digits;
+				if (digits < 20)
+					m_entry << digit;
+			}
+
+			void Point() {
+				if (m_state == ibCalcState_Error)
+					Reset(ibNumber(0));
+				if (m_state != ibCalcState_Typing)
+					BeginEntry();
+				if (m_entry.Find(wxT('.')) != wxNOT_FOUND)
+					return;
+				if (m_entry.empty() || m_entry == wxT("-"))
+					m_entry += wxT("0");
+				m_entry += wxT('.');
+			}
+
+			void Backspace() {
+				if (m_state == ibCalcState_Error)
+					Reset(ibNumber(0));
+				if (m_state != ibCalcState_Typing)
+					return;   // a result is not typed text; there is nothing to take a character off
+				if (!m_entry.empty())
+					m_entry.RemoveLast();
+				if (m_entry == wxT("-"))
+					m_entry.clear();
+			}
+
+			void Negate() {
+				if (m_state == ibCalcState_Typing) {
+					if (m_entry.StartsWith(wxT("-")))
+						m_entry.Remove(0, 1);
+					else
+						m_entry.Prepend(wxT("-"));
+				}
+				else if (m_state == ibCalcState_Result) {
+					m_accumulator = -m_accumulator;
+				}
+			}
+
+			// Two operators in a row ("12 + *") replace one another, they do not combine.
+			void Operator(ibCalcOp op) {
+				if (m_state == ibCalcState_Typing)
+					TakeEntry();
+				if (m_state != ibCalcState_Error)
+					m_pending = op;
+			}
+
+			void Equals() {
+				if (m_state == ibCalcState_Typing)
+					TakeEntry();
+				m_pending = ibCalcOp_None;
+			}
+
+			// The typed figure is taken: the right side of the open operation, or the value itself.
+			void TakeEntry() {
+				wxString text = m_entry;
+				if (text.EndsWith(wxT(".")))
+					text.RemoveLast();   // "12." is 12
+				ibNumber right(0);
+				if (!text.empty() && text != wxT("-"))
+					right.FromString(text);
+
+				m_entry.clear();
+				m_state = ibCalcState_Result;
+
+				switch (m_pending) {
+				case ibCalcOp_None: m_accumulator = right; return;
+				case ibCalcOp_Add: m_accumulator += right; break;
+				case ibCalcOp_Subtract: m_accumulator -= right; break;
+				case ibCalcOp_Multiply: m_accumulator *= right; break;
+				case ibCalcOp_Divide:
+					if (right.IsZero()) {
+						m_state = ibCalcState_Error;
+						return;
+					}
+					m_accumulator /= right;
+					break;
+				}
+				// A quotient has no end in general (1 / 3): it is cut at ten places, and what was cut is
+				// still exact in every place a person can read.
+				m_accumulator = m_accumulator.Round(10);
+			}
+
+			static wxString OperatorSign(ibCalcOp op) {
+				switch (op) {
+				case ibCalcOp_Add: return wxT("+");
+				case ibCalcOp_Subtract: return wxT("−");
+				case ibCalcOp_Multiply: return wxT("×");
+				case ibCalcOp_Divide: return wxT("÷");
+				default: return wxT(" ");
+				}
+			}
+
+			void ShowState() {
+				wxString text;
+				if (m_state == ibCalcState_Error) {
+					text = _("Error");
+				}
+				else if (m_state == ibCalcState_Typing) {
+					text = m_entry.empty() ? wxString(wxT("0")) : m_entry;
+				}
+				else {
+					// The shortest exact spelling: no trailing zeros after the point, no bare point.
+					text = m_accumulator.ToString();
+					if (text.Find(wxT('.')) != wxNOT_FOUND) {
+						while (text.EndsWith(wxT("0")))
+							text.RemoveLast();
+						if (text.EndsWith(wxT(".")))
+							text.RemoveLast();
+					}
+					if (text.empty() || text == wxT("-0"))
+						text = wxT("0");
+				}
+				m_display->SetLabel(text);
+				m_operation->SetLabel(OperatorSign(m_pending));
+			}
+
+			void OnOKButtonClicked(wxCommandEvent&) {
+				Equals();
+				if (m_state == ibCalcState_Error) {
+					ShowState();   // 12 / 0 is not a value to put into the field
+					return;
+				}
+				ibValue cNumber(m_accumulator);
+				if (m_ownerValue != nullptr)
+					m_ownerValue->ChoiceProcessing(cNumber);
+				Dismiss();
+			}
+
+			void OnCharHook(wxKeyEvent& event) {
+				const int code = event.GetKeyCode();
+				const wxUniChar ch = event.GetUnicodeKey();
+
+				if (code == WXK_ESCAPE) {
+					Dismiss();
+					return;
+				}
+				// Enter finishes an open operation first, and only then takes the result.
+				if (code == WXK_RETURN || code == WXK_NUMPAD_ENTER) {
+					if (m_pending != ibCalcOp_None) {
+						Equals();
+						ShowState();
+					}
+					else {
+						wxCommandEvent clicked(wxEVT_COMMAND_BUTTON_CLICKED, wxID_OK);
+						OnOKButtonClicked(clicked);
+					}
+					return;
+				}
+
+				if (code == WXK_BACK) Backspace();
+				else if (code == WXK_DELETE) Reset(ibNumber(0));
+				else if (ch >= wxT('0') && ch <= wxT('9')) Digit(static_cast<int>(ch.GetValue() - wxT('0')));
+				else if (ch == wxT('.') || ch == wxT(',')) Point();
+				else if (ch == wxT('+')) Operator(ibCalcOp_Add);
+				else if (ch == wxT('-')) Operator(ibCalcOp_Subtract);
+				else if (ch == wxT('*')) Operator(ibCalcOp_Multiply);
+				else if (ch == wxT('/')) Operator(ibCalcOp_Divide);
+				else if (ch == wxT('=')) Equals();
+				else { event.Skip(); return; }
+				ShowState();
+			}
+		};
+
+		if (ownerValue != nullptr) {
+			wxPopupCalculatorWindow* popup =
+				new wxPopupCalculatorWindow(ownerValue, parent);
+			popup->Popup();
+		}
 		return true;
 	}
 	else if (valType == ibValueTypes::TYPE_DATE) {
@@ -615,21 +934,16 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →
 	// default to item selection.
 	const ibValueMetaObjectAttributeBase* attr =
-		dynamic_cast<const ibValueMetaObjectAttributeBase*>(GetSourceAttributeObject());
+		ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
 	if (attr != nullptr) return attr->GetSelectMode();
 	return ibSelectMode::ibSelectMode_Items;
 }
 
 ibValue ibTypeControlFactory::CreateValue() const
 {
-	return ibTypeControlFactory::CreateValueRef();
-}
-
-ibValue* ibTypeControlFactory::CreateValueRef() const
-{
 	// Value creation is the FACTORY's job — it knows its bound Type (GetTypeDesc); delegating to
 	// the source attribute was a duplicate of exactly this.
-	return ibBackendTypeSourceFactory::CreateValueRef();
+	return ibBackendTypeSourceFactory::CreateValue();
 }
 
 ibClassID ibTypeControlFactory::GetDataType() const

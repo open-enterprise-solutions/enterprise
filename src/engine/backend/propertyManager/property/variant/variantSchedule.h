@@ -2,7 +2,7 @@
 #define __SCHEDULE_VARIANT_H__
 
 // The variant payload of a schedule property — an ibJobScheduleDescription living INSIDE the
-// variant, never beside it (docs/property-system.md § 3). That is what enrols a schedule in all
+// variant, never beside it (docs/private/property-system.md § 3). That is what enrols a schedule in all
 // five property surfaces at once: the designer editor, script, serialization, clipboard and the
 // configuration diff.
 //
@@ -32,7 +32,7 @@ public:
 	}
 
 	// Value equality, straight through the description — this is what the configuration
-	// compare reads (docs/property-system.md § 6.1).
+	// compare reads (docs/private/property-system.md § 6.1).
 	virtual bool Eq(wxVariantData& data) const {
 		const ibVariantDataSchedule* src = dynamic_cast<const ibVariantDataSchedule*>(&data);
 		return src != nullptr && src->m_schedule == m_schedule;

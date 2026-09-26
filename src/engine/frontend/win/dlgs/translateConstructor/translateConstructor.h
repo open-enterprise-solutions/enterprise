@@ -30,6 +30,7 @@
 #include <wx/dialog.h>
 #include <wx/textctrl.h>
 
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -39,10 +40,16 @@ class FRONTEND_API ibDialogTranslateConstructor : public wxDialog
 {
 public:
 
+	// WHAT EDITS ONE BOX THROUGH A WINDOW OF ITS OWN. Given, every box gets a `...` beside it that hands
+	// the box's text over and, when the call says yes, takes it back — the format property opens the
+	// format string constructor there (advpropString.cpp). `language` is what the box is labelled with.
+	// This window knows nothing about what the text is.
+	using ibBoxEditor = std::function<bool(wxWindow* parent, const wxString& language, wxString& text)>;
+
 	// `metaData` names the languages (an extension's are its owner's); without one there is a single
 	// box, for the language in force, beside whatever codes the text already holds.
 	ibDialogTranslateConstructor(wxWindow* parent, const wxString& title, const ibTranslateString& text,
-		const ibMetaData* metaData, bool readOnly, int maxLength = 0);
+		const ibMetaData* metaData, bool readOnly, int maxLength = 0, const ibBoxEditor& boxEditor = ibBoxEditor());
 
 	// What the boxes say, laid over the text that came in (Collect).
 	ibTranslateString GetTranslate() const;

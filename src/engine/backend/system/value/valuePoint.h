@@ -20,7 +20,7 @@ public:
 	virtual ~ibValuePoint() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::PointToString(m_point); 
 	}
 

@@ -23,8 +23,8 @@
 class BACKEND_API ibPropertyDataComposition : public ibProperty {
 	// ONE maker with a default — the dynamic list's shape over the same description, because a list
 	// and a report SAVE the same thing.
-	wxVariantData* CreateVariantData(ibPropertyObject* property,
-	                                 const ibCompositionDescription& val = ibCompositionDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property,
+	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 
 	// ⭐⭐ IT HOLDS A DESCRIPTION, and the action is what the inspector shows over it (2026-08-23).

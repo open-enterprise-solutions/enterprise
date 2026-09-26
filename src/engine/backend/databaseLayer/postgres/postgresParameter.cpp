@@ -99,7 +99,7 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 		//
 		// Unreachable today: every constructor sets a known kind. It is written anyway because the
 		// Firebird driver's equivalent default was unreachable too, right up until a caller reached
-		// it, and it cost a day of looking for a phantom (docs/query-engine-layers.md).
+		// it, and it cost a day of looking for a phantom (docs/private/query-engine-layers.md).
 		ibBackendCoreException::Error(
 			_("PostgreSQL: a parameter of kind %d cannot be rendered for binding"),
 			(int)m_nParameterType);

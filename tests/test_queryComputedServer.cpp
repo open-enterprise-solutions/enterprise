@@ -7,7 +7,7 @@
 // the fallback." A reference column travels as its ibReference blob (the temp stores the spread) — grouping
 // / filtering by the reference needs NO decomposition. A DOT-WALK (navigate THROUGH a reference) is not
 // promoted (stays the RAM path). This harness proves the SERVER path produces the correct result on a real
-// embedded SQLite. (docs/temp-db.md)
+// embedded SQLite. (docs/private/temp-db.md)
 //
 // Needs a real connection (temp tables) so it brings up appData + the connection pool over an in-memory
 // SQLite, like test_tempDbSqlite. Skips (not fails) if the headless env cannot come up.

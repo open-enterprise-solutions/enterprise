@@ -155,7 +155,7 @@ endif()
 #     cmake -B build -DCMAKE_BUILD_TYPE=Debug -DOES_SANITIZE=address
 #
 # The procedure is the same on every platform (see
-# docs/engineering-playbook/25-memory-leaks.md); only the instrument differs.
+# docs/private/engineering-playbook/25-memory-leaks.md); only the instrument differs.
 # Accepts anything the toolchain does: address, undefined, thread,
 # address,undefined. OFF by default — ASan roughly doubles memory and costs
 # ~2x runtime, which is not what an ordinary debug build should pay.
@@ -168,7 +168,7 @@ if(OES_SANITIZE)
         # so say so rather than let the flag imply cover it does not give.
         message(WARNING
             "OES_SANITIZE on MSVC: /fsanitize=address has no leak detector. "
-            "Use a Debug build and the CRT dump (docs/engineering-playbook/25-memory-leaks.md).")
+            "Use a Debug build and the CRT dump (docs/private/engineering-playbook/25-memory-leaks.md).")
         add_compile_options(/fsanitize=${OES_SANITIZE})
     else()
         add_compile_options(-fsanitize=${OES_SANITIZE} -fno-omit-frame-pointer -g)
@@ -184,12 +184,104 @@ set(OES_SRC_DIR      "${CMAKE_SOURCE_DIR}/src")
 set(OES_ENGINE_DIR   "${OES_SRC_DIR}/engine")
 set(OES_3RDPARTY_DIR "${OES_SRC_DIR}/3rdparty")
 
+# ⭐ A SUBMODULE THE BUILD NEEDS IS FETCHED BY THE BUILD. `oes_require_submodule(<dir under 3rdparty> <a file in
+# it>)` is asked for every one of them - cpp-httplib here, Mbed TLS and wxWidgets where they are added - and a
+# missing one is fetched on the spot, with everything under it, before anything reads it.
+#
+# 🛑 IT USED TO STOP AND SAY WHAT TO RUN, and a build whose checkout fetched less than the tree now needs
+# stopped there with it: the nightly is started from the workflow file of the default branch, which still
+# fetched wxWidgets alone, so the night after the HTTP stack came in ended at configure on every platform -
+# "cpp-httplib submodule not found" (2026-09-26). The tree knows what it needs; the checkout does not.
+#
+# Tried again with a longer wait, as .github/fetch-submodules.sh does: GitHub answers a clone with 503 now and
+# then. Only a tree that cannot be fetched at all - no git, not a checkout, no network - still stops here,
+# saying where the submodule was looked for.
+function(oes_require_submodule name marker)
+    set(dir "${OES_3RDPARTY_DIR}/${name}")
+    if(EXISTS "${dir}/${marker}")
+        return()
+    endif()
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        foreach(attempt 1 2 3)
+            message(STATUS "Fetching the ${name} submodule (attempt ${attempt} of 3)")
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive -- "src/3rdparty/${name}"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                RESULT_VARIABLE fetched)
+            if(fetched EQUAL 0 AND EXISTS "${dir}/${marker}")
+                return()
+            endif()
+            if(attempt LESS 3)
+                math(EXPR wait "${attempt} * 30")
+                execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep "${wait}")
+            endif()
+        endforeach()
+    endif()
+    message(FATAL_ERROR
+        "${name} submodule not found at ${dir}, and it could not be fetched.\n"
+        "Run: git submodule update --init --recursive"
+    )
+endfunction()
+
+# Said here rather than three hundred lines later, as a header that cannot be opened.
+oes_require_submodule(cpp-httplib httplib.h)
+
 # ---------------------------------------------------------------------------
 # Platform detection and global compile definitions
 # ---------------------------------------------------------------------------
 
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
+
+# cpp-httplib, for every translation unit that includes it (the MCP server, the script's HTTP client,
+# the web server, the tests): its inline functions read these, and two units compiled under two values
+# of one macro are one definition too many - so the whole build says it once. ConfigurationDefs.props
+# says the same for the solution.
+#   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
+#   itself: a server that does not speak it (an older proxy, a cash register's firmware) answers a second
+#   late or not at all, and a script has no header it may set to stop that.
+#   SEND_FLAGS=MSG_NOSIGNAL - off Windows a write to a peer that hung up raises SIGPIPE, whose default
+#   ends the process; the flag keeps it an error the caller sees. macOS has no such flag and sets
+#   SO_NOSIGPIPE on the socket instead (backend/system/value/valueHttp.cpp).
+add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
+if(NOT WIN32 AND NOT APPLE)
+    add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
+endif()
+
+# TLS for cpp-httplib: Mbed TLS, a submodule built here - nothing installed, nothing from the system (the tree
+# holds OpenSSL only as a run-time client of PostgreSQL, without headers). Its tests and programs stay out; the
+# generated files are in the tag, so no Python is needed. One macro for the whole build, for the reason the
+# two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
+# keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
+# backend, which carries them as PUBLIC.
+oes_require_submodule(mbedtls CMakeLists.txt)
+# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
+# library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
+# PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
+# DIRECTORY variable rather than a target property, because the targets do not exist until the subdirectory
+# below has been read - and there are five of them, not three: mbedcrypto pulls everest and p256m, which go
+# into the same shared library. The old value is put back afterwards so that nothing else in this build
+# changes: wxWidgets and the executables are compiled exactly as they were.
+set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# What this build needs on top of Mbed TLS's own configuration - threads, above all (the file says why). The
+# directory goes on the include path for the whole build because Mbed TLS's OWN sources include
+# threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
+# the mutexes over.
+set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/backend/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
+include_directories("${OES_ENGINE_DIR}/backend/tls")
+set(ENABLE_TESTING OFF CACHE BOOL "Mbed TLS: its own tests" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "Mbed TLS: its sample programs" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Mbed TLS: -Werror" FORCE)
+set(GEN_FILES OFF CACHE BOOL "Mbed TLS: regenerate its generated sources" FORCE)
+# Off Windows the configuration above takes Mbed TLS's own pthread mutexes, and its CMake links pthread only
+# when asked: without this its libraries use the functions and name the library for nobody, resolving by
+# accident through whatever the consumer happens to link (on glibc 2.34 and later pthread is inside libc).
+set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes its mutexes from" FORCE)
+add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
+set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
+add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
 if(WIN32)
     add_compile_definitions(
@@ -304,13 +396,8 @@ set(wxBUILD_SAMPLES  OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
-# Ensure the submodule directory exists
-if(NOT EXISTS "${OES_3RDPARTY_DIR}/wxWidgets/CMakeLists.txt")
-    message(FATAL_ERROR
-        "wxWidgets submodule not found at ${OES_3RDPARTY_DIR}/wxWidgets.\n"
-        "Run: git submodule update --init --recursive"
-    )
-endif()
+# Ensure the submodule directory exists (fetched when it does not - see oes_require_submodule)
+oes_require_submodule(wxWidgets CMakeLists.txt)
 
 add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets")
 

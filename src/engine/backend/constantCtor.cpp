@@ -7,13 +7,13 @@
 // GetClassType()). Only CreateObject() remains.
 
 //const-object class
-ibValue* ibCtorMetaValueTypeConstantObject::CreateObject() const
+ibValue ibCtorMetaValueTypeConstantObject::CreateObject() const
 {
 	return m_metaObject->CreateRecordDataObjectValue();
 }
 
 //const-manager class
-ibValue* ibCtorMetaValueTypeConstantManager::CreateObject() const
+ibValue ibCtorMetaValueTypeConstantManager::CreateObject() const
 {
 	return new ibValueManagerDataObjectConstant(m_metaObject);
 }

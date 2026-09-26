@@ -127,7 +127,7 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectGenericData::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), [this]() -> ibValue* { return CreateRecordDataObjectValue(); });
+			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordDataObjectValue(); });
 
 		return false;
 	}
@@ -188,7 +188,7 @@ ibBackendValueForm* ibValueMetaObjectConstant::GetObjectForm() const
 {
 	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(nullptr, nullptr, m_metaGuid);
 	if (foundedForm == nullptr)
-		return ibValueMetaObjectFormBase::CreateAndBuildForm(nullptr, nullptr, CreateRecordDataObjectValue(), m_metaGuid);
+		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaGuid), nullptr, nullptr, CreateRecordDataObjectValue());
 	return foundedForm;
 }
 

@@ -595,7 +595,7 @@ public:
 
 	// Job manager — the schedule and the sessions behind scheduled /
 	// background work. Same nullptr-before-and-after contract as the
-	// accessors above. See backend/job/jobManager.h and docs/job-manager.md.
+	// accessors above. See backend/job/jobManager.h and docs/private/job-manager.md.
 	static class ibJobManager* GetJobManager() {
 		return s_instance != nullptr ? s_instance->m_jobManager.get() : nullptr;
 	}

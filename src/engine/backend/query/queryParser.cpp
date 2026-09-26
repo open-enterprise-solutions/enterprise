@@ -1301,6 +1301,20 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		e->m_literal.SetType(ibValueTypes::TYPE_NULL);
 		return e;
 	}
+	// ⭐ …AND `UNDEFINED` — THE RUNTIME'S OWN EMPTY VALUE, the same one a script writes by that name
+	// (Max, 2026-09-24: "Undefined is just the runtime's empty value"). The word is not being invented for
+	// the query: it is being let in, so a query can say what every other tier already says.
+	//
+	// ⚠ NOT `NULL`, which is the DATABASE's absence — a join that did not match, a column with nothing in
+	// it. The two meet in the same cell often enough to be taken for one, and they part the moment the
+	// field could hold an EMPTY REFERENCE: that is a value OF A TYPE, and this is a value of none
+	// (queryKeywords.h).
+	if (tk.IsKeyword(ibQueryKeyword::Undefined)) {
+		++m_pos;
+		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		e->m_literal.SetType(ibValueTypes::TYPE_EMPTY);
+		return e;
+	}
 
 	// ⭐⭐ A SCALAR CALL IS RECOGNISED BY POSITION, NOT BY OWNING THE WORD.
 	//

@@ -644,12 +644,18 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 
 			// The height comes across against the sheet's own default (see `rowScale` above), and a
 			// hidden row is a height of nothing, as «Hide» leaves it.
+			//
+			// ⚠ ONLY A HEIGHT SOMEBODY SET — `customHeight`. Excel writes `ht` on every row it has laid
+			// out, the ones it fitted to their text included; read as a height of its own, each of those
+			// would lose its automatic height here (spreadsheetDescription.h, HasRowSize) and stop
+			// following its text the moment the workbook was opened.
 			const bool folded = BoolOf(row, wxT("hidden"));
 
 			double height = 0.0;
 			if (folded)
 				document.SetRowSize(documentRow, 0);
-			else if (row->GetAttribute(wxT("ht"), wxEmptyString).ToCDouble(&height) && height > 0.0)
+			else if (BoolOf(row, wxT("customHeight"))
+				&& row->GetAttribute(wxT("ht"), wxEmptyString).ToCDouble(&height) && height > 0.0)
 				document.SetRowSize(documentRow, static_cast<int>(height * rowScale + 0.5));
 
 			long depth = 0;

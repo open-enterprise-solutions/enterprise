@@ -1,66 +1,38 @@
 #include "artProvider.h"
-#include "backend/backend_picture.h"
 
-#include "artProvider/null/null.xpm"
+#include "backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64
 
-#include "artProvider/codeEditor/intelli/functionBlue.xpm"
-#include "artProvider/codeEditor/intelli/functionRed.xpm"
-#include "artProvider/codeEditor/intelli/procedureBlue.xpm"
-#include "artProvider/codeEditor/intelli/procedureRed.xpm"
-#include "artProvider/codeEditor/intelli/variable.xpm"
-#include "artProvider/codeEditor/intelli/variableAlt.xpm"
-
-#include "artProvider/template/mergeCells.xpm"
-#include "artProvider/template/addSection.xpm"
-#include "artProvider/template/removeSection.xpm"
-#include "artProvider/template/showCells.xpm"
-#include "artProvider/template/showHeaders.xpm"
-#include "artProvider/template/showSections.xpm"
-#include "artProvider/template/borders.xpm"
-#include "artProvider/template/dockTable.xpm"
-
-#include "artProvider/codeEditor/addComment.xpm"
-#include "artProvider/codeEditor/removeComment.xpm"
-#include "artProvider/codeEditor/syntaxControl.xpm"
-#include "artProvider/codeEditor/gotoLine.xpm"
-#include "artProvider/codeEditor/proceduresFunctions.xpm"
-#include "artProvider/codeEditor/formatCode.xpm"
-
-#include "artProvider/designer/designerPage.xpm"
-#include "artProvider/designer/codePage.xpm"
-
-#include "artProvider/metadata/commonFolder.xpm"
-#include "artProvider/metadata/saveMetadata.xpm"
-
-#include "artProvider/service/message.xpm"
-#include "artProvider/service/variables.xpm"
-#include "artProvider/service/stack.xpm"
-#include "artProvider/service/watch.xpm"
-
-#include "artProvider/service/property.xpm"
-
-// The debugger's pictures, as VECTORS: each drawn in debugger/<name>.svg, the .svg.h beside it is that same
-// document as a string — sharp at whatever scale the display asks for, a toolbar at 2x or a menu alike.
-// (Not `debug/`: the repository ignores every folder of that name, the build output's.)
-#include "artProvider/debugger/start.svg.h"
-#include "artProvider/debugger/startWithoutDebugging.svg.h"
-#include "artProvider/debugger/attach.svg.h"
-#include "artProvider/debugger/continue.svg.h"
-#include "artProvider/debugger/pause.svg.h"
-#include "artProvider/debugger/stepInto.svg.h"
-#include "artProvider/debugger/stepOver.svg.h"
-#include "artProvider/debugger/stepOut.svg.h"
-#include "artProvider/debugger/stopDebugging.svg.h"
-#include "artProvider/debugger/stopProgram.svg.h"
-#include "artProvider/debugger/removeAllBreakpoints.svg.h"
+// EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the
+// size of its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which
+// draws the PNG and writes the string; the groups are the debugger, the code editor and its autocomplete, the form
+// designer, the metadata tree, the service panes and the output window, the spreadsheet, the list commands and the
+// query constructor, and wx's own stock ids.
+#include "private/picturePredefined.h"
 
 #include <wx/bmpbndl.h>
+
+// THE BUNDLE CARRIES THE MASTER AT THE SIZE ASKED AND AT TWICE AND FOUR TIMES IT, so a display scaled to 150 or
+// 200 % is handed a picture drawn for it rather than the small one stretched - never larger than the master,
+// which would only be stretched in its turn.
+static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
+{
+	const wxImage master = ibBackendPicture::GetImageFromBase64(png);
+	if (!master.IsOk())
+		return wxBitmapBundle();
+
+	wxVector<wxBitmap> bitmaps;
+	for (const int times : { 1, 2, 4 }) {
+		const wxSize at(size.x * times, size.y * times);
+		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
+			break;
+		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
+	}
+	return wxBitmapBundle::FromBitmaps(bitmaps);
+}
 
 // ----------------------------------------------------------------------------
 // wxOESArtProvider class
 // ----------------------------------------------------------------------------
-
-#include "private/picturePredefined.h"
 
 class wxFrontendArtProvider : public wxArtProvider {
 public:
@@ -72,130 +44,139 @@ protected:
 		const wxArtClient& client,
 		const wxSize& size) override {
 
-		static const struct wxFrontendArtProviderIconEntry {
-
-			struct wxFrontendArtProviderIconData {
-
-				wxFrontendArtProviderIconData(const char* data[]) :
-					m_data(data), m_len(0) {
-					unsigned int idx = 0;
-					while (m_data[idx++] != nullptr) {
-						m_len += sizeof(m_data[idx]);
-					}
-				}
-
-				const char** m_data;
-				size_t m_len;
-			};
-
-			wxArtClient client;
-			wxArtID id;
-			wxFrontendArtProviderIconData data;
-		}
-
-		s_allBitmaps[] =
+		// The pictures: a PNG master in Base64, scaled down to the size asked for (16x16 when none is).
+		static const struct { wxArtClient client; wxArtID id; const wxString& png; } s_allPictures[] =
 		{
-			// ******* wxART_AUTOCOMPLETE *******
-			{ wxART_AUTOCOMPLETE, wxART_FUNCTION_RED, s_functionBlue_xpm},
-			{ wxART_AUTOCOMPLETE, wxART_FUNCTION_BLUE, s_functionRed_xpm },
-			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE_RED, s_procedureRed_xpm },
-			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE_BLUE, s_procedureBlue_xpm },
-			{ wxART_AUTOCOMPLETE, wxART_VARIABLE, s_variable_xpm },
-			{ wxART_AUTOCOMPLETE, wxART_VARIABLE_ALTERNATIVE, s_variable_alt_xpm },
+			// ******* wxART_VISUALHOST *******
+			{ wxART_VISUALHOST, wxART_NO_PICTURE, s_null_png },
 
-			// ******* wxART_DOC_MODULE *******
-			{ wxART_DOC_MODULE, wxART_ADD_COMMENT, s_addComment_xpm },
-			{ wxART_DOC_MODULE, wxART_REMOVE_COMMENT, s_removeComment_xpm },
-			{ wxART_DOC_MODULE, wxART_SYNTAX_CONTROL, s_syntaxControl_xpm },
-			{ wxART_DOC_MODULE, wxART_GOTO_LINE, s_gotoLine_xpm },
-			{ wxART_DOC_MODULE, wxART_PROC_AND_FUNC, s_proceduresFunctions_xpm },
-			{ wxART_DOC_MODULE, wxART_FORMAT_CODE, s_formatCode_xpm },
+			// ******* wxART_FRONTEND ******* - moving a row is the stock arrow's act, so it is the stock arrow
+			// (wxART_EDIT and wxART_DELETE are stock ids themselves and are answered by the stock table below)
+			{ wxART_FRONTEND, wxART_ADD, s_add_png },
+			{ wxART_FRONTEND, wxART_UP, s_goUp_png },
+			{ wxART_FRONTEND, wxART_DOWN, s_goDown_png },
+			{ wxART_FRONTEND, wxART_SORT, s_sort_png },
+			{ wxART_FRONTEND, wxART_DATABASE, s_db_png },
+			{ wxART_FRONTEND, wxART_DATABASE_APPLY, s_dbApply_png },
+			{ wxART_FRONTEND, wxART_DATABASE_ROOLBACK, s_dbRollback_png },
+			{ wxART_FRONTEND, wxART_QUERY_CONSTRUCTOR, s_queryConstructor_png },
+			{ wxART_FRONTEND, wxART_TEMP_TABLE, s_tempTable_png },
+			{ wxART_FRONTEND, wxART_NESTED_QUERY, s_nestedQuery_png },
+			{ wxART_FRONTEND, wxART_TRANSLATION_CONSTRUCTOR, s_translationConstructor_png },
+			{ wxART_FRONTEND, wxART_FORMAT_CONSTRUCTOR, s_formatConstructor_png },
+			{ wxART_FRONTEND, wxART_LINQ_CONSTRUCTOR, s_linqConstructor_png },
+			{ wxART_DEBUG, wxART_BREAKPOINT_CONDITION, s_breakpointCondition_png },
+			{ wxART_DOC_MODULE, wxART_SELECT_ALL, s_selectAll_png },
 
 			// ******* wxART_DOC_FORM *******
-			{ wxART_DOC_FORM, wxART_DESIGNER_PAGE, s_designerPage_xpm },
-			{ wxART_DOC_FORM, wxART_CODE_PAGE, s_codePage_xpm },
+			{ wxART_DOC_FORM, wxART_DESIGNER_PAGE, s_designerPage_png },
+			{ wxART_DOC_FORM, wxART_CODE_PAGE, s_codePage_png },
 
 			// ******* wxART_DOC_TEMPLATE *******
-			{ wxART_DOC_TEMPLATE, wxART_MERGE_CELL , s_mergeCells_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_ADD_SECTION , s_addSection_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_REMOVE_SECTION , s_removeSection_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_CELL, s_showCells_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_HEADER, s_showHeaders_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_SECTION, s_showSections_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_BORDER, s_borders_xpm },
-			{ wxART_DOC_TEMPLATE, wxART_DOCK_TABLE , s_dockTable_xpm },
+			{ wxART_DOC_TEMPLATE, wxART_MERGE_CELL, s_mergeCells_png },
+			{ wxART_DOC_TEMPLATE, wxART_ADD_SECTION, s_addSection_png },
+			{ wxART_DOC_TEMPLATE, wxART_REMOVE_SECTION, s_removeSection_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_CELL, s_showCells_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_HEADER, s_showHeaders_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_SECTION, s_showSections_png },
+			{ wxART_DOC_TEMPLATE, wxART_BORDER, s_borders_png },
 
 			// ******* wxART_SERVICE *******
-			{ wxART_SERVICE, wxART_MESSAGE, s_message_xpm },
-			{ wxART_SERVICE, wxART_LOCAL_VARIABLE, s_variables_xpm },
-			{ wxART_SERVICE, wxART_STACK, s_stack_xpm },
-			{ wxART_SERVICE, wxART_WATCH, s_watch_xpm },
-
-			{ wxART_SERVICE, wxART_PROPERTY, s_property_xpm },
+			{ wxART_SERVICE, wxART_MESSAGE, s_message_png },
+			{ wxART_SERVICE, wxART_LOCAL_VARIABLE, s_variables_png },
+			{ wxART_SERVICE, wxART_STACK, s_stack_png },
+			{ wxART_SERVICE, wxART_WATCH, s_watch_png },
+			{ wxART_SERVICE, wxART_PROPERTY, s_property_png },
 
 			// ******* wxART_METATREE *******
-			{ wxART_METATREE, wxART_COMMON_FOLDER, s_commonFolder_xpm },
-			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_xpm }
-		};
+			{ wxART_METATREE, wxART_COMMON_FOLDER, s_commonFolder_png },
+			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_png },
 
-		for (unsigned n = 0; n < WXSIZEOF(s_allBitmaps); n++) {
-			const wxFrontendArtProviderIconEntry& entry = s_allBitmaps[n];
-			if (entry.id != id)
-				continue;
-
-			return wxIcon(entry.data.m_data);
-		}
-
-		// The vector pictures: an SVG document, drawn at the size asked for (16x16 when none is).
-		static const struct { wxArtClient client; wxArtID id; const char* svg; } s_allVectors[] =
-		{
 			// ******* wxART_DEBUG *******
-			{ wxART_DEBUG, wxART_DEBUG_START, s_start_svg },
-			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_svg },
-			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_svg },
-			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_svg },
-			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_svg },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_svg },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_svg },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_svg },
-			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_svg },
-			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_svg },
-			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_svg }
+			{ wxART_DEBUG, wxART_DEBUG_START, s_start_png },
+			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_png },
+			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_png },
+			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_png },
+			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_png },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_png },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_png },
+			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_png },
+
+			// ******* wxART_DOC_MODULE *******
+			{ wxART_DOC_MODULE, wxART_ADD_COMMENT, s_addComment_png },
+			{ wxART_DOC_MODULE, wxART_REMOVE_COMMENT, s_removeComment_png },
+			{ wxART_DOC_MODULE, wxART_SYNTAX_CONTROL, s_syntaxControl_png },
+			{ wxART_DOC_MODULE, wxART_GOTO_LINE, s_gotoLine_png },
+			{ wxART_DOC_MODULE, wxART_PROC_AND_FUNC, s_proceduresFunctions_png },
+			{ wxART_DOC_MODULE, wxART_FORMAT_CODE, s_formatCode_png },
+			{ wxART_DOC_MODULE, wxART_INCREASE_INDENT, s_increaseIndent_png },
+			{ wxART_DOC_MODULE, wxART_DECREASE_INDENT, s_decreaseIndent_png },
+
+			// ******* wxART_AUTOCOMPLETE *******
+			{ wxART_AUTOCOMPLETE, wxART_FUNCTION, s_function_png },
+			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE, s_procedure_png },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE, s_variable_png },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE_ALTERNATIVE, s_variableAlt_png },
+
+			// ******* wxART_SERVICE *******
+			{ wxART_SERVICE, wxART_OUTPUT_INFORMATION, s_outputInformation_png },
+			{ wxART_SERVICE, wxART_OUTPUT_WARNING, s_outputWarning_png },
+			{ wxART_SERVICE, wxART_OUTPUT_ERROR, s_outputError_png }
 		};
 
-		for (const auto& entry : s_allVectors) {
+		for (const auto& entry : s_allPictures) {
 			if (entry.client == client && entry.id == id)
-				return wxBitmapBundle::FromSVG(entry.svg, size.IsFullySpecified() ? size : wxSize(16, 16));
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
-		if (client == wxART_FRONTEND) {
+		// ⭐ WX'S OWN PICTURES, FOR EVERY CLIENT. This provider stands first (pushed over wx's), so a stock id asked
+		// anywhere - a menu, a toolbar, a button, a list, a message window - gets this drawing instead of Tango's
+		// or an XPM of wx's, and not one call site changes.
+		static const struct { wxArtID id; const wxString& png; } s_stockPictures[] =
+		{
+			{ wxART_DELETE, s_delete_png },
+			{ wxART_NEW, s_new_png },
+			{ wxART_EDIT, s_edit_png },
+			{ wxART_GO_UP, s_goUp_png },
+			{ wxART_GO_DOWN, s_goDown_png },
+			{ wxART_GO_BACK, s_goBack_png },
+			{ wxART_GO_FORWARD, s_goForward_png },
+			{ wxART_GO_DIR_UP, s_goDirUp_png },
+			{ wxART_COPY, s_copy_png },
+			{ wxART_CUT, s_cut_png },
+			{ wxART_PASTE, s_paste_png },
+			{ wxART_UNDO, s_undo_png },
+			{ wxART_REDO, s_redo_png },
+			{ wxART_FIND, s_find_png },
+			{ wxART_PLUS, s_plus_png },
+			{ wxART_MINUS, s_minus_png },
+			{ wxART_FILE_OPEN, s_fileOpen_png },
+			{ wxART_FILE_SAVE, s_fileSave_png },
+			{ wxART_FILE_SAVE_AS, s_fileSaveAs_png },
+			{ wxART_NORMAL_FILE, s_normalFile_png },
+			{ wxART_FOLDER, s_folder_png },
+			{ wxART_LIST_VIEW, s_listView_png },
+			{ wxART_REPORT_VIEW, s_reportView_png },
+			{ wxART_FULL_SCREEN, s_fullScreen_png },
+			{ wxART_HELP_BOOK, s_helpBook_png },
+			{ wxART_HELP_SETTINGS, s_helpSettings_png },
+			{ wxART_TICK_MARK, s_tickMark_png },
+			{ wxART_STOP, s_stop_png },
+			{ wxART_QUIT, s_quit_png },
+			{ wxART_MISSING_IMAGE, s_missingImage_png },
+			{ wxART_WARNING, s_warning_png },
+			{ wxART_ERROR, s_error_png },
+			{ wxART_INFORMATION, s_information_png },
+			{ wxART_QUESTION, s_question_png },
+			{ wxART_TIP, s_tip_png }
+		};
 
-			if (id == wxART_DATABASE)
-				return ibBackendPicture::GetImageFromBase64(s_db_32_png, size);
-			else if (id == wxART_DATABASE_ROOLBACK)
-				return ibBackendPicture::GetImageFromBase64(s_db_rollback_32_png, size);
-			else if (id == wxART_DATABASE_APPLY)
-				return ibBackendPicture::GetImageFromBase64(s_db_apply_32_png, size);
-			else if (id == wxART_ADD)
-				return ibBackendPicture::GetImageFromBase64(s_add_32_png, size);
-			else if (id == wxART_EDIT)
-				return ibBackendPicture::GetImageFromBase64(s_edit_32_png, size);
-			else if (id == wxART_DELETE)
-				return ibBackendPicture::GetImageFromBase64(s_delete_32_png, size);
-			else if (id == wxART_UP)
-				return ibBackendPicture::GetImageFromBase64(s_up_32_png, size);
-			else if (id == wxART_DOWN)
-				return ibBackendPicture::GetImageFromBase64(s_down_32_png, size);
-			else if (id == wxART_SORT)
-				return ibBackendPicture::GetImageFromBase64(s_sort_32_png, size);
-			else if (id == wxART_QUERY_CONSTRUCTOR)
-				return ibBackendPicture::GetImageFromBase64(s_query_constructor_32_png, size);
-			else if (id == wxART_TEMP_TABLE)
-				return ibBackendPicture::GetImageFromBase64(s_temp_table_32_png, size);
-			else if (id == wxART_NESTED_QUERY)
-				return ibBackendPicture::GetImageFromBase64(s_nested_query_32_png, size);
-
-			return wxNullBitmap;
+		for (const auto& entry : s_stockPictures) {
+			if (entry.id == id)
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		return wxNullBitmap;

@@ -133,6 +133,26 @@ enum ibValueTypes : unsigned char {
 	TYPE_LAST,
 };
 
+// WHAT KIND OF THING A REGISTERED TYPE IS, and what the registry tells it. Here, beside the value
+// types, because ibValue's registry surface names them (value.h) while the ctors that carry them
+// (compiler/typeCtor.h) are built on a complete ibValue — so they cannot live with the ctors.
+enum ibCtorObjectType {
+	ibCtorObjectType_object_primitive = 1,
+	ibCtorObjectType_object_value,
+	ibCtorObjectType_object_control,
+	ibCtorObjectType_object_system,
+	ibCtorObjectType_object_enum,
+	ibCtorObjectType_object_context,
+
+	ibCtorObjectType_object_metadata,
+	ibCtorObjectType_object_meta_value
+};
+
+enum ibCtorObjectTypeEvent {
+	ibCtorObjectTypeEvent_Register,
+	ibCtorObjectTypeEvent_UnRegister,
+};
+
 //*******************************************************************************************
 //*                                 Declare special var                                     *
 //*******************************************************************************************

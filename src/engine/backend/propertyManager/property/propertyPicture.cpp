@@ -5,7 +5,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyPicture::CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id) const
+wxVariantData* ibPropertyPicture::CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id)
 {
 	return new ibVariantDataPicture(property, id);
 }

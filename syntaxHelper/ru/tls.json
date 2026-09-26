@@ -1,0 +1,190 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.CertificateFile",
+      "name_local": "CertificateFile",
+      "name_en": "CertificateFile",
+      "kind": "collection",
+      "class_id": 179108361144881211,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New CertificateFile(path : string [, password : string])",
+      "description": "НАЗВАННЫЙ ФАЙЛ PEM — сертификат или сертификат вместе с его закрытым ключом. Значение держит две вещи и не читает ни одной: путь и пароль, который открывает ключ. Что ВНУТРИ файла — дело библиотеки TLS: это читается при соединении, а не здесь.\n\nФАЙЛ ДОЛЖЕН БЫТЬ НА МЕСТЕ СРАЗУ. Путь, который ничего не называет, и пустой путь отвергаются там, где значение создаётся, — «CertificateFile: there is no file '<путь>'», — поэтому опечатка в пути находится за столом, а не у дверей банка. `New CertificateFile()` вовсе без аргумента тоже отвергается («Error initializing object 'CertificateFile'»): файл сертификата без файла — не файл сертификата.\n\nЧТО В НЁМ — СКАЗАНО ПОЗЖЕ И ПО ИМЕНИ ЭТОГО ФАЙЛА. Файл, который не PEM, или ключ, который пароль не открывает, отвергаются при первом запросе через него: «HTTPConnection: the certificate file '<путь>' could not be read - not a PEM, or the key's password is wrong» — про сертификат, который предъявляет эта сторона, и «...the trusted certificates could not be read from the certificate file '<путь>' - not a PEM» — про тот, которому она доверяет. Соединение может держать два таких файла, поэтому фраза называет один из них; и говорится она при каждом следующем запросе, а не один раз.\n\nПароль задаётся один раз и не читается обратно — наружу из значения выходит только Path. CertificateFile не привязан к соединению: один файл могут делить несколько значений SecureConnection.",
+      "syntax_block": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");                // кому доверять\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");  // сертификат И его ключ\nMessage(mine.Path);",
+      "syntax_block_ves": "trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");                // кому доверять\nmine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");  // сертификат И его ключ\nMessage(mine.Path);",
+      "parameters": "path — файл, как его называет файловая система. Он должен быть на месте в момент создания значения, и именно это имя несёт позднейший отказ.\npassword — открывает закрытый ключ, лежащий в файле; не задан — считается, что ключа, требующего пароля, в файле нет. Задаётся один раз и обратно не читается.",
+      "return_descr": "CertificateFile — путь и пароль, с которыми он создан.",
+      "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar secure = New SecureConnection(mine, trust);      // предъявить свой, доверять только этому центру\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                      // порт не задан: с защитой это 443\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // ...the certificate file 'C:\\certs\\client.pem' could not be read...\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.CertificateFile.Path",
+        "cls.SecureConnection",
+        "cls.SecureConnection.ClientCertificate",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.CertificateFile.Path",
+      "name_local": "Path",
+      "name_en": "Path",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "CertificateFile.Path",
+      "description": "Путь, с которым файл создан, как он был задан, — ТОЛЬКО ЧТЕНИЕ. Указать созданный CertificateFile на другой файл нельзя: создайте другой и положите его в SecureConnection.\n\nЭто же имя движок ставит в отказ, когда библиотека не смогла прочитать файл, — то, что пишет в журнал скрипт, и то, что видит человек, совпадают. Пароль не публикуется нигде: обратно из значения его не читает ничто.",
+      "syntax_block": "var file = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nMessage(file.Path);   // C:\\certs\\bank-ca.pem",
+      "parameters": "",
+      "return_descr": "String — путь.",
+      "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar secure = New SecureConnection();\nsecure.TrustedCertificates = trust;\nMessage(secure.TrustedCertificates.Path);   // возвращается тем же",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.CertificateFile",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.SecureConnection.ClientCertificate"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "collection",
+      "class_id": 169100091633056753,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New SecureConnection([clientCertificate : CertificateFile [, trustedCertificates : CertificateFile]])",
+      "description": "ТО, ЧТО HTTPConnection НЕСЁТ, ЧТОБЫ ГОВОРИТЬ ПО https. Три вещи, и никакой библиотеки внутри: какой сертификат предъявлять (ClientCertificate), кому доверять (TrustedCertificates) и проверять ли сервер вообще (VerifyServerCertificate). Что это значит на проводе — дело соединения.\n\nСОЗДАННОЕ ПУСТЫМ — `New SecureConnection()` — оно ничего не предъявляет, доверяет тому, чему доверяет ПЛАТФОРМА (хранилищу сертификатов Windows, keychain macOS, /etc/ssl/certs в Linux — их читает сама библиотека TLS), и проверяет сервер. Это и есть нужная настройка, и стоит она одну строку.\n\nОба аргумента необязательны, и каждый — CertificateFile или Undefined; всё прочее отвергается по имени самого свойства: «SecureConnection: ClientCertificate is a CertificateFile, or Undefined». Свойство, которое никто не задал, читается как Undefined.\n\nСАМО ПО СЕБЕ ОНО НЕ ДЕЛАЕТ НИЧЕГО: его кладут в соединение — `connection.SecureConnection = secure`, — и соединение спрашивает его при КАЖДОМ запросе, а не запоминает ответ. Поэтому одно значение могут делить два соединения, а изменённое на месте (`secure.VerifyServerCertificate = False`) слушается уже следующим запросом, а не следующим сеансом.\n\nСборка без TLS тип всё равно имеет и отказывается им пользоваться: «HTTPConnection: this build has no TLS - a secure connection cannot be made».",
+      "syntax_block": "var secure = New SecureConnection();                   // доверие платформы, проверка включена\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                        // ...= Undefined для обычного http://",
+      "syntax_block_ves": "secure = New SecureConnection();                   // доверие платформы, проверка включена\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nbank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                    // ...= Undefined для обычного http://",
+      "parameters": "clientCertificate — сертификат, который предъявляет эта сторона, как CertificateFile с ним и его ключом; не задан или Undefined — не предъявляется ничего.\ntrustedCertificates — удостоверяющий центр, которому доверять, как CertificateFile; не задан или Undefined — собственное хранилище сертификатов платформы.",
+      "return_descr": "SecureConnection — ничего не предъявляется, доверие платформы, проверка включена.",
+      "example": "var secure = New SecureConnection();                 // доверять платформе, проверять сервер\nvar shop = New HTTPConnection(\"api.example\");\nshop.SecureConnection = secure;\nMessage(shop.Port);                                  // 443: порт никто не задавал\n\nvar bank = New HTTPConnection(\"api.bank.example\");   // ...а это доверяет одному центру\nbank.SecureConnection = New SecureConnection(\n    New CertificateFile(\"C:\\certs\\client.pem\", \"key password\"),\n    New CertificateFile(\"C:\\certs\\bank-ca.pem\"));\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // не доверяем, не тот хост, файл не прочитан...\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection.ClientCertificate",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.ClientCertificate",
+      "name_local": "ClientCertificate",
+      "name_en": "ClientCertificate",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.ClientCertificate",
+      "description": "Сертификат, который предъявляет ЭТА сторона, когда сервер его просит, — CertificateFile, в котором лежат и сертификат, И его закрытый ключ, а пароль ключа — второй аргумент этого файла. Undefined (так оно и есть, пока не задано) означает, что не предъявляется ничего, и сервер, который требует клиентский сертификат, соединение отклоняет.\n\nЧитается и пишется. Записанное чем-либо, кроме CertificateFile или Undefined, вызывает отказ «SecureConnection: ClientCertificate is a CertificateFile, or Undefined» — в том числе строкой, похожей на путь: путь — это ещё не файл, который кто-то искал.\n\nФайл, который библиотека не смогла прочитать, называется ПРИ ПЕРВОМ ЗАПРОСЕ и по имени: «HTTPConnection: the certificate file '<путь>' could not be read - not a PEM, or the key's password is wrong». И называется при каждом следующем: транспорт соединения выбрасывается вместе с отказом, чтобы ничто не шло дальше тихо, с половиной настройки.",
+      "syntax_block": "secure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nsecure.ClientCertificate = Undefined;   // не предъявлять ничего",
+      "parameters": "",
+      "return_descr": "CertificateFile или Undefined, когда не предъявляется ничего.",
+      "example": "var secure = New SecureConnection();\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar till = New HTTPConnection(\"api.till.example\");\ntill.SecureConnection = secure;\nvar response = till.Post(New HTTPRequest(\"/v1/shift\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.CertificateFile",
+        "cls.SecureConnection.TrustedCertificates",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.TrustedCertificates",
+      "name_local": "TrustedCertificates",
+      "name_en": "TrustedCertificates",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.TrustedCertificates",
+      "description": "КОМУ ДОВЕРЯТЬ — CertificateFile с сертификатом удостоверяющего центра. Undefined (так оно и есть, пока не задано) означает собственное хранилище платформы: хранилище сертификатов Windows, keychain macOS, /etc/ssl/certs в Linux — их читает сама библиотека TLS.\n\nНАЗВАННЫЙ ФАЙЛ ЗАМЕНЯЕТ ЭТО ХРАНИЛИЩЕ, а не добавляется к нему: системные сертификаты библиотека читает только тогда, когда своего файла не названо. Это верный ответ для банка или кассы, сертификат которых подписан их собственным центром: назвать файл центра и ОСТАВИТЬ ПРОВЕРКУ ВКЛЮЧЁННОЙ, а не тянуться к VerifyServerCertificate = False.\n\nЧитается и пишется; всё, что не CertificateFile и не Undefined, вызывает отказ «SecureConnection: TrustedCertificates is a CertificateFile, or Undefined».\n\nНазванный файл, который не PEM, называется при первом запросе и по имени: «...was not answered: the trusted certificates could not be read from the certificate file '<путь>' - not a PEM». Сервер, которого это доверие не покрывает, — ДРУГАЯ фраза: «the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate; name the authority's file in TrustedCertificates».",
+      "syntax_block": "secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nsecure.TrustedCertificates = Undefined;   // обратно к хранилищу платформы",
+      "parameters": "",
+      "return_descr": "CertificateFile или Undefined, когда доверие — хранилище платформы.",
+      "example": "var secure = New SecureConnection();\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;\n// сертификат, подписанный кем-либо ещё, отвергается, каким бы хорошим он ни был",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.SecureConnection.VerifyServerCertificate",
+      "name_local": "VerifyServerCertificate",
+      "name_en": "VerifyServerCertificate",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "SecureConnection.VerifyServerCertificate",
+      "description": "ПРОВЕРЯЕТСЯ ЛИ СЕРВЕР ВООБЩЕ. True, пока не сказано иное; False снимает проверку — ОБЕ её части: цепочку (кто подписал этот сертификат и годен ли он ещё) и имя узла (для того ли хоста этот сертификат, который спрашивали). Обеими правит один переключатель: оставить одну и снять другую нельзя.\n\nЧего он НЕ снимает — это шифрование, и именно это делает его опасным: линия по-прежнему зашифрована, поэтому ответ кого угодно читается ровно так же, как ответ настоящего. Вещь для стенда с самоподписанным сертификатом и никогда не для банка. Тянуться нужно к TrustedCertificates: назвать файл центра и оставить проверку включённой. При снятой проверке файл, названный в TrustedCertificates, не читается вовсе, поэтому испорченный останется незамеченным до тех пор, пока проверку не включат обратно.\n\nТОЛЬКО True ИЛИ False: число или строка вызывают отказ «SecureConnection: VerifyServerCertificate is True or False», потому что `1` или `\"yes\"`, принятые за истину, сняли бы проверку опечаткой.\n\nПри включённой проверке от запроса могут вернуться две разные фразы, и говорят они о разном: «the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate...» (цепочка) и «the server's certificate is not for this host name» (имя).",
+      "syntax_block": "secure.VerifyServerCertificate = False;   // только для стенда\nif (Not secure.VerifyServerCertificate) {\n    Message(\"сервер не проверяется\");\n}",
+      "parameters": "",
+      "return_descr": "Boolean — True, пока не присвоено False.",
+      "example": "var secure = New SecureConnection();\nMessage(secure.VerifyServerCertificate);   // True: иного никто не говорил\n\n// Стенд с самоподписанным сертификатом. В работе вместо этого называют центр:\n//   secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\stand-ca.pem\");\nsecure.VerifyServerCertificate = False;\nvar stand = New HTTPConnection(\"stand.local\");\nstand.SecureConnection = secure;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.SecureConnection",
+        "cls.SecureConnection.TrustedCertificates",
+        "cls.HTTPConnection.SecureConnection",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPConnection.SecureConnection",
+      "description": "https КАК СВОЙСТВО. Положенное сюда значение SecureConnection делает защищённым каждый запрос этого соединения; Undefined (так оно и есть, пока не задано) — обычный http://. Всё прочее вызывает отказ «HTTPConnection: SecureConnection is a SecureConnection value, or Undefined for plain http://».\n\nСХЕМА НИКОГДА НЕ ИДЁТ В ХОСТ. `New HTTPConnection(\"https://api.bank.example\")` отвергается там, где задаётся хост, и отказ указывает сюда: «the host is a name - 'api.example' - not an address: the path goes into the request's ResourceAddress, and 'https' is the SecureConnection property».\n\nПОРТ СЛЕДУЕТ ЗА НИМ. Порт, которого никто не задавал, — 443, пока свойство держит SecureConnection, и снова 80, когда его убрали; порт, который ЗАДАЛИ, остаётся собой — с защитой или без.\n\nСвойство спрашивается при каждом запросе, а не запоминается: одно значение могут делить два соединения, а изменённое на месте слушается уже следующим запросом.",
+      "syntax_block": "connection.SecureConnection = New SecureConnection();\nconnection.SecureConnection = Undefined;   // снова обычный http://\nMessage(connection.Port);                  // 443 с ним, 80 без него - если порт не задавали",
+      "parameters": "",
+      "return_descr": "SecureConnection или Undefined для обычного http://.",
+      "example": "var bank = New HTTPConnection(\"api.bank.example\");   // НЕ \"https://api.bank.example\"\nMessage(bank.Port);                                  // 80\nbank.SecureConnection = New SecureConnection();\nMessage(bank.Port);                                  // 443\n\nvar response = bank.Get(New HTTPRequest(\"/v1/balance\"));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.SecureConnection",
+        "cls.SecureConnection.VerifyServerCertificate",
+        "cls.CertificateFile",
+        "guide.http"
+      ],
+      "reviewed": false
+    }
+  ]
+}

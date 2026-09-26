@@ -22,7 +22,7 @@
 // the default session-derived holder, identity = sys_session.session
 // — keeps lock cleanup naturally aligned with session teardown.
 //
-// See docs/record-locks.md.
+// See docs/private/record-locks.md.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_LOCK_HOLDER_H_

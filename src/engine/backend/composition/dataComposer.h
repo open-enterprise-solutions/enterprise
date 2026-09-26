@@ -29,7 +29,7 @@
 //       .Sort(wxT("Description"))
 //       .Run(driver);                            // render -> parse -> lower -> walk -> driver
 //
-// See docs/query-language-arc.md §22.1b / §23.
+// See docs/private/query-language-arc.md §22.1b / §23.
 
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
@@ -1418,7 +1418,7 @@ private:
 	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
 
 	// ⭐⭐ THE AUTHOR'S TEXT, SPLIT INTO WHAT PREPARES AND WHAT IS READ — the seam that lets a
-	// composition stand over a PACKAGE (docs/query-language-arc.md § 24.4b).
+	// composition stand over a PACKAGE (docs/private/query-language-arc.md § 24.4b).
 	//
 	// One query is read as a nested source, as it always was: `FROM (<the text>) AS AuthorQuery`.
 	// A package is not — a `;` inside brackets is not a query — so its statements stay AHEAD of the
@@ -1565,7 +1565,7 @@ private:
 // "give me the schema" — without knowing which of them it is holding.
 //
 // The shape is the one ibBackendQueryableHolder already uses for sources: the thing HOLDS the
-// query object rather than being it (docs/ownership-authority.md).
+// query object rather than being it (docs/private/ownership-authority.md).
 // ==========================================================================
 class BACKEND_API ibCompositionHolder {
 public:

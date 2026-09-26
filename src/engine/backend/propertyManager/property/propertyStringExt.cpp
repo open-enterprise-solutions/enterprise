@@ -5,7 +5,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyTString::CreateVariantData(const ibTranslateString& translate) const
+wxVariantData* ibPropertyTString::CreateVariantData(const ibTranslateString& translate)
 {
 	return new ibVariantDataTranslate(translate);
 }

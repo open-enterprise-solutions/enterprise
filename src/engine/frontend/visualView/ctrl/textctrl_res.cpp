@@ -1,46 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_text_ctrl_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 12 1",
-	"  c None",
-	"& c #EEFFFF",
-	"$ c #171717",
-	"X c #FFFFFF",
-	"o c #808080",
-	"* c #EAFFFF",
-	". c #3E9ADE",
-	"+ c #F9FFFF",
-	"# c #F3FFFF",
-	"% c #EDFFFF",
-	"O c #151515",
-	"@ c #161616",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	"................",
-	".XXXXXXXXXXXXXX.",
-	".XXXXXXoXoXXXXX.",
-	".XXOOXXXoXXX++X.",
-	".XXXX@X+o++X++#.",
-	".++O@@++o++####.",
-	".#O+#$+#o######.",
-	".##$$O#o#o%#%%%.",
-	".##&%%%%%%%%***.",
-	"................",
-	"                ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_textCtrl_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAC9ElEQVR4nOyZX0hTURzHv3NJk3Q6kZxpaeTftD9ohX8iCLEiIuqpFyFIMIqiXgr6S4IWJqUm1EtFSihYIfQWUkF/rEwtQ+fUSej2YtkmbS7G/uW9aO7u6ubdKs485wP34XzvYXA+95yz37k3DJQTBsphAkA5TAAohwkA5TABoBwmAJTDBIBymABQzjLvIOlUrxtLGEP9Jplnmy0BUA7bA/x10NdtRCiz+vQXn/fZDABheD+xfz0D2SYIyvlrS8DhcEA7OIw+jQaxKhU25GQjQR3P37Naf6GzqxvfJyZQVJCPVQlqkELQAsb0BlTfqEPPp15egieciAP79+HDxy70awZm0no8am5ESvIakEBQAp60PUVtw23YbLZ57xtNJtx/0ASutpbJ5irQjvedoS+gpvYWWh+3+e3nnh64zCsbHR0DKQQkoLvn86IGHwpIFmCxTOFSRZUoDw8PR/62LVibkoyfZjOGhnTQaAdBOpIFtL94ye/mnqSlrkPt9auIj18pyJ+1P8eFK5Wi33C7yTlxS64DtNohUXbx3BnR4Dl2lxRjR1GhKOdmCClIFtA/oBW0IyIisD4zY8H+OTlZosxknAQpSF4CeoNB0J4tdhZCFaMSZWaLBaQgeQYkJSYK2uPj33z2N02aRFlk5AqQgmQBGempgvaU1epzt+/rHxBlMTHRIAXJAtLTUkVZ5bWaeWcC9y/w6k2HKFcqlSAFyXvA3j278LClVTDgYd0IDh4qXXQdIA8j5xAqWYAyKgrVVRUoO3oCTqfzT2632/H67Tv+CiUCehTZWZm4fP4s5HI5Qp2A5yK3FFqa7vk/1U1XfYrlCkGUl7sZpBDUYuTWe3PjXRwrL+MHpVDMDTRBrUZJ8U7cabiJk8fLET2z8RUV5mN7YQFIIegXItwh6MjhUv5yuVzQjXxFXFws/zJklq15ufyLkR9Go9/C6X/jfVRn3wZpgwkA5chAOWwJgHKYAFAOEwDKYQJAOUwAKIcJAOUwAaAc6gX8BgAA//8XNU4YAAAABklEQVQDAObe1Bek5uhsAAAAAElFTkSuQmCC";
 
 wxIcon ibValueTextCtrl::GetIcon() const
 {
-	return wxIcon(s_text_ctrl_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_textCtrl_png, wxSize(16, 16));
 }
 
 wxIcon ibValueTextCtrl::GetIconGroup()
 {
-	return wxIcon(s_text_ctrl_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_textCtrl_png, wxSize(16, 16));
 }

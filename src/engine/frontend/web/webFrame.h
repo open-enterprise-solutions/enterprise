@@ -135,10 +135,10 @@ public:
 	// entry — closing the tab releases it.
 	virtual ibBackendValueForm* ActiveWindow() const override { return m_activeForm; }
 	virtual ibBackendValueForm* CreateNewForm(
+		const ibFormRequest& request,
 		const class ibValueMetaObjectFormBase* creator,
 		class ibBackendControlFrame* ownerControl = nullptr,
-		class ibSourceDataObject* srcObject = nullptr,
-		const ibUniqueKey& formGuid = wxNullUniqueKey) override;
+		class ibSourceDataObject* srcObject = nullptr) override;
 
 	// Override mirrors ibFrontendMainFrame's — delegates to
 	// ibFormVisualDocument::CreateFormUniqueKey so the form's

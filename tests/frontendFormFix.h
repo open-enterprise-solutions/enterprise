@@ -11,7 +11,8 @@
 // FrontendRuntimeFix). Build forms with NewForm().
 // =============================================================================
 
-#pragma once
+#ifndef __FRONTEND_FORM_FIX_H__
+#define __FRONTEND_FORM_FIX_H__
 
 #include "frontendFix.h"
 
@@ -85,3 +86,5 @@ struct FrontendFormFix : FrontendRuntimeFix {
 		return dynamic_cast<ibValueForm*>(ibBackendValueForm::CreateNewForm());
 	}
 };
+
+#endif

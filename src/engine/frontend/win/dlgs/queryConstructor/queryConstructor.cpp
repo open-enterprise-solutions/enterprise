@@ -890,7 +890,7 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 //
 // The grid is the same five cells a join is read through, so nothing had to be learnt to use it.
 //
-// See docs/query-constructor.md §8a.
+// See docs/private/query-constructor.md §8a.
 wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 {
 	wxPanel* page = new wxPanel(parent);

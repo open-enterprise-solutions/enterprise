@@ -270,11 +270,16 @@ TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 // ⭐ THE LAST LANGUAGE MAY END WITH THE STRING. `;` separates languages; written without one after
 // the last, the text was not recognised at all and a tab title read "en = 'June'; ru = ..." in full
 // (the payroll demo, 2026-09-10).
+//
+// ⚠ ASKED IN A LANGUAGE NAMED HERE, not the machine's. What is under test is the FORM, and read in the
+// language in force the answer was the machine's: on a Russian one this came back "Iyun" and was the one
+// red test of a full run (2026-09-26).
 TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
 {
 	EXPECT_TRUE(ibBackendLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), Translated(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), Translated(wxT("ru = 'Iyun'; en = 'June'")));   // the last one is found too
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("Iyun"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
 	EXPECT_FALSE(ibBackendLocalization::IsLocalizationString(wxT("June")));
 }
 
@@ -422,6 +427,60 @@ TEST(SpreadsheetDocument, RowAndColSize_SetTwiceReplacesRatherThanAppends)
 
 	// A line nobody declared answers the default rather than the neighbour's size.
 	EXPECT_NE(60, doc->GetRowSize(4));
+}
+
+// AUTOMATIC ROW HEIGHT (2026-09-22): a row without a height of its own follows its text, and giving it
+// one by hand is what switches that off — so "has a height" and "back to automatic" have to be exact,
+// and removing one entry must leave the others findable where the serializer reads them.
+TEST(SpreadsheetDocument, RowSize_ResetGivesTheRowBackItsAutomaticHeight)
+{
+	auto doc = MakeDocument();
+	doc->SetRowSize(5, 40);
+	doc->SetRowSize(2, 30);
+	doc->SetRowSize(7, 50);
+
+	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+
+	desc.ResetRowSize(2);
+	desc.ResetRowSize(3);   // a row that has no height of its own: nothing to do
+
+	EXPECT_FALSE(desc.HasRowSize(2));
+	EXPECT_EQ(s_defaultRowHeight, doc->GetRowSize(2));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+	EXPECT_EQ(40, doc->GetRowSize(5));
+	EXPECT_EQ(50, doc->GetRowSize(7));
+
+	// …and the one after the removed entry moved down in the order the serializer reads.
+	ASSERT_NE(nullptr, desc.GetRowSizeByIdx(1));
+	EXPECT_EQ(7u, desc.GetRowSizeByIdx(1)->m_row);
+
+	doc->SetRowSize(7, 55);   // still found through the index after the move
+	EXPECT_EQ(55, doc->GetRowSize(7));
+	EXPECT_EQ(2, desc.GetSizeNumberRows());
+}
+
+// An area put into a document takes a height only where its row has one. Copying GetRowSize's answer
+// for every row wrote the default down as a height of its own, and every line of a composed report came
+// out fixed — automatic height gone before anything was shown.
+TEST(SpreadsheetDocument, PutArea_CarriesOnlyTheHeightsThatWereSet)
+{
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("caption"));
+	area->SetCellValue(1, 0, wxT("line"));
+	area->SetRowSize(0, 40);
+
+	auto doc = MakeDocument();
+	doc->PutArea(area);
+	doc->PutArea(area);
+
+	const ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
+	EXPECT_TRUE(desc.HasRowSize(0));
+	EXPECT_FALSE(desc.HasRowSize(1));
+	EXPECT_TRUE(desc.HasRowSize(2));
+	EXPECT_FALSE(desc.HasRowSize(3));
+	EXPECT_EQ(40, doc->GetRowSize(2));
 }
 
 // ---------------------------------------------------------------------------

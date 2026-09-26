@@ -69,6 +69,9 @@ enum
 	enFileDelete,
 	enGetTempDir,
 	enGetTempFileName,
+	//--- JSON:
+	enReadJSON,
+	enWriteJSON,
 	//--- Window operations: 
 	enActiveWindow,
 	//--- Special:
@@ -191,6 +194,10 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
 	helper.AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
 	helper.AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
+	//--- JSON: the reference system's spelling of JSONReader.ReadValue() / JSONWriter.WriteValue(value).
+	// Order MUST match enReadJSON..enWriteJSON above.
+	helper.AppendFunc(wxT("ReadJSON"), 1, wxT("ReadJSON(reader : JSONReader)"));
+	helper.AppendFunc(wxT("WriteJSON"), 2, wxT("WriteJSON(writer : JSONWriter, value : any)"));
 	//--- Window operations: 
 	helper.AppendFunc(wxT("ActiveWindow"), wxT("ActiveWindow()"));
 	//--- Special:
@@ -248,6 +255,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 #include "backend/compiler/enumUnit.h"
 #include "backend/system/value/valueGuid.h"
+#include "backend/system/value/valueJson.h"   // ReadJSON / WriteJSON
 #include "backend/backend_exception.h"   // a call this dispatcher itself refuses (Date with two arguments)
 
 #include "backend/appData.h"
@@ -340,6 +348,21 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enFileDelete: pvarRetValue = DeleteFile(paParams[0]->GetString()); return true;
 		case enGetTempDir: pvarRetValue = GetTempDir(); return true;
 		case enGetTempFileName: pvarRetValue = GetTempFileName(); return true;
+			//--- JSON:
+		case enReadJSON: {
+			ibValueJsonReader* const reader = lSizeArray > 0 ? dynamic_cast<ibValueJsonReader*>(paParams[0]->GetRef()) : nullptr;
+			if (reader == nullptr)
+				ibBackendCoreException::Error(_("ReadJSON: the argument is a JSONReader"));
+			pvarRetValue = reader->ReadValue();
+			return true;
+		}
+		case enWriteJSON: {
+			ibValueJsonWriter* const writer = lSizeArray > 1 ? dynamic_cast<ibValueJsonWriter*>(paParams[0]->GetRef()) : nullptr;
+			if (writer == nullptr)
+				ibBackendCoreException::Error(_("WriteJSON: the arguments are a JSONWriter and the value to write"));
+			writer->WriteValue(*paParams[1]);
+			return true;
+		}
 			//--- Window operations: 
 		case enActiveWindow: pvarRetValue = ActiveWindow(); return true;
 			//--- Special:
@@ -350,7 +373,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
-				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
@@ -400,12 +423,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 				pvarRetValue = IsInRole(*paParams[0]);
 			return lSizeArray > 0;
 		case enGetCommonForm: pvarRetValue = GetCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
 		case enShowCommonForm: ShowCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -431,7 +454,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 
 		case enGetCommonForm:
-			pvarRetValue = GetCommonForm(paParams[0]->GetString(),
+			pvarRetValue = GetCommonForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -458,7 +481,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
-				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
@@ -473,7 +496,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
 		case enShowCommonForm: ShowCommonForm(
-			paParams[0]->GetString(),
+			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
@@ -489,7 +512,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		{
 			//--- Special:
 		case enShowCommonForm:
-			ShowCommonForm(paParams[0]->GetString(),
+			ShowCommonForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;

@@ -2,10 +2,10 @@
 // The debugger's pictures.
 //
 // The designer's Debug toolbar and Debug menu ask the art provider for one picture per command, under client
-// wxART_DEBUG — artProvider/debugger/<name>.svg, compiled in as the string beside it (<name>.svg.h). A picture
-// drawn as text can fail quietly: a typo in the markup gives a blank button, not an error. These tests draw
-// each one and look at the pixels, so a button that would be empty or a twin of its neighbour is caught here
-// and not by somebody squinting at the toolbar.
+// wxART_DEBUG — a PNG in Base64 in artProvider/private/picturePredefined.h, drawn from its SVG by
+// tools/pictures/render.js. A picture kept as text can fail quietly: a string cut short gives a blank button,
+// not an error. These tests draw each one and look at the pixels, so a button that would be empty or a twin
+// of its neighbour is caught here and not by somebody squinting at the toolbar.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -114,13 +114,19 @@ TEST(DebugToolbarIcons, NoTwoCommands_ShareAPicture)
 	}
 }
 
-// Sharp at every scale: the same id at a larger size gives a larger picture, not a stretched small one.
+// Sharp at every scale: the same id at a larger size gives a larger picture, not a stretched small one. The
+// bundle carries the master at the size asked and at twice and four times it (artProvider.cpp, BundleOf).
 TEST(DebugToolbarIcons, ScalesWithTheDisplay)
 {
 	const wxBitmapBundle bundle = wxArtProvider::GetBitmapBundle(wxART_DEBUG_STEP_OVER, wxART_DEBUG, wxSize(16, 16));
 	ASSERT_TRUE(bundle.IsOk());
 	EXPECT_EQ(bundle.GetBitmap(wxSize(16, 16)).GetSize(), wxSize(16, 16));
 	EXPECT_EQ(bundle.GetBitmap(wxSize(48, 48)).GetSize(), wxSize(48, 48));
+
+	// At 32 the picture is the master's own, not the 16 one blown up: they differ pixel for pixel.
+	const wxImage drawn = bundle.GetBitmap(wxSize(32, 32)).ConvertToImage();
+	const wxImage stretched = bundle.GetBitmap(wxSize(16, 16)).ConvertToImage().Scale(32, 32, wxIMAGE_QUALITY_NEAREST);
+	EXPECT_NE(Fingerprint(drawn), Fingerprint(stretched)) << "the 32 px picture is the 16 px one stretched";
 }
 
 // An id that is not a debug picture gets none, rather than somebody else's.

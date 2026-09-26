@@ -1132,7 +1132,7 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 				// Only the RESET speaks. A scroll that fails keeps the rows already on screen and
 				// will be asked again on the next wheel tick, so a dialog per tick would bury the
 				// window it belongs to; that case stays with the journal line it already writes.
-				// The description is DATA, never a format string (docs/exceptions.md).
+				// The description is DATA, never a format string (docs/private/exceptions.md).
 				if (isReset && !req->m_error.empty())
 					ibJournalError(wxT("ui"), wxT("%s"), req->m_error);
 				return;

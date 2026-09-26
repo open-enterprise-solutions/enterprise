@@ -122,7 +122,7 @@ private:
 // editor's own choice type is the front's job. It exists because the three of them used
 // to build a wxPGChoices right here and pass it through the ms_property* slot, which the
 // seam does not allow (wxObject* is the most derived type backend may name — §4 of
-// docs/property-system.md) and which dragged propgrid into every backend TU. The data
+// docs/private/property-system.md) and which dragged propgrid into every backend TU. The data
 // was already ours; only the conversion sat on the wrong side.
 // HOW MANY OF THE CHOICES MAY BE HELD AT ONCE. Today this is folklore: the chart-of-characteristic-
 // types property states "exactly one" in a comment while its editor is a multi-select tree, and a
@@ -868,6 +868,12 @@ public:
 		return pos;
 	}
 
+protected:
+
+	// THE MECHANISM, NOT THE DOOR. Moving a child is a change its owner has to answer for — a
+	// metaobject marks its configuration modified and announces the move (ibValueMetaObject), a
+	// frame re-lays its controls (ibValueFrame) — so each owner opens its own ChangeChildPosition
+	// over this one, and a caller holding the helper's name could otherwise step round all of it.
 	bool ChangeChildPosition(propertyType* obj, unsigned int pos) {
 
 		unsigned int obj_pos = GetChildPosition(obj);
@@ -886,6 +892,8 @@ public:
 		AddChild(pos, obj);
 		return true;
 	}
+
+public:
 
 	/**
 	* Removes a child from the object.

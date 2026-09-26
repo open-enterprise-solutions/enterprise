@@ -10,7 +10,7 @@
 // Selection in any of the three tabs invokes ShowEntry(id); the panel
 // owns the navigation history stack (Alt+← / Alt+→).
 //
-// See docs/syntax-helper-design.md §5 for the binding contract.
+// See docs/private/syntax-helper-design.md §5 for the binding contract.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_PANE_VIEW_H_

@@ -91,14 +91,14 @@ public:
 	virtual const ibDialectDictionary& GetDialect() const override;
 
 	// PG DB temp-table facts (the first real temp target — ad-hoc CREATE TEMPORARY TABLE). Presence
-	// of this (vs the base nullptr) flips PG onto the temp path; FB stays on RAM. (docs/temp-db.md)
+	// of this (vs the base nullptr) flips PG onto the temp path; FB stays on RAM. (docs/private/temp-db.md)
 	static const ibTempTableDialect& TempDialect();
 	virtual const ibTempTableDialect* GetTempTableDialect() const override;
 
 	// Derived-state materialisation (register totals) — the production target. PG is the
 	// only per-row engine that cannot inline a trigger body (it needs a FUNCTION), and the
 	// only one with a storage knob worth setting (fillfactor → HOT updates on the hot totals
-	// row). Both are dictionary slots. (docs/register-totals-strategy.md)
+	// row). Both are dictionary slots. (docs/private/register-totals-strategy.md)
 	static const ibMaterializationDialect& MaterializationDialect();
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
 

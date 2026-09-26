@@ -280,13 +280,18 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		batch.DropColumn(dstCol);
 		return retCode;
 	}
-	// UPDATE — only if the type set changed.
-	if (srcCol->GetTypeDesc() == dstCol->GetTypeDesc())
+	// UPDATE — only if what the column may HOLD changed: GetTypeValueDesc, the answer its layout is built
+	// from below. Asked of the DECLARATION, a field declared through a chart of characteristic types never
+	// changed at all — its declaration IS the chart — while the chart gaining a reference type grew its
+	// layout a reference pair. The apply wrote nothing, and the next read would have asked for columns
+	// the table does not have (found 2026-09-24 on a rehearsal: a catalog added to a chart's types,
+	// 0 changes).
+	const ibTypeDescription& srcTypeDesc = srcCol->GetTypeValueDesc();
+	const ibTypeDescription& dstTypeDesc = dstCol->GetTypeValueDesc();
+	if (srcTypeDesc == dstTypeDesc)
 		return retCode;
 
 	const wxString&    tableName = batch.GetTable();
-	const ibTypeDescription& srcTypeDesc = srcCol->GetTypeDesc();
-	const ibTypeDescription& dstTypeDesc = dstCol->GetTypeDesc();
 	const wxString fieldName = srcCol->GetPhysicalName();
 	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
 	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);

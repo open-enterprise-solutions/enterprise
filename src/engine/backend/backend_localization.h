@@ -95,7 +95,13 @@ public:
 	wxString GetString() const {
 		return GetTranslate(ibBackendLocalization::GetUserLanguage());
 	}
-	operator wxString() const { return GetString(); }
+
+	// …AND THE SAME TEXT WRITTEN INTO `scratch`, which is what comes back — for a caller reading one text
+	// after another: a scratch reused call after call grows once and then stops allocating.
+	const wxString& GetString(wxString& scratch) const {
+		ibBackendLocalization::GetTranslateFromArray(ibBackendLocalization::GetUserLanguage(), m_translations, scratch);
+		return scratch;
+	}
 
 	// …AND THE TEXT OF ONE NAMED LANGUAGE.
 	wxString GetTranslate(const wxString& strLangCode) const {

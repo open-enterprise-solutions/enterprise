@@ -414,7 +414,7 @@ TEST_F(TempDbSqliteFix, DoorMultipleAggregatesInOneRow)
 // asserted here by RUNNING the render against SQLite:
 //   * it FILTERS — a row passes iff a permitting row EXISTS (no permission → not visible);
 //   * it NEVER MULTIPLIES — a row permitted by N rows appears ONCE, not N times (an INNER
-//     JOIN would duplicate; the filter-not-JOIN principle, docs/access-policy-rls.md).
+//     JOIN would duplicate; the filter-not-JOIN principle, docs/private/access-policy-rls.md).
 // Both sources are SQLite temp tables (the vehicle), so the correlation runs server-side
 // exactly like a temp-promoted inner — the outer key qualifies by the source's own table
 // name (BuildConditionExpr's empty-mainQual fallback), so it never binds inside the EXISTS.
@@ -485,7 +485,7 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_DoesNotMultiply)
 
 	// An INNER JOIN would yield key 2 THREE times (one per permission match). The semi-join
 	// FILTERS: key 2 appears exactly ONCE. This is the whole point — a restriction must not
-	// duplicate rows (docs/access-policy-rls.md — RLS join = FILTER, not JOIN).
+	// duplicate rows (docs/private/access-policy-rls.md — RLS join = FILTER, not JOIN).
 	EXPECT_EQ(SemiJoinSurvivors(holder, sales, perm), (std::vector<int>{2}))
 		<< "a row permitted by N rows appears ONCE, not N times";
 }
@@ -518,7 +518,7 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_NegatedIsAntiJoin)
 // The WRITE half: an RLS semi-join rides m_predicate, and the DELETE path lowers m_predicate
 // through BuildWhere (the earlier flat loop read only m_conditions and left writes UNENFORCED —
 // a silent leak). So a blanket DELETE under the restriction scopes to PERMITTED rows only; an
-// unpermitted row cannot be deleted. (docs/access-policy-rls.md — Write path)
+// unpermitted row cannot be deleted. (docs/private/access-policy-rls.md — Write path)
 TEST_F(TempDbSqliteFix, RlsSemiJoin_RestrictsDelete)
 {
 	if (!ready) GTEST_SKIP();
@@ -547,7 +547,7 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_RestrictsDelete)
 
 // Several joins on one restriction (Max: "and will it digest several joins?"). Each AddSemiJoin
 // AND-folds its EXISTS into m_predicate, so a row must satisfy EVERY semi-join — and each is still a
-// FILTER, so the intersection never multiplies. (docs/access-policy-rls.md — the tree rides every path)
+// FILTER, so the intersection never multiplies. (docs/private/access-policy-rls.md — the tree rides every path)
 TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)
 {
 	if (!ready) GTEST_SKIP();

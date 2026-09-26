@@ -932,8 +932,8 @@ HTTP: POST /w/<dbalias>/login  (body: user+pwd, cookie: tabSid UUID)
 ```
 Script (desktop) / HTTP POST /open?metaID=N (web):
 OpenForm("Catalog.Products.ListForm")
-  └─ ibValueMetaObjectFormBase::CreateAndBuildForm(metaForm, owner, srcObj, uniqueKey)
-       └─ ibSession::CurrentFrame()->CreateNewForm(metaFormObject, ownerControl, srcObject)
+  └─ ibValueMetaObjectFormBase::CreateAndBuildForm(request, metaForm, owner, srcObj)
+       └─ ibSession::CurrentFrame()->CreateNewForm(request, metaFormObject, ownerControl, srcObject)
               # session-owned frame; desktop = ibFrontendMainFrame, web = ibWebFrame
             └─ ibValueForm constructed (per-instance compileModule + ProcUnit)
                  └─ LoadFormData / BuildForm — control tree built from metadata

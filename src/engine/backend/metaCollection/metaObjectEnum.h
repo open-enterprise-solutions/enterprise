@@ -5,30 +5,17 @@
 //	Description : enumerations owned by the BASE metaobject — the ones whose
 //	              meaning is platform-wide rather than tied to one metatype.
 //
-//	Why this file exists. ibSelectMode used to live in attribute/metaAttributeObjectEnum.h,
-//	but it is not an attribute concept: ibValueMetaObject::ProcessChoice takes it, and a
-//	choice form is something any metaobject can raise. A base naming a type declared by one
-//	of its descendants is backwards, and it showed: metaObject.h had to name it through an
-//	elaborated `enum ibSelectMode` specifier with nothing declared in scope — accepted by
-//	MSVC, rejected outright by GCC.
-//
-//	Keeping it HERE rather than inside metaObject.h is what keeps consumers cheap: the
-//	frontend's type control needs the select mode and nothing else about metaobjects, so it
-//	includes this (enumUnit.h only) instead of the whole base-metaobject header.
+//	The SCRIPT-VISIBLE faces live here; the types themselves live with the
+//	subject they belong to. ibSelectMode is part of what a choice is asked
+//	with, so it moved to createRequest.h beside the request that carries it —
+//	and its script face stayed here, with the other enumerations a module can
+//	name (Max, 2026-09-23).
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/compiler/enumUnit.h"
+#include "backend/createRequest.h"   // ibSelectMode — the enum this face is of
 
-// What a choice form is allowed to hand back — items, folders, or either. A hierarchical
-// source is the one that can tell them apart; a flat one only ever answers with items.
-enum ibSelectMode {
-	ibSelectMode_Items = 1,
-	ibSelectMode_Folders,
-	ibSelectMode_FoldersAndItems
-};
-
-// The script-visible face of the same enum (registered as "SelectMode" —
-// see metaObjectEnum.cpp).
+// The script-visible face of ibSelectMode (registered as "SelectMode" — see metaObjectEnum.cpp).
 class ibValueEnumSelectMode : public ibValueEnumeration<ibSelectMode> {
 	public:
 	ibValueEnumSelectMode() : ibValueEnumeration() {}

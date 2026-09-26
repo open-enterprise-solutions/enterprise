@@ -8,7 +8,7 @@
 // type silently corrupts on the next reload — no other test catches it.
 //
 // This is the regression guard the serialization arc mandates BEFORE any
-// further step (see docs/metadata-serialization-arc.md, "Step 0"). It proves
+// further step (see docs/private/metadata-serialization-arc.md, "Step 0"). It proves
 // the format is a fixed point: load(save(x)) re-serializes to the identical
 // bytes. Any drift between a Save body and its Load mirror flips the
 // byte-equality assertion.

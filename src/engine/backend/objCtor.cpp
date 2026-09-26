@@ -9,7 +9,7 @@
 // typeid/wxClassInfo key for them. Only CreateObject() remains.
 
 //reference class
-ibValue* ibCtorMetaValueTypeReference::CreateObject() const
+ibValue ibCtorMetaValueTypeReference::CreateObject() const
 {
 	// OnDemand is REQUIRED here, not preferred: reading the row would materialise attribute values,
 	// one of which is itself a reference, re-entering this very function -> stack overflow.
@@ -17,31 +17,31 @@ ibValue* ibCtorMetaValueTypeReference::CreateObject() const
 }
 
 //object class
-ibValue* ibCtorMetaValueTypeObject::CreateObject() const
+ibValue ibCtorMetaValueTypeObject::CreateObject() const
 {
 	return m_metaObject->CreateRecordDataObjectValue();
 }
 
 //manager class
-ibValue* ibCtorMetaValueTypeManager::CreateObject() const
+ibValue ibCtorMetaValueTypeManager::CreateObject() const
 {
 	return m_metaObject->CreateManagerDataObjectValue();
 }
 
 //object record key
-ibValue* ibCtorMetaValueTypeRecord::CreateObject() const
+ibValue ibCtorMetaValueTypeRecord::CreateObject() const
 {
 	return m_metaObject->CreateRecordKeyObjectValue();
 }
 
 //object record manager
-ibValue* ibCtorMetaValueTypeRecordManager::CreateObject() const
+ibValue ibCtorMetaValueTypeRecordManager::CreateObject() const
 {
 	return m_metaObject->CreateRecordManagerObjectValue();
 }
 
 //object record set
-ibValue* ibCtorMetaValueTypeRecordSet::CreateObject() const
+ibValue ibCtorMetaValueTypeRecordSet::CreateObject() const
 {
 	return m_metaObject->CreateRecordSetObjectValue();
 }

@@ -265,7 +265,7 @@ public:
 	// Fire the native-click event. The Bind set up in
 	// ibValueButton::Create routes it to OnButtonPressed, which runs
 	// the script and refreshes the form — same shape as a desktop
-	// wxButton click. See docs/web/event-dispatcher.md.
+	// wxButton click. See docs/private/web/event-dispatcher.md.
 	bool FireClick() { return FireCommand(wxEVT_BUTTON); }
 
 	virtual bool HandleRequest(const wxString& kind,

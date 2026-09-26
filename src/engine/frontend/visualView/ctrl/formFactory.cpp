@@ -69,13 +69,19 @@ inline void SetDefaultLayoutProperties(ibValueSizerItem* sizerItem)
 ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* controlParent, const ibValue& generateId)
 {
 	if (ibValue::IsRegisterCtor(clsid)) {
-		ibValueFrame* newControl = nullptr;
+		ibValuePtr<ibValueFrame> newControl;
 		ibValue* ppParams[] = { this, controlParent, const_cast<ibValue*>(&generateId) };
 		try {
-			newControl = ibValue::CreateAndConvertObjectRef< ibValueFrame>(clsid, ppParams, 3);
+			newControl = ibValue::CreateObject(clsid, ppParams, 3);
+			if (newControl == nullptr) {
+				// Built, but not an element of a form — the class id names something else. Said, as below.
+				ibJournalError(wxT("ui.form"), _("Class id %lld is not a form element"), (long long)clsid);
+				return nullptr;
+			}
 			// A parented control is owned by the parent's vector (AddChild inside
 			// Init). A rootless control has no vector owner, so the caller takes
-			// ownership via this reference (e.g. an ibValuePtr member).
+			// ownership via this reference (e.g. an ibValuePtr member) — taken before
+			// the holder here lets go.
 			if (controlParent == nullptr) newControl->IncrRef();
 		}
 		// 🛑 THE REFUSAL KEEPS ITS REASON. A control that cannot be built returns nullptr, and every

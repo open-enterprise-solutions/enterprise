@@ -941,6 +941,21 @@ ibSession* ibSession::Current()
 	auto& reg = *regPtr;
 	const auto tid = std::this_thread::get_id();
 
+	// ⭐⭐ A THREAD THAT BOUND ITSELF MEANS IT — and it is asked FIRST, before the debug redirect below,
+	// because a binding is a STATEMENT and the redirect is a GUESS. A debug handler that has been told
+	// which stop it is working on binds that session for the length of the work (EvalInParkedSession in
+	// debugServer.cpp); one that has not been told falls through to the guess, as everything did before.
+	//
+	// 🛑 THE GUESS USED TO WIN. With two runtimes stopped — an application at its own startup breakpoint
+	// and a background run inside a print — every evaluation was worked out in the FIRST of them, while
+	// the stack and the locals on screen belonged to the second (2026-09-25).
+	{
+		std::shared_lock<std::shared_mutex> lk(s_currentMutex);
+		if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
+			if (auto sp = it->second.lock()) return sp.get();
+		}
+	}
+
 	// Debug-thread redirection: a thread registered as a debug-server
 	// worker resolves Current() to "whichever script thread is parked
 	// at a breakpoint right now" (front of the FIFO queue maintained
@@ -971,14 +986,11 @@ ibSession* ibSession::Current()
 	// silently, and differently from run to run.
 	//
 	// The fix is not a better Single; it is not having one. A thread that bound
-	// itself means it (that is the whole point of ibSessionScope), and a thread
-	// that did not gets the process's fallback — the first authenticated session,
-	// which on a desktop IS the lone session the old branch was reaching for. The
-	// access mode still sizes the worker pool; it no longer decides identity.
-	std::shared_lock<std::shared_mutex> lk(s_currentMutex);
-	if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
-		if (auto sp = it->second.lock()) return sp.get();
-	}
+	// itself means it (that is the whole point of ibSessionScope, asked at the top
+	// of this function), and a thread that did not gets the process's fallback —
+	// the first authenticated session, which on a desktop IS the lone session the
+	// old branch was reaching for. The access mode still sizes the worker pool; it
+	// no longer decides identity.
 	return reg.GetFallback();
 }
 

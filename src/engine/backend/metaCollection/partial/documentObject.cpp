@@ -88,36 +88,14 @@ const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() con
 //*                       Document hook overrides for RecorderRef scaffold                       *
 //***********************************************************************************************
 
-bool ibValueRecordDataObjectDocument::CheckDeletionMarkOnPosting(ibDocumentWriteMode /*wm*/) const
-{
-	ibValue deletionMark = false;
-	ibValueMetaObjectAttributePredefined* attributeDeletionMark = m_metaObject->GetDataDeletionMark();
-	wxASSERT(attributeDeletionMark);
-	ibValueRecordDataObjectRef::GetValueByMetaID(*attributeDeletionMark, deletionMark);
-	return !deletionMark.GetBoolean();  // true = ok to proceed (no DeletionMark)
-}
-
-void ibValueRecordDataObjectDocument::ApplyPostedAttributeOnWrite(ibDocumentWriteMode writeMode)
+void ibValueRecordDataObjectDocument::SetPosted(bool posted)
 {
 	ibValueMetaObjectDocument* dataRef = nullptr;
 	if (!m_metaObject->ConvertToValue(dataRef))
 		return;
 	ibValueMetaObjectAttributePredefined* metaPosted = dataRef->GetDocumentPosted();
 	wxASSERT(metaPosted);
-	if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
-		m_listObjectValue.insert_or_assign(metaPosted->GetMetaID(), true);
-	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting)
-		m_listObjectValue.insert_or_assign(metaPosted->GetMetaID(), false);
-}
-
-void ibValueRecordDataObjectDocument::FillDefaultDateForNew()
-{
-	ibValueMetaObjectDocument* dataRef = nullptr;
-	if (!m_metaObject->ConvertToValue(dataRef))
-		return;
-	const ibValue& docDate = GetValueByMetaID(*dataRef->GetDocumentDate());
-	if (docDate.IsEmpty())
-		SetValueByMetaID(*dataRef->GetDocumentDate(), ibValueSystemFunction::CurrentDate());
+	m_listObjectValue.insert_or_assign(metaPosted->GetMetaID(), posted);
 }
 
 // What this document writes into, by list — the registers it posts movements to or the sequences it
@@ -135,8 +113,7 @@ const ibMetaDescription* ibValueRecordDataObjectDocument::GetRecordDescription(i
 //***********************************************************************************************
 // WriteObject(wm, pm) / DeleteObject scaffold moved up to
 // ibValueRecordDataObjectRecorderRef — see top of this file.
-// Document keeps only the hook overrides (CheckDeletionMarkOnPosting,
-// ApplyPostedAttributeOnWrite, FillDefaultDateForNew, IsPosted).
+// Document keeps only the hook overrides (IsPosted, SetPosted).
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -258,7 +235,7 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		return true;
 	case Func::eGetFormObject:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;

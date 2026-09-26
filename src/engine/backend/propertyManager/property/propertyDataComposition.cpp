@@ -4,7 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc) const
+wxVariantData* ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
 	return new ibVariantDataComposition(property, desc);
 }

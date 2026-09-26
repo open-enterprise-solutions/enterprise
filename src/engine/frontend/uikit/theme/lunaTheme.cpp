@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 // Luna theme — the default uikit theme, built the way every univ theme is:
 // an ibThemeRenderer subclass + an ibColourScheme carrying the interior-design
-// palette from docs/ui-palette.md (cool dusty-blue chrome, warm-cream
+// palette from docs/private/ui-palette.md (cool dusty-blue chrome, warm-cream
 // content, terracotta accent). Registered as the default theme "luna".
 // ----------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@
 
 namespace {
 
-// palette tiers (docs/ui-palette.md — reuse a tier, don't invent a shade)
+// palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade)
 const wxColour kChrome(0xB8, 0xC9, 0xD4);        // chrome        #B8C9D4
 const wxColour kChromeLight(0xC8, 0xD6, 0xDF);   // chrome-light  #C8D6DF
 const wxColour kContent(0xFA, 0xF7, 0xF0);       // content       #FAF7F0

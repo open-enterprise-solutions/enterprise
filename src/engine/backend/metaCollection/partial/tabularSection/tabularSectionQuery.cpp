@@ -56,7 +56,7 @@ const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxStri
 	const ibBackendQueryColumn* const ownerRef = OwnerRefColumn();
 	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::CompareString(name, ownerRef->GetName()))
 		return ownerRef;
-	// The attribute's QUERY FACE — it holds one rather than being one (docs/ownership-authority.md) — found in the
+	// The attribute's QUERY FACE — it holds one rather than being one (docs/private/ownership-authority.md) — found in the
 	// SAME list GetColumns vends. The table's children alone missed what its owner carries into it: the account's
 	// kinds table shows a tick-box per breakdown accounting kind of its chart, and `K.Quantitative` was refused as
 	// an unknown attribute while `SELECT *` returned it (2026-09-17).
@@ -128,7 +128,16 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 	}
 	catch (...) { return false; }
 
-	m_readAfter = true;
+	// THE ROWS ARE HERE, SO NOTHING IS PENDING ANY MORE.
+	//
+	// 🛑 IT SAID `true`, and that is the flag the caller reads on (reference.cpp, GetPropVal): the read
+	// re-armed the very condition that starts it, so EVERY access to the field read the table again. And
+	// a read begins by CLEARING the model — which detaches every row already handed out, including the
+	// one a `foreach` is standing on. The script kept working only for as long as nobody else touched the
+	// field; a watch expression or a hover on it broke the script it was watching. Measured 2026-09-25:
+	// three re-reads from the debug connection's thread, and the next step died on `line.Item`
+	// ("Object field not readable (Item)", Document.GoodsSale.ManagerModule(37)).
+	m_readAfter = false;
 	return true;
 }
 

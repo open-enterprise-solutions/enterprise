@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — the bytecode emission CONTRACT
 //
-// Step 0 of the compiler AST arc (docs/compiler-ast-arc.md §3e). This suite
+// Step 0 of the compiler AST arc (docs/private/compiler-ast-arc.md §3e). This suite
 // does not test that the compiler is CORRECT; test_compiler.cpp does that. It
 // tests that emission does not CHANGE.
 //
@@ -16,7 +16,7 @@
 // The rendering is deliberately WIDER than the interpreter reads: it includes
 // m_numLine, because the debugger's breakpoints ride on it and a tree-driven
 // emitter is exactly the kind of change that silently drops line stamps
-// (docs/compiler-ast-arc.md §5).
+// (docs/private/compiler-ast-arc.md §5).
 //
 // UPDATING A DIGEST. When a change is intended, the failure prints the full
 // disassembly and the ready-to-paste literal. Paste it — but only after reading

@@ -2,6 +2,7 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
 #include "frontend/win/dlgs/settings/savedSettings.h"    // the setting marked "restore on open" goes on here
+#include "frontend/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -24,8 +25,7 @@ bool ibValueGridBox::SetControlValue(const ibValue& varControlVal)
 
 	// The window follows the model it was given — the sheet is the model's, and a run filling it
 	// reaches the screen through the notifiers the window subscribes to here.
-	if (ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetInnerWx()))
-		gridWindow->LoadDocument(model->GetSpreadsheetDocument());
+	m_gridDocument->SetSpreadsheetDocument(model->GetSpreadsheetDocument());
 
 	return true;
 }
@@ -41,8 +41,12 @@ bool ibValueGridBox::GetControlValue(ibValue& pvarControlVal) const
 //***********************************************************************************
 
 ibValueGridBox::ibValueGridBox() : ibValueWindowComposite(),
-m_spreadsheetModel(new ibValueSpreadsheetDocument())   // nothing bound yet — a sheet of its own IS a model
+m_spreadsheetModel(new ibValueSpreadsheetDocument()),   // nothing bound yet — a sheet of its own IS a model
+m_gridDocument(new ibSpreadsheetGridBoxDocument()),
+m_gridView(new ibSpreadsheetGridBoxView())                // empty until Create
 {
+	m_gridView->SetDocument(m_gridDocument);
+
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
 	m_propertyMinSize->SetValue(wxSize(150, 50));
@@ -58,9 +62,30 @@ m_spreadsheetModel(new ibValueSpreadsheetDocument())   // nothing bound yet — 
 
 #include "frontend/visualView/ctrl/form.h"
 
+ibValueGridBox::~ibValueGridBox()
+{
+	*m_aliveToken = false;
+
+	wxDELETE(m_gridView);   // the view first: it is the document's
+	wxDELETE(m_gridDocument);
+}
+
+ibView* ibValueGridBox::GetControlView() const
+{
+	// An empty view (cleaned up, not created again) has nothing to hand on.
+	return m_gridView->GetGridCtrl() != nullptr ? m_gridView : nullptr;
+}
+
 wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 {
-	ibGridEditor* gridWindow = new ibGridEditor(nullptr, wxparent, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	// The box's view is created the way a document's view is — its frame is this box's parent, and its
+	// OnCreate makes the editor, which is what the form engine is handed.
+	m_gridView->SetFrame(wxparent);
+	
+	if (!m_gridView->OnCreate(m_gridDocument, 0))
+		return nullptr;
+	
+	ibGridEditor* gridWindow = m_gridView->GetGridCtrl();
 
 	gridWindow->EnableProperty(!visualHost->IsDesignerHost());
 	gridWindow->EnableGridArea(false);
@@ -76,7 +101,7 @@ wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	// a hand-filled document simply by being one — and the window subscribes to that very object, so
 	// data arriving there reaches the screen without anybody re-pointing the control.
 	if (m_spreadsheetModel)
-		gridWindow->LoadDocument(m_spreadsheetModel->GetSpreadsheetDocument());
+		m_gridDocument->SetSpreadsheetDocument(m_spreadsheetModel->GetSpreadsheetDocument());
 
 	// ⭐⭐ THE CELL CLICKS, BROUGHT OUT TO THE RUNTIME. The editor window has always caught them — a
 	// DOUBLE left click opens the cell's value, a right click raises the popup — but it handled them
@@ -143,6 +168,8 @@ void ibValueGridBox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	}
 
 	UpdateWindow(gridWindow);
+
+	m_gridDocument->UpdateAllViews();
 }
 
 void ibValueGridBox::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
@@ -158,22 +185,10 @@ void ibValueGridBox::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 	// nothing has nothing to stop.
 	if (m_spreadsheetModel)
 		m_spreadsheetModel->CancelFetch();
-}
 
-//**********************************************************************************
-
-#include "frontend/win/editor/gridEditor/gridPrintout.h"
-
-wxPrintout* ibValueGridBox::CreatePrintout() const
-{
-	// GetInnerWx, not GetWxObject — this box is a COMPOSITE, so the outer object is the layer
-	// canvas that carries the command bar, and the grid sits inside it. The cast to the editor was
-	// therefore never anything but null, and printing a report quietly did nothing.
-	ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(GetInnerWx());
-	if (gridWindow != nullptr)
-		return gridWindow->CreatePrintout();
-
-	return nullptr;
+	// …and the view is closed, left empty: the visual host destroys the editor right after this, and the
+	// document stays with the box.
+	m_gridView->Close(false);
 }
 
 //**********************************************************************************

@@ -61,7 +61,7 @@ public:
 	// NOTE: MSSQL's true row lock is the table hint "WITH (UPDLOCK, ROWLOCK)" placed AFTER FROM,
 	// which the suffix model can't express — so MSSQL/ODBC pessimistic row-locking is a known gap
 	// (the old virtual placed it as a suffix too, i.e. it was never correct here). NOWAIT rides
-	// SET LOCK_TIMEOUT 0 (ibTxOptions::noWait). See docs/record-locks.md.
+	// SET LOCK_TIMEOUT 0 (ibTxOptions::noWait). See docs/private/record-locks.md.
 
 	// Database schema API contributed by M. Szeftel (author of wxActiveRecordGenerator)
 	virtual bool TableExists(const wxString& table);
@@ -88,7 +88,7 @@ public:
 	// underneath, so there is nothing correct it could emit. A register on ODBC therefore
 	// keeps serving Balance / Turnover from the live aggregation — the always-works floor.
 	// This stays true even after the MSSQL port: an MSSQL driver would carry the set-based
-	// dictionary, MSSQL-through-ODBC still would not. (docs/register-totals-strategy.md)
+	// dictionary, MSSQL-through-ODBC still would not. (docs/private/register-totals-strategy.md)
 
 	static bool IsAvailable();
 

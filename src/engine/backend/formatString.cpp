@@ -9,6 +9,8 @@
 
 #include <wx/datetime.h>
 
+#include <algorithm>   // std::max / std::min — the spelling of a date letter
+
 namespace {
 
 struct ibFormatCodeInfo {
@@ -53,46 +55,83 @@ std::optional<wxUniChar> FirstChar(const wxString& value)
 	return value[0];
 }
 
-// The date pattern in wxDateTime's terms. ⚠ `mm` IS THE MONTH and `MM` the minutes.
-wxString ToStrftime(const wxString& pattern)
+// The letters of a date pattern: year, month, day, hours, minutes, seconds. ⚠ `mm` IS THE MONTH and `MM`
+// the minutes.
+int DateLetter(wxUniChar c)
 {
-	wxString newFormat = pattern;
+	switch (c.GetValue()) {
+	case L'y': return 0;
+	case L'm': return 1;
+	case L'd': return 2;
+	case L'H': return 3;
+	case L'M': return 4;
+	case L'S': return 5;
+	}
+	return -1;
+}
 
-	//year
-	if (newFormat.Replace("yyyy", "%Y") == 0) {
-		if (newFormat.Replace("yyy", "%y") == 0) {
-			if (newFormat.Replace("yy", "%y") == 0) {
-				newFormat.Replace("y", "%y");
+void AppendTwoDigits(int value, wxString& out)
+{
+	out += static_cast<wxChar>(L'0' + value / 10 % 10);
+	out += static_cast<wxChar>(L'0' + value % 10);
+}
+
+// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out` — no strftime pattern is built and wxDateTime::Format is
+// not called, because both allocate once per date and a report prints a date per row.
+//
+// The reading is the one the strftime translation gave (yyyy the full year, yyy / yy / y two digits,
+// mm / m, dd / d, HH / H, MM / M, SS / S two digits each): a letter is taken by the LONGEST spelling the
+// pattern uses anywhere, every run of it is read in pieces of that length, and what is left over stands as
+// the letter — `yyyyy` is the year and a `y`. Every other character stands as it is.
+void WriteDate(const wxString& pattern, const wxDateTime::Tm& tm, wxString& out)
+{
+	static const int s_longest[6] = { 4, 2, 2, 2, 2, 2 };
+	const size_t length = pattern.length();
+
+	int spelling[6] = { 0, 0, 0, 0, 0, 0 };
+	for (size_t i = 0; i < length;) {
+		size_t run = 1;
+		while (i + run < length && pattern[i + run] == pattern[i]) ++run;
+		const int letter = DateLetter(pattern[i]);
+		if (letter >= 0)
+			spelling[letter] = std::max(spelling[letter], std::min(static_cast<int>(run), s_longest[letter]));
+		i += run;
+	}
+
+	out.clear();
+	out.reserve(length + 4);
+	for (size_t i = 0; i < length;) {
+		const wxUniChar c = pattern[i];
+		size_t run = 1;
+		while (i + run < length && pattern[i + run] == c) ++run;
+		const int letter = DateLetter(c);
+		size_t at = 0;
+		if (letter >= 0) {
+			const size_t piece = static_cast<size_t>(spelling[letter]);
+			for (; at + piece <= run; at += piece) {
+				switch (letter) {
+				case 0:
+					if (piece == 4 && tm.year >= 0 && tm.year <= 9999) {
+						AppendTwoDigits(tm.year / 100, out);
+						AppendTwoDigits(tm.year % 100, out);
+					}
+					else if (piece == 4)
+						out << tm.year;
+					else
+						AppendTwoDigits((tm.year % 100 + 100) % 100, out);
+					break;
+				case 1: AppendTwoDigits(tm.mon + 1, out); break;
+				case 2: AppendTwoDigits(tm.mday, out);    break;
+				case 3: AppendTwoDigits(tm.hour, out);    break;
+				case 4: AppendTwoDigits(tm.min, out);     break;
+				case 5: AppendTwoDigits(tm.sec, out);     break;
+				}
 			}
 		}
+		if (at < run)
+			out.append(run - at, c);
+		i += run;
 	}
-
-	//month
-	if (newFormat.Replace("mm", "%m") == 0) {
-		newFormat.Replace("m", "%m");
-	}
-
-	//day
-	if (newFormat.Replace("dd", "%d") == 0) {
-		newFormat.Replace("d", "%d");
-	}
-
-	//hour
-	if (newFormat.Replace("HH", "%H") == 0) {
-		newFormat.Replace("H", "%H");
-	}
-
-	//minute
-	if (newFormat.Replace("MM", "%M") == 0) {
-		newFormat.Replace("M", "%M");
-	}
-
-	//second
-	if (newFormat.Replace("SS", "%S") == 0) {
-		newFormat.Replace("S", "%S");
-	}
-
-	return newFormat;
 }
 
 } // namespace
@@ -235,7 +274,12 @@ bool ibFormatString::IsWritable(const wxString& text)
 ibFormatString ibFormatString::Parse(const wxString& fmt)
 {
 	ibFormatString format;
+	Parse(fmt, format);
+	return format;
+}
 
+bool ibFormatString::Parse(const wxString& fmt, ibFormatString& format)
+{
 	// The pairs, as Format has always read them: `;` ends one, the first `=` splits it, and a `=`
 	// after that is not kept.
 	std::vector<std::pair<wxString, wxString>> pairs;
@@ -287,7 +331,7 @@ ibFormatString ibFormatString::Parse(const wxString& fmt)
 		else
 			format.m_other.push_back(pair);
 	}
-	return format;
+	return !pairs.empty();
 }
 
 wxString ibFormatString::Render() const
@@ -310,19 +354,30 @@ wxString ibFormatString::Render() const
 
 wxString ibFormatString::Apply(const ibValue& cData) const
 {
+	wxString result;
+	Apply(cData, result);
+	return result;
+}
+
+bool ibFormatString::Apply(const ibValue& cData, wxString& result) const
+{
 	switch (cData.GetType()) {
 	case ibValueTypes::TYPE_BOOLEAN: {
 		const std::optional<wxString>& text = cData.GetBoolean() ? m_boolean.m_true : m_boolean.m_false;
 		if (text)
-			return *text;
-		return cData.GetString();
+			result = *text;
+		else
+			result = cData.GetString();
+		break;
 	}
 	case ibValueTypes::TYPE_NUMBER: {
 		const ibNumber number = cData.GetNumber();
 
 		// NZ: replacement string when value is exactly zero.
-		if (number.IsZero() && m_number.m_zero)
-			return *m_number.m_zero;
+		if (number.IsZero() && m_number.m_zero) {
+			result = *m_number.m_zero;
+			break;
+		}
 
 		ibNumber::Format numFmt;
 		if (m_number.m_fractionDigits)   numFmt.fracDigits = *m_number.m_fractionDigits;
@@ -334,21 +389,26 @@ wxString ibFormatString::Apply(const ibValue& cData) const
 		}
 		if (m_number.m_groupSize)        numFmt.groupSize  = *m_number.m_groupSize;
 
-		return number.ToString(numFmt);
+		number.ToString(numFmt, result);
+		break;
 	}
 	case ibValueTypes::TYPE_DATE: {
-		if (cData.IsEmpty() && m_date.m_empty)
-			return *m_date.m_empty;
-
+		if (cData.IsEmpty() && m_date.m_empty) {
+			result = *m_date.m_empty;
+			break;
+		}
 		if (m_date.m_pattern) {
 			const wxDateTime dateTime = wxLongLong(cData.GetDate());
-			return dateTime.Format(ToStrftime(*m_date.m_pattern));
+			WriteDate(*m_date.m_pattern, dateTime.GetTm(), result);
+			break;
 		}
-		return cData.GetString();
+		result = cData.GetString();
+		break;
 	}
 	default:
-		break;      // every other type formats as its plain string
+		result = cData.GetString();   // every other type formats as its plain string
+		break;
 	}
 
-	return cData.GetString();
+	return !result.IsEmpty();
 }

@@ -258,7 +258,9 @@ struct ibQueryOutline {
 	bool     m_groups          = false;
 	wxString m_groupInto;                            // empty unless `group … into <name>`
 	bool     m_orders          = false;
-	bool     m_orderDescending = false;
+	// One per ordering key, in the order written: whether that key runs descending. Each key has its own
+	// way (`orderby a, b descending, c`), so one flag for the query could only have said one of them.
+	std::vector<bool> m_orderKeysDescending;
 
 	// ⭐⭐ AND THE QUERY ITSELF, as it was written — the exact stretch of text the compiler read to
 	// arrive at everything above, with the two character positions that bracket it.

@@ -22,7 +22,7 @@
 // impossible by construction: values travel as Const/Param nodes that become
 // bound parameters. The dialect difference (FIRST vs LIMIT, $n vs ?, type map,
 // UPSERT spelling) is closed entirely by ibDialectDictionary; there is no
-// per-DBMS fork in this layer (docs/query-language-arc.md §6, §18, §20).
+// per-DBMS fork in this layer (docs/private/query-language-arc.md §6, §18, §20).
 
 #include "backend/backend.h"
 #include "backend/compiler/value.h"                  // ibValue (Const node payload)
@@ -494,7 +494,7 @@ struct ibQueryRel
 	// Aggregate: GROUP BY ROLLUP(keys) — the DBMS computes every subtotal LEVEL (each from raw
 	// detail, so correct for COUNT / AVG, unlike re-aggregating leaf sums) + a grand total in ONE
 	// pass. The renderer wraps the keys with the dialect's rollup prefix/suffix; only set by L3's
-	// totals push-down when the dialect advertises m_features.m_rollup. (docs/query-language-arc.md §22.1b)
+	// totals push-down when the dialect advertises m_features.m_rollup. (docs/private/query-language-arc.md §22.1b)
 	bool m_rollup = false;
 
 	ibQuerySpan m_span;
@@ -662,7 +662,7 @@ struct ibQueryIR
 	// Pessimistic read-for-update: the renderer appends the dialect's row-lock clause
 	// (m_rowLockSuffix) to the TOP-level SELECT. Used by the register set lock + ibLockManager.
 	// m_lockNoWait additionally appends m_rowLockNoWaitSuffix (e.g. " NOWAIT") so a non-blocking
-	// acquire fails fast instead of queueing on a held row. (docs/record-locks.md)
+	// acquire fails fast instead of queueing on a held row. (docs/private/record-locks.md)
 	bool m_lockForUpdate = false;
 	bool m_lockNoWait    = false;
 
@@ -764,7 +764,7 @@ inline ibDdlStatement ibDropTable(const wxString& table, std::vector<ibDdlColumn
 // ANALYZE a table — refresh the optimiser's statistics so it plans against real cardinality
 // (after a temp materialise, a bulk load, or a restructure). The per-driver form lives in the
 // dialect (m_analyzePrefix: PG/SQLite "ANALYZE", FB empty); a driver with
-// no ANALYZE renders to empty and Execute no-ops. (docs/temp-db.md)
+// no ANALYZE renders to empty and Execute no-ops. (docs/private/temp-db.md)
 inline ibDdlStatement ibAnalyzeTable(const wxString& table)
 {
 	ibDdlStatement s(ibDdlKind::Analyze);
@@ -774,7 +774,7 @@ inline ibDdlStatement ibAnalyzeTable(const wxString& table)
 
 // CREATE a TEMPORARY table. The temp lexical bits (createPrefix / createSuffix) come from the L1
 // ibTempTableDialect, so this stays driver-agnostic — the temp-table manager fills them from the
-// connected driver's facts. (docs/temp-db.md)
+// connected driver's facts. (docs/private/temp-db.md)
 inline ibDdlStatement ibCreateTempTable(const wxString& table, std::vector<ibDdlColumn> columns,
                                         const wxString& createPrefix, const wxString& createSuffix = wxEmptyString)
 {
@@ -912,7 +912,7 @@ struct ibDmlStatement
 
 	// Insert ONLY — extra VALUES tuples for a multi-row INSERT: m_assignments is row 0 (it carries the
 	// column list), each m_extraRows[i] is one further row's values IN THE SAME COLUMN ORDER. Empty =
-	// a plain single-row INSERT. Used by the temp-table manager to bulk-fill in chunks. (docs/temp-db.md)
+	// a plain single-row INSERT. Used by the temp-table manager to bulk-fill in chunks. (docs/private/temp-db.md)
 	std::vector<std::vector<ibQueryExprPtr>> m_extraRows;
 
 	// Update + Delete (null = no WHERE — affects all rows).

@@ -167,7 +167,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// Both are structural: the totals object is created with the register, and the credit account
 		// is created the moment correspondence is switched on. Either one absent while correspondence
 		// says otherwise means the metadata is inconsistent with itself, and the only correct answer
-		// is to stop the apply and say which half is missing (docs/exceptions.md §5a).
+		// is to stop the apply and say which half is missing (docs/private/exceptions.md §5a).
 		// (The credit side is only ever asked for when correspondence is on — see the two calls at the
 		// end of this function — so there is no legitimate "this side does not exist" case to allow.)
 		if (totals == nullptr || account == nullptr)

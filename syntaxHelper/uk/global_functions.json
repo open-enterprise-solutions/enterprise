@@ -1068,6 +1068,44 @@
       "reviewed": true
     },
     {
+      "id": "fn.ReadJSON",
+      "name_local": "ReadJSON",
+      "name_en": "ReadJSON",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ReadJSON(reader : JSONReader)",
+      "description": "Цілком значення, на якому стоїть JSONReader, — написання еталонної системи для `reader.ReadValue()`. Об'єкт стає Structure, масив — Array, `null` — це Null; число читається зі свого тексту, точно. Якщо читач стоїть на імені властивості або щойно створений, це значення, яке йде далі.",
+      "syntax_block": "ReadJSON(reader : JSONReader)",
+      "parameters": "reader — JSONReader із заданим текстом.",
+      "return_descr": "Structure, Array, String, Number, Boolean або Null.",
+      "example": "reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"qty\"\":2}\");\norder = ReadJSON(reader);\nMessage(order.number);",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.WriteJSON", "guide.json"],
+      "reviewed": false
+    },
+    {
+      "id": "fn.WriteJSON",
+      "name_local": "WriteJSON",
+      "name_en": "WriteJSON",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "WriteJSON(writer : JSONWriter, value : any)",
+      "description": "Пише значення через JSONWriter — написання еталонної системи для `writer.WriteValue(value)`. Structure, Container і Array ідуть цілком, на будь-яку глибину; те, у чого немає форми в JSON (посилання, таблиця), відхиляється за іменем типу і нічого по собі не залишає.",
+      "syntax_block": "WriteJSON(writer : JSONWriter, value : any)",
+      "parameters": "writer — JSONWriter; value — String, Number, Boolean, Date, Null, Undefined або Structure / Container / Array з них.",
+      "return_descr": "Нічого.",
+      "example": "line = New Structure();\nline.Insert(\"item\", \"x\");\nwriter = New JSONWriter();\nWriteJSON(writer, line);\nMessage(writer.Close());",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.ReadJSON", "guide.json"],
+      "reviewed": false
+    },
+    {
       "id": "fn.ActiveWindow",
       "name_local": "ActiveWindow",
       "name_en": "ActiveWindow",
@@ -1760,25 +1798,6 @@
       "example": "ShowCommonForm(\"Settings\");",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
-      "reviewed": true
-    },
-    {
-      "id": "fn.GetCommonTemplate",
-      "name_local": "GetCommonTemplate",
-      "name_en": "GetCommonTemplate",
-      "kind": "system_function",
-      "category_keys": [
-        "global_context",
-        "global_functions"
-      ],
-      "signature": "GetCommonTemplate(name : string)",
-      "description": "Спільний макет за іменем — табличний документ, з якого збирається друкована форма.",
-      "syntax_block": "GetCommonTemplate(name : string)",
-      "parameters": "name — ім'я спільного макета.",
-      "return_descr": "Макет.",
-      "example": "template = GetCommonTemplate(\"InvoiceHeader\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": ["fn.GetCommonForm"],
       "reviewed": true
     },
     {

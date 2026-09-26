@@ -418,6 +418,16 @@ public:
 		return wxWindow::SetFont(font);
 	}
 
+	// A WIDTH THAT IS SET IS ANSWERED NO NARROWER THAN THE CONTROL CAN BE TYPED IN. A form author gives a
+	// field a width (a sum: 72 pixels), and the caption and the "..." / "x" buttons are drawn inside that
+	// same width, so on a narrow field they used up all of it and left the text area none - a field with
+	// nowhere to enter the value. Asked here, of the control, a sizer never lays it out narrower whoever
+	// set the width, and the answer follows the caption and the buttons as they change. A width that is
+	// not set stays unset: the best size already leaves room.
+	static constexpr int kMinimumTextWidth = 56;   // the text area, in DIP
+	virtual wxSize GetMinSize() const override;
+	virtual wxSize GetMaxSize() const override;
+
 	virtual bool Enable(bool enable = true);
 
 	// accessors
@@ -619,6 +629,7 @@ private:
 
 	wxSize ComputeLabelBestSize() const;
 	wxSize ComputeButtonAreaSize() const;
+	int    ComputeMinUsableWidth() const;
 	void   EnsureSlotMetrics() const;
 	int    BtnSlotWidth() const { EnsureSlotMetrics(); return m_cachedSlotW; }
 	int    BtnSlotHeight() const { EnsureSlotMetrics(); return m_cachedSlotH; }

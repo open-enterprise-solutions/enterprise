@@ -16,7 +16,7 @@
 // ask it, because there is only one function under them now: if a test here goes red, the field
 // tree and the resolver go wrong together, which is at least honest.
 //
-// (docs/register-totals-strategy.md, docs/query-constructor.md §5g)
+// (docs/private/register-totals-strategy.md, docs/private/query-constructor.md §5g)
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -779,7 +779,7 @@ TEST(AcctArgs, TheSymbiosisAsksWhatToDoWithAnEmptyPeriod) {
         << "a turnover has no balance to carry across an empty period";
 }
 
-TEST(AcctArgs, AListingTakesNeitherAccountNorBreakdownAndCanBeOrdered) {
+TEST(AcctArgs, AListingTakesNeitherAccountNorBreakdownNorAnOrder) {
     const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Records, /*correspondence*/ true);
     EXPECT_EQ(0, a.m_begin);
     EXPECT_EQ(1, a.m_end);
@@ -787,11 +787,9 @@ TEST(AcctArgs, AListingTakesNeitherAccountNorBreakdownAndCanBeOrdered) {
     EXPECT_EQ(-1, a.m_accountDr)   << "a listing reports the lines as written";
     EXPECT_EQ(-1, a.m_kindsDr);
     EXPECT_EQ(2, a.m_condition);
-    // Only a listing answers with LINES, so only a listing can be ordered and capped: a fold has no
-    // line to put before another.
-    EXPECT_EQ(3, a.m_order);
-    EXPECT_EQ(4, a.m_top);
-    EXPECT_EQ(5, a.m_count);
+    // The condition is the last argument: how the lines are ordered and how many are taken is the
+    // query's to say over the reading (`orderby ... take`), not a string of fields parsed here.
+    EXPECT_EQ(3, a.m_count);
 }
 
 TEST(AcctArgs, EverySlotIsDistinctAndInsideTheCount) {
@@ -805,7 +803,7 @@ TEST(AcctArgs, EverySlotIsDistinctAndInsideTheCount) {
             const ibAcctArgs a = ibAcctArgs::For(shape, correspondence);
             const int slots[] = { a.m_begin, a.m_end, a.m_periodicity, a.m_fillMethod,
                                   a.m_accountDr, a.m_kindsDr, a.m_accountCr, a.m_kindsCr,
-                                  a.m_condition, a.m_order, a.m_top };
+                                  a.m_condition };
             std::set<int> seen;
             for (const int slot : slots) {
                 if (slot < 0)

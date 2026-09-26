@@ -8,6 +8,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
 #include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::RunState)
+#include "backend/utils/debugTrace.h"  // ibDebugTraceEnabled — the parameters' values, only when asked for
 
 // --------------------------------------------------------------------------
 // Parameter binding: ibValue -> ibPreparedStatement::SetParam* by type.
@@ -41,6 +42,40 @@ static ibQueryParam ibParamOfConst(const ibQueryExpr& expr)
 		p.m_value = expr.m_const;
 	}
 	return p;
+}
+
+// What the journal says about a statement's parameters: their COUNT — a bind list is data (a password, a
+// person's name), and a journal a developer mails back must not carry it.
+//
+// ⭐ …UNLESS THE PROCESS WAS STARTED ASKING FOR THEM (OES_TRACE_SQL_PARAMS, utils/debugTrace.h). A statement
+// whose answer is wrong is often wrong in a CONSTANT the engine wrote into it, not in its text: a ledger
+// balance split one item into two rows because the key's normalising CASE bound an untyped empty where the
+// column's typed one belonged, and the journal showed the CASE with `?` in every place that mattered
+// (2026-09-26). Each value as it would bind: a blob in hex, an empty as NULL, a caller's value by index.
+// (maybe_unused: a Release build compiles the journal out, and this with it.)
+[[maybe_unused]] static wxString ibJournalOfParams(const std::vector<ibQueryParam>& params)
+{
+	static const bool s_traceValues = ibDebugTraceEnabled("OES_TRACE_SQL_PARAMS");
+	wxString text = wxString::Format(wxT("[%u params"), static_cast<unsigned>(params.size()));
+	if (s_traceValues) {
+		for (size_t i = 0; i < params.size(); ++i) {
+			const ibQueryParam& p = params[i];
+			text << (i == 0 ? wxT(": ") : wxT("; ")) << (i + 1) << wxT("=");
+			if (p.m_external)
+				text << wxT("&") << p.m_externalIndex;
+			else if (p.m_isBlob) {
+				text << wxT("0x");
+				const unsigned char* bytes = static_cast<const unsigned char*>(p.m_blob.GetData());
+				for (size_t b = 0; b < p.m_blob.GetDataLen(); ++b)
+					text << wxString::Format(wxT("%02x"), bytes[b]);
+			}
+			else if (p.m_value.GetType() == TYPE_EMPTY || p.m_value.GetType() == TYPE_NULL)
+				text << wxT("NULL");
+			else
+				text << p.m_value.GetString().Left(64);
+		}
+	}
+	return text + wxT("]");
 }
 
 // Bind a whole render plan in placeholder order (1-based). Inline Const values
@@ -802,11 +837,9 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	// The Firebird layer has always written its own; that one is about EXECUTION, this one about what
 	// the engine composed, and the pair is how a wrong answer is told apart from a wrong statement.
 	//
-	// The parameter COUNT rather than the values: a bind list is data (a password, a person's name),
-	// and a journal that a developer mails back must not carry it. The count is what a reader checks
-	// against the placeholders.
-	ibJournalInfo(wxT("query.sql"), wxT("%s   [%u params]"),
-	              m_out.m_sql, static_cast<unsigned>(m_out.m_params.size()));
+	// The parameter COUNT rather than the values, unless asked (ibJournalOfParams). The count is what a
+	// reader checks against the placeholders.
+	ibJournalInfo(wxT("query.sql"), wxT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
 	return m_out;
 }
 
@@ -1714,9 +1747,9 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 	}
 
 	m_out.m_sql = sql;
-	// The WRITE side, said the same way as the read (above): one line per statement, values left out.
-	ibJournalInfo(wxT("query.sql"), wxT("%s   [%u params]"),
-	              m_out.m_sql, static_cast<unsigned>(m_out.m_params.size()));
+	// The WRITE side, said the same way as the read (above): one line per statement, values left out
+	// unless asked.
+	ibJournalInfo(wxT("query.sql"), wxT("%s   %s"), m_out.m_sql, ibJournalOfParams(m_out.m_params));
 	return m_out;
 }
 

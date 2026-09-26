@@ -14,7 +14,7 @@
 // collide with the script language's keywords, and the query parser is not
 // subject to the script's CES-vs-VES keyword gate.
 //
-// See docs/query-language-arc.md §14 / §23.
+// See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/backend.h"     // BACKEND_API
 #include <wx/string.h>
@@ -96,6 +96,17 @@ enum class ibQueryKeyword
 
 	// literals
 	True, False,
+
+	// ⭐⭐ `UNDEFINED` — THE EMPTY OF A COMPOSITE FIELD: nothing was chosen at all, not a reference, not
+	// anything (Max, 2026-09-24). It is NOT an empty reference: that one is a value OF A TYPE — "a
+	// Catalogue.Goods, but no particular one" — and it names its type in the stored row, while this names
+	// none. `IS NULL` cannot say the difference: it holds for both, so until this word there was no way
+	// to ask a query for one and not the other.
+	//
+	// ⚠ A word in a VALUE position, like TRUE / FALSE / NULL beside it, so it costs a configuration
+	// nothing: ParsePrimary hands any keyword still standing where a field may stand back as a name, and
+	// a dotted path reads its first word as a name whatever the dictionary says.
+	Undefined,
 
 	// CASE expression
 	Case, When, Then, Else, End,
