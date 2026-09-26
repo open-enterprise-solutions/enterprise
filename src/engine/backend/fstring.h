@@ -428,6 +428,11 @@ BACKEND_API ibString Plain(const ibString& format);
 // Past this the result is not a message any more, and a format that keeps failing is not going to fit.
 constexpr size_t kFormatMaxLength = size_t(1) << 24;
 
+// swprintf into `out`, grown until the result fits — false when it never does (fstring.cpp). The one
+// place the C library formats for Format: on Apple's libc the wide printf passes through the thread's
+// multibyte locale, so it is called under a UTF-8 one there.
+BACKEND_API bool Print(std::wstring& out, const wchar_t* spec, ...);
+
 } // namespace ibFStringFormat
 
 // Every name spelled with its namespace, and no `using namespace`: this body is instantiated inside
@@ -450,16 +455,12 @@ inline ibString ibString::Format(const ibString& format, const Args&... args)
 			wxFAIL_MSG(wxT("ibString::Format: the arguments do not answer the format"));
 			return format;
 		}
-		// swprintf reports "does not fit" and nothing more, so the buffer grows until it does.
 		std::wstring out;
-		for (size_t capacity = spec.size() + 64; capacity <= ibFStringFormat::kFormatMaxLength; capacity *= 2) {
-			out.resize(capacity);
-			const int written = std::apply([&](const auto&... value) {
-				return std::swprintf(&out[0], capacity, spec.c_str(), ibFStringFormat::Pass(value)...);
-			}, held);
-			if (written >= 0 && static_cast<size_t>(written) < capacity)
-				return ibString(out.c_str(), static_cast<size_t>(written));
-		}
+		const bool fits = std::apply([&](const auto&... value) {
+			return ibFStringFormat::Print(out, spec.c_str(), ibFStringFormat::Pass(value)...);
+		}, held);
+		if (fits)
+			return ibString(out.c_str(), out.size());
 		wxFAIL_MSG(wxT("ibString::Format: the result does not fit"));
 		return format;
 	}

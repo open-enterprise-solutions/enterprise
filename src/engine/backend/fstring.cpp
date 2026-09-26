@@ -12,7 +12,12 @@
 #include <atomic>
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
+#include <cstdarg>       // Print — the arguments Format hands on
+#include <cwchar>        // vswprintf
 #include <locale>
+#if defined(__APPLE__)
+#include <xlocale.h>     // newlocale / uselocale — Print's own UTF-8 locale
+#endif
 #include <new>
 #include <sstream>       // ToCDouble — the classic locale, whatever the process has set
 #include <wx/wxcrt.h>    // wxTolower / wxToupper (per-char case primitives)
@@ -745,6 +750,40 @@ bool Prepare(const ibString& formatText, const Kind* given, size_t count, std::w
 		i = j;
 	}
 	return next == count;
+}
+
+// 🛑 ON APPLE'S LIBC THE WIDE PRINTF IS NOT WIDE ALL THE WAY: it passes every character through the
+// thread's multibyte locale, and in the "C" locale a character past ASCII cannot be converted — a Cyrillic
+// argument, a Cyrillic word in the format — so the call failed, and a failure reads the same as "does not
+// fit": the buffer grew to the limit and Format gave up (IbString.FormatKeepsCyrillic, macOS CI,
+// 2026-09-26; glibc and MSVC copy wide characters as they are). So there it runs under a UTF-8 locale of
+// its own, for this call only; the process's locale is not touched.
+bool Print(std::wstring& out, const wchar_t* spec, ...)
+{
+#if defined(__APPLE__)
+	static const locale_t s_utf8 = newlocale(LC_CTYPE_MASK, "UTF-8", static_cast<locale_t>(0));
+	const locale_t previous = s_utf8 != static_cast<locale_t>(0) ? uselocale(s_utf8) : static_cast<locale_t>(0);
+#endif
+
+	// vswprintf reports "does not fit" and nothing more, so the buffer grows until it does.
+	bool fits = false;
+	for (size_t capacity = std::wcslen(spec) + 64; capacity <= kFormatMaxLength && !fits; capacity *= 2) {
+		out.resize(capacity);
+		va_list args;
+		va_start(args, spec);
+		const int written = std::vswprintf(&out[0], capacity, spec, args);
+		va_end(args);
+		if (written >= 0 && static_cast<size_t>(written) < capacity) {
+			out.resize(static_cast<size_t>(written));
+			fits = true;
+		}
+	}
+
+#if defined(__APPLE__)
+	if (previous != static_cast<locale_t>(0))
+		uselocale(previous);
+#endif
+	return fits;
 }
 
 ibString Plain(const ibString& formatText)

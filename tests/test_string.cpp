@@ -249,6 +249,12 @@ TEST(IbString, FormatKeepsCyrillic) {
     EXPECT_TRUE(ibString::Format(wxT("<%s>"), ibString(WxRu())).ToWxString() == wxT("<") + WxRu() + wxT(">"));
 }
 
+// …and in the format itself: on Apple's libc the wide printf goes through the thread's locale, and in
+// the "C" one a character past ASCII failed the call either way (ibFStringFormat::Print).
+TEST(IbString, FormatKeepsCyrillicInTheFormat) {
+    EXPECT_TRUE(ibString::Format(ibString(WxRu() + wxT(" %d")), 5).ToWxString() == WxRu() + wxT(" 5"));
+}
+
 TEST(IbString, FormatGrowsPastItsFirstGuess) {
     const ibString longText(wxString(wxT('x'), 5000));
     EXPECT_EQ(ibString::Format(wxT("%s!"), longText).Len(), 5001u);
