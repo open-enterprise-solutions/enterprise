@@ -565,6 +565,14 @@ private:
 // without storing anything — the destination keeps the reference it already had,
 // which is exactly right. Two pointer compares inside a branch that was already
 // there, rather than a guard object on the hottest path in the interpreter.
+//
+// 🛑 AND THE RELEASE IS A Reset, NOT A BARE DecrRef. The destination used to keep its tag and its
+// pointer after the release, and every operation below that clears the destination again - the
+// string branch (MakeStringValue, SetString) - released the SAME reference a second time. A temporary
+// slot that held an array or a lambda and then received `"text" + n` took the object's count below
+// what its holders really held, and it was freed while a variable still pointed at it: the three
+// corpus scripts ASan stopped on (test_closure_iterator, test_closure_linq, test_linq_chain_extended,
+// develop at 7de8aec2). Reset releases and clears in one step, so a second clear finds nothing.
 #define CHECK_READONLY(Operation)\
 if(cValue1.m_bReadOnly)\
 {\
@@ -575,7 +583,7 @@ if(cValue1.m_bReadOnly)\
 }\
 if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
  && &cValue1!=&cValue2 && &cValue1!=&cValue3)\
- cValue1.m_pRef->DecrRef();\
+ cValue1.Reset();\
 
 // The same for a comparison, which also hands on whether it stands in a filter (IS_THREE_VALUED_NULL).
 #define CHECK_READONLY_COMPARE(Operation)\
@@ -588,7 +596,7 @@ if(cValue1.m_bReadOnly)\
 }\
 if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
  && &cValue1!=&cValue2 && &cValue1!=&cValue3)\
- cValue1.m_pRef->DecrRef();\
+ cValue1.Reset();\
 
 // Append a value's text onto `out`.
 //
