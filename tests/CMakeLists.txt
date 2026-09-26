@@ -113,6 +113,7 @@ add_executable(oes_tests
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
+    test_totalsFold.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
     test_calcDisplacement.cpp
