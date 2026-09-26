@@ -110,7 +110,7 @@ void ibValueStaticText::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		const bool read = GetControlValue(value);
 
 		staticText->SetLabel(GetControlTitle());
-		staticText->SetValueText(read ? value.GetString() : wxString());
+		staticText->SetValueText(read ? value.GetString() : ibString());
 
 		// A link only where there is something to open: an empty value is plain text, because a
 		// link that leads nowhere is worse than no link.

@@ -1696,7 +1696,7 @@ wxString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain&
 		// AMBIGUOUS — green here, a build failure on macOS and Linux (portability.md §1.10). The tree
 		// writes it this way in every other place; this one was the exception, and CI said so.
 		return numMethod != wxNOT_FOUND
-			? value.GetMethodHelper(numMethod) : wxString(wxEmptyString);
+			? value.GetMethodHelper(numMethod) : ibString();
 	}
 
 	wxString signature = fn.m_strRealName + wxT("(");

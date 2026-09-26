@@ -438,7 +438,7 @@ public:
 	//type conversion
 	virtual ibString GetString() const final {
 		return m_value ? m_value->GetString() :
-			wxString(wxEmptyString);
+			ibString();
 	}
 
 	virtual ibNumber GetNumber() const final {

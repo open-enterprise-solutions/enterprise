@@ -17,7 +17,7 @@ class BACKEND_API ibValueGuid : public ibValue {
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
 
 	virtual ibString GetString() const {
-		return m_guid;
+		return m_guid.str();
 	}
 
 	//check is empty

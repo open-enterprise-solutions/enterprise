@@ -145,7 +145,7 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 #if wxUSE_STD_IOSTREAM
 		virtual bool Write(wxSTD ostream& str) const {
-			str << m_cValue.GetString();
+			str << m_cValue.GetString().ToWxString();
 			return true;
 		}
 #endif

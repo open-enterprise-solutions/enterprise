@@ -195,7 +195,7 @@ public:
 			const ibValue held = SideValue(item);
 			// …compared with the text the CELL shows, which is the text the editor opened on (ibFilterValueText).
 			const wxString shown = m_side == kFilterColRight ? ibFilterValueText(held, item->m_left)
-				: m_side == kFilterColLeft ? ibFilterValueText(held, item->m_right) : held.GetString();
+				: m_side == kFilterColLeft ? ibFilterValueText(held, item->m_right) : held.GetString().ToWxString();
 			if (!held.IsEmpty() && shown == text)
 				return false;   // the model has nothing to take — what is held stands
 		}

@@ -41,7 +41,7 @@ ibString ibValuePointInTime::GetString() const
 		return wxEmptyString;
 
 	const wxString date = m_date.Format(wxT("%d.%m.%Y %H:%M:%S"));
-	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString();
+	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString().ToWxString();
 }
 
 // ⭐ THE DATE FIRST, THE REFERENCE INSIDE IT.

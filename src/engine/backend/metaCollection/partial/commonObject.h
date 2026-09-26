@@ -2190,7 +2190,7 @@ public:
 
 	//Get presentation 
 	virtual wxString GetSourceCaption() const override {
-		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString();
+		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString().ToWxString();
 	}
 
 	//support source data
@@ -2389,7 +2389,7 @@ public:
 
 	//Get presentation 
 	virtual wxString GetSourceCaption() const {
-		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : GetString());
+		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : GetString().ToWxString());
 	}
 
 	//support source data
@@ -2615,7 +2615,7 @@ public:
 
 	//Get presentation
 	virtual wxString GetSourceCaption() const {
-		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : GetString());
+		return m_metaObject->GetSynonym() + wxT(": ") + (IsNewObject() ? _("Creating") : GetString().ToWxString());
 	}
 
 	//get metaData from object

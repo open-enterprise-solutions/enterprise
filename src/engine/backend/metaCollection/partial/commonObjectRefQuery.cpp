@@ -129,7 +129,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibDataQueryResult sel = q.Execute(page);
 
 		const bool rowFound = sel.Next();
-		const wxString dbVer = rowFound ? sel.GetValue(dvAttr->GetQueryColumn()).GetString() : wxString();
+		const wxString dbVer = rowFound ? sel.GetValue(dvAttr->GetQueryColumn()).GetString() : ibString();
 
 		// Row disappeared between our load and write — somebody else
 		// committed a DELETE. Treat as a version conflict for UX

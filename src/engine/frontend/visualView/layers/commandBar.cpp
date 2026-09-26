@@ -316,7 +316,7 @@ wxString ibQuickFilterCaption(const ibFilterNodeDescription& node)
 		? node.m_left.m_path : node.m_left.m_presentation;
 	const wxString value = node.m_right.IsField()
 		? (node.m_right.m_presentation.IsEmpty() ? node.m_right.m_path : node.m_right.m_presentation)
-		: node.m_right.m_value.GetString();
+		: node.m_right.m_value.GetString().ToWxString();
 	// AN UNSET VALUE STILL READS AS THE FIELD IT NARROWS — a bare field name says "click me to
 	// narrow by this", which is what an unfilled quick filter is for.
 	return value.IsEmpty() ? field : field + wxT(": ") + value;
