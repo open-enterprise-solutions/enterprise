@@ -98,8 +98,16 @@ ibValueModelTable::~ibValueModelTable()
 	// owning back-pointer is a cycle and the table would never be freed. Detaching is the honest
 	// shape for that direction, and it is the one the row base already uses for a detached line: an
 	// object that has outlived its owner answers "no owner", it does not dereference one.
-	if (m_tableColumnCollection != nullptr)
+	//
+	// 🛑 …AND SO DO ITS COLUMNS. AddColumn gives each column this table as its attach owner
+	// (SetAttachOwner, not AttachPropertyObject — see there), so the property object's own teardown
+	// does not know them, and a column that died after the table asked the freed table to forget it
+	// (crash dump 2026-09-27: completion held `Total.Columns` after `Total` had gone).
+	if (m_tableColumnCollection != nullptr) {
+		for (const auto& colInfo : m_tableColumnCollection->m_listColumnInfo)
+			colInfo->SetAttachOwner(nullptr);
 		m_tableColumnCollection->DetachOwnerTable();
+	}
 }
 
 // NOTE: a table-of-values is a RAM model — it has NO source queryable. The RAM composer (ibDataRamComposer)
