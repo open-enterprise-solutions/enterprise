@@ -6,7 +6,7 @@
 class BACKEND_API ibValueOLE :
 	public ibValueDynamicMembers {
 	public:
-	wxString m_objectName;
+	ibString m_objectName;
 #ifdef __WXMSW__
 	IDispatch* m_dispatch = nullptr;
 	IStream* m_streamDispatch = nullptr;
@@ -54,8 +54,8 @@ public:
 
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
-	virtual long FindMethod(const wxString& strMethodName) const;
-	virtual long FindProp(const wxString& strPropName) const;
+	virtual long FindMethod(const ibString& strMethodName) const override;
+	virtual long FindProp(const ibString& strPropName) const override;
 
 	virtual bool IsPropReadable(const long lPropNum) const {
 		return true;
@@ -89,9 +89,7 @@ public:
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const {
-		return m_objectName;
-	}
+	virtual ibString GetString() const { return m_objectName; }
 
 	//operator '=='
 	virtual bool CompareValueEQ(const ibValue& cParam) const {

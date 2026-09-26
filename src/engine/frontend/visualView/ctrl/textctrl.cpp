@@ -162,6 +162,15 @@ void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, 
 }
 
 #include "backend/appData.h"
+#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
+#include "backend/metaCollection/attribute/metaAttributeObject.h"
+
+const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const
+{
+	static const ibTranslateString s_none;
+	const ibValueMetaObjectAttributeBase* attribute = ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
+	return attribute != nullptr ? attribute->GetFormat() : s_none;
+}
 
 void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 {
@@ -195,8 +204,12 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// Desktop's "if (!DesignerMode()) SetValue" guard is pointless on web
 	// (wfrontend is never in designer mode); the no-op check is cheap.
 	textEditor->SetLabel(GetControlTitle());
-	if (!appData->DesignerMode())
-		textEditor->SetValue(m_selValue.GetString());
+	if (!appData->DesignerMode()) {
+		wxString text;
+		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+		GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(m_selValue, text);
+		textEditor->SetValue(text);
+	}
 	textEditor->SetPasswordMode(m_propertyPasswordMode->GetValueAsBoolean());
 	textEditor->SetMultilineMode(m_propertyMultilineMode->GetValueAsBoolean());
 	// A dotted reference path (Source.Ref.Field) is read-only — force edit mode off
@@ -286,6 +299,10 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 
 	m_formOwner->RefreshForm();
 
+	wxString text;
+	const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+	GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(m_selValue, text);
+
 	// Push m_selValue into the live editor. GetWxObject() is unified —
 	// both builds return the web/wx node the walker stashed in the host's
 	// m_baseObjects. Desktop additionally repositions the insertion
@@ -300,11 +317,11 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	// mismatch instead.
 	auto* textEditor = dynamic_cast<ibWebTextCtrl*>(GetWxObject());
 	if (textEditor != nullptr)
-		textEditor->SetValue(m_selValue.GetString());
+		textEditor->SetValue(text);
 #else
 	ibControlTextEditor* textEditor = static_cast<ibControlTextEditor*>(GetWxObject());
 	if (textEditor != nullptr) {
-		textEditor->SetValue(m_selValue.GetString());
+		textEditor->SetValue(text);
 		if (m_selValue.IsEmpty())
 			textEditor->SetInsertionPoint(wxNOT_FOUND);
 		else textEditor->SetInsertionPointEnd();
@@ -329,6 +346,7 @@ bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
 	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
@@ -352,6 +370,7 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
 	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());

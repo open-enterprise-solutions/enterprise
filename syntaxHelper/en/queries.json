@@ -63,15 +63,16 @@
     "query"
    ],
    "signature": "Query.Execute() : QueryResult",
-   "description": "The result of executing a query — a single data snapshot. Detail rows and totals read from the same snapshot, so they cannot diverge.\n\n**Methods:**\n- `Select()` — open a traversal. For a plain SELECT it returns a flat cursor; for a TOTALS query — the totals tree. Both come back as a `QuerySelect` with one and the same traversal interface.",
-   "syntax_block": "var res = q.Execute();\nvar sel = res.Select();",
+   "description": "The result of executing a query — a single data snapshot. Detail rows and totals read from the same snapshot, so they cannot diverge.\n\n**Methods:**\n- `Select()` — open a traversal. For a plain SELECT it returns a flat cursor; for a TOTALS query — the totals tree. Both come back as a `QuerySelect` with one and the same traversal interface.\n- `Unload()` — the rows themselves, as a value table (`Table`): one column per output column, named and typed as the query names and types it (a column whose type the query does not know stays untyped — a number stays a number). For counting, indexing, sorting or searching the rows, or handing them on. Like `Select()`, it reads the result: a second `Unload()` is refused (\"already been read\") — run the query again. Only the direct traversal unloads: `Unload(QueryResultIteration.ByGroups)` is refused; a grouped result is walked with `Select(...)`.",
+   "syntax_block": "var res = q.Execute();\nvar sel = res.Select();\n// or the rows as a table\nvar t = q.Execute().Unload();",
    "parameters": "",
-   "return_descr": "Select() returns a QuerySelect.",
-   "example": "",
+   "return_descr": "Select() returns a QuerySelect; Unload() returns a Table.",
+   "example": "var q = New Query(\"SELECT G.Description AS Name, G.Price AS Price FROM Catalog.Goods AS G\");\nvar t = q.Execute().Unload();\nMessage(String(t.Count()) + \" goods, \" + String(t.Total(\"Price\")) + \" in all\");",
    "availability": "enterprise, wenterprise-server, daemon, codeRunner",
    "see_also": [
     "cls.Query",
     "cls.QuerySelect",
+    "cls.Table",
     "q.Totals"
    ],
    "reviewed": true

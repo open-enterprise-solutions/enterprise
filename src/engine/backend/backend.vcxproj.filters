@@ -326,6 +326,9 @@
     <ClInclude Include="serialize\jsonProvider.h">
       <Filter>serialize</Filter>
     </ClInclude>
+    <ClInclude Include="serialize\jsonText.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
     <ClInclude Include="fileSystem\types.h">
       <Filter>fileSystem</Filter>
     </ClInclude>
@@ -553,6 +556,9 @@
     <ClInclude Include="propertyManager\property\propertyString.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFormat.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyDataComposition.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -652,7 +658,16 @@
     <ClInclude Include="system\value\valueTextFile.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueHttp.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueSecureConnection.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueGuid.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueJson.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueJob.h">
@@ -1346,6 +1361,9 @@
     <ClCompile Include="serialize\jsonProvider.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
+    <ClCompile Include="serialize\jsonText.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
@@ -1972,6 +1990,7 @@
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -2011,7 +2030,16 @@
     <ClCompile Include="system\value\valueTextFile.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueHttp.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSecureConnection.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueGuid.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueJson.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueJob.cpp">

@@ -53,6 +53,11 @@ enum ibFilterTreeColumn {
 // itself, which is a row like any other and the only one with no index.
 using ibFilterPath = std::vector<size_t>;
 
+// A SIDE'S VALUE AS ITS CELL SHOWS IT — written as the FIELD it is compared with writes it: `Cost = 37335`
+// is a cost, so it reads `37335.00` (the field's type's format). One answer for the cell and for the editor
+// that asks whether its text is still the cell's own (ibFilterValueRenderer::GetValueFromEditorCtrl).
+wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescription& field);
+
 // One row of the tree — a condition or a group, named by WHERE it sits. The
 // model owns these and hands the same one back for the same path, so selection
 // and expansion survive a refresh.

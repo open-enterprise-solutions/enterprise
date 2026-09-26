@@ -1,0 +1,27 @@
+Test identities for tests/test_valueHttpSecure.cpp - self-signed, made once, good for a hundred years.
+Nothing here is a secret: the private keys exist so that a TLS server can be brought up inside a test
+on 127.0.0.1 and a client can present a certificate to it.
+
+  server.pem / server.key   the test server, CN and subjectAltName IP:127.0.0.1 (no name - a client that
+                            asks for "localhost" is refused by the hostname check, which is a test)
+  client.pem                a client's certificate AND its private key in one file, the key encrypted
+                            with the password "secret" - the shape CertificateFile(path, password) takes.
+                            The key is PKCS#8 / PBKDF2-HMAC-SHA256 / AES-256-CBC on purpose: OpenSSL's
+                            default here is 3DES, and a TLS client that no longer compiles DES in would
+                            fail to read it - which would read as a defect in the code under test
+  other.pem                 another self-signed identity for 127.0.0.1, named as the one authority to
+                            trust when the server's certificate was NOT signed by it. Its private key is
+                            not kept: nothing here serves with this identity, so the key would be a
+                            private key in a public tree that no test needs
+
+Made with OpenSSL 3 (any version that knows -addext will do):
+
+  openssl req -x509 -newkey rsa:2048 -nodes -days 36500 -keyout server.key -out server.pem \
+      -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"
+  openssl req -x509 -newkey rsa:2048 -days 36500 -passout pass:secret -keyout client.key.enc -out client.crt \
+      -subj "/CN=script"
+  openssl pkcs8 -topk8 -in client.key.enc -passin pass:secret -out client.key.aes -v2 aes-256-cbc \
+      -passout pass:secret                                  # away from OpenSSL's 3DES default, see above
+  cat client.crt client.key.aes > client.pem
+  openssl req -x509 -newkey rsa:2048 -nodes -days 36500 -keyout other.key.discarded -out other.pem \
+      -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"   # and other.key.discarded is deleted

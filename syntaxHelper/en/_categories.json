@@ -17,6 +17,10 @@
     "collections": "Collections",
     "containers": "Container and Structure",
     "value_table": "Value table (Table)",
+    "http": "HTTP — requests to another system",
+    "json": "JSON — reading and writing",
+    "text_files": "Text files and bytes — reading and writing",
+    "runtime": "Runtime",
     "guide": "Guide"
   }
 }

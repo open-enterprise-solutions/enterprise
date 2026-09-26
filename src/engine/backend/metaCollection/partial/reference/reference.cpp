@@ -870,7 +870,7 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 	return &m_sourceExplorer;
 }
 
-wxString ibValueReferenceDataObject::GetString() const
+ibString ibValueReferenceDataObject::GetString() const
 {
 	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
 	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to

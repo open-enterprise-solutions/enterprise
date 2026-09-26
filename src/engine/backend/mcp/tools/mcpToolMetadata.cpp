@@ -200,6 +200,14 @@ const ibArg& ArgId()
 	return s_a;
 }
 
+const ibArg& ArgPosition()
+{
+	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
+		ibMcpText("Where the object goes among the objects of its kind under the same parent, counted "
+			  "from 0 - the place in `order`."), /*required*/ true);
+	return s_a;
+}
+
 const ibArg& ArgParentId()
 {
 	// One spelling for the whole surface: every other multi-word argument here is camelCase
@@ -1624,6 +1632,105 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolMetadataDelete);
+
+//---------------------------------------------------------------------------
+// metadata_move — the order of an object among its siblings
+//---------------------------------------------------------------------------
+
+class ibMcpToolMetadataMove : public ibMcpTool {
+public:
+
+	wxString GetName() const override { return wxT("metadata_move"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("moving '%s'"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Change the place of an object among its siblings of the same kind - the order of "
+			"the sections in the navigation panel, of the forms under an object, of what the tree shows. "
+			"`position` is its place in that list, from 0. Answers with `order`, the siblings of the same "
+			"kind as they now stand. The order is part of what config_save keeps and config_apply hands to "
+			"the running application.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgPosition() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibMetaData* metaData = OpenConfiguration(refusal);
+		if (metaData == nullptr)
+			return false;
+
+		const s32 asked = (s32)ArgId().Whole(params);
+		if (asked <= 0) {
+			refusal = ibMcpText("Pass the object's NodeId.");
+			return false;
+		}
+
+		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked);
+		if (object == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("Nothing in this configuration has id %i."), (int)asked);
+			return false;
+		}
+
+		ibValueMetaObject* const parent = object->GetParent();
+		if (parent == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is the root of the configuration and has no siblings."), object->GetName());
+			return false;
+		}
+
+		// The objects of its kind — what `position` counts. The children of a parent are of every kind at
+		// once; the object takes the place of the one standing at that position among its own.
+		std::vector<ibValueMetaObject*> kind;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			ibValueMetaObject* child = parent->GetChild(idx);
+			if (child->GetClassType() == object->GetClassType() && !child->IsDeleted())
+				kind.push_back(child);
+		}
+
+		const s32 position = (s32)ArgPosition().Whole(params);
+		if (position < 0 || position >= (s32)kind.size()) {
+			refusal = wxString::Format(
+				ibMcpText("Position %i is past the objects of this kind - there are %i, counted from 0. "
+					  "Nothing was moved."), (int)position, (int)kind.size());
+			return false;
+		}
+
+		// The parent's door moves it, marks the configuration modified and announces `Moved` — or
+		// refuses a read-only one, and nothing has moved.
+		const unsigned int from = parent->GetChildPosition(object);
+		if (!parent->ChangeChildPosition(object, parent->GetChildPosition(kind[position]))) {
+			refusal = ibMcpText("The configuration refused the move - it is read-only. Nothing was moved.");
+			return false;
+		}
+
+		result.SetValue(wxT("name"), object->GetName());
+		result.AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+		result.AddField(wxT("moved"), ibDataValue::Bool(parent->GetChildPosition(object) != from));
+
+		// WHAT THE ORDER IS NOW, of the objects of the same kind - the answer to "did that put it where
+		// I meant", without a second call to read the tree.
+		std::vector<ibDataValue> order;
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			const ibValueMetaObject* child = parent->GetChild(idx);
+			if (child->GetClassType() == object->GetClassType() && !child->IsDeleted())
+				order.push_back(ibDataValue::String(child->GetName()));
+		}
+		result.AddField(wxT("order"), ibDataValue::Array(order));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolMetadataMove);
 
 //===========================================================================
 // The WRITING half — folded in from mcpToolEdit.cpp on 2026-09-01.

@@ -4,6 +4,7 @@
 #include "backend/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
 
 #include <algorithm>
+#include <atomic>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -346,6 +347,18 @@ struct ibNumber::BigImpl
 
 };
 
+// A heap-tier number's BigImpl and the count of the numbers holding it — see fnumber.h.
+struct ibNumber::SharedBig
+{
+	std::atomic<long> m_refCount{ 1 };
+	BigImpl           m_big;
+
+	SharedBig() = default;
+	explicit SharedBig(const BigImpl& big) : m_big(big) {}
+
+	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
+};
+
 namespace
 {
 	// Aligns two BigImpl operands to a common exp10 by scaling whichever has the larger
@@ -479,14 +492,19 @@ void TrimFractionZeros(ibNumber::BigImpl& v)
 // ImmMantissa / ImmExp moved to fnumber.h — they are the innermost step of
 // TryImmInts, which every arithmetic and comparison fast path goes through.
 
-ibNumber::BigImpl* ibNumber::HeapPtr() const
+ibNumber::SharedBig* ibNumber::Shared() const
 {
-	return reinterpret_cast<BigImpl*>(static_cast<uintptr_t>(m_payload));
+	return reinterpret_cast<SharedBig*>(static_cast<uintptr_t>(m_payload & ~1ULL));   // drop the tag
 }
 
-void ibNumber::StoreHeap(BigImpl* p) noexcept
+ibNumber::BigImpl* ibNumber::HeapPtr() const
 {
-	m_payload = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p));
+	return &Shared()->m_big;
+}
+
+void ibNumber::StoreHeap(SharedBig* p) noexcept
+{
+	m_payload = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p)) | 1ULL;   // tag 1 = heap
 }
 
 // ---- ctors / dtor / assignment -------------------------------------------------------
@@ -510,8 +528,8 @@ void ibNumber::FromSigned64(int64_t v) noexcept
 		m_payload = PackImmediate(v, 0);
 		return;
 	}
-	BigImpl* p = new BigImpl();
-	p->FromInt64(v);
+	SharedBig* p = new SharedBig();
+	p->m_big.FromInt64(v);
 	StoreHeap(p);
 }
 
@@ -540,11 +558,11 @@ void ibNumber::FromUnsigned64(uint64_t v) noexcept
 		m_payload = PackImmediate(static_cast<int64_t>(v), 0);
 		return;
 	}
-	BigImpl* p = new BigImpl();
-	p->limbs.push_back(static_cast<uint32_t>(v));
-	if (v >> 32) p->limbs.push_back(static_cast<uint32_t>(v >> 32));
-	p->negative = false;
-	p->exp      = 0;
+	SharedBig* p = new SharedBig();
+	p->m_big.limbs.push_back(static_cast<uint32_t>(v));
+	if (v >> 32) p->m_big.limbs.push_back(static_cast<uint32_t>(v >> 32));
+	p->m_big.negative = false;
+	p->m_big.exp      = 0;
 	StoreHeap(p);
 }
 
@@ -595,14 +613,12 @@ ibNumber::ibNumber(const wxString& s)
 	if (TryParseString(s, big)) StoreBig(big);
 }
 
-ibNumber::ibNumber(const ibNumber& o)
-	: m_payload(0)
+// A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
+ibNumber::ibNumber(const ibNumber& o) noexcept
+	: m_payload(o.m_payload)
 {
-	if (o.IsImmediate()) {
-		m_payload = o.m_payload;
-	} else {
-		StoreHeap(new BigImpl(*o.HeapPtr()));
-	}
+	if (IsHeap())
+		Shared()->m_refCount.fetch_add(1, std::memory_order_relaxed);
 }
 
 ibNumber::ibNumber(ibNumber&& o) noexcept
@@ -616,15 +632,13 @@ ibNumber::~ibNumber()
 	Clear();
 }
 
-ibNumber& ibNumber::operator=(const ibNumber& o)
+ibNumber& ibNumber::operator=(const ibNumber& o) noexcept
 {
 	if (this == &o) return *this;
+	if (o.IsHeap())
+		o.Shared()->m_refCount.fetch_add(1, std::memory_order_relaxed);   // first — `o` may share ours
 	Clear();
-	if (o.IsImmediate()) {
-		m_payload = o.m_payload;
-	} else {
-		StoreHeap(new BigImpl(*o.HeapPtr()));
-	}
+	m_payload = o.m_payload;
 	return *this;
 }
 
@@ -640,7 +654,9 @@ ibNumber& ibNumber::operator=(ibNumber&& o) noexcept
 void ibNumber::Clear() noexcept
 {
 	if (IsHeap()) {
-		delete HeapPtr();
+		SharedBig* const shared = Shared();
+		if (shared->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+			delete shared;   // the last owner
 	}
 	m_payload = PackImmediate(0, 0);
 }
@@ -664,14 +680,16 @@ void ibNumber::StoreBig(const BigImpl& src)
 	//   - If heap: keep allocation, just zero the limbs in place. Saves
 	//     delete + new on accumulator patterns that flap to/from zero
 	//     (e.g. running sum that hits zero between additions).
+	//   A BigImpl is written in place only when this number owns it ALONE; a shared one
+	//   is let go and the result gets its own (copy on write).
 	if (src.IsZero()) {
-		if (IsHeap()) {
+		if (IsHeap() && Shared()->Alone()) {
 			BigImpl* hp = HeapPtr();
 			hp->limbs.clear();
 			hp->negative = false;
 			hp->exp      = 0;
 		} else {
-			m_payload = PackImmediate(0, 0);
+			Clear();
 		}
 		return;
 	}
@@ -682,11 +700,12 @@ void ibNumber::StoreBig(const BigImpl& src)
 		StoreImmediate(m64, src.exp);
 		return;
 	}
-	if (IsHeap()) {
+	if (IsHeap() && Shared()->Alone()) {
 		*HeapPtr() = src;
 		return;
 	}
-	StoreHeap(new BigImpl(src));
+	Clear();
+	StoreHeap(new SharedBig(src));
 }
 
 // ---- arithmetic ----------------------------------------------------------------------
@@ -1464,6 +1483,100 @@ wxString ibNumber::ToString() const
 
 wxString ibNumber::ToString(const Format& fmt) const
 {
+	wxString out;
+	ToString(fmt, out);
+	return out;
+}
+
+void ibNumber::ToString(const Format& fmt, wxString& out) const
+{
+	// ⭐ THE IMMEDIATE TIER WITHOUT THE HEAP. An ordinary amount is a 47-bit mantissa and a small exponent,
+	// so its digits fit a stack buffer and its rounding fits an int64: the text is laid out straight into
+	// `out`, the same text the general branch below gives — the same half-away rounding as Round(n), the
+	// same fixed count of fraction digits, the same groups, no sign on a figure that rounded to zero.
+	// What this does not cover — significant-digit capping, integer padding, an exponent past 18 — goes on
+	// to the general branch.
+	if (IsImmediate() && fmt.precision < 0 && fmt.minIntDigits <= 0 && ImmExp() >= -18 && ImmExp() <= 18) {
+		static const uint64_t s_pow10[19] = {
+			1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL, 10000000ULL, 100000000ULL,
+			1000000000ULL, 10000000000ULL, 100000000000ULL, 1000000000000ULL, 10000000000000ULL,
+			100000000000000ULL, 1000000000000000ULL, 10000000000000000ULL, 100000000000000000ULL,
+			1000000000000000000ULL };
+
+		const int64_t mantissa = ImmMantissa();
+		const bool negative = mantissa < 0;
+		uint64_t magnitude = negative ? static_cast<uint64_t>(-mantissa) : static_cast<uint64_t>(mantissa);   // |m| < 2^46
+		const int exp = ImmExp();
+		const size_t intTrailingZeros = exp > 0 ? static_cast<size_t>(exp) : 0u;
+		size_t fracCount = exp < 0 ? static_cast<size_t>(-exp) : 0u;
+
+		if (fmt.fracDigits >= 0 && fracCount > static_cast<size_t>(fmt.fracDigits)) {
+			const uint64_t divisor = s_pow10[fracCount - static_cast<size_t>(fmt.fracDigits)];
+			const uint64_t rest = magnitude % divisor;
+			magnitude /= divisor;
+			if (rest * 2 >= divisor) ++magnitude;   // half away from zero, on the magnitude
+			fracCount = static_cast<size_t>(fmt.fracDigits);
+		}
+
+		wchar_t digits[24];
+		wchar_t* const end = digits + 24;
+		wchar_t* p = end;
+		uint64_t remaining = magnitude;
+		do { *--p = static_cast<wchar_t>(L'0' + remaining % 10); remaining /= 10; } while (remaining != 0);
+		const size_t magLen = static_cast<size_t>(end - p);
+
+		// The general branch's layout: the integer digits, then the fraction — leading zeros where the
+		// magnitude is shorter than the fraction, then as many zeros as NFD still asks for.
+		size_t intDigitsAtP = magLen, fracLeading = 0, fracDigitsAtP = 0;
+		const wchar_t* fracStart = p;
+		if (fracCount > 0) {
+			if (magLen > fracCount) {
+				intDigitsAtP  = magLen - fracCount;
+				fracDigitsAtP = fracCount;
+				fracStart     = p + intDigitsAtP;
+			}
+			else {
+				intDigitsAtP  = 0;
+				fracDigitsAtP = magLen;
+				fracLeading   = fracCount - magLen;
+			}
+		}
+		const size_t fracPad = fmt.fracDigits >= 0 && static_cast<size_t>(fmt.fracDigits) > fracCount
+			? static_cast<size_t>(fmt.fracDigits) - fracCount : 0u;
+		const bool hasFraction = fmt.fracDigits >= 0 ? fmt.fracDigits > 0 : fracCount > 0;
+
+		const size_t intLen = intDigitsAtP + intTrailingZeros;
+		const size_t emitIntLen = intLen == 0 ? 1u : intLen;
+		const bool useGroups = fmt.groupSize > 0 && fmt.groupSep != 0 && emitIntLen > static_cast<size_t>(fmt.groupSize);
+		const bool withSign = negative && magnitude != 0;
+
+		out.clear();
+		out.reserve((withSign ? 1u : 0u) + emitIntLen + (useGroups ? (emitIntLen - 1) / static_cast<size_t>(fmt.groupSize) : 0u)
+			+ (hasFraction ? 1u + fracLeading + fracDigitsAtP + fracPad : 0u));
+
+		if (withSign) out += wxT('-');
+		if (useGroups) {
+			for (size_t i = 0; i < emitIntLen; ++i) {
+				if (i > 0 && (emitIntLen - i) % static_cast<size_t>(fmt.groupSize) == 0)
+					out += fmt.groupSep;
+				out += intLen == 0 ? wxT('0') : (i < intDigitsAtP ? p[i] : wxT('0'));
+			}
+		}
+		else if (intLen == 0)
+			out += wxT('0');
+		else {
+			out.append(p, intDigitsAtP);
+			if (intTrailingZeros > 0) out.append(intTrailingZeros, wxT('0'));
+		}
+		if (hasFraction) {
+			out += fmt.decimalSep;
+			if (fracLeading > 0)   out.append(fracLeading, wxT('0'));
+			if (fracDigitsAtP > 0) out.append(fracStart, fracDigitsAtP);
+			if (fracPad > 0)       out.append(fracPad, wxT('0'));
+		}
+		return;
+	}
+
 	// Single-pass formatter: generates the magnitude digits once into a wchar_t
 	// scratch buffer, then walks it forward emitting sign, int part with group
 	// separators, custom decimal separator, fraction part with leading zeros.
@@ -1503,8 +1616,10 @@ wxString ibNumber::ToString(const Format& fmt) const
 	const size_t magLen = static_cast<size_t>(end - p);
 
 	// Past the ceiling the plain form cannot be built at all — see ScientificText above.
-	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10)
-		return ScientificText(p, magLen, b.negative, b.exp);
+	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
+		out = ScientificText(p, magLen, b.negative, b.exp);
+		return;
+	}
 
 	// Layout:
 	//   exp >= 0: int = magLen digits at p, plus `exp` trailing zeros; no fraction.
@@ -1597,42 +1712,41 @@ wxString ibNumber::ToString(const Format& fmt) const
 	                        + (hasFraction ? 1u : 0u)
 	                        + fracLeadingEmit + fracDigitsEmit + fracTrailingPad;
 
-	wxString result;
-	result.reserve(totalSize);
+	out.clear();
+	out.reserve(totalSize);
 
-	if (b.negative && !b.IsZero()) result += wxT('-');
+	if (b.negative && !b.IsZero()) out += wxT('-');
 
 	// Integer part — leading-zero pad, then digits, with optional group separator.
 	if (useGroups) {
 		for (size_t i = 0; i < emitIntLen; ++i) {
 			if (i > 0 && (emitIntLen - i) % static_cast<size_t>(fmt.groupSize) == 0)
-				result += fmt.groupSep;
-			if (i < padCount)                       result += wxT('0');
-			else if (intLen == 0)                   result += wxT('0');     // base placeholder
+				out += fmt.groupSep;
+			if (i < padCount)                       out += wxT('0');
+			else if (intLen == 0)                   out += wxT('0');     // base placeholder
 			else {
 				const size_t j = i - padCount;
-				result += (j < intDigitsAtP) ? p[j] : wxT('0');             // trailing zeros for exp>0
+				out += (j < intDigitsAtP) ? p[j] : wxT('0');             // trailing zeros for exp>0
 			}
 		}
 	} else {
 		// Fast path — append leading pad, slice, trailing zeros without per-char condition.
 		// append(ptr, n) writes straight into reserved storage; wxString(ptr, n)
 		// would allocate a temporary first.
-		if (padCount > 0)         result.append(padCount, wxT('0'));
-		if (intLen == 0)          result += wxT('0');
+		if (padCount > 0)         out.append(padCount, wxT('0'));
+		if (intLen == 0)          out += wxT('0');
 		else {
-			if (intDigitsAtP > 0)     result.append(p, intDigitsAtP);
-			if (intTrailingZeros > 0) result.append(intTrailingZeros, wxT('0'));
+			if (intDigitsAtP > 0)     out.append(p, intDigitsAtP);
+			if (intTrailingZeros > 0) out.append(intTrailingZeros, wxT('0'));
 		}
 	}
 
 	if (hasFraction) {
-		result += fmt.decimalSep;
-		if (fracLeadingEmit > 0) result.append(fracLeadingEmit, wxT('0'));
-		if (fracDigitsEmit > 0)  result.append(fracStart, fracDigitsEmit);
-		if (fracTrailingPad > 0) result.append(fracTrailingPad, wxT('0'));
+		out += fmt.decimalSep;
+		if (fracLeadingEmit > 0) out.append(fracLeadingEmit, wxT('0'));
+		if (fracDigitsEmit > 0)  out.append(fracStart, fracDigitsEmit);
+		if (fracTrailingPad > 0) out.append(fracTrailingPad, wxT('0'));
 	}
-	return result;
 }
 
 bool ibNumber::FromString(const wxString& s)

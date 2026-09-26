@@ -31,7 +31,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "procUnitLambda.h"   // ibValueFunction full def + AsFunction / AsIterator
+
 #include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
+#include "backend/query/queryRamTable.h"   // ibQueryRamTable — …filled first, then loaded into it (TableOfRows)
 
 #include "system/value/valueTable.h"  // ibValueModelTable — what a query ANSWERS with: columns and rows
 #include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
@@ -584,14 +586,14 @@ public:
 	// surface — a watch and a property grid enumerate it — but turning a name into a number is a
 	// question two names can answer outright, without the virtual hop into the general machinery.
 	// It is asked once per `g.Key` and once per `g.Values`, i.e. per group of every grouped loop.
-	virtual long FindProp(const wxString& name) const override {
+	virtual long FindProp(const ibString& name) const override {
 		if (stringUtils::CompareString(name, wxT("Key")))    return 0;
 		if (stringUtils::CompareString(name, wxT("Values"))) return 1;
 		return wxNOT_FOUND;
 	}
 
 	virtual bool     IsEmpty()   const override { return false; }
-	virtual wxString GetString() const override { return m_key.GetString(); }
+	virtual ibString GetString() const override { return m_key.GetString(); }
 
 	// BY ORDINAL — the names became these numbers at compile time.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
@@ -618,9 +620,9 @@ private:
 class ibValueLinqShape : public ibValue {
 public:
 	ibValueLinqShape() : ibValue(ibValueTypes::TYPE_VALUE) {}
-	explicit ibValueLinqShape(const wxString& names) : ibValue(ibValueTypes::TYPE_VALUE) {
+	explicit ibValueLinqShape(const ibString& names) : ibValue(ibValueTypes::TYPE_VALUE) {
 		// One constant, split once. `\n` separates the fields — an identifier cannot contain it.
-		wxString rest = names;
+		ibString rest = names;
 		while (!rest.IsEmpty()) {
 			const int at = rest.Find(wxT('\n'));
 			if (at == wxNOT_FOUND) { m_fields.push_back(rest); break; }
@@ -632,15 +634,15 @@ public:
 	virtual ibClassID GetClassType() const override { return g_valueLinqShape; }
 
 	virtual bool     IsEmpty()   const override { return m_fields.empty(); }
-	virtual wxString GetString() const override { return wxT("<row shape>"); }
+	virtual ibString GetString() const override { return wxT("<row shape>"); }
 
 	long Count() const { return (long)m_fields.size(); }
-	const wxString& NameAt(long i) const { return m_fields[(size_t)i]; }
+	const ibString& NameAt(long i) const { return m_fields[(size_t)i]; }   // by reference — GetPropName lends it
 
 	// The ONLY place a name becomes a number, and it is asked by whoever did NOT get the number
 	// baked in at compile time. A projection has a handful of fields, so this is a short walk over
 	// a contiguous vector — no map, no member table, nothing built to answer it.
-	long Ordinal(const wxString& name) const {
+	long Ordinal(const ibString& name) const {
 		for (size_t i = 0; i < m_fields.size(); ++i)
 			if (stringUtils::CompareString(m_fields[i], name))
 				return (long)i;
@@ -648,7 +650,7 @@ public:
 	}
 
 private:
-	std::vector<wxString> m_fields;
+	std::vector<ibString> m_fields;   // the engine's own string, as the member lookup that asks them
 };
 
 // ⭐⭐ A PROJECTED ROW. What `select { name = expr, … }` produces, and what a `Structure` used to.
@@ -677,9 +679,9 @@ public:
 	// A row EXISTS: it is not empty because a field of it happens to be.
 	virtual bool IsEmpty() const override { return m_values.empty(); }
 
-	virtual wxString GetString() const override {
+	virtual ibString GetString() const override {
 		// What a watch shows. Names included — the person reading it did not write the ordinals.
-		wxString text;
+		ibString text;
 		for (size_t i = 0; i < m_values.size(); ++i) {
 			if (i != 0) text << wxT(", ");
 			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << wxT("=");
@@ -691,15 +693,15 @@ public:
 	// ⭐ ITS OWN ANSWERS. Four overrides and no member table: the surface IS the shape, so there is
 	// nothing to build, nothing to cache and nothing to invalidate.
 	virtual long     GetNProps() const override { return (long)m_values.size(); }
-	virtual long     FindProp(const wxString& name) const override {
+	virtual long     FindProp(const ibString& name) const override {
 		return m_shape != nullptr ? m_shape->Ordinal(name) : wxNOT_FOUND;
 	}
-	virtual wxString GetPropName(const long lPropNum) const override {
-		// ⚠ `wxString(wxEmptyString)`: outside MSVC the bare constant is a `const wxChar*`, both arms
-		// convert to each other and the conditional is AMBIGUOUS — it builds here and fails on macOS
-		// and Linux (portability.md §1.10).
+	virtual const ibString& GetPropName(const long lPropNum) const override {
+		// Both arms the same lvalue type, so the conditional lends a reference and is not ambiguous
+		// (a bare `wxEmptyString` is a `const wxChar*` that converts both ways — portability.md §1.10).
+		static const ibString s_absent;
 		return (m_shape != nullptr && lPropNum >= 0 && lPropNum < m_shape->Count())
-			? m_shape->NameAt(lPropNum) : wxString(wxEmptyString);
+			? m_shape->NameAt(lPropNum) : s_absent;
 	}
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
 		if (lPropNum < 0 || (size_t)lPropNum >= m_values.size()) return false;
@@ -774,7 +776,7 @@ public:
 			? m_view->empty()
 			: (m_rows.empty() && m_buckets.empty() && m_seen.empty());
 	}
-	virtual wxString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
+	virtual ibString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
 
 	// ⭐ FIRST TIME? — `Distinct`, entire. ORDERED rather than hashed, and see the note on the
 	// buckets below for the measurement that says to keep it that way.
@@ -1452,13 +1454,13 @@ namespace {
 // answer. `ToTable` on a collection and the last instruction of a compiled query ask the same three
 // questions of the same rows, and a second builder would be a second set of column names.
 struct ibRowColumns {
-	std::vector<wxString> m_names;
+	std::vector<ibString> m_names;
 	bool m_rowIsTheCell = false;   // nothing to take apart: the row goes into the single column
 };
 
-std::vector<wxString> ColumnsOf(const ibValueLinqRows& kept);
+std::vector<ibString> ColumnsOf(const ibValueLinqRows& kept);
 ibRowColumns          ColumnsOfRowItself(const ibValueLinqRows& kept);
-ibValue               TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
+ibValue               TableOfRows(ibValueLinqRows& kept, const std::vector<ibString>& columns,
                                   bool rowIsTheCell = false);
 
 } // namespace
@@ -1497,7 +1499,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		// the operator's script NAME against the value's own members; if it has it, the `.Select(...)` was
 		// meant as that method, not a pipeline op — dispatch there. This is the context the caller asked
 		// for: a LINQ-chain Select stays LINQ, a Select on a value that defines one calls the value's.
-		wxString methodName;
+		ibString methodName;
 		for (const auto& info : ibValue::GetLinqMethodTable())
 			if (info.id == method) { methodName = info.name; break; }
 		const long ownNum = methodName.IsEmpty() ? -1 : self->FindMethod(methodName);
@@ -1911,7 +1913,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			while (upstream->MoveNext(current))
 				rows.Keep(current);
 
-			const std::vector<wxString> named = ColumnsOf(rows);
+			const std::vector<ibString> named = ColumnsOf(rows);
 			if (!named.empty()) {
 				CopyValue(ret, TableOfRows(rows, named));
 				break;
@@ -2003,7 +2005,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 // LINQ method-name -> enum resolver. Linear scan through the metadata
 // table — 32 entries; the compile-side calls this once per chain-method
 // emit, runtime never. Case-insensitive match per OES convention.
-long ibValue::FindLinqMethodByName(const wxString& name) {
+long ibValue::FindLinqMethodByName(const ibString& name) {
 	for (const auto& info : GetLinqMethodTable()) {
 		if (stringUtils::CompareString(name, info.name))
 			return (long)info.id;
@@ -2038,12 +2040,12 @@ ibValueLinqRows& LinqResultIn(ibValue& scratch)
 //
 // The question itself lives one level down (`ibLinqNamedColumns`, below) because the EDITOR asks it
 // too, of a sample row rather than a real one — see the note on the exported form.
-std::vector<wxString> ColumnsOf(const ibValueLinqRows& kept)
+std::vector<ibString> ColumnsOf(const ibValueLinqRows& kept)
 {
 	if (kept.Count() == 0)
 		return {};
 
-	std::vector<wxString> names;
+	std::vector<ibString> names;
 	ibLinqNamedColumns(kept.At(0), names);
 	return names;
 }
@@ -2097,69 +2099,51 @@ ibRowColumns ColumnsOfRowItself(const ibValueLinqRows& kept)
 // here, at the same single place every other shape of query becomes a value the language holds.
 //
 // No name is used to build it: the columns come from the shape and every cell is written by the
-// column's ID.
-ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
+// column's ID — its ordinal, from 1. The rows go into the fast table every read that hands a script a
+// table fills (ibQueryRamTable::ToValueTable), and that loads them.
+ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<ibString>& columns,
 	bool rowIsTheCell)
 {
-	ibValueModelTable* const table = new ibValueModelTable();
-	auto* const cols = table->GetColumnCollection();
-	if (cols == nullptr)
-		return ibValue(table);
-
-	std::vector<unsigned int> columnIds;
-	columnIds.reserve(columns.size());
-	for (const wxString& name : columns) {
+	ibQueryRamTable rows;
+	for (size_t i = 0; i < columns.size(); ++i)
 		// ⚠ AN UNDECLARED COLUMN IS A STRING COLUMN — the value table says so itself (valueTable.cpp,
 		// enAddColumn), and everything then compares as text: `5` sorts after `100`. A projected
 		// column holds whatever its expression produced, so it must DECLARE that: an empty type
 		// description admits anything, because AdjustValue hands the value back untouched when the
 		// description says nothing (valueType.cpp).
-		auto* const col = cols->AddColumn(name, ibTypeDescription(), name);
-		columnIds.push_back(col != nullptr ? col->GetColumnID() : 0);
-	}
+		rows.AddColumn(static_cast<ibMetaID>(i + 1), columns[i], ibTypeDescription());
 
-	// 🛑 THE ROWS GO IN WITHOUT TELLING ANYBODY, and that is the difference between an answer and a
-	// standstill. `AppendRow` is the door a PERSON adds a row through: it fills the new row from the
-	// filter in force, asks the composer about groups, and NOTIFIES the model — and the notify makes
-	// the view's order stale, which is recomputed over every row there is. Once per row that is
-	// O(n²): measured on this base, a 50 000-row answer took SEVENTY SECONDS to hand back.
-	//
-	// Nothing here is a person adding a row. The table is being BUILT, nobody is watching it yet,
-	// there is no filter and no grouping to obey, and every cell is written explicitly — so the row
-	// is made and put in, and the notify is not sent. Same door (the storage's own Append), one
-	// argument different.
 	for (const ibValue& row : kept.Rows()) {
 		ibValue* const source = row.GetRef();
 		if (source == nullptr)
 			continue;
 
-		ibComposerNode* const node = new ibComposerNode();
+		const long at = rows.AppendRow();
 
 		// WHICH READ THIS IS WAS DECIDED WHERE THE COLUMNS WERE — see ibRowColumns. A row with a
 		// surface hands over its properties by ordinal; a row that IS the value goes in whole.
 		if (rowIsTheCell) {
-			node->AppendTableValue(columnIds[0], row);
+			rows.SetCell(at, 1, row);
 		}
 		// ⭐ A PROJECTED ROW HANDS ITS CELLS OVER, it does not have them asked for. Every row of
 		// every `select { … }` is one of these, and going through the general surface cost a
-		// temporary plus a copy INTO it before the copy into the node — three touches of a
+		// temporary plus a copy INTO it before the copy into the table — three touches of a
 		// refcounted value to move it one place. The general path below stays for a row that is
 		// not ours (an object lending its own properties).
 		else if (const ibValueLinqRecord* const projected =
 					LinqCast<ibValueLinqRecord>(source, g_valueLinqRecord)) {
 			for (size_t i = 0; i < columns.size(); ++i)
-				node->AppendTableValue(columnIds[i], projected->ValueAt((long)i));
+				rows.SetCell(at, static_cast<ibMetaID>(i + 1), projected->ValueAt((long)i));
 		}
 		else {
 			for (size_t i = 0; i < columns.size(); ++i) {
 				ibValue cell;
-				source->GetPropVal((long)i, cell);             // by ordinal on both sides
-				node->AppendTableValue(columnIds[i], cell);    // absent reads land as an empty cell
+				source->GetPropVal((long)i, cell);                                // by ordinal on both sides
+				rows.SetCell(at, static_cast<ibMetaID>(i + 1), std::move(cell));  // absent reads land as an empty cell
 			}
 		}
-		table->Append(node, /*notify*/ false);
 	}
-	return ibValue(table);
+	return rows.ToValueTable();
 }
 
 } // namespace
@@ -2206,7 +2190,7 @@ void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
 	//
 	// The Array below is for rows that are plain values with nothing to call a column — a chain
 	// asked to end in `ToArray`, which says in its own name what it wants back.
-	const std::vector<wxString> columns = ColumnsOf(kept);
+	const std::vector<ibString> columns = ColumnsOf(kept);
 	if (!columns.empty()) {
 		out = TableOfRows(kept, columns);
 		return;
@@ -2264,7 +2248,7 @@ void ibLinqGroups(ibValue& out, ibValue& scratch)
 // how a thing lives exactly as long as its loop does, and the rows that outlive the loop hold the
 // shape themselves. So the names are turned into positions once per QUERY; per row there is one
 // allocation of exactly the right size, and then stores at known indexes.
-void ibLinqRow(ibValue& out, ibValue& shapeSlot, const wxString& names, long count)
+void ibLinqRow(ibValue& out, ibValue& shapeSlot, const ibString& names, long count)
 {
 	ibValueLinqShape* shape = LinqCast<ibValueLinqShape>(shapeSlot.GetRef(), g_valueLinqShape);
 	if (shape == nullptr) {
@@ -2301,7 +2285,7 @@ void ibLinqGroupedSample(ibValue& out, const ibValue& key, const ibValue* row)
 	out = rows;
 }
 
-bool ibLinqNamedColumns(const ibValue& row, std::vector<wxString>& outNames)
+bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames)
 {
 	outNames.clear();
 

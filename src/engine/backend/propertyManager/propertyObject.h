@@ -868,6 +868,12 @@ public:
 		return pos;
 	}
 
+protected:
+
+	// THE MECHANISM, NOT THE DOOR. Moving a child is a change its owner has to answer for — a
+	// metaobject marks its configuration modified and announces the move (ibValueMetaObject), a
+	// frame re-lays its controls (ibValueFrame) — so each owner opens its own ChangeChildPosition
+	// over this one, and a caller holding the helper's name could otherwise step round all of it.
 	bool ChangeChildPosition(propertyType* obj, unsigned int pos) {
 
 		unsigned int obj_pos = GetChildPosition(obj);
@@ -886,6 +892,8 @@ public:
 		AddChild(pos, obj);
 		return true;
 	}
+
+public:
 
 	/**
 	* Removes a child from the object.

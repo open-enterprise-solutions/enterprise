@@ -1377,6 +1377,51 @@ TEST(RuntimeTest, ClosureWritesBackIntoItsCapturedSlot) {
 }
 
 // ===========================================================================
+// A SLOT HOLDING A REFERENCE THAT RECEIVES A STRING SUM RELEASES IT ONCE
+//
+// CHECK_READONLY (procUnit.cpp) released the destination's reference and left
+// its tag and pointer in place; the string branch of AddValue then cleared the
+// destination again and released the SAME reference a second time. An object a
+// variable still held was freed under it - the three corpus scripts the address
+// sanitizer stopped on (test_closure_iterator, test_closure_linq,
+// test_linq_chain_extended). The probe counts its own destruction, so the second
+// release shows in any build, with a sanitizer or without.
+// ===========================================================================
+
+namespace {
+class ReleaseProbe : public ibValue {
+public:
+	explicit ReleaseProbe(int* destroyed)
+		: ibValue(ibValueTypes::TYPE_VALUE, false), m_destroyed(destroyed) {}
+	~ReleaseProbe() override { ++*m_destroyed; }
+private:
+	int* m_destroyed;
+};
+} // namespace
+
+TEST(RuntimeTest, AStringSumIntoASlotHoldingAReferenceReleasesItOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var keep public; var slot public;\n")
+		wxT("Procedure Run() Public\n")
+		wxT("  slot = keep;\n")
+		wxT("  slot = \"n=\" + 1;\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	int destroyed = 0;
+	ASSERT_TRUE(pu.SetPropVal(wxT("keep"), ibValue(static_cast<ibValue*>(new ReleaseProbe(&destroyed)))));
+	pu.CallAsProc(wxT("Run"));
+
+	EXPECT_EQ(destroyed, 0) << "released by the slot that stopped holding it, and once more";
+	ibValue slot;
+	ASSERT_TRUE(pu.GetPropVal(wxT("slot"), slot));
+	EXPECT_EQ(slot.GetString(), wxString(wxT("n=1")));
+}
+
+// ===========================================================================
 // A BUILT-IN GLOBAL CALLED WITH FEWER ARGUMENTS THAN IT DECLARES
 //
 // `Message` declares two parameters (text, status) and every script passes one.
@@ -1494,7 +1539,7 @@ TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
 	for (size_t i = 0; i < bc.m_listConst.size(); i++)
 		std::printf("  [%u] type=%d text=%s\n", (unsigned)i,
 			(int)bc.m_listConst[i].GetType(),
-			(const char*)bc.m_listConst[i].GetString().ToUTF8());
+			bc.m_listConst[i].GetString().ToUTF8().c_str());
 	std::printf("code %u\n", (unsigned)bc.m_listCode.size());
 	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
 		const ibByteUnit& u = bc.m_listCode[i];
@@ -1593,7 +1638,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	std::printf("direct sqrt(16) = %s\n", (const char*)direct.ToString().ToUTF8());
 
 	std::printf("arg: type=%d text=%s\n",
-		(int)arg.GetType(), (const char*)arg.GetString().ToUTF8());
+		(int)arg.GetType(), arg.GetString().ToUTF8().c_str());
 
 	ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
 
@@ -1602,7 +1647,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	// "Sqrt returned zero" and "the root is right but the conversion is not"
 	// are different defects and this tells them apart.
 	std::printf("ret: type=%d text=%s int=%d\n",
-		(int)ret.GetType(), (const char*)ret.GetString().ToUTF8(), (int)ret.GetInteger());
+		(int)ret.GetType(), ret.GetString().ToUTF8().c_str(), (int)ret.GetInteger());
 
 	EXPECT_EQ(ret.GetInteger(), 4);
 }

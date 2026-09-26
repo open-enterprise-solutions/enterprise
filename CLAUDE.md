@@ -64,7 +64,7 @@ enterprise/
 │   └── private/              # ⚠ PRIVATE SUBMODULE (open-enterprise-solutions/enterprise-docs):
 │       │                     # design docs, arcs, plans. It resolves for members of the organisation
 │       │                     # and is simply EMPTY for everyone else — the build never needs it, and
-│       │                     # CI initialises only the wxWidgets submodule. The map below is inside it.
+│       │                     # CI fetches every submodule .gitmodules names but this one. The map below is inside it.
 │       ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
 │       ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
 │       ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
@@ -147,12 +147,14 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 
 `ibValueMetaObject` extends `ibValue`, meaning metadata objects (Catalog definitions, Document definitions, etc.) can be stored in and returned from script variables.
 
+The payload is ONE union word: `bool` / date / reference / `ibString m_sData` / `ibNumber m_fData`. The string and the number are each a pointer-sized handle to a shared, counted block (copy = atomic `+1`, a write detaches), so `sizeof(ibValue)` is 32 on x64 and 24 on x86 (2026-09-26). The union's empty state is all-zero bits, valid as an empty string and as the number 0 at once; every change of kind destroys the old one and zeroes the word. `GetString()` returns `ibString` by value; `wxString` is a conversion at the widget edge (`ToWxString()`).
+
 ### 2a. ibNumber — exact-decimal lazy-grow
 
 `ibNumber` (`src/engine/backend/fnumber.h`) is the numeric storage type used by `ibValue::m_fData`. It is **not** a typedef for ttmath::Big — that dependency was removed; the class is self-contained.
 
-- `sizeof(ibNumber) == 8` always. Single tagged `uint64_t`: bit 0 = tag, bits [16:1] = exp10, bits [63:17] = 47-bit signed mantissa. Most values stay inline (immediate tier).
-- Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (high-precision decimal).
+- `sizeof(ibNumber) == 8` always. Single tagged `uint64_t`: bit 0 = tag (0 = immediate, so all-zero bits are the number 0), bits [16:1] = exp10, bits [63:17] = 47-bit signed mantissa. Most values stay inline (immediate tier).
+- Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (high-precision decimal). It lives in a counted `SharedBig` block: copies share it, and a write goes in place only when the number holds it alone.
 - Self-contained: no ttmath dependency. Schoolbook Add/Sub/Mul + base-2 long-division Div live in `fnumber.cpp`. MSVC x86/x64 use `_addcarry_u32`/`_subborrow_u32` intrinsics; portable fallback elsewhere.
 - **Immediate fast paths.** `*` / `/` and `Compare` short-circuit two immediate-INTEGER operands (`exp10 == 0`) through a single `int64` op — no `BigImpl`, no `10^30` inflate, no long division — via the private `TryImmInts` gate. `+` / `-` (`+=` / `-=`) go further, through `TryImmAligned`: two immediate operands are aligned to the smaller exponent (integers are the case where it is 0) and added as `int64`, so money arithmetic — `SUM(Amount)` over a register, `1518500.00 + 17000.00` — no longer drops to `BigImpl` either (2026-09-12). Every fast path fires only when the result fits immediate (and, for `/`, the division is exact), so the value is exactly the one the `BigImpl` path computes; exactness is preserved. Common arithmetic / comparison is a few ns; non-exact decimal division still pays the full exact long-division cost (inherent, not a regression). ⚠ Build a zero with the default constructor, not `0.00`: `ibNumber(double)` prints the double and parses the text back to be exact about it, which on a per-cell path is the whole cost of the read (the Firebird `GetResultNumber` did exactly that until 2026-09-12).
 - Buffer / wire: `wxMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.

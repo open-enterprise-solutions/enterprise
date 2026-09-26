@@ -75,21 +75,21 @@ BACKEND_API const ibValue wxEmptyValue;
 //**********************************************************************
 
 ibValue::ibValue()
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
 	DEBUG_VALUE_CREATE();
 }
 
 //copy constructor:
 ibValue::ibValue(const ibValue& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
 	Copy(varValue);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue&& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
 	Move(std::move(varValue));
 	DEBUG_VALUE_CREATE();
@@ -116,7 +116,7 @@ ibValue::ibValue(ibBackendValue* pParam)
 }
 
 ibValue::ibValue(const wxDateTime& cParam)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
 	const wxLongLong& llData = cParam.GetValue();
 	m_dData = llData.GetValue();
@@ -124,7 +124,7 @@ ibValue::ibValue(const wxDateTime& cParam)
 }
 
 ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
 	wxDateTime dataVal(nDay, (wxDateTime::Month)(nMonth - 1), nYear, nHour, nMinute, nSecond);
 	if (dataVal.IsValid()) {
@@ -138,7 +138,7 @@ ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned
 }
 
 ibValue::ibValue(ibValueTypes type, bool readOnly)
-	: m_typeClass(type), m_bReadOnly(readOnly), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(type), m_bReadOnly(readOnly), m_dData(0), m_refCount(0)
 {
 	switch (type)
 	{
@@ -152,8 +152,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 		m_dData = emptyDate;
 		break;
 	case TYPE_STRING:
-		delete m_pStr; m_pStr = nullptr;
-		break;
+		break;      // the zeroed word IS the empty string
 	default:
 		m_pRef = nullptr;
 		break;
@@ -165,7 +164,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 //Constructors by types:
 #define CVALUE_BYTYPE(v_parclass, v_type, v_value) \
 ibValue::ibValue (v_parclass cParam) \
-    : m_typeClass(v_type), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0) \
+    : m_typeClass(v_type), m_bReadOnly(false), m_dData(0), m_refCount(0) \
 {\
 	v_value = cParam;\
 	DEBUG_VALUE_CREATE();\
@@ -180,34 +179,35 @@ CVALUE_BYTYPE(const ibNumber&, ibValueTypes::TYPE_NUMBER, m_fData);
 
 CVALUE_BYTYPE(wxLongLong_t, ibValueTypes::TYPE_DATE, m_dData);
 
-// String ctors — m_pStr is a pooled-heap ibString, allocated only for a
-// non-empty string (empty stays nullptr = no allocation). char* keeps the
-// historical wxString(char*) conversion (NOT ibString's UTF-8 path).
+// String ctors — the text goes into the union's word as it is (a copy of an
+// ibString is one more owner, not the characters); the empty string is the
+// zeroed word itself. char* keeps the historical wxString(char*) conversion
+// (NOT ibString's UTF-8 path).
 ibValue::ibValue(const char* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
-	if (cParam && *cParam) m_pStr = new ibString(wxString(cParam));
+	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wchar_t* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
-	if (cParam && *cParam) m_pStr = new ibString(cParam);
+	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wxString& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
-	if (!cParam.IsEmpty()) m_pStr = new ibString(cParam);
+	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
-ibValue::ibValue(ibString&& cParam)   // native — steals the buffer (runtime string functions)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
+ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime string functions)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
 {
-	if (!cParam.IsEmpty()) m_pStr = new ibString(std::move(cParam));
+	m_sData = std::move(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
@@ -219,7 +219,9 @@ ibValue::~ibValue()
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
 		m_pRef->DecrRef();
 	else if (m_typeClass == ibValueTypes::TYPE_STRING)
-		delete m_pStr;   // ONLY if STRING — m_pStr aliases m_pRef in the union
+		m_sData.~ibString();   // ONLY if STRING — the word aliases m_pRef in the union
+	else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+		m_fData.~ibNumber();   // a heap-tier number lets go of its BigImpl
 	DEBUG_VALUE_DELETE();
 }
 
@@ -229,17 +231,17 @@ void ibValue::Reset()
 
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef)
 		m_pRef->DecrRef();
-	else if (m_typeClass == ibValueTypes::TYPE_STRING) {
-		delete m_pStr;
-		m_pStr = nullptr;
-	}
+	else if (m_typeClass == ibValueTypes::TYPE_STRING)
+		m_sData.~ibString();   // lets go of the text
+	else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+		m_fData.~ibNumber();   // …and of a heap-tier number's BigImpl
 	// TYPE_CONST_REFFER: non-owned read-only view — only TYPE_REFFER is DecrRef'd
 	// above, so the const-ref's pointer is just dropped below (the metadata tree
 	// owns the object; we never ref-count or delete it). The const-ref never sets
 	// m_bReadOnly, so the write-denied guard above doesn't fire for it either.
 
 	m_typeClass = ibValueTypes::TYPE_EMPTY;
-	m_pRef = nullptr;
+	m_dData = 0;   // the WHOLE word: the empty state of every member (value.h, the union)
 }
 
 //methods:
@@ -248,19 +250,17 @@ void ibValue::Copy(const ibValue& cOld)
 	if (this == &cOld)
 		return;
 
-	// STRING ONTO STRING KEEPS THE BUFFER, and the check has to come BEFORE Reset(),
-	// because Reset() is exactly what throws it away. Overwriting the text reuses the
-	// allocation, so a value assigned into repeatedly pays for one buffer instead of
-	// one per copy — this is the road `operator=` takes, i.e. everything outside the
-	// interpreter: table cells, array elements, record fields.
+	// STRING ONTO STRING SHARES THE TEXT: one more owner of the source's text, the
+	// destination's own let go — no characters copied. This is the road `operator=`
+	// takes, i.e. everything outside the interpreter: table cells, array elements,
+	// record fields.
 	//
 	// Read-only is excluded deliberately: writing through the tag would step over
 	// Reset()'s write-denied check, which is where that error is raised.
-	if (!m_bReadOnly && m_pStr != nullptr &&
+	if (!m_bReadOnly &&
 		m_typeClass == ibValueTypes::TYPE_STRING &&
 		cOld.m_typeClass == ibValueTypes::TYPE_STRING) {
-		if (cOld.m_pStr != nullptr) *m_pStr = *cOld.m_pStr;
-		else m_pStr->Clear();          // null source = the empty string
+		m_sData = cOld.m_sData;
 		return;
 	}
 
@@ -278,7 +278,7 @@ void ibValue::Copy(const ibValue& cOld)
 		m_fData = cOld.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		m_pStr = cOld.m_pStr ? new ibString(*cOld.m_pStr) : nullptr;
+		m_sData = cOld.m_sData;   // the text shared — the zeroed word after Reset() is an empty string
 		break;
 	case ibValueTypes::TYPE_DATE:
 		m_dData = cOld.m_dData;
@@ -326,7 +326,7 @@ void ibValue::Move(ibValue&& cOld)
 		m_fData = std::move(cOld.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		m_pStr = cOld.m_pStr; cOld.m_pStr = nullptr;   // steal the buffer
+		m_sData = std::move(cOld.m_sData);   // take the text over
 		break;
 	case ibValueTypes::TYPE_DATE:
 		m_dData = std::move(cOld.m_dData);
@@ -444,7 +444,7 @@ void ibValue::operator = (const wxString& cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (!cParam.IsEmpty()) m_pStr = new ibString(cParam);   // empty → nullptr, no alloc
+	m_sData = ibString(cParam);
 }
 
 // Character POINTERS assign as strings. Without these two, `value = "text"` and
@@ -456,7 +456,7 @@ void ibValue::operator = (const char* cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (cParam && *cParam) m_pStr = new ibString(wxString(cParam));
+	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
 }
 
 void ibValue::operator = (const wchar_t* cParam)
@@ -464,7 +464,7 @@ void ibValue::operator = (const wchar_t* cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (cParam && *cParam) m_pStr = new ibString(cParam);
+	m_sData = ibString(cParam);
 }
 
 void ibValue::operator = (ibString&& cParam)
@@ -472,7 +472,7 @@ void ibValue::operator = (ibString&& cParam)
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (!cParam.IsEmpty()) m_pStr = new ibString(std::move(cParam));   // steal buffer; empty → nullptr
+	m_sData = std::move(cParam);   // take the text over
 }
 
 void ibValue::operator = (const ibValue& cParam)
@@ -491,20 +491,26 @@ void ibValue::operator = (ibValueTypes type)
 {
 	ibValue objValue(*this);
 
+	// The text or the number of the kind the value WAS is let go (objValue holds it for SetData),
+	// and the word zeroed — the empty state of every kind (value.h, the union).
+	if (m_typeClass == ibValueTypes::TYPE_STRING)
+		m_sData.~ibString();
+	else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+		m_fData.~ibNumber();
+	m_dData = 0;
+
 	switch (type)
 	{
 	case TYPE_BOOLEAN:
 		m_bData = false;
 		break;
 	case TYPE_NUMBER:
-		m_fData.SetZero();
-		break;
+		break;      // the zeroed word is the number 0
 	case TYPE_DATE:
 		m_dData = emptyDate;
 		break;
 	case TYPE_STRING:
-		delete m_pStr; m_pStr = nullptr;
-		break;
+		break;      // the zeroed word is the empty string
 	default:
 		m_pRef = nullptr;
 		break;
@@ -644,19 +650,16 @@ bool ibValue::SetString(const wxString& strString)
 		return m_pRef->SetString(strString);
 	}
 
-	// Already a string with a live buffer: overwrite the text and keep the object.
-	// Before Reset(), which would free it. (An empty result is left as a live EMPTY
-	// buffer rather than nullptr — IsEmpty() reads both as empty, and the buffer is
-	// then there for the next write.)
-	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING && m_pStr != nullptr) {
-		*m_pStr = ibString(strString);
+	// Already a string: the new text simply replaces the one held.
+	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING) {
+		m_sData = ibString(strString);
 		return true;
 	}
 
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (!strString.IsEmpty()) m_pStr = new ibString(strString);   // empty → nullptr
+	m_sData = ibString(strString);
 
 	return true;
 }
@@ -666,17 +669,16 @@ bool ibValue::SetString(ibString&& strString)
 	if (m_bReadOnly && m_typeClass == ibValueTypes::TYPE_REFFER)
 		return m_pRef->SetString(strString.ToWxString());
 
-	// Already a string with a live buffer: move into the object we have instead of
-	// deleting it and allocating another to hold the same stolen buffer.
-	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING && m_pStr != nullptr) {
-		*m_pStr = std::move(strString);
+	// Already a string: the text is taken over in place of the one held.
+	if (!m_bReadOnly && m_typeClass == ibValueTypes::TYPE_STRING) {
+		m_sData = std::move(strString);
 		return true;
 	}
 
 	Reset();
 
 	m_typeClass = ibValueTypes::TYPE_STRING;
-	if (!strString.IsEmpty()) m_pStr = new ibString(std::move(strString));   // steal buffer; empty → nullptr
+	m_sData = std::move(strString);
 
 	return true;
 }
@@ -729,16 +731,11 @@ void ibValue::SetData(const ibValue& varValue)
 		SetNumber(varValue.GetString());
 		return;
 	case ibValueTypes::TYPE_STRING: {
-		// A string source hands back its live buffer, so the assign is one buffer
-		// copy instead of the ibString -> wxString -> ibString round trip. A
-		// coerced source (number/bool/date) already owns its text in `scratch`,
-		// which is ours to give away. Both branches finish producing the value
-		// BEFORE SetString()'s Reset() runs, because varValue may be a reference
-		// that resolves back to this very value's buffer.
-		ibString scratch;
-		const ibString& text = varValue.GetString(scratch);
-		if (&text == &scratch) SetString(std::move(scratch));
-		else SetString(ibString(text));
+		// A string source shares its text (one more owner, no copy); a coerced one
+		// (number/bool/date) builds it. Either way the text is held BEFORE
+		// SetString()'s Reset() runs, because varValue may be a reference that
+		// resolves back to this very value.
+		SetString(varValue.GetString());
 		return;
 	}
 	case ibValueTypes::TYPE_DATE:
@@ -807,51 +804,32 @@ ibNumber ibValue::GetNumber() const
 	return 0;
 }
 
-wxString ibValue::GetString() const
+ibString ibValue::GetString() const
 {
 	switch (m_typeClass)
 	{
 	case ibValueTypes::TYPE_EMPTY:
-		return wxEmptyString;
 	case ibValueTypes::TYPE_NULL:
-		return wxEmptyString;
+		return ibString();
 	case ibValueTypes::TYPE_BOOLEAN:
 		return m_bData ? wxT("True") : wxT("False");
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData.ToString();
 	case ibValueTypes::TYPE_STRING:
-		return m_pStr ? m_pStr->ToWxString() : wxString(wxEmptyString);
+		return m_sData;   // the text SHARED — one more owner, no copy
 	case ibValueTypes::TYPE_DATE: {
 		const wxDateTime& dateTime = wxLongLong(m_dData);
 		return dateTime.Format("%d.%m.%Y %H:%M:%S");
 	}
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
-		return m_pRef ? m_pRef->GetString() : wxString(wxEmptyString);
+		// A REFERENCE TO A STRING IS STILL A STRING: the target shares its text the same way.
+		return m_pRef != nullptr ? m_pRef->GetString() : ibString();
 	default:
 		break;      // object kinds present as their class name — tail below
 	}
 
 	return GetClassName();
-}
-
-const ibString& ibValue::GetString(ibString& scratch) const
-{
-	if (m_typeClass == ibValueTypes::TYPE_STRING) {
-		if (m_pStr) return *m_pStr;            // zero-copy — the live buffer
-		static const ibString s_empty;         // empty string {STRING, null}
-		return s_empty;
-	}
-	// A REFERENCE TO A STRING IS STILL A STRING, and the buffer is one hop away.
-	// Without this hop the reffer fell into the coercion below and rebuilt the
-	// text it was already pointing at — a wxString allocation per call, on a path
-	// that exists to avoid exactly that. Following the chain reaches the same
-	// zero-copy return the target would have given, and a reffer to a NUMBER is
-	// no worse off: it coerces one level down instead of here.
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->GetString(scratch);
-	scratch = GetString();                     // coerce number/bool/date (one wxString→ibString)
-	return scratch;
 }
 
 wxLongLong_t ibValue::GetDate() const
@@ -867,7 +845,7 @@ wxLongLong_t ibValue::GetDate() const
 		return emptyDate;
 	}
 	case ibValueTypes::TYPE_STRING: {
-		const wxString sData = m_pStr ? m_pStr->ToWxString() : wxString();
+		const wxString sData = m_sData.ToWxString();
 		wxDateTime dateTime;
 		if (dateTime.ParseFormat(sData, "%d.%m.%Y %H:%M:%S")) {
 			const wxLongLong& llData = dateTime.GetValue();
@@ -1050,7 +1028,7 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_DATE:
 		return m_dData == emptyDate;
 	case ibValueTypes::TYPE_STRING:
-		return m_pStr == nullptr || m_pStr->IsEmpty();
+		return m_sData.IsEmpty();
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
 	case ibValueTypes::TYPE_VALUE:
@@ -1078,8 +1056,17 @@ void ibValue::SetType(ibValueTypes type)
 		ibBackendCoreException::Error(_("Attempt to change the type of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
 		m_pRef->SetType(type);
-	else
+	else if (m_typeClass != type) {
+		// A NEW KIND STARTS FROM THE ZEROED WORD (value.h, the union): the text or the number of
+		// the old one is let go — retagging alone would read a boolean's byte as a number and keep
+		// a string's text forever.
+		if (m_typeClass == ibValueTypes::TYPE_STRING)
+			m_sData.~ibString();
+		else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+			m_fData.~ibNumber();
+		m_dData = 0;
 		m_typeClass = type;
+	}
 }
 
 ibValueTypes ibValue::GetType() const
@@ -1168,14 +1155,26 @@ inline int CompareOrder(const T& a, const T& b) { return (b < a) - (a < b); }
 // passed on as if it were already -1/0/1.
 inline int OrderOfDifference(const int difference) { return (difference > 0) - (difference < 0); }
 
-// Both sides as text. The GetString(scratch) overload IS the "read it in place"
-// path — for a TYPE_STRING value it returns the live buffer and never touches
-// the scratch — so all four tag combinations get the cheapest reading available
-// to them from one line, and an unused scratch allocates nothing.
+// A value's text, read IN PLACE when it is a string (or a reference to one): its own text by
+// reference, not even a count taken — a sort compares, and a hash reads, without touching the
+// counters. Anything else (number, date, object) builds its text into `built`.
+inline const ibString& AsText(const ibValue& value, ibString& built)
+{
+	const ibValue* held = &value;
+	while ((held->m_typeClass == ibValueTypes::TYPE_REFFER || held->m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
+		&& held->m_pRef != nullptr)
+		held = held->m_pRef;
+	if (held->m_typeClass == ibValueTypes::TYPE_STRING)
+		return held->m_sData;
+	built = held->GetString();
+	return built;
+}
+
+// Both sides as text, each the cheapest reading it has.
 inline int CompareAsText(const ibValue& a, const ibValue& b)
 {
-	ibString sa, sb;
-	return OrderOfDifference(a.GetString(sa).raw().compare(b.GetString(sb).raw()));
+	ibString builtA, builtB;
+	return AsText(a, builtA).Cmp(AsText(b, builtB));
 }
 
 // WHICH STRETCH OF THE ORDER A KIND OCCUPIES. Values of different rank are
@@ -1363,8 +1362,8 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 		if (cParam.GetType() != ibValueTypes::TYPE_DATE) return false;
 		return m_dData == (cParam.m_typeClass == ibValueTypes::TYPE_DATE ? cParam.m_dData : cParam.GetDate());
 	case ibValueTypes::TYPE_STRING:
-		// GetString(scratch) hands back the live buffer for a string AND for a
-		// reference to one, so the text path needs no special case here.
+		// GetString() shares the text of a string AND of a reference to one, so
+		// the text path needs no special case here.
 		return cParam.GetType() == ibValueTypes::TYPE_STRING && CompareAsText(*this, cParam) == 0;
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
@@ -1456,8 +1455,8 @@ size_t ibValue::GetValueHash() const
 	// through CompareAsText) — so an enum and the string of its presentation land
 	// in the same bucket, which is what their order says about them.
 	default: {
-		ibString scratch;
-		const ibString& text = GetString(scratch);
+		ibString built;
+		const ibString& text = AsText(*this, built);   // a string's own text, read in place
 		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
 			h = ibHashCombine(h, *p);
@@ -1517,7 +1516,7 @@ long ibValue::GetNProps() const
 	return 0;
 }
 
-long ibValue::FindProp(const wxString& strPropName) const
+long ibValue::FindProp(const ibString& strPropName) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindProp(strPropName);
@@ -1527,14 +1526,15 @@ long ibValue::FindProp(const wxString& strPropName) const
 	return wxNOT_FOUND;
 }
 
-wxString ibValue::GetPropName(const long lPropNum) const
+const ibString& ibValue::GetPropName(const long lPropNum) const
 {
+	static const ibString s_absent;
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetPropName(lPropNum);
 	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetPropName(lPropNum);
-	return wxEmptyString;
+	return s_absent;
 }
 
 bool ibValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -1588,7 +1588,7 @@ bool ibValue::IsPropScoped(const long lPropNum) const
 	return false;
 }
 
-long ibValue::ibMemberTable::AppendProp(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias)
+long ibValue::ibMemberTable::AppendProp(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias)
 {
 	const unsigned int flags =
 		(readable ? eProp_Readable : 0u) |
@@ -1610,7 +1610,7 @@ long ibValue::GetNMethods() const
 // Per-class method resolver. LINQ pipeline ops bypass this entirely —
 // compile-side emits OPER_CALL_LINQ via FindLinqMethodByName before
 // reaching the OPER_CALL_METHOD path.
-long ibValue::FindMethod(const wxString& strMethodName) const
+long ibValue::FindMethod(const ibString& strMethodName) const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->FindMethod(strMethodName);
@@ -1622,24 +1622,26 @@ long ibValue::FindMethod(const wxString& strMethodName) const
 	return wxNOT_FOUND;
 }
 
-wxString ibValue::GetMethodName(const long lMethodNum) const
+const ibString& ibValue::GetMethodName(const long lMethodNum) const
 {
+	static const ibString s_absent;
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodName(lMethodNum);
 	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetMethodName(lMethodNum);
-	return wxEmptyString;
+	return s_absent;
 }
 
-wxString ibValue::GetMethodHelper(const long lMethodNum) const
+const ibString& ibValue::GetMethodHelper(const long lMethodNum) const
 {
+	static const ibString s_absent;
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetMethodHelper(lMethodNum);
 	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->GetMethodHelper(lMethodNum);
-	return wxEmptyString;
+	return s_absent;
 }
 
 long ibValue::GetNParams(const long lMethodNum) const

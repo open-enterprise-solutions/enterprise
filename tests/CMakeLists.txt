@@ -68,6 +68,7 @@ add_executable(oes_tests
     test_dataNode.cpp
     test_pointInTime.cpp
     test_jsonProvider.cpp
+    test_valueJson.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
@@ -90,9 +91,11 @@ add_executable(oes_tests
     test_queryConstructor.cpp
     test_queryNaming.cpp
     test_queryRoundTrip.cpp
+    test_jsonRoundTrip.cpp
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp
+    test_queryUnload.cpp
     test_columnCodec.cpp
     test_queryPredicate.cpp
     test_queryColumnExpr.cpp
@@ -111,6 +114,7 @@ add_executable(oes_tests
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
+    test_totalsFold.cpp
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
     test_calcDisplacement.cpp
@@ -129,6 +133,8 @@ add_executable(oes_tests
     test_valueStructure.cpp
     test_valueGeometry.cpp
     test_valueTextFile.cpp
+    test_valueHttp.cpp
+    test_valueHttpSecure.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp
     test_rowValues.cpp
@@ -150,6 +156,8 @@ add_executable(oes_tests
     test_sourceHopChain.cpp
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
+    test_typeFamilyAdjust.cpp
+    test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
 )
@@ -210,10 +218,11 @@ oes_discover_tests(oes_tests)
 # ---------------------------------------------------------------------------
 # Lightweight string-layer tests — ibString/fstring only.
 #
-# fstring.h + fstringPool.h are header-only and depend on nothing but wxBase,
-# so this target does NOT link (or recompile) backend.dll. Use it for fast
-# iteration on the string type — it builds in seconds even after touching core
-# backend headers:
+# fstring.h is the facade and fstring.cpp the module behind it; both depend on
+# nothing but wxBase, so this target compiles the module IN (as if it were
+# backend, BACKEND_EXPORTS) and does NOT link (or recompile) backend.dll. Use it
+# for fast iteration on the string type — it builds in seconds even after
+# touching core backend headers:
 #
 #   cmake --build build --target oes_string_tests
 #   ./bin/oes_string_tests                                    # functional tests
@@ -223,7 +232,9 @@ oes_discover_tests(oes_tests)
 add_executable(oes_string_tests
     test_string.cpp
     bench_string.cpp
+    "${CMAKE_SOURCE_DIR}/src/engine/backend/fstring.cpp"
 )
+target_compile_definitions(oes_string_tests PRIVATE BACKEND_EXPORTS)
 
 target_link_libraries(oes_string_tests
     PRIVATE

@@ -11,35 +11,45 @@
        (caught by CI on 2026-08-02, the Windows job with PostgreSQL off). -->
   <PropertyGroup>
     <OesDriverDefines>OES_USE_FIREBIRD;OES_USE_POSTGRESQL;OES_USE_ODBC;</OesDriverDefines>
+    <!-- cpp-httplib, for every project that includes it, as the root CMakeLists.txt says it for every
+         target: the client does not add `Expect: 100-continue` to a large body by itself. -->
+    <OesHttpDefines>CPPHTTPLIB_EXPECT_100_THRESHOLD=0;</OesHttpDefines>
+    <!-- TLS, for every project, and for Mbed TLS itself. Both have to be said once for the whole program:
+         the first because cpp-httplib's inline functions change shape with it and three translation units
+         include the header, the second because MBEDTLS_THREADING_C adds a mutex to contexts the callers
+         declare - a caller that misses it disagrees with the library about their size. The angle form is
+         read from the include path (the project and the callers both carry src\engine\backend\tls), which
+         keeps a file path with quotes in it out of a preprocessor definition. -->
+    <OesTlsDefines>CPPHTTPLIB_MBEDTLS_SUPPORT;MBEDTLS_USER_CONFIG_FILE=&lt;oes_mbedtls_config.h&gt;;</OesTlsDefines>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
 </Project>

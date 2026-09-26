@@ -306,35 +306,16 @@ public:
 
 		result.SetValue(wxT("name"), name);
 
-		ibValue value;
-
-		if (ibValue::GetAvailableCtor(name) != nullptr) {
-			try {
-				value = ibValue::CreateObject(name);
-			}
-			catch (...) {
-				// ⭐ WHY, NOT JUST THAT. This used to say "cannot be built without arguments", which
-				// reads as a limitation of this verb and sends a caller looking for the arguments.
-				// There are none to find: what is left here after 2026-09-09 is two small families,
-				// and neither has a value to show.
-				refusal = wxString::Format(
-					ibMcpText("'%s' has no empty form, so there is nothing to read members off. Either it "
-					  "is a type CONSTRAINT - what a value is ALLOWED to be, like `Any` - and there was "
-					  "never a value behind it; or it exists only against the thing that owns it (a "
-					  "module unit, a row of a list), and one standing alone would answer about "
-					  "nothing. If you are HOLDING one, ask what it offers where you got it: the "
-					  "value's own members are in script_complete after a dot."), name);
-				return false;
-			}
-		}
-		// ⭐⭐ …AND THE CONFIGURATION'S OWN TYPES ARE BUILT THROUGH THE CONFIGURATION'S REGISTRY.
+		// ⭐⭐ ONE DOOR FOR BOTH REGISTRIES. The configuration's own types (`CatalogManager.Goods`,
+		// `DocumentObject.GoodsReceipt`) live in the metadata's registry and the platform's in the value
+		// registry — and the metadata answers for its own image and falls through to the value registry
+		// itself (ibMetaData::GetAvailableCtor). So a name is asked where a script names it: the open
+		// configuration, else the platform alone. A concrete reference exists only in the first.
 		//
 		// 🛑 TWO REGISTRIES, ONE VOCABULARY — and this verb used to answer out of one of them and
-		// REFUSE the other. type_list lists the configuration's types (`CatalogManager.Goods`,
-		// `DocumentObject.GoodsReceipt`) because they are real names a script writes; they live in
-		// the metadata's registry, so asking the engine alone answered "not a type this platform
-		// knows" about a name type_list had just given. That was softened once into a refusal that
-		// pointed at metadata_get — better words for the same silence.
+		// REFUSE the other. type_list lists the configuration's types because they are real names a
+		// script writes, so asking the engine alone answered "not a type this platform knows" about a
+		// name type_list had just given.
 		//
 		// ⚠ AND IT IS THE MANAGERS THAT MADE IT COST SOMETHING. `Catalogs.<name>` is where DATA IS
 		// WRITTEN — CreateElement, CreateFolder, CreateGroup, the finders — and the one verb that
@@ -342,32 +323,56 @@ public:
 		// the way to find the item-creating verb was to guess `CreateItem`, be refused by the
 		// runtime, and guess again. A vocabulary that cannot be asked is a vocabulary somebody
 		// brings from another platform.
-		//
-		// The ctor knows how to build one (ibCtorMetaValueType::CreateObject), which is the same
-		// road the runtime itself takes when a script names the type — so the answer is the one a
-		// script would get, not a description of it.
-		else if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+		const ibMetaData* const metaData =
+			(activeMetaData != nullptr && activeMetaData->IsConfigOpen()) ? activeMetaData : nullptr;
+		const ibCtorAbstractType* const ctor = metaData != nullptr
+			? metaData->GetAvailableCtor(name) : ibValue::GetAvailableCtor(name);
 
-			ibCtorMetaValueType* const ctor = activeMetaData->GetTypeCtor(name);
+		if (ctor == nullptr) {
+			refusal = wxString::Format(
+				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
+			return false;
+		}
 
-			if (ctor == nullptr) {
-				refusal = wxString::Format(
-					ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
-				return false;
-			}
+		// WHETHER IT IS THE CONFIGURATION'S — asked of the configuration's registry, which answers for
+		// its own types only. It says what kind of thing this is and who declares it, below.
+		const ibCtorMetaValueType* const ownCtor =
+			metaData != nullptr ? metaData->GetTypeCtor(ctor->GetClassType()) : nullptr;
 
-			// HELD IN AN ibValue, never on the stack as a raw pointer: these are refcounted, and a
-			// bare pointer here is the shape that has produced heap corruption in this tree before.
-			// The registry answers with the owner, so it is held from the moment it exists.
+		// BUILT BY ITS CTOR, the one that knows how — and not through the factory's door, whose Init()
+		// runs an object's own code (a data object's Filling) for a question that only reads members.
+		// HELD IN AN ibValue from the moment it exists: these are refcounted, and a bare pointer here is
+		// the shape that has produced heap corruption in this tree before.
+		ibValue value;
+		try {
 			value = ctor->CreateObject();
+		}
+		catch (...) {
+			value = ibValue();   // a question about a type must not surface as an error
+		}
 
-			if (!value.IsReference()) {
-				refusal = wxString::Format(
+		// ASKED OF THE HOLDER, not of what it holds: nothing was made when the holder itself is empty.
+		// `Undefined` is a type too, and its ctor makes one — held, and GetType() reads through to
+		// TYPE_EMPTY — while a characteristic of one type makes a plain value that is not held at all.
+		if (value.m_typeClass == ibValueTypes::TYPE_EMPTY) {
+			// ⭐ WHY, NOT JUST THAT. This used to say "cannot be built without arguments", which reads as
+			// a limitation of this verb and sends a caller looking for the arguments. There are none.
+			refusal = ownCtor != nullptr
+				? wxString::Format(
 					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
 					  "exists only against the object that declares it. Read that object with "
-					  "metadata_get, its fields with query_fields."), name);
-				return false;
-			}
+					  "metadata_get, its fields with query_fields."), name)
+				: wxString::Format(
+					ibMcpText("'%s' has no empty form, so there is nothing to read members off. Either it "
+					  "is a type CONSTRAINT - what a value is ALLOWED to be, like `Any` - and there was "
+					  "never a value behind it; or it exists only against the thing that owns it (a "
+					  "module unit, a row of a list), and one standing alone would answer about "
+					  "nothing. If you are HOLDING one, ask what it offers where you got it: the "
+					  "value's own members are in script_complete after a dot."), name);
+			return false;
+		}
+
+		if (ownCtor != nullptr) {
 
 			// ⭐⭐ AND THE CLASS ID SAYS MORE THAN "IT EXISTS" — it says WHAT KIND OF THING this is
 			// and WHICH METAOBJECT declares it, and both are answers a caller otherwise infers from
@@ -396,21 +401,16 @@ public:
 				return "";
 			};
 
-			if (const char* const role = roleWord(ctor->GetMetaTypeCtor()); *role != '\0')
+			if (const char* const role = roleWord(ownCtor->GetMetaTypeCtor()); *role != '\0')
 				result.SetValue(wxT("role"), wxString::FromAscii(role));
 
 			// WHOSE IT IS — said by the one function that says an object, so the id, the name and
 			// the kind read the same here as everywhere else.
-			if (const ibValueMetaObject* const owner = ctor->GetMetaObject()) {
+			if (const ibValueMetaObject* const owner = ownCtor->GetMetaObject()) {
 				std::shared_ptr<ibDataNode> declaredBy = std::make_shared<ibDataNode>();
 				ibMcpSayObject(owner, *declaredBy);
 				result.AddField(wxT("declaredBy"), ibDataValue::Child(declaredBy));
 			}
-		}
-		else {
-			refusal = wxString::Format(
-				ibMcpText("'%s' is not a type this platform knows. Use type_list to see what is."), name);
-			return false;
 		}
 
 		std::vector<ibDataValue> methods;

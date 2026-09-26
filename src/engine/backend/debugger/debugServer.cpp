@@ -709,7 +709,7 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 			? runContext->m_pRefLocVars[info.m_slotIndex]
 			: nullptr;
 		commandChannel.w_stringZ(renderedName);
-		commandChannel.w_stringZ(locRefValue ? locRefValue->GetString()    : wxString());
+		commandChannel.w_stringZ(locRefValue ? locRefValue->GetString()    : ibString());
 		commandChannel.w_stringZ(locRefValue ? locRefValue->GetClassName() : wxString());
 		commandChannel.w_u32(locRefValue ? locRefValue->GetNProps() : 0);
 	};
@@ -767,7 +767,7 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 				? v.m_strRealName
 				: (prefix + wxT(".") + v.m_strRealName);
 			commandChannel.w_stringZ(rendered);
-			commandChannel.w_stringZ(locRefValue ? locRefValue->GetString()    : wxString());
+			commandChannel.w_stringZ(locRefValue ? locRefValue->GetString()    : ibString());
 			commandChannel.w_stringZ(locRefValue ? locRefValue->GetClassName() : wxString());
 			commandChannel.w_u32(locRefValue ? locRefValue->GetNProps() : 0);
 		}
@@ -1526,7 +1526,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			commandChannel.w_stringZ(strModuleName);
 			commandChannel.w_stringZ(strExpression);
 			commandChannel.w_stringZ(evaluated
-				? vResult.GetString()
+				? vResult.GetString().ToWxString()
 				: (parked ? _("<cannot be evaluated here>")
 				          : _("<the runtime is not parked at a breakpoint>")));
 

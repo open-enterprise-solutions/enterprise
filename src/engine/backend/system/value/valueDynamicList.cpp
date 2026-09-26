@@ -631,7 +631,7 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 		else
 			m_sourceExplorer.AppendColumn(column.m_name,
 				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.m_col != nullptr ? column.m_col->GetTypeDesc() : ibTypeDescription());
+				column.GetTypeDesc());
 	}
 	// The list's DEFAULT view rides onto the explorer: a Choice list stamps the choice flag the form auto-build copies
 	// onto the mainTableBox (where it serialises per-form). A Normal list leaves it off. This is the ONE propagation.

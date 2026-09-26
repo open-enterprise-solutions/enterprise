@@ -31,6 +31,40 @@ TEST(ValueTest, SizeofReport) {
 }
 
 // ===========================================================================
+// One word for every kind — a string and a number live in the union
+// ===========================================================================
+
+TEST(ValueUnion, ACopyOfAStringSharesItsText) {
+    const ibValue original(wxT("a text longer than the short-string buffer"));
+    const ibValue copy(original);
+    EXPECT_EQ(original.GetString().wc_str(), copy.GetString().wc_str());   // the same characters
+}
+
+TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
+    ibValue v(true);
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // a boolean's byte is not read as a number
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = wxT("text");
+    v.SetType(ibValueTypes::TYPE_NUMBER);       // nor a string's text
+    EXPECT_TRUE(v.GetNumber().IsZero());
+    v = ibNumber(wxString(wxT("765.3456754567765443343")));
+    v.SetType(ibValueTypes::TYPE_STRING);       // nor a heap-tier number
+    EXPECT_TRUE(v.GetString().IsEmpty());
+}
+
+TEST(ValueUnion, KindChangesOnTheLetRoad) {
+    const ibValue number(ibNumber(wxString(wxT("765.3456754567765443343"))));
+    const ibValue text(wxT("text"));
+    const ibValue flag(true);
+    ibValue slot;
+    for (const ibValue* source : { &number, &text, &flag, &number, &flag, &text }) {
+        CopyValue(slot, *source);
+        EXPECT_EQ(slot.GetType(), source->GetType());
+        EXPECT_TRUE(slot.GetString() == source->GetString());
+    }
+}
+
+// ===========================================================================
 // TYPE_BOOLEAN
 // ===========================================================================
 
@@ -278,7 +312,7 @@ public:
     explicit ConstRefProbe(bool* deletedFlag)
         : ibValue(ibValueTypes::TYPE_VALUE, false), m_deleted(deletedFlag) {}
     ~ConstRefProbe() override { if (m_deleted) *m_deleted = true; }
-    wxString GetString() const override { return wxT("PROBE"); }
+    ibString GetString() const override { return wxT("PROBE"); }
 private:
     bool* m_deleted;
 };

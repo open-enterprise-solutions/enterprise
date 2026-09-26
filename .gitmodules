@@ -6,3 +6,10 @@
 	path = docs/private
 	url = https://github.com/open-enterprise-solutions/enterprise-docs.git
 	branch = main
+	update = none
+[submodule "src/3rdparty/cpp-httplib"]
+	path = src/3rdparty/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "src/3rdparty/mbedtls"]
+	path = src/3rdparty/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git

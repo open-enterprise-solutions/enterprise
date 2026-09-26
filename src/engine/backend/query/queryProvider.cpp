@@ -5965,7 +5965,7 @@ public:
 	{
 		for (const ibBackendQueryColumn* c : cols)
 			if (c != nullptr) {
-				m_columns.push_back(ibQueryRamColumn{ c->GetColumnId(), c->GetName(), c->GetTypeDesc() });
+				m_columns.push_back(ibQueryRamColumn{ c->GetColumnId(), c->GetName(), c->GetTypeDesc(), c->GetSynonym() });
 				m_cols.push_back(c);
 			}
 	}

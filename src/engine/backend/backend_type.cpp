@@ -263,6 +263,70 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 
 /////////////////////////////////////////////////////////////////////////////////////
 
+#include "backend/formatString.h"   // ibFormatString — what the type description gives
+
+bool ibBackendTypeConfigFactory::GetFormatFromTypeDesc(const ibTypeDescription& type, ibFormatString& formatString)
+{
+	bool written = false;
+
+	// A number: as many digits after the point as the type keeps — `5.00`, not `5`. A number nobody bounded
+	// (precision 0, "no limit" — an average, a product) keeps no count of its own and is shown as it is.
+	if (type.ContainType(ibValueTypes::TYPE_NUMBER) && type.GetPrecision() > 0) {
+		formatString.m_number.m_fractionDigits = type.GetScale();
+		written = true;
+	}
+
+	// A date: what its fractions keep — a date alone shows no time, a time no date.
+	if (type.ContainType(ibValueTypes::TYPE_DATE)) {
+		switch (type.GetDateFraction()) {
+		case ibDateFractions::ibDateFractions_Date:
+			formatString.m_date.m_pattern = ibFormatString::PresetPattern(ibDatePreset::Date);
+			break;
+		case ibDateFractions::ibDateFractions_Time:
+			formatString.m_date.m_pattern = ibFormatString::PresetPattern(ibDatePreset::Time);
+			break;
+		default:
+			formatString.m_date.m_pattern = ibFormatString::PresetPattern(ibDatePreset::DateTime);
+			break;
+		}
+		written = true;
+	}
+
+	return written;
+}
+
+const ibFormatString& ibBackendTypeConfigFactory::GetFormatFromColumn(const ibTranslateString& format, const ibTypeDescription& type)
+{
+	// Compared by what they say, not by whose they are: an attribute edited in the designer keeps its
+	// address, and a column's type in a value table is changed in place.
+	//
+	// ONE KEPT: a table is painted a column at a time, top to bottom, so the cells of a column ask one question
+	// in a row and the first cell of the next column asks a new one. The answer handed back is good until the
+	// next ask on this thread — read it at once.
+	struct ibKeptFormat {
+		wxString m_text;
+		ibTypeDescription m_type;
+		ibFormatString m_formatString;
+	};
+	static thread_local ibKeptFormat s_kept;
+
+	// The text in the language in force, through a scratch: compared with the one kept without allocating
+	// (comparing the translations themselves copied every language of both, every cell).
+	thread_local wxString s_text;
+	const wxString& text = format.GetString(s_text);
+	if (s_kept.m_text == text && s_kept.m_type == type)
+		return s_kept.m_formatString;
+
+	s_kept.m_formatString = ibFormatString();
+	if (text.IsEmpty() || !ibFormatString::Parse(text, s_kept.m_formatString))
+		GetFormatFromTypeDesc(type, s_kept.m_formatString);
+	s_kept.m_text = text;
+	s_kept.m_type = type;
+	return s_kept.m_formatString;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
 #include "backend/query/queryColumn.h"                      // ibBackendSourceColumn — the leaf the dot returns
 
 const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(

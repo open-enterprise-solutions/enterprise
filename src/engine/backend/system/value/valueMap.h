@@ -153,9 +153,9 @@ public:
 	// FindProp is the DOT, and only a Structure has one: a Container's key is a
 	// value, and `c.Name` could not name a reference or a number anyway. So on a
 	// Container FindProp always misses and `c.Name` raises "not found".
-	virtual long FindProp(const wxString& strPropName) const override;
+	virtual long FindProp(const ibString& strPropName) const override;
 	virtual long GetNProps() const override { return (long)m_entries.size(); }
-	virtual wxString GetPropName(const long lPropNum) const override;
+	virtual const ibString& GetPropName(const long lPropNum) const override;
 	virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 

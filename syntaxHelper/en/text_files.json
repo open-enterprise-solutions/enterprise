@@ -1,0 +1,555 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.TextReader",
+      "name_local": "TextReader",
+      "name_en": "TextReader",
+      "kind": "collection",
+      "class_id": 212494550608706170,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New TextReader(path : string [, encoding : TextEncoding = UTF8])",
+      "description": "A file's text, read line by line. The whole file is decoded ONCE, when it is opened - these are exchange files: sales out of a cash register, a price list, an invoice from another system, not logs of gigabytes.\n\nTHE FILE IS NOT HELD OPEN between opening and Close. Its bytes are read whole and the handle let go inside the opening call itself; Close() lets the decoded text go, so what it frees is memory, not a handle on disk.\n\nOpen, ReadLine, Read, LineCount, GetLine and Close are the whole surface - a reader has no properties. ReadLine and GetLine walk ONE cut of the file, so a loop to LineCount() and a loop to Undefined see the same lines, and GetLine does not move where ReadLine stands.\n\nTHE END OF THE FILE IS Undefined, NOT AN EMPTY STRING. An empty line is a line: a loop written against \"\" stops at the first blank line of the file, and written the other way round it never stops. Read() is the other half of that rule - with nothing left it hands over \"\", not Undefined.\n\nTHE ENCODING IS THE SCRIPT'S TO SAY - a member of TextEncoding, UTF8 when the argument is left out or given empty. Bytes that do not spell text in it are a REFUSAL, not a text with holes in it: \"TextReader: the file '<path>' cannot be read in the encoding given\". A byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark also says which end comes first.\n\nA file that cannot be opened, one too large to be held in memory, and one that cannot be read to the end are refusals of their own, each naming the file. Every verb of a reader with no file open refuses with \"TextReader: no file is open\"; built with no argument at all a reader holds none, and Open gives it one. ValueIsFilled answers whether a file is open.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "syntax_block_ves": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nWhile Line <> Undefined Do        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\nEndDo;\nReader.Close();",
+      "parameters": "path - the file to read. One that cannot be opened is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8, which is STRICT: bytes that are not UTF-8 are refused rather than read with holes in them.",
+      "return_descr": "TextReader.",
+      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, not \"\": an empty line is a line\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // the first field\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader.ReadLine",
+        "cls.TextReader.Read",
+        "cls.TextReader.LineCount",
+        "cls.TextReader.GetLine",
+        "cls.TextWriter",
+        "enum.TextEncoding",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Open",
+      "name_local": "Open",
+      "name_en": "Open",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Open(path : string, encoding : TextEncoding = UTF8)",
+      "description": "Opens a file on a reader that already exists - the same thing the constructor does, said afterwards. What was open is let go first, and the reader starts at the first line of the new file, so ONE reader can be walked over one file after another.\n\nThe refusals are the constructor's, each naming the file: one that cannot be opened, one too large to be held in memory, one that cannot be read to the end, and bytes that do not spell text in the encoding given.",
+      "syntax_block": "Reader.Open(path);\nReader.Open(path, TextEncoding.ANSI);",
+      "parameters": "path - the file to read.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.",
+      "return_descr": "",
+      "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // the first file is let go; the reader stands at line 1 of the second\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.ReadLine",
+      "name_local": "ReadLine",
+      "name_en": "ReadLine",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.ReadLine() : string",
+      "description": "The next line, WITHOUT its line break - CRLF and LF alike, so a file written on one system reads on another. Each call moves on by one.\n\nTHE END OF THE FILE IS Undefined. An empty line is a line and comes back as \"\", which is exactly why the loop is written against Undefined: written against \"\" it stops at the first blank line of the file.\n\nGetLine and LineCount do not move where ReadLine stands, so the two ways of reading a file can be used together. With no file open it refuses: \"TextReader: no file is open\".",
+      "syntax_block": "Line = Reader.ReadLine();",
+      "parameters": "None.",
+      "return_descr": "String - or Undefined at the end of the file.",
+      "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // not while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Read",
+        "cls.TextReader.GetLine",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Read() : string",
+      "description": "Everything left - from the line ReadLine would hand over next to the end of the file - as ONE text, line breaks and all, exactly as they stand in the file. Afterwards the reader is at the end.\n\nWITH NOTHING LEFT IT ANSWERS \"\", not Undefined. That is the difference from ReadLine: the end of the file is Undefined only for the verb that hands lines over one at a time.\n\nWith no file open it refuses: \"TextReader: no file is open\".",
+      "syntax_block": "Rest = Reader.Read();",
+      "parameters": "None.",
+      "return_descr": "String - \"\" when nothing is left.",
+      "example": "Header = Reader.ReadLine();       // the first line on its own\nBody = Reader.Read();             // everything after it, line breaks and all\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.ReadLine",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.LineCount",
+      "name_local": "LineCount",
+      "name_en": "LineCount",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.LineCount() : number",
+      "description": "How many lines the file has - the very lines ReadLine hands over, cut the same way. It does not move where ReadLine stands.\n\nA LINE BREAK AT THE VERY END ENDS THE LAST LINE, it opens no empty one after it: a file holding \"a\" and a break is ONE line here, where StrLineCount, which counts a TEXT, says two. An empty file has no lines at all.\n\nWith no file open it refuses: \"TextReader: no file is open\".",
+      "syntax_block": "Count = Reader.LineCount();",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.GetLine",
+        "cls.TextReader.ReadLine",
+        "fn.StrLineCount"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.GetLine",
+      "name_local": "GetLine",
+      "name_en": "GetLine",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.GetLine(line : number) : string",
+      "description": "Line number n, counted FROM ONE - the very line ReadLine would hand over there, cut the same way. It does not move where ReadLine stands, so a file can be read by number and line by line at once.\n\nNO SUCH LINE IS Undefined - line 0, a negative number, and anything past the last. The same answer the end of the file gets from ReadLine, and for the same reason: an empty line is a line and comes back as \"\".\n\nWith no file open it refuses: \"TextReader: no file is open\".",
+      "syntax_block": "Line = Reader.GetLine(2);",
+      "parameters": "line - the line's number, counted from one. Below one, or past the last, the answer is Undefined.",
+      "return_descr": "String - or Undefined when there is no such line.",
+      "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // the header line\nMessage(Reader.GetLine(Reader.LineCount()));   // the last one\nMessage(Reader.ReadLine());                    // still line 1: GetLine did not move it\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.LineCount",
+        "cls.TextReader.ReadLine",
+        "fn.StrGetLine"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Reader.Close()",
+      "description": "Lets the file's decoded text go. The file on disk was already closed at the moment it was opened - its bytes are read whole inside that call - so what this frees is the memory the reader holds, not a handle.\n\nAfterwards ReadLine, Read, LineCount and GetLine refuse with \"TextReader: no file is open\", until an Open gives the reader a file again. Closing one that holds nothing is not an error.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Reader.Close();\nReader.Open(nextFile);        // the same reader, another file",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextReader",
+        "cls.TextReader.Open"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter",
+      "name_local": "TextWriter",
+      "name_en": "TextWriter",
+      "kind": "collection",
+      "class_id": 209640218422438089,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New TextWriter(path : string [, encoding : TextEncoding = UTF8 [, append : boolean = False]])",
+      "description": "A file's text, written. Write puts text down as it is; WriteLine adds ONE line break - LF, the same on every platform, so a file written here reads the same there.\n\nTHE TEXT IS ON DISK WHEN THE FILE CLOSED, NOT WHEN Write ANSWERED. The stream is buffered: a full disk, a share that dropped - Write says yes to the buffer, and the CLOSE is what reports it, with \"TextWriter: the file '<path>' could not be written to the end\". A close taken on trust lets a script delete its source believing the export whole. A writer nobody closed still leaves what was written on disk, because it closes itself when it is let go - but then nobody is told if that close failed.\n\nBY DEFAULT THE FILE IS REPLACED; the third argument, True, adds to the end of what is there.\n\nTHE ENCODING is a member of TextEncoding, UTF8 when left out or given empty. UTF-16 gets a byte-order mark and UTF-8 gets none - the mark is what breaks the first field for every reader that does not expect one; when appending, the mark goes in only if the file has nothing in it yet. A character the encoding has no bytes for is a REFUSAL, not a question mark in the file.\n\nOpen, Write, WriteLine and Close are the whole surface - a writer has no properties. Built with no argument at all it holds no file, and Open gives it one. ValueIsFilled answers whether one is open.",
+      "syntax_block": "Writer = New TextWriter(path, TextEncoding.UTF8);\nWriter = New TextWriter(path, TextEncoding.UTF8, True);   // append instead of replace\n\nWriter.WriteLine(\"code;name;qty\");\nWriter.Write(\"00001;Paper;12\");\nWriter.Close();                                           // here, and only here, a failure is told",
+      "parameters": "path - the file to write. One that cannot be opened for writing is refused, and the message names it.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
+      "return_descr": "TextWriter.",
+      "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Paper;12\");\nWriter.Close();                      // the export is whole only once this returned",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter.Write",
+        "cls.TextWriter.WriteLine",
+        "cls.TextWriter.Close",
+        "cls.TextReader",
+        "enum.TextEncoding",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Open",
+      "name_local": "Open",
+      "name_en": "Open",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Open(path : string, encoding : TextEncoding = UTF8, append : boolean = False)",
+      "description": "Opens a file on a writer that already exists - the same thing the constructor does, said afterwards. What was open is CLOSED first, so a close that fails is told HERE, before the new file is touched.\n\nBy default the new file is replaced; the third argument, True, appends to it. A UTF-16 file gets its byte-order mark, unless the append lands on a file that already has content. A file that cannot be opened for writing is refused, and the message names it.",
+      "syntax_block": "Writer.Open(path);\nWriter.Open(path, TextEncoding.UTF8, True);",
+      "parameters": "path - the file to write.\nencoding - a member of TextEncoding; left out or given empty it is UTF8.\nappend - True adds to the end of the file; False, the default, replaces it.",
+      "return_descr": "",
+      "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // the first file is CLOSED here - and a close that failed is told here\nWriter.WriteLine(\"two\");\nWriter.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Write",
+      "name_local": "Write",
+      "name_en": "Write",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Write(text : string)",
+      "description": "Writes the text as it is: no line break is added, and nothing is translated - what goes down is the text's bytes in the file's encoding. Empty text writes nothing at all.\n\nA character the encoding has no bytes for is a REFUSAL - \"TextWriter: the text cannot be written to '<path>' in the encoding given\" - rather than a question mark left in the file where a letter should be. With no file open it refuses with \"TextWriter: no file is open\".\n\nAN ANSWER HERE IS NOT THE TEXT ON DISK: the stream is buffered, and Close is what reports a write that did not land.",
+      "syntax_block": "Writer.Write(text);",
+      "parameters": "text - what to put down, as it is.",
+      "return_descr": "",
+      "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Paper;\");\nWriter.WriteLine(\"12\");        // the break that ends the row",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.WriteLine",
+        "cls.TextWriter.Close",
+        "enum.TextEncoding"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.WriteLine",
+      "name_local": "WriteLine",
+      "name_en": "WriteLine",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.WriteLine(text : string)",
+      "description": "The text, and then ONE line break - LF, on every platform, so a file written on Windows reads the same on Linux and on macOS. CRLF is not written; TextReader strips either, so a file made here is read back line for line.\n\nEverything Write says holds here: an encoding that cannot spell the text is a refusal, a writer with no file open is a refusal, and the close is what reports a write that did not land.",
+      "syntax_block": "Writer.WriteLine(text);",
+      "parameters": "text - what to put down; the line break after it is added by this verb.",
+      "return_descr": "",
+      "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // an empty line is a line - just the break",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Write",
+        "cls.TextReader.ReadLine"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.TextWriter.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Writer.Close()",
+      "description": "Closes the file - and THIS is where a write that did not land is told: \"TextWriter: the file '<path>' could not be written to the end\". A full disk, a share that dropped, a quota reached: Write said yes to the buffer, and the close is what meets the disk.\n\nSo close, and let the refusal reach you, before a script deletes its source believing the export whole. After a close that failed the handle is let go rather than closed a second time.\n\nClosing a writer that holds no file is not an error, and a writer nobody closed closes itself when it is let go - silently, which is the reason to do it here.",
+      "syntax_block": "Writer.Close();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "try {\n    Writer.Close();\n} except {\n    Message(\"the export did not reach the disk: \" + ErrorDescription());\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.TextWriter",
+        "cls.TextWriter.Write",
+        "cls.TextWriter.Open"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData",
+      "name_local": "BinaryData",
+      "name_en": "BinaryData",
+      "kind": "collection",
+      "class_id": 146987204006577027,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New BinaryData([base64 : string])",
+      "description": "Bytes, held as a value - an image, a PDF, a zip, a file whose content is not text at all. A string would not do: text reads back in an encoding, compares as text, and quietly mangles whatever is not valid in it.\n\nRead(path) takes a file's content whole, Write(path) puts the content into a file, Size() says how many bytes there are. Those three are the whole surface - a binary value has no properties.\n\nTHE CONSTRUCTOR'S STRING IS BASE64, NOT A PATH, which is why reading a file is a method: one argument meaning two things is a file that silently fails to decode. A string that is not strict base64 is refused when the value is built - \"Error initializing object 'BinaryData'\" - and another BinaryData handed to the constructor is copied.\n\nTEXT IS A PROJECTION OF THE BYTES, not their storage: written into a string, a BinaryData shows as base64, and an empty one as \"\". Two of them are EQUAL when they hold the same bytes - the comparison reads the content, not its text - and against anything else it is the text that is compared. ValueIsFilled answers whether there are any bytes at all.\n\nA file that cannot be opened is a refusal, and so is one too large to be held in memory: a part of a file is never handed over as the whole of it.",
+      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
+      "parameters": "base64 - the bytes written as base64, the same form the value shows as text; strict, and anything else is refused. Another BinaryData is copied instead. Left out, the value holds no bytes.",
+      "return_descr": "BinaryData.",
+      "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData.Size",
+        "cls.BinaryData.Read",
+        "cls.BinaryData.Write",
+        "cls.TextReader",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Size",
+      "name_local": "Size",
+      "name_en": "Size",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Size() : number",
+      "description": "How many bytes the value holds. A value that holds none is 0 - which is also what a file of no length gives after Read, since an empty file is not a failure.",
+      "syntax_block": "Count = Bytes.Size();",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"the file is empty\"); }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Read"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Read(path : string)",
+      "description": "Takes the file's content WHOLE, replacing whatever the value held. Nothing is decoded and nothing is skipped - a byte-order mark, if the file has one, is part of the content here, because these are bytes and not text.\n\nA file that cannot be opened is refused - \"BinaryData: cannot open the file '<path>' for reading\" - and so is one too large to be held in memory: \"BinaryData: the file '<path>' is too large to be read whole\", rather than a part of the file being handed over as the whole of it. A file of no length reads as no bytes, which is not a failure.",
+      "syntax_block": "Bytes.Read(path);",
+      "parameters": "path - the file to read.",
+      "return_descr": "",
+      "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Write",
+        "cls.BinaryData.Size",
+        "cls.TextReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.Write",
+      "name_local": "Write",
+      "name_en": "Write",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.Write(path : string)",
+      "description": "Puts the content into a file, replacing what was there. A value holding no bytes writes an empty file.\n\nTHE BYTES ARE ON DISK WHEN THE FILE CLOSED, not when the write answered - the stream is buffered - and both halves are told in the same sentence: \"BinaryData: writing to the file '<path>' failed\". A file that cannot be opened for writing is refused before anything is written at all.",
+      "syntax_block": "Bytes.Write(path);",
+      "parameters": "path - the file to write; it is replaced.",
+      "return_descr": "",
+      "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.BinaryData",
+        "cls.BinaryData.Read",
+        "cls.TextWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding",
+      "name_local": "TextEncoding",
+      "name_en": "TextEncoding",
+      "kind": "enum_type",
+      "class_id": 413303300201889308,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
+      "description": "How bytes spell text, said as a value: TextEncoding has five members - UTF8, UTF16, ANSI, OEM and System - and a member is written TextEncoding.<Name>. A script never builds one, and the string \"utf-8\" is not one either: the enumeration is there instead of it.\n\nIT IS READ WHEREVER BYTES MEET TEXT - New TextReader(path, encoding) and TextReader.Open, New TextWriter(path, encoding, append) and TextWriter.Open. Left out, or given empty, it is UTF8.\n\nUTF-8 IS STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it. On reading, a byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark says which end comes first; on writing, UTF-16 gets a mark and UTF-8 gets none.\n\nANSI, OEM AND System ARE THE MACHINE'S OWN, ASKED OF IT rather than assumed, so a base moved from one machine to another reads the files of the machine it runs on. On Windows they are code pages taken by NUMBER: ANSI and System are both the system's ANSI page, OEM is the console's. Away from Windows there is only one such encoding - the current locale's - and all three of them are it. A byte a page has no character for, and a character it has no bytes for, are refusals.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // a file from a console program\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding.UTF8",
+        "enum.TextEncoding.UTF16",
+        "enum.TextEncoding.ANSI",
+        "cls.TextReader",
+        "cls.TextWriter",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.UTF8",
+      "name_local": "UTF8",
+      "name_en": "UTF8",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF8",
+      "description": "UTF-8, and THE DEFAULT: this is what an encoding argument means when it is left out or given empty.\n\nSTRICT. Bytes that are not UTF-8 are refused - \"TextReader: the file '<path>' cannot be read in the encoding given\" - rather than read as a text with replacement characters in it, because a text with holes reads like a text and compares like one.\n\nA byte-order mark at the head of the file is read as a mark and never handed over as text. Writing puts NO mark in front: a mark before JSON, or before the first field of a CSV, is what every reader that does not expect one breaks on.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // the same as New TextReader(path)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "cls.TextReader",
+        "cls.TextWriter"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.UTF16",
+      "name_local": "UTF16",
+      "name_en": "UTF16",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.UTF16",
+      "description": "UTF-16: two bytes a character, and a byte-order mark to say which of them comes first.\n\nREADING FOLLOWS THE MARK - FF FE is read little-endian, FE FF big-endian - and either way the mark is a mark and not the first character of the first line.\n\nWRITING IS LITTLE-ENDIAN and puts the mark in front, because without it nothing reading the file could tell the ends apart. When appending, the mark goes in only if the file has nothing in it yet.",
+      "syntax_block": "Writer = New TextWriter(path, TextEncoding.UTF16);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"code;name;qty\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // the mark says which end comes first",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "cls.TextReader",
+        "cls.TextWriter"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.ANSI",
+      "name_local": "ANSI",
+      "name_en": "ANSI",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.ANSI",
+      "description": "The ANSI code page OF THE MACHINE the platform runs on - asked of the system, never assumed, so a base moved from one machine to another reads the files of the machine it is on now. It is what most Windows programs write when they do not write Unicode.\n\nOn Windows the page is taken BY NUMBER - the one the system answers with - and converted by the system that owns it, so nothing is spelled out and nothing is guessed. A byte the page has no character for is a REFUSAL, and so is a character the page has no bytes for: a text is not written with a question mark where a letter should stand.\n\nAway from Windows there is one such encoding, the current locale's, and ANSI, OEM and System all mean it.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.OEM",
+        "enum.TextEncoding.System"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.OEM",
+      "name_local": "OEM",
+      "name_en": "OEM",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.OEM",
+      "description": "The OEM code page of the machine - the console's: what a DOS-era program, or a report printed to a file, still writes in. Asked of the system, never assumed.\n\nThe rules are ANSI's: on Windows the page is taken by number and converted by the system that owns it, and a byte the page has no character for, or a character it has no bytes for, is a refusal rather than a wrong letter.\n\nAway from Windows there is no separate OEM page: there is the current locale's encoding, and ANSI, OEM and System all mean it.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.OEM);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // written by a console program\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.ANSI",
+        "enum.TextEncoding.System"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.TextEncoding.System",
+      "name_local": "System",
+      "name_en": "System",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "TextEncoding.System",
+      "description": "The encoding of the system as it is set up now. On Windows that IS its ANSI page - the same page ANSI names, reached by the same road - and away from Windows it is the current locale's encoding, which is what ANSI and OEM are there too.\n\nIt is the member to say when what a file is in is \"whatever this machine writes\". When it is known, say that instead: UTF8 for an exchange file, OEM for one a console program wrote.",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.System);",
+      "parameters": "",
+      "return_descr": "TextEncoding.",
+      "example": "Reader = New TextReader(path, TextEncoding.System);   // whatever this machine writes\nMessage(Reader.ReadLine());\nReader.Close();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.TextEncoding",
+        "enum.TextEncoding.ANSI",
+        "enum.TextEncoding.OEM"
+      ],
+      "reviewed": false
+    }
+  ]
+}

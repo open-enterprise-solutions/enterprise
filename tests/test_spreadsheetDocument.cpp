@@ -270,11 +270,16 @@ TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 // ⭐ THE LAST LANGUAGE MAY END WITH THE STRING. `;` separates languages; written without one after
 // the last, the text was not recognised at all and a tab title read "en = 'June'; ru = ..." in full
 // (the payroll demo, 2026-09-10).
+//
+// ⚠ ASKED IN A LANGUAGE NAMED HERE, not the machine's. What is under test is the FORM, and read in the
+// language in force the answer was the machine's: on a Russian one this came back "Iyun" and was the one
+// red test of a full run (2026-09-26).
 TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
 {
 	EXPECT_TRUE(ibBackendLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), Translated(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), Translated(wxT("ru = 'Iyun'; en = 'June'")));   // the last one is found too
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("Iyun"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
+	EXPECT_EQ(wxT("June"), ibBackendLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
 	EXPECT_FALSE(ibBackendLocalization::IsLocalizationString(wxT("June")));
 }
 

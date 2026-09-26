@@ -32,7 +32,7 @@ class BACKEND_API ibValueType : public ibValue {
 		return m_clsid != rValue->m_clsid;
 	}
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 private:
 	ibClassID m_clsid;
@@ -156,7 +156,7 @@ public:
 	// anyway; what they need is the content, and for a composite that is the whole point of it
 	// being composite. Empty stays empty — a field that has not been given a type says nothing
 	// rather than inventing a word for it.
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// EMPTY MEANS "NAMES NO TYPE". The base answers `false` for every value object — an object
 	// exists, therefore it is not empty — which is right for a schedule (its defaults mean

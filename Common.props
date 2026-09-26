@@ -201,9 +201,11 @@
     $(PlatformShortName) (x86/x64) + $(PlatformToolsetVersion) (143 for
     v143), so the rule survives toolset upgrades.
   -->
+  <!-- A static library has no run time of its own to stand beside, and its OutDir is the lib directory:
+       without the second half of the condition the redistributable lands there, next to the .lib. -->
   <Target Name="CopyMsvcCRT"
           AfterTargets="Build"
-          Condition="$(Configuration.StartsWith('Release'))">
+          Condition="$(Configuration.StartsWith('Release')) And '$(ConfigurationType)'!='StaticLibrary'">
     <PropertyGroup>
       <!-- $(VCToolsRedistDir) is unreliable on some installations; build from
            $(VCInstallDir) + $(VCToolsVersion) which are always populated. -->

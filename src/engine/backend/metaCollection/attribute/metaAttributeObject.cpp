@@ -54,6 +54,13 @@ const ibChoiceParametersDescription& ibValueMetaObjectAttributeBase::GetChoicePa
 	return s_none;
 }
 
+// …and no format: a predefined field is shown as its type has it.
+const ibTranslateString& ibValueMetaObjectAttributeBase::GetFormat() const
+{
+	static const ibTranslateString s_none;
+	return s_none;
+}
+
 // WHAT A VALUE HERE MAY BE — the type factory's answer (backend_type.cpp: a characteristic stands for its
 // chart's types). Overridden here only because an attribute is both a type factory and a source column,
 // and each base declares the question: one overrider answers for both, with the factory's answer.
@@ -192,6 +199,7 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 	m_propertyIndexingMode->SetNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
 	m_propertyItemMode->SetNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
 	m_propertySelectMode->SetNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
+	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
 	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
 	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 	return true;
@@ -203,6 +211,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyIndexingMode->GetName(),   m_propertyIndexingMode->GetNodeValue());
 	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
 	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
+	node.SetProperty(m_propertyFormat->GetName(),     m_propertyFormat->GetNodeValue());
 	node.SetProperty(m_propertyTypeLink->GetName(),   m_propertyTypeLink->GetNodeValue());
 	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 	return true;

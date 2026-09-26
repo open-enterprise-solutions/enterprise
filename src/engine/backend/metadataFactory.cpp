@@ -52,10 +52,14 @@ ibValue ibMetaData::CreateObject(const ibClassID& clsid, ibValue** paParams, con
 
 		// Owned from the moment it exists — see ibValue::CreateObject. A refusal throws, and the owner
 		// lets it go.
+		//
+		// ⚠ WHAT THE CTOR MAKES IS THE ANSWER, WHATEVER IT IS — an object, a manager, a reference, and for a
+		// characteristic the value its chart makes, which for a chart of several types is the empty value and
+		// holds no object at all. `IsReference()` stood here, the old pointer's null check carried into a value
+		// (2026-09-21), and it asked the wrong thing: the empty cell of a characteristic column (an account's
+		// analytics) asserted in Debug and was thrown away in Release (2026-09-26, two dumps from a ledger's
+		// list). Init() asks the held object, and a value that holds none has nothing to initialise.
 		ibValue newObject = typeCtor->CreateObject();
-		wxASSERT(newObject.IsReference());
-
-		if (!newObject.IsReference()) return wxEmptyValue;
 
 		bool succes = true;
 		if (lSizeArray > 0)

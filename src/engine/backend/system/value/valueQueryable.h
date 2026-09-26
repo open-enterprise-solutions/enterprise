@@ -162,7 +162,7 @@ public:
 	virtual bool IsEmpty() const override { return m_queryable == nullptr; }
 
 	// Watch-safe: a DESCRIPTION of the source + folded ops, never the data.
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// The single consumer surface — LINQ ops fold / execute (see the header note).
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
@@ -220,7 +220,7 @@ public:
 	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName);
 
 	virtual bool     IsEmpty()   const override { return m_source == nullptr; }
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// The ONLY surface: Join(innerQueryable, leftKey, rightKey [, op]) and Where(predicate) — both fold
 	// straight into the target query (never a separate builder).

@@ -17,6 +17,7 @@
 #include "backend/query/columnLayout.h"                 // ColumnFieldNames / ibSqlAliasOf — the read's output names
 
 #include <map>
+#include <unordered_map>   // the verification's key figures — keyed by a sequence of values (ibValueSeqHash)
 #include <algorithm>
 
 namespace {
@@ -302,57 +303,133 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		? ibValue(ibTruncateToPeriod(wxDateTime::Now(), spec.m_periodUnit)) : ibValue();
 	const bool bounded = hasPeriod;
 
-	// Resolve both through the SOURCE rather than building raw columns here. The door checks column
-	// ownership by POINTER identity (OwnsColumn), so a locally-made twin of the same field is a
-	// different column as far as it is concerned — it would read as belonging to nobody. These are
-	// the table's own declared columns, which is also why they need no lifetime care.
+	// The period is the table's own column, asked of the SOURCE only for how it is laid out.
 	const ibBackendQueryColumn* periodCol = hasPeriod
 		? derived.m_queryable->ResolveColumnByName(spec.m_periodColumn) : nullptr;
-	const ibBackendQueryColumn* shardCol = derived.m_queryable->ResolveColumnByName(ShardColumnName());
-	if (shardCol == nullptr || (hasPeriod && periodCol == nullptr))
+	if (hasPeriod && periodCol == nullptr)
 		return true;   // the source does not expose what the declaration promised — nothing safe to do
+
+	// ⭐⭐ A ROW IS NAMED BY ITS FIELDS, EXACTLY AS THE TRIGGER NAMES IT.
+	//
+	// 🛑 THE FOLD READ ITS KEYS AS VALUES AND WROTE BACK BY VALUE, and that is two readings of one row. A
+	// value answers for its MEANING: an empty reference and a cell nobody tagged are both "not filled",
+	// and so are their text and their equality (dbTableProvider.cpp, the empty predicate). The table
+	// keeps them as two DIFFERENT rows — the trigger matches a key field by field — so the fold bucketed
+	// rows that are not one key, and aimed its add and its subtract with a WHERE that hit a row of the
+	// other spelling, or two rows at once. A ledger whose currency was added after its first postings
+	// folded one July entry of 5 600 into 11 200 (2026-09-26, the totals job, verified against a copy of
+	// the base taken before it ran). A fold moves figures without changing their sum; that one grew it.
+	//
+	// So the fold works where the trigger works: on the PHYSICAL fields. It buckets by their exact
+	// contents and addresses one row by all of them — a NULL as IS NULL, a key as its bytes. Rows the
+	// reading takes for one key but the table keeps apart stay apart; the reading sums them anyway
+	// (KeyFieldsAsRead), and a fold owes nothing more than a narrower read.
+	std::vector<ibColumnSlot> fields;
+	if (hasPeriod)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(periodCol))
+			fields.push_back(slot);
+	for (const ibBackendQueryColumn* k : spec.m_keys)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(k))
+			fields.push_back(slot);
+
+	const auto SumAlias = [](size_t n) { return wxString::Format(wxT("sum%u_"), static_cast<unsigned>(n)); };
 
 	// 1. READ one row per (key, shard) straight off the TOTALS table — never the movements. This
 	//    re-packs figures that are already correct instead of recomputing them, which is the whole
-	//    reason it is affordable next to a rebuild.
-	ibDataQueryBuilder read = SystemQuery(holder);
-	read.From(derived.m_queryable);
-
-	if (hasPeriod)
-		read.GroupBy(periodCol);
-	for (const ibBackendQueryColumn* k : spec.m_keys)
-		read.GroupBy(k);
-	read.GroupBy(shardCol);
-	for (const ibSchemaDelta& d : spec.m_deltas)
-		read.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, d.m_column, d.m_column->GetPhysicalName());
-
+	//    reason it is affordable next to a rebuild. It counts the physical rows under each too: see
+	//    the note at the fold.
+	ibDatabaseQueryBuilder read(holder);
+	read.From(derived.m_name);
+	std::vector<ibQueryProjItem> items;
+	for (const ibColumnSlot& f : fields) {
+		items.push_back(ibQueryProjItem{ ibCol(f.m_name), f.m_name });
+		read.GroupBy(ibCol(f.m_name));
+	}
+	items.push_back(ibQueryProjItem{ ibCol(ShardColumnName()), ShardColumnName() });
+	read.GroupBy(ibCol(ShardColumnName()));
+	for (size_t n = 0; n < spec.m_deltas.size(); n++)
+		items.push_back(ibQueryProjItem{ ibFunc(wxT("SUM"), { ibCol(spec.m_deltas[n].m_column->GetPhysicalName()) }), SumAlias(n) });
+	items.push_back(ibQueryProjItem{ ibFunc(wxT("COUNT"), { ibCol(ShardColumnName()) }), wxT("rows_") });
+	read.Project(std::move(items));
 	if (bounded)
-		read.WhereCompare(periodCol, ibQueryFilterOp::Less, periodBefore);
+		read.Where(ibBinOp(ibQueryBinOp::Lt, ibCol(spec.m_periodColumn), ibConst(periodBefore)));
 
-	ibDataQueryResult rows = read.SelectAggregate();
+	ibQueryResult rows = read.Execute();
 
-	// Drain and bucket by LOGICAL key (period + dimensions). Keys that occupy one row are already
+	// Drain and bucket by KEY (period + dimensions, field by field). Keys that occupy one row are already
 	// folded and drop out below, so what survives is only what actually spread. Reading the whole
 	// range to discover that is the cost of not tracking state anywhere — and once a period settles
 	// it is one row per key, so the pass gets cheaper every time it runs.
-	struct ibShardRow { ibValue m_period; std::vector<ibValue> m_keys; ibValue m_shard; std::vector<ibValue> m_sums; };
+	struct ibShardRow {
+		std::vector<ibQueryExprPtr> m_fields;    // one equality (or IS NULL) per physical field of the key
+		long long                   m_shard = 0;
+		std::vector<ibNumber>       m_sums;
+		long long                   m_rows = 0;  // physical rows under this (key, shard)
+		bool                        m_addressable = true;
+	};
 	std::map<wxString, std::vector<ibShardRow>> spread;
 
 	while (rows.Next()) {
 		ibShardRow row;
 		wxString id;
-		if (hasPeriod) {
-			row.m_period = rows.GetValue(periodCol);
-			id = row.m_period.GetString();
+		for (const ibColumnSlot& f : fields) {
+			id += wxT("\x1F");   // unit separator — never inside a field
+			if (rows.IsResultNull(f.m_name)) {
+				row.m_fields.push_back(ibIsNull(ibCol(f.m_name), false));
+				id += wxT("<null>");
+				continue;
+			}
+			ibQueryExprPtr value;
+			switch (f.m_type.m_kind) {
+			case ibCanonicalKind::Boolean: {
+				const bool v = rows.GetResultBool(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v ? wxT("1") : wxT("0");
+				break;
+			}
+			case ibCanonicalKind::Integer:
+			case ibCanonicalKind::BigInt: {
+				const long long v = rows.GetResultLong(f.m_name);
+				value = ibConst(ibValue(ibNumber(v)));
+				id += wxString::Format(wxT("%lld"), v);
+				break;
+			}
+			case ibCanonicalKind::Number: {
+				const ibNumber v = rows.GetResultNumber(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v.ToString();
+				break;
+			}
+			case ibCanonicalKind::Date: {
+				const wxDateTime v = rows.GetResultDate(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v.FormatISOCombined();
+				break;
+			}
+			case ibCanonicalKind::String: {
+				const wxString v = rows.GetResultString(f.m_name);
+				value = ibConst(ibValue(v));
+				id += v;
+				break;
+			}
+			default: {   // Blob / Binary / Guid — the bytes as they are stored
+				wxMemoryBuffer bytes(0);
+				rows.GetResultBlob(f.m_name, bytes);
+				// An empty but present blob has no spelling a statement can bind (ibParamOfConst takes it
+				// for a NULL), so a row that holds one cannot be named - it is read, and left alone.
+				row.m_addressable = row.m_addressable && bytes.GetDataLen() > 0;
+				value = ibConstBlob(bytes.GetData(), bytes.GetDataLen());
+				for (size_t b = 0; b < bytes.GetDataLen(); ++b)
+					id += wxString::Format(wxT("%02x"), static_cast<const unsigned char*>(bytes.GetData())[b]);
+				break;
+			}
+			}
+			row.m_fields.push_back(ibBinOp(ibQueryBinOp::Eq, ibCol(f.m_name), value));
 		}
-		// (the shard is read below, after the keys, so `id` stays the LOGICAL key only)
-		for (const ibBackendQueryColumn* k : spec.m_keys) {
-			row.m_keys.push_back(rows.GetValue(k));
-			id += wxT("\x1F") + row.m_keys.back().GetString();   // unit separator — never inside a value
-		}
-		row.m_shard = rows.GetValue(shardCol);
-		for (const ibSchemaDelta& d : spec.m_deltas)
-			row.m_sums.push_back(rows.GetColumn(d.m_column->GetPhysicalName()));
+		row.m_shard = rows.GetResultLong(ShardColumnName());
+		for (size_t n = 0; n < spec.m_deltas.size(); n++)
+			row.m_sums.push_back(rows.IsResultNull(SumAlias(n)) ? ibNumber() : rows.GetResultNumber(SumAlias(n)));
+		row.m_rows = rows.GetResultLong(wxT("rows_"));
 		spread[id].push_back(std::move(row));
 	}
 
@@ -362,6 +439,14 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		std::vector<ibShardRow>& shards = entry.second;
 		if (shards.size() < 2)
 			continue;   // one row already — nothing to fold, whichever shard it sits in
+
+		// ⚠ ONE PHYSICAL ROW UNDER EACH (KEY, SHARD), OR THE KEY IS LEFT AS IT IS. A NULL in a key field is
+		// a row the unique index does not guard — the trigger that meets one matches nothing and inserts
+		// beside it — so two rows may answer to the same fields, and no WHERE can name one of them.
+		// Leaving the key unfolded costs nothing but a wider read: a split key reads exactly right.
+		if (std::any_of(shards.begin(), shards.end(),
+				[](const ibShardRow& r) { return r.m_rows != 1 || !r.m_addressable; }))
+			continue;
 
 		// ONE TRANSACTION PER KEY — the finest granularity that is still correct, and the choice
 		// that decides whether this can run while people work. Atomicity is needed only across one
@@ -380,61 +465,66 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 		// by hashing the connection, so a key may well have no shard-0 row at all — and creating one
 		// first would mean an INSERT racing the very writers this fold is meant to tolerate.
 		std::sort(shards.begin(), shards.end(),
-			[](const ibShardRow& a, const ibShardRow& b) { return a.m_shard.GetNumber() < b.m_shard.GetNumber(); });
-		const ibValue absorber = shards.front().m_shard;
+			[](const ibShardRow& a, const ibShardRow& b) { return a.m_shard < b.m_shard; });
+		const ibShardRow& absorber = shards.front();
 
+		// The WHERE that names ONE physical row: every field of the key, and the shard - the trigger's own
+		// match (m_deltaKeyMatchItem, `IS NOT DISTINCT FROM`), spelled against the values read above: IS NULL
+		// for a NULL, = for the rest. One rule for "which row is this key's", whoever writes it.
+		const auto Aim = [](const ibShardRow& row) {
+			ibQueryExprPtr where = ibBinOp(ibQueryBinOp::Eq, ibCol(ShardColumnName()), ibConst(ibValue(ibNumber(row.m_shard))));
+			for (const ibQueryExprPtr& field : row.m_fields)
+				where = ibBinOp(ibQueryBinOp::And, where, field);
+			return where;
+		};
+		// `col = COALESCE(col, 0) + delta` — in-statement arithmetic, NULL-safe on the stored side.
+		const auto Moved = [&spec](const std::vector<ibNumber>& sums, bool negate) {
+			std::vector<ibDmlAssign> assign;
+			for (size_t n = 0; n < spec.m_deltas.size(); n++) {
+				const wxString column = spec.m_deltas[n].m_column->GetPhysicalName();
+				assign.push_back(ibDmlAssign{ column, ibBinOp(ibQueryBinOp::Add,
+					ibFunc(wxT("COALESCE"), { ibCol(column), ibConst(ibValue(ibNumber())) }),
+					ibConst(ibValue(negate ? -sums[n] : sums[n]))) });
+			}
+			return assign;
+		};
+
+		ibDatabaseQueryBuilder write(holder);
+		bool aimed = true;
 		for (size_t i = 1; i < shards.size(); i++) {
 			const ibShardRow& src = shards[i];
 
-			// The WHERE that names one physical row of this key — shared by all three statements.
-			auto Aim = [&](ibDataQueryBuilder& q, const ibValue& shard) {
-				q.From(derived.m_queryable);
-				if (hasPeriod)
-					q.Where(periodCol, src.m_period);
-				for (size_t n = 0; n < spec.m_keys.size(); n++)
-					q.Where(spec.m_keys[n], src.m_keys[n]);
-				q.Where(shardCol, shard);
-			};
-			// (WHERE, not a key match — which is why the source reports no primary key: an UPDATE
-			//  here must hit ONE physical row of the key, the one this shard occupies.)
-
-			// ADD then SUBTRACT, both as in-statement arithmetic (AddValue). That is the whole point
-			// of the rewrite: a movement landing mid-fold COMPOSES with the adjustment instead of
-			// being overwritten by it, so the fold no longer needs a quiet range. The pair must be
-			// atomic or a crash between them doubles / loses the figure — hence the caller's
-			// transaction, and hence folding one key at a time so that transaction stays short.
-			{
-				ibDataQueryBuilder add = SystemQuery(holder);
-				Aim(add, absorber);
-				// A figure the shard row never held sums to NULL — nothing to move, so a zero, never a NULL bind.
-				for (size_t n = 0; n < spec.m_deltas.size(); n++)
-					add.AddValue(spec.m_deltas[n].m_column, ibValue(src.m_sums[n].GetNumber()));
-				if (!add.Update())
-					return false;
-			}
-			{
-				ibDataQueryBuilder sub = SystemQuery(holder);
-				Aim(sub, src.m_shard);
-				for (size_t n = 0; n < spec.m_deltas.size(); n++)
-					sub.AddValue(spec.m_deltas[n].m_column, ibValue(-src.m_sums[n].GetNumber()));
-				if (!sub.Update())
-					return false;
-			}
+			// ADD then SUBTRACT, both as in-statement arithmetic. That is the whole point of the
+			// rewrite: a movement landing mid-fold COMPOSES with the adjustment instead of being
+			// overwritten by it, so the fold no longer needs a quiet range. The pair must be atomic or
+			// a crash between them doubles / loses the figure — hence the key's transaction — and each
+			// must hit exactly ONE row, or the key is rolled back and left for the next pass.
+			const int added = write.Execute(ibUpdate(derived.m_name, Moved(src.m_sums, false), Aim(absorber)));
+			if (added < 0)
+				return false;   // ~scope rolls the key back — nothing half-moved survives
+			const int taken = added == 1 ? write.Execute(ibUpdate(derived.m_name, Moved(src.m_sums, true), Aim(src))) : 0;
+			if (taken < 0)
+				return false;
+			aimed = added == 1 && taken == 1;
+			if (!aimed)
+				break;
 
 			// DROP the drained row — ONLY if it really came out empty. A delta that arrived
 			// mid-fold left it non-zero, and then the row is not ours to remove: its contribution
 			// is still owed to the total, and the next pass folds it. Deleting on the shard number
 			// alone (what the first version did) is exactly the write that would swallow it.
-			{
-				ibDataQueryBuilder drop = SystemQuery(holder);
-				Aim(drop, src.m_shard);
-				for (const ibSchemaDelta& d : spec.m_deltas)
-					drop.Where(d.m_column, ibValue(0.0));
-				if (!drop.Delete())
-					return false;   // ~scope rolls the key back — nothing half-moved survives
-			}
+			ibQueryExprPtr empty = Aim(src);
+			for (const ibSchemaDelta& d : spec.m_deltas)
+				empty = ibBinOp(ibQueryBinOp::And, empty, ibBinOp(ibQueryBinOp::Eq,
+					ibFunc(wxT("COALESCE"), { ibCol(d.m_column->GetPhysicalName()), ibConst(ibValue(ibNumber())) }),
+					ibConst(ibValue(ibNumber()))));
+			if (write.Execute(ibDelete(derived.m_name, empty)) < 0)
+				return false;
 		}
-		scope.SafeCommitTransaction();
+		if (aimed)
+			scope.SafeCommitTransaction();
+		else
+			scope.SafeRollBackTransaction();
 	}
 
 	return true;
@@ -470,16 +560,23 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 
 	// Both sides are drained the same way — one entry per key, the accumulations in declaration
 	// order — so the comparison below comes down to two maps of the same shape.
+	//
+	// ⭐ THE KEY AS THE READING SEES IT: a sequence of values (ibValueSeqHash), not their text joined.
+	// 🛑 It was the text, and the entry was ASSIGNED: two groups the table keeps apart - an empty
+	// currency stored untagged and one stored as an empty reference - read as the same text, and the
+	// second replaced the first, so the check compared half a key's figure with the whole of it
+	// (2026-09-26). Groups that are one key to a reader are one entry here, and their figures ADD.
+	using ibKeyFigures = std::unordered_map<std::vector<ibValue>, std::vector<ibNumber>, ibValueSeqHash, ibValueSeqEqual>;
 	auto Drain = [&](ibDataQueryResult& rows) {
-		std::map<wxString, std::vector<ibValue>> out;
+		ibKeyFigures out;
 		while (rows.Next()) {
-			wxString id;
+			std::vector<ibValue> key;
 			for (const ibBackendQueryColumn* k : spec.m_keys)
-				id += wxT("\x1F") + rows.GetValue(k).GetString();
-			std::vector<ibValue> sums;
-			for (const ibSchemaDelta& d : spec.m_deltas)
-				sums.push_back(rows.GetColumn(d.m_column->GetPhysicalName()));
-			out[id] = std::move(sums);
+				key.push_back(rows.GetValue(k));
+			std::vector<ibNumber>& sums = out[key];
+			sums.resize(spec.m_deltas.size());
+			for (size_t n = 0; n < spec.m_deltas.size(); n++)
+				sums[n] += rows.GetColumn(spec.m_deltas[n].m_column->GetPhysicalName()).GetNumber();
 		}
 		return out;
 	};
@@ -487,7 +584,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 	// SIDE A — re-aggregate the MOVEMENTS. The same read Regenerate performs, narrowed to one period.
 	// Filtering on the RAW period column is correct because truncation is monotone: exactly the
 	// movements that truncate into prevStart lie in [prevStart, curStart).
-	std::map<wxString, std::vector<ibValue>> fromSource;
+	ibKeyFigures fromSource;
 	{
 		ibDataQueryBuilder read = SystemQuery(holder);
 		read.From(spec.m_source);
@@ -504,7 +601,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 
 	// SIDE B — what the TOTALS hold for that period. Grouping WITHOUT the shard column sums the
 	// shards, which is the same thing the read view does, so a split table is compared as one figure.
-	std::map<wxString, std::vector<ibValue>> fromTotals;
+	ibKeyFigures fromTotals;
 	{
 		ibDataQueryBuilder read = SystemQuery(holder);
 		read.From(derived.m_queryable);
@@ -527,7 +624,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 		const auto found = fromTotals.find(entry.first);
 		if (found == fromTotals.end()) { mismatches++; continue; }
 		for (size_t i = 0; i < entry.second.size() && i < found->second.size(); i++)
-			if (entry.second[i].GetNumber() != found->second[i].GetNumber()) { mismatches++; break; }
+			if (entry.second[i] != found->second[i]) { mismatches++; break; }
 	}
 	for (const auto& entry : fromTotals)
 		if (fromSource.find(entry.first) == fromSource.end())

@@ -92,6 +92,9 @@ public:
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
 			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
+			virtual const ibFormatString& GetColumnFormat() const {
+				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+			}
 
 			ibValueTabularSectionColumnInfo();
 			ibValueTabularSectionColumnInfo(ibValueMetaObjectAttributeBase* attribute);
@@ -145,7 +148,7 @@ public:
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
-		virtual wxString GetString() const;
+		virtual ibString GetString() const;
 
 		friend class ibValueTabularSectionDataObjectBase;
 	private:
@@ -287,7 +290,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 	// Iterator runtime path lives on ibValueModel (cursor over Get*Fetch
 	// → BuildVisibleView for filter+sort consistency with the GUI).

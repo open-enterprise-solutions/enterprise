@@ -569,6 +569,10 @@ public:
 			"It reads FILES, so it answers for the run being debugged as well as for this one - "
 			"every row says which application wrote it. Ask it after running something and getting "
 			"an answer you did not expect: the statement that produced it is in here verbatim.\n\n"
+			"The parameters' VALUES are left out - they are data - unless the application was started "
+			"with the environment variable OES_TRACE_SQL_PARAMS=1; then each statement carries them "
+			"too, a reference key in hex. Ask for that when the text looks right and the answer does "
+			"not: a constant the engine bound can be what is wrong.\n\n"
 			"Debug builds only - a Release binary writes no journal, and says so rather than "
 			"reporting an empty one.");
 	}

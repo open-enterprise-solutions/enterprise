@@ -26,10 +26,12 @@ reasoning behind it is readable.
 The house rules are in [development.md](../development.md) §8, and they hold here:
 
 - **English**, and in the same push as the code it describes.
+- **Terse: what it is, why it exists, what it guarantees and where it stops.** Short statements,
+  no story. How it was built, the forks, the measurements and what is still broken are written
+  in full in `private/`.
 - **State the need, not the status.** "The engine cannot do X yet" goes stale the day X lands;
   "a report needs X, because …" stays true.
-- **Say what was decided and why**, including the roads not taken. A document that only lists the
-  final shape leaves the next person to re-open the same questions.
+- **Say why an interface has its shape**, in a line. The roads not taken are argued in `private/`.
 - Name the file after its subject, in lower case with dashes: `record-locks.md`, not `RecordLocks.md`.
 
 Add a row to the table below when you add a document, so this folder can be read from one place.
@@ -38,4 +40,5 @@ Add a row to the table below when you add a document, so this folder can be read
 
 | Document | What it holds |
 |---|---|
-| _(none yet)_ | |
+| [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
+| [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |

@@ -74,15 +74,17 @@ ibValue ibValue::CreateObject(const ibClassID& clsid, ibValue** paParams, const 
 		// lets it go (see ibCtorAbstractType::CreateObject). A refusal throws, and the owner lets it go.
 		ibValue created = typeCtor->CreateObject();
 
-		// 🛑 NOT AN ASSERT. A ctor that cannot build one WITHOUT ARGUMENTS answers empty, and that
-		// is an ORDINARY answer for the parameterised families — a reference type, a register's
-		// record set, a document object. Asking about one of those is a normal thing to do
-		// (type_members does it, wrapped in a try, precisely because it expects a refusal), and the
-		// assert turned that question into a debug break: the caller's own handling never ran, and a
-		// person at the designer got a stack instead of a sentence.
-		if (!created.IsReference())
-			ibBackendCoreException::Error(_("Object '%s' cannot be created without arguments"),
-				typeCtor->GetClassName());
+		// ⭐ WHAT THE CTOR MAKES IS THE ANSWER, EMPTY INCLUDED — the rule ibMetaData::CreateObject reads
+		// its own image by. Empty means the type has no value of its own to make: a type CONSTRAINT
+		// (`Any`, `AnyRef`, the metatype families `CatalogRef` / `DocumentRef`) or a value that exists
+		// only against its owner. That is an ordinary answer, and the caller who needs a value asks it.
+		//
+		// 🛑 IT WAS A REFUSAL, "cannot be created without arguments", and it reached the one caller that
+		// asks exactly this question: the empty value of a declared type. An attribute declared
+		// `DocumentRef` could neither start empty nor be cleared — its empty value was a throw (#157).
+		// `New` needs no refusal of its own here: the compiler emits it only for a type that builds
+		// one (compileCode.cpp), and the callers that read a value out of this door ask it for one.
+		// Init() below is asked of the held object, and a value that holds none has nothing to set up.
 		if (typeCtor->GetObjectTypeCtor() != ibCtorObjectType::ibCtorObjectType_object_system) {
 			bool succes = true;
 			if (lSizeArray > 0)
