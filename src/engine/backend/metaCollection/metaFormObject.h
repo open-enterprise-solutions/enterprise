@@ -61,13 +61,24 @@ public:
 
 #pragma region _form_creator_h_
 
-	static ibBackendValueForm* CreateAndBuildForm(const ibValueMetaObjectFormBase* creator,
+	// ⭐⭐ WHERE THE OPENING PARAMETERS ARE FIXED ONTO THE FORM. This is the one place a form object is
+	// actually made, so it is the direct road for them: whatever the caller asked this opening for is
+	// stamped on the form here, and the form's own module reads it afterwards (Max, 2026-09-23: "a
+	// direct road to fixing the opening parameters"; "the front can pass parameters to the server which
+	// then reach the form being opened, and it can read them there").
+	//
+	// The request is FIRST, as it is on the generic builder that calls this — one function name, one
+	// place for the same argument.
+	static ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullGuid);
+		ibSourceDataObject* srcObject = nullptr);
 
-	static ibBackendValueForm* CreateAndBuildForm(const ibValueMetaObjectFormBase* creator, const ibFormID& form_id = defaultFormType,
+	// …and the same without naming the KIND of form, which the creator already knows. Not an overload
+	// "without the request" — every one of these takes it; this one only spares the caller a fact it
+	// would have to read off the creator to repeat back.
+	static ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullGuid);
+		ibSourceDataObject* srcObject = nullptr);
 
 #pragma endregion
 

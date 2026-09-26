@@ -5,7 +5,7 @@
 
 ////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
 	return new ibVariantDataRecord(property, typeDesc);

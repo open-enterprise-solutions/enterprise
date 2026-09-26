@@ -141,8 +141,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetRecordForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
+	virtual ibBackendValueForm* GetRecordForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//prepare menu for item
@@ -198,14 +198,14 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
-	virtual ibValueRecordManagerObject* CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//get command section 
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
@@ -301,7 +301,7 @@ private:
 // register; the only degree of freedom is the period bound (last = MAX / "<=", first =
 // MIN / ">="), fixed by the two derived types. The compute itself is the register's own
 // ComputeSlice. A slice does NOT persist on the register — it lives for the one call
-// that built it. See docs/query-language-arc.md §22.4d.
+// that built it. See docs/private/query-language-arc.md §22.4d.
 
 // base — shared slice logic; abstract (the period bound is the derived's job). The
 // RAM-virtual-table plumbing + the register-forwarding navigation live in the shared
@@ -472,8 +472,8 @@ class ibValueRecordSetObjectInformationRegister : public ibValueRecordSetObject 
 public:
 
 	//default methods
-	virtual ibValueRecordSetObject* CopyRegisterValue() {
-		return new ibValueRecordSetObjectInformationRegister(*this);
+	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue() {
+		return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectInformationRegister(*this));
 	}
 
 	// WriteRecordSet / DeleteRecordSet inherited from
@@ -513,8 +513,8 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 	{
 		m_members.Bind(this, &ibValueRecordManagerObjectInformationRegister::FillMembers);
 	}
-	virtual ibValueRecordManagerObject* CopyRegister(bool showValue = false) {
-		ibValueRecordManagerObject* objectRef = CopyRegisterValue();
+	virtual ibValuePtr<ibValueRecordManagerObject> CopyRegister(bool showValue = false) {
+		const ibValuePtr<ibValueRecordManagerObject> objectRef = CopyRegisterValue();
 		if (objectRef != nullptr && showValue)
 			objectRef->ShowFormValue();
 		return objectRef;
@@ -541,8 +541,8 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 
 #pragma region _form_builder_h_
 	//support show 
-	virtual void ShowFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr);
+	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
 #pragma endregion
 
 	//support actionData

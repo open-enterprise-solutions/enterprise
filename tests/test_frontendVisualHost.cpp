@@ -19,8 +19,10 @@
 
 #include "frontend/visualView/visualHostClient.h"  // ibVisualHostClient + ibFormVisualDocument
 #include "backend/compiler/value.h"                // control_to_clsid
+#include "frontend/visualView/ctrl/notebook.h"      // g_controlNotebookCLSID / g_controlNotebookPageCLSID
 
 #include <wx/frame.h>
+#include "frontend/win/ctrls/controlTextEditor.h"   // ibControlTextEditor — the narrow-field tests
 
 namespace {
 
@@ -109,4 +111,150 @@ TEST_F(VisualHostFix, CreateVisualHostMaterialisesControl)
 		<< "the host walker builds the form's wx tree";
 	EXPECT_NE(host->GetWxObject(button), nullptr)
 		<< "the button control materialised into a wx widget in the host map";
+}
+
+// ---------------------------------------------------------------------------
+// A NOTEBOOK PAGE WITH SEVERAL CONTROLS UNDER IT (#160).
+//
+// The form factory wraps every control added to a NotebookPage in a SizerItem that sits directly under
+// the page, so a page with several controls has several SizerItems as direct children — and that is
+// the ordinary shape, not an odd one. Opening the item form of a catalog built that way crashed
+// `enterprise` in wxSizer::SetContainingWindow, called from RefreshControl's `wxparent->SetSizer(...)`.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Notebook -> one page -> `controls` buttons, built the way the designer's Add command builds them.
+ibVisualHostClient* MakeNotebookHost(VisualHostFix& fix, ibValueForm*& form, int controls, ibValueFrame** outPage = nullptr)
+{
+	form = fix.NewForm();
+	if (form == nullptr) return nullptr;
+
+	// The form is a frame: a control added to it comes back wrapped in a SizerItem, and the notebook
+	// itself is that item's only child.
+	ibValueFrame* notebookItem = form->NewObject(g_controlNotebookCLSID, form);
+	if (notebookItem == nullptr) return nullptr;
+	ibValueFrame* notebook = notebookItem->GetChildCount() > 0 ? notebookItem->GetChild(0) : notebookItem;
+
+	ibValueFrame* page = form->NewObject(g_controlNotebookPageCLSID, notebook);
+	if (page == nullptr) return nullptr;
+	if (outPage != nullptr) *outPage = page;
+
+	for (int i = 0; i < controls; ++i)
+		form->NewObject(g_hostButtonCLSID, page);
+
+	auto* doc = new ibFormVisualDocument(form);                 // leaked, see the file header
+	return new ibVisualHostClient(doc, form, fix.parent);       // leaked (parent child)
+}
+
+} // namespace
+
+TEST_F(VisualHostFix, NotebookPage_OneControl_Builds)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibValueForm* form = nullptr;
+	ibVisualHostClient* host = MakeNotebookHost(*this, form, 1);
+	ASSERT_NE(host, nullptr);
+
+	EXPECT_TRUE(host->CreateAndUpdateVisualHost());
+}
+
+TEST_F(VisualHostFix, NotebookPage_SeveralControls_Builds)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibValueForm* form = nullptr;
+	ibValueFrame* page = nullptr;
+	ibVisualHostClient* host = MakeNotebookHost(*this, form, 4, &page);
+	ASSERT_NE(host, nullptr);
+	ASSERT_NE(page, nullptr);
+	ASSERT_EQ(page->GetChildCount(), 4u) << "each control is its own SizerItem directly under the page";
+
+	EXPECT_TRUE(host->CreateAndUpdateVisualHost())
+		<< "the page's controls are laid out, whatever their number";
+}
+
+// ------------------ a field the form made narrow still has somewhere to type -------------------
+//
+// A sum was given 72 pixels by the form, and the caption plus the "..." and "x" buttons are drawn
+// INSIDE that width: they took all of it and the text area was zero wide - nowhere to enter the value.
+
+namespace {
+
+// The text area is the one child window the editor owns.
+int TextAreaWidth(ibControlTextEditor* editor)
+{
+	for (wxWindow* child : editor->GetChildren())
+		if (child != nullptr)
+			return child->GetSize().x;
+	return -1;
+}
+
+ibControlTextEditor* MakeSumField(wxWindow* parent, int width)
+{
+	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);   // parent-owned
+	editor->SetLabel(wxT("Сумма"));
+	editor->ShowSelectButton(true);
+	editor->ShowClearButton(true);
+	editor->SetMinSize(wxSize(width, -1));
+	editor->SetMaxSize(wxSize(width, -1));
+	return editor;
+}
+
+} // namespace
+
+TEST_F(VisualHostFix, TextEditor_FormWidthTooNarrowForCaptionAndButtons_MinSizeLeavesATextArea)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibControlTextEditor* editor = MakeSumField(parent, 72);
+
+	// The fault itself: at the width the form gave, the caption and buttons leave the text area (almost) nothing.
+	editor->SetSize(wxSize(72, 28));
+	editor->Layout();
+	EXPECT_LT(TextAreaWidth(editor), editor->FromDIP(ibControlTextEditor::kMinimumTextWidth) / 2)
+		<< "72 pixels are not enough for a caption, two buttons and a text area";
+
+	EXPECT_GT(editor->GetMinSize().x, 72);
+	EXPECT_EQ(editor->GetMaxSize().x, editor->GetMinSize().x);   // a maximum below the minimum would undo it
+
+	editor->SetSize(wxSize(editor->GetMinSize().x, 28));
+	editor->Layout();
+	EXPECT_GE(TextAreaWidth(editor), editor->FromDIP(ibControlTextEditor::kMinimumTextWidth) - 2);
+}
+
+TEST_F(VisualHostFix, TextEditor_FormWidthAlreadyWideEnough_IsLeftAsTheAuthorSetIt)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibControlTextEditor* editor = MakeSumField(parent, 400);
+
+	EXPECT_EQ(editor->GetMinSize().x, 400);
+	EXPECT_EQ(editor->GetMaxSize().x, 400);
+}
+
+TEST_F(VisualHostFix, TextEditor_NoWidthSetByTheForm_StaysUnset)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	auto* editor = new ibControlTextEditor(parent, wxID_ANY, wxEmptyString);
+	editor->SetLabel(wxT("Сумма"));
+	editor->ShowSelectButton(true);
+
+	EXPECT_LE(editor->GetMinSize().x, 0);   // the default best size already leaves room; nothing to force
+	EXPECT_LE(editor->GetMaxSize().x, 0);
+}
+
+TEST_F(VisualHostFix, TextEditor_MoreButtonsVisible_NeedMoreWidth)
+{
+	if (!frameReady) GTEST_SKIP();
+
+	ibControlTextEditor* editor = MakeSumField(parent, 1);   // narrower than anything: the answer is the floor
+	editor->ShowSelectButton(false);
+	editor->ShowClearButton(false);
+	const int bare = editor->GetMinSize().x;
+	editor->ShowSelectButton(true);
+	editor->ShowClearButton(true);
+	EXPECT_GT(editor->GetMinSize().x, bare);
 }

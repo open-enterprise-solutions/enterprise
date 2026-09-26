@@ -67,10 +67,33 @@ bool ibValueMetaObjectSequence::OnDeleteMetaObject()
 	return ibValueMetaObjectRegisterData::OnDeleteMetaObject();
 }
 
+#include "backend/objCtor.h"
+
+// ⭐⭐ …AND THROUGH THE OTHER FOUR, THE RUN AND THE CLOSE, which is where a module is REGISTERED. The rule
+// above was kept for creating, loading, saving and deleting and stopped there: both modules were made and
+// written and handed to nobody. The manager module never reached the designer's module manager or a
+// session's, and the record set module was never put in the compile cache, so neither had anything to be
+// edited or compiled against (reported 2026-09-21). Driven here as the accumulation register drives its
+// own - the two modules, the moment, and the selection the manager's Select() hands out.
+bool ibValueMetaObjectSequence::OnBeforeRunMetaObject(int flags)
+{
+	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyObjectModule)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributePointInTime)->OnBeforeRunMetaObject(flags)) return false;
+
+	registerSelection();
+
+	return ibValueMetaObjectRegisterData::OnBeforeRunMetaObject(flags);
+}
+
 // ⭐ THE BORDERS ARE A TABLE OF THE SEQUENCE'S OWN COLUMNS: the dimensions that make the key, and the
 // registration the key has got to — its recorder and its date. Read as `Sequence.<Name>.Borders`.
 bool ibValueMetaObjectSequence::OnAfterRunMetaObject(int flags)
 {
+	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAttributePointInTime)->OnAfterRunMetaObject(flags)) return false;
+
 	if (!ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags))
 		return false;
 	// …and the registrations answer through THIS kind's surface, which vends the moment beside the
@@ -79,6 +102,10 @@ bool ibValueMetaObjectSequence::OnAfterRunMetaObject(int flags)
 	m_metaData->RegisterSource(&m_ownQueryable);
 	if (HasBorders())
 		m_metaData->RegisterSource(&m_bordersSource);
+
+	// The record set module is compiled against a set of this sequence, found by the module.
+	if (auto* cc = m_metaData->GetCompileCache())
+		return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue { return CreateRecordSetObjectValue(); });
 	return true;
 }
 
@@ -86,7 +113,27 @@ bool ibValueMetaObjectSequence::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_bordersSource);   // mirror of the run's RegisterSource
 	m_metaData->UnregisterSource(&m_ownQueryable);
-	return ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject();
+
+	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAttributePointInTime)->OnBeforeCloseMetaObject()) return false;
+
+	if (!ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject())
+		return false;
+	if (auto* cc = m_metaData->GetCompileCache())
+		cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+	return true;
+}
+
+bool ibValueMetaObjectSequence::OnAfterCloseMetaObject()
+{
+	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyObjectModule)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAttributePointInTime)->OnAfterCloseMetaObject()) return false;
+
+	unregisterSelection();
+
+	return ibValueMetaObjectRegisterData::OnAfterCloseMetaObject();
 }
 
 // No "default list form" property yet: a sequence opens the form generated from its own fields. The
@@ -98,37 +145,36 @@ ibValueMetaObjectFormBase* ibValueMetaObjectSequence::GetDefaultFormByID(const i
 
 // The list shows the REGISTRATIONS, ordered by the moment they carry — which is what a person opens
 // a sequence to look at: what is registered, for which key, and how far it has got.
-ibSourceDataObject* ibValueMetaObjectSequence::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectSequence::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormList:
-		return ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateList(request, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));
 	}
 
 	return nullptr;
 }
 
 // The list form of the registrations, built the way every register's list is.
-ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const wxString& strFormName,
-	ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const ibFormRequest& request,
+	ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
-		strFormName,
+		request,
 		ibValueMetaObjectSequence::eFormList,
-		ownerControl, ibCreateList(GetQueryable(), GetRegisterPeriod()->GetQueryColumn()),
-		formGuid
+		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn())
 	);
 }
 
-ibValueManagerDataObject* ibValueMetaObjectSequence::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectSequence::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectSequence(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectSequence(this));
 }
 
-ibValueRecordSetObject* ibValueMetaObjectSequence::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
+ibValuePtr<ibValueRecordSetObject> ibValueMetaObjectSequence::CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey) const
 {
-	return new ibValueRecordSetObjectSequence(this, uniqueKey);
+	return ibValuePtr<ibValueRecordSetObject>(new ibValueRecordSetObjectSequence(this, uniqueKey));
 }
 
 // ⭐⭐ AND WHAT THIS METATYPE OWNS, IT ALSO WRITES AND READS. The borders' holder is written for its

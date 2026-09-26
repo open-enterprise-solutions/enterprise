@@ -220,7 +220,7 @@ bool ibValueRecordDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue& 
 		return true;
 	case Func::enGetForm:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;

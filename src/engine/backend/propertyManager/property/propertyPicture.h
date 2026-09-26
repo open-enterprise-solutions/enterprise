@@ -6,7 +6,7 @@
 
 //base property for "picture"
 class BACKEND_API ibPropertyPicture : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id);
 public:
 
 #pragma region _value_
@@ -46,7 +46,7 @@ public:
 
 //base property for "external picture"
 class BACKEND_API ibPropertyExternalPicture : public ibProperty {
-	wxVariantData* CreateVariantData(const ibExternalPictureDescription& pictureDesc) const;
+	static wxVariantData* CreateVariantData(const ibExternalPictureDescription& pictureDesc);
 public:
 
 #pragma region _value_

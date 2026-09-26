@@ -4,6 +4,7 @@
 #endif
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"
+#include "backend/formatString.h"   // ibFormatString — what the field shows its value through
 #include "frontend/visualView/ctrl/form.h"
 
 bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strData)
@@ -11,9 +12,12 @@ bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strDa
 	const ibMetaData* metaData = GetMetaData();
 	wxASSERT(metaData);
 	ibValue selValue; GetControlValue(selValue);
+	wxString text;
+	const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
+	GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(selValue, text);
 	const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());
 	if (newValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-		textCtrl->SetValue(selValue.GetString());
+		textCtrl->SetValue(text);
 		textCtrl->SetInsertionPointEnd();
 		return false;
 	}
@@ -23,7 +27,7 @@ bool ibValueTextCtrl::TextProcessing(wxTextCtrl* textCtrl, const wxString& strDa
 			SetControlValue(listValue.at(0));
 		}
 		else {
-			textCtrl->SetValue(selValue.GetString());
+			textCtrl->SetValue(text);
 			textCtrl->SetInsertionPointEnd();
 			return false;
 		}

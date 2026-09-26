@@ -2,7 +2,7 @@
 #include "backend/query/columnSpread.h"   // ibColumnSpread::DriveSpread — shared role-spread binding (value + wire codecs)
 
 #include "backend/backend_core.h"    // emptyDate
-#include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateAndConvertObjectRef
+#include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateObject
 #include "backend/objCtor.h"         // ibCtorMetaValueType / ibCtorObjectMetaType / ibCtorAbstractType
 #include "backend/valueInfo.h"       // reference_size_t (= sizeof(ibReference)), ibReference
 #include "backend/compiler/value.h"  // ibValue accessors + ibValuePtr
@@ -430,8 +430,8 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 			ibValue* ppParams[] = { &enumVariant };
 
 			try {
-				ibValuePtr<ibValueEnumerationWrapper> creator(
-					metaData->CreateAndConvertObjectRef<ibValueEnumerationWrapper>(so->GetClassName(), ppParams, 1));
+				const ibValuePtr<ibValueEnumerationWrapper> creator(
+					metaData->CreateObject(so->GetClassName(), ppParams, 1));
 				retValue = creator->GetEnumVariantValue();
 			}
 			catch (...) {
@@ -489,7 +489,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
 		// column's TYPED EMPTY value, not UNDEFINED.
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return true;
 	}
 	}
@@ -560,7 +560,7 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 	catch (const ibDatabaseLayerException& err) {
 		if (err.GetDriverErrorCode() != DATABASE_LAYER_FIELD_NOT_IN_RESULTSET)
 			throw;
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return false;
 	}
 }
@@ -619,7 +619,7 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 	ibFieldTypes fieldType = static_cast<ibFieldTypes>(result.GetResultInt(tagField));
 
 	if (col != nullptr && !cell.TagFits(col, fieldType)) {
-		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc());
+		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData);
 		return true;
 	}
 
@@ -649,8 +649,8 @@ bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY
 		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
 		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
-		// (docs/query-language-arc.md §22.4b — typed-empty dot-walk)
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		// (docs/private/query-language-arc.md §22.4b — typed-empty dot-walk)
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
 		return true;
 	}
 	// (No tail return: the `default` above answers every tag there is, so one here is unreachable —

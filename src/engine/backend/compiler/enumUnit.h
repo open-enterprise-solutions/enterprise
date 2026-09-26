@@ -14,7 +14,7 @@ public:
 
 	virtual ibValue* GetEnumVariantValue() const = 0;
 	virtual wxString GetClassName() const = 0;
-	virtual wxString GetString() const = 0;
+	virtual ibString GetString() const = 0;
 
 protected:
 	std::vector<wxString> m_listEnumStr;
@@ -102,7 +102,7 @@ protected:
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
 		virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const override {
-			ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateAndConvertObjectRef<ibValueEnumeration<valType>>(m_clsid));
+			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
 			for (auto& e : enumOwner->m_listEnumData) {
 				if (e.second.Contains(findData)) {
 					ibValueEnumerationVariant<valType>* enumValue = new ibValueEnumerationVariant<valType>(e.first, m_clsid);
@@ -187,7 +187,7 @@ protected:
 		// setting round-trips; presenting it in a picker or a cell makes the form
 		// speak in identifiers. Falls back to the name when a member was declared
 		// without a description, so nothing is ever blank.
-		virtual wxString GetString() const override {
+		virtual ibString GetString() const override {
 			return m_description.IsEmpty() ? m_name : m_description;
 		}
 		// The identifier, for whoever needs it as such.
@@ -436,9 +436,9 @@ public:
 	};
 
 	//type conversion
-	virtual wxString GetString() const final {
+	virtual ibString GetString() const final {
 		return m_value ? m_value->GetString() :
-			wxString(wxEmptyString);
+			ibString();
 	}
 
 	virtual ibNumber GetNumber() const final {

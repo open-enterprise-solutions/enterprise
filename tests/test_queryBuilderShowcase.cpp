@@ -1,5 +1,5 @@
 // Showcase: ibListSqlBuilder  →  ibDatabaseQueryBuilder (L2)
-// (docs/query-language-arc.md §18).
+// (docs/private/query-language-arc.md §18).
 //
 // ibListSqlBuilder (metaCollection/partial/list/listSqlBuilder.cpp) is the
 // hand-rolled SQL-fragment builder behind the paged Fetch impls. It is a

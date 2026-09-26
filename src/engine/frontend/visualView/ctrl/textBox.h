@@ -8,6 +8,7 @@ class ibValueTextBox : public ibValueWindow {
 	public:
 
 	ibValueTextBox();
+	virtual ~ibValueTextBox();
 
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost *visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost *visualHost, bool firstCreated) override;
@@ -15,8 +16,8 @@ class ibValueTextBox : public ibValueWindow {
 	virtual void Update(wxObject* wxobject, ibVisualHost *visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost *visualHost) override;
 
-	//support printing 
-	virtual wxPrintout* CreatePrintout() const;
+	// The view of the document this box holds, as the grid box's (ibValueGridBox::GetControlView).
+	virtual ibView* GetControlView() const override;
 
 	//methods & attributes
 	// No own name surface — the base ibValueFrame::FillMembers covers it.
@@ -31,6 +32,12 @@ class ibValueTextBox : public ibValueWindow {
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
+
+private:
+
+	// The document and its view — the grid box's arrangement (ibValueGridBox::m_gridDocument).
+	class ibTextBoxDocument* m_textDocument = nullptr;
+	class ibTextBoxView*     m_textView = nullptr;
 };
 
 #endif

@@ -335,6 +335,11 @@ void ibDialogQueryExpression::FillLanguageTree()
 	leaf(other, Kw(ibQueryKeyword::True),  Kw(ibQueryKeyword::True));
 	leaf(other, Kw(ibQueryKeyword::False), Kw(ibQueryKeyword::False));
 	leaf(other, Kw(ibQueryKeyword::Null),  Kw(ibQueryKeyword::Null));
+	// ⭐ …AND THE RUNTIME'S OWN EMPTY VALUE, beside NULL because that is where a person looks for it and
+	// NOT the same thing: NULL is the database's absence, this is a composite field on which nothing was
+	// chosen. Offered here, the difference is something an author can write rather than something they
+	// have to know (Max, 2026-09-24).
+	leaf(other, Kw(ibQueryKeyword::Undefined), Kw(ibQueryKeyword::Undefined));
 	// A PARAMETER is how a value reaches a query from outside — the one piece of syntax a person
 	// writing a condition needs and cannot find among the fields.
 	leaf(other, wxT("&") + wxString(_("Parameter")), wxT("&"));

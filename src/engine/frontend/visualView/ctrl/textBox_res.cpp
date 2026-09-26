@@ -1,66 +1,15 @@
 #include "textBox.h"
 
-/* XPM */
-static const char* s_text_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 32 1",
-	"= c #97C4E7",
-	": c #72A8D2",
-	"1 c #FFFFFF",
-	"w c #839CB5",
-	"X c #6B98B8",
-	". c #5A89A6",
-	"@ c #3A749C",
-	", c #D1E5F5",
-	"< c #67A1CF",
-	"> c #F1F4F7",
-	"e c #85A7BC",
-	"% c #C3DDF1",
-	"0 c #749BB4",
-	"2 c #7EA6C0",
-	"; c #5F9BC8",
-	"  c None",
-	"O c #538DB3",
-	"- c #85BBE2",
-	"$ c #D6DFE7",
-	"9 c #EFF6FC",
-	"o c #6591AE",
-	"4 c #F7FBFD",
-	"8 c #FAFCFE",
-	"6 c #DAEAF7",
-	"7 c #E9F3FA",
-	"q c #FDFDFE",
-	"3 c #E2EFF8",
-	"# c #8EA9BC",
-	"& c #B6D5EE",
-	"* c #A5CCEA",
-	"5 c #F4F9FD",
-	"+ c #4581AA",
-	/* pixels */
-	"  ..XooO+@#$    ",
-	"  .%%&*=-;:;>   ",
-	"  .,,%&*=<1=X>  ",
-	"  #%%%%&*211=X  ",
-	"  #3-----<oXoO  ",
-	"  #3456,%&*=-O  ",
-	"  #3--------=O  ",
-	"  #355736,%&*o  ",
-	"  #3--------&o  ",
-	"  #38459736,%X  ",
-	"  #3--------,0  ",
-	"  #31q84597360  ",
-	"  #3--------3w  ",
-	"  #3111q84597e  ",
-	"  ##########e#  ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_textBox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABhUlEQVR4nOybsU4CURBF72z8A8slsZYCS0v/wfgJmmgBlpZGEwpbLSy01P9xKTQmlvyDHc9FLUgIDJsdlh3mnoIEeMXbk527My/ZDMHJEBwKQHB2tAV5vzgpNd0KsI8NkoAPmchw/NB7hSHqHSCSbjZ98b/7mO4hSy+dQXEKQ/QSEOmiTQieLCX4zIBSQj54O4cBoi3oXBZp9vvdRQ9NcvU4Wvxnwtn4/uAZNfD9FDAoB/+PwZoS3Ak4Psrnf6whwZ2Aw+6uqQSXJWApwW0GWElwHYIWEtRZoG0s7QtmmUroj7612WGrp8Ekk6G2xt0dUAUR2dPW8DwALafq7LFyRvzDIzEEhxkAI6rWnkZT5w4sAQSHGQAjmj4rtIIlgOAwA2CEdR+gYZU5LAEEhxkAI9gHOIUCEBz2AQgOBSA47AMQHApAcFrXBzSdJSwBBIcZACPYBziFAhCcyhnQ9Ny/blgC6oqU3uGVFfauCkhJrsvPLzgjAZ9/e1+O+s7QtsMMQHDCC/gBAAD//0qcl2UAAAAGSURBVAMAIYde1O8QyCcAAAAASUVORK5CYII=";
 
 wxIcon ibValueTextBox::GetIcon() const
 {
-	return wxIcon(s_text_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_textBox_png, wxSize(16, 16));
 }
 
 wxIcon ibValueTextBox::GetIconGroup()
 {
-	return wxIcon(s_text_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_textBox_png, wxSize(16, 16));
 }

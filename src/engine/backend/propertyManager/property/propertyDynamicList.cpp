@@ -5,7 +5,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc) const
+wxVariantData* ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
 	return new ibVariantDataComposition(property, desc);
 }

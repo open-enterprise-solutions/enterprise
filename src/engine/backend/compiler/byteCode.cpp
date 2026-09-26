@@ -134,63 +134,65 @@ void ibByteBinder::SetVar(const wxString& name, ibValue* value)
 // Function vs procedure split: m_bCodeRet (true = function with return,
 // false = procedure).
 
-long ibByteCode::FindMethod(const wxString& strMethodName) const
+long ibByteCode::FindMethod(const ibString& strMethodName) const
 {
+	// The table keeps wx names and the lookup brings the engine's own: the two wide buffers are
+	// compared as they lie, nothing converted (ibString::IsSameAs).
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return stringUtils::CompareString(strMethodName, fn.m_strRealName); });
+		[&](const auto& fn) { return strMethodName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportMethod(const wxString& strMethodName) const
+long ibByteCode::FindExportMethod(const ibString& strMethodName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
 			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
-			return stringUtils::CompareString(strMethodName, fn.m_strRealName);
+			return strMethodName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindFunction(const wxString& funcName) const
+long ibByteCode::FindFunction(const ibString& funcName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return fn.m_bCodeRet && stringUtils::CompareString(funcName, fn.m_strRealName); });
+		[&](const auto& fn) { return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportFunction(const wxString& funcName) const
+long ibByteCode::FindExportFunction(const ibString& funcName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
 			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
-			return fn.m_bCodeRet && stringUtils::CompareString(funcName, fn.m_strRealName);
+			return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindProcedure(const wxString& procName) const
+long ibByteCode::FindProcedure(const ibString& procName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
-		[&](const auto& fn) { return !fn.m_bCodeRet && stringUtils::CompareString(procName, fn.m_strRealName); });
+		[&](const auto& fn) { return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
 }
 
-long ibByteCode::FindExportProcedure(const wxString& procName) const
+long ibByteCode::FindExportProcedure(const ibString& procName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
 			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
-			return !fn.m_bCodeRet && stringUtils::CompareString(procName, fn.m_strRealName);
+			return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;

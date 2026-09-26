@@ -15,7 +15,7 @@
 // AXIS 2 (ibDimensionKind: Elements / Hierarchy / HierarchyOnly) lives on the DIMENSION
 // (ByParentRef's dim / a TotalBy level): how a reference field unfolds (folders). One read = one
 // snapshot; subtotals roll from THAT snapshot (no second query → detail and total can't skew).
-// (docs/query-language-arc.md §22.1b)
+// (docs/private/query-language-arc.md §22.1b)
 
 #include "queryRamTable.h"      // ibQueryRamTable (the snapshot, held BY VALUE — move-only)
 #include "queryRowCursor.h"     // ibQueryRowCursor — the rows as they arrive (what the group folds read)

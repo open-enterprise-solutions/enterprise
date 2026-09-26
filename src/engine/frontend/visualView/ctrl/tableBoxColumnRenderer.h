@@ -10,6 +10,11 @@
 #include "frontend/visualView/ctrl/form.h"
 #include "frontend/visualView/ctrl/tableBox.h"
 
+#include "backend/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
+
+#include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
+#include <optional>
+
 class ibDataViewValueRenderer :
 	public ibDataViewCustomRenderer {
 public:
@@ -128,6 +133,19 @@ public:
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
+		// A BOOLEAN IS A TICK — the platform's own, where the text would start, not the word for it; false is an
+		// empty cell. A MARK, not a checkbox: a box says "click me", and a list cell is not ticked by a click. Not
+		// centred either: in a wide column a centred mark stands away from the row's picture.
+		if (m_valueFlag.has_value()) {
+			if (*m_valueFlag) {
+				wxWindow* const view = GetView();
+				const wxSize mark = wxRendererNative::Get().GetCheckMarkSize(view);
+				const wxRect at(rect.x, rect.y + (rect.height - mark.y) / 2, mark.x, mark.y);
+				wxRendererNative::Get().DrawCheckMark(view, *dc, at);
+			}
+			return true;
+		}
+
 		// ⭐ THE TEXT, NOT THE VARIANT. Passing m_valueVariant here converted it to a string on every
 		// draw - and GetSize() below converted the same variant separately to measure it, so one
 		// painted cell built the string twice. wxVariant::operator wxString was 3.10% of the whole
@@ -151,6 +169,8 @@ public:
 	}
 
 	virtual wxSize GetSize() const override {
+		if (m_valueFlag.has_value())
+			return wxRendererNative::Get().GetCheckMarkSize(GetView());
 		if (!m_valueVariant.IsNull()) {
 			return GetTextExtent(m_valueText);
 		}
@@ -162,20 +182,44 @@ public:
 
 	virtual bool SetValue(const wxVariant& value) override {
 
+		m_valueVariant = value;
+		m_valueText.clear();
+		m_valueFlag.reset();
+
 		// The vertical flag has to be spelled out. GetEffectiveAlignmentIfKnown() only adds
 		// wxALIGN_CENTRE_VERTICAL when the renderer left the alignment at wxDVR_DEFAULT_ALIGNMENT,
 		// so setting a bare horizontal flag here (wxALIGN_LEFT is plain 0 — left AND top) opted
 		// this renderer out of vertical centring and pinned every value to the top of its row.
 		// Columns drawn by a renderer that never calls SetAlignment stayed centred, which is why
 		// the date column looked right next to text that did not.
-		if (value.GetType() == wxT("number"))
-			SetAlignment(wxALIGN_RIGHT | wxALIGN_CENTRE_VERTICAL);
-		else
+		if (value.IsNull()) {
 			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+			return true;
+		}
 
-		m_valueVariant = value;
-		// Built ONCE, here, where the value arrives - drawing and measuring both read it.
-		m_valueText = value.IsNull() ? wxString() : value.MakeString();
+		// A variant no table model made — a settings dialog's own text — is shown as it is.
+		const ibValue* cell = GetCellValue(value);
+		if (cell == nullptr) {
+			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+			m_valueText = value.MakeString();
+			return true;
+		}
+
+		// Everything below is asked of the value itself.
+		SetAlignment((cell->GetType() == ibValueTypes::TYPE_NUMBER ? wxALIGN_RIGHT : wxALIGN_LEFT) | wxALIGN_CENTRE_VERTICAL);
+
+		// Built ONCE, here, where the value arrives - drawing and measuring both read it, through the format
+		// of the column: found once for a paint pass over the column (StartColumn), by the cell outside one.
+		const ibFormatString* format = !m_inColumn ? GetCellFormat()
+			: m_columnFormat.has_value() ? &*m_columnFormat : nullptr;
+		if (format != nullptr)
+			format->Apply(*cell, m_valueText);
+		else
+			m_valueText = cell->GetString();
+
+		// A boolean is drawn as a tick (Render), and whether it has one is the value's, not its text's.
+		if (cell->GetType() == ibValueTypes::TYPE_BOOLEAN)
+			m_valueFlag = cell->GetBoolean();
 		return true;
 	}
 
@@ -199,6 +243,42 @@ public:
 		return ibDataViewRendererBase::CheckedGetValue(model, item, column);
 	}
 
+	// THE VALUE A CELL HOLDS — null when the variant is not one a table model made. The settings dialogs (the
+	// filter, the composer, a row's value) draw their own wxVariant text with this renderer too, and a cast
+	// taken on trust called wxVariantDataString through this class's table (dump 2026-09-25, the filter).
+	static const ibValue* GetCellValue(const wxVariant& value) {
+		if (value.GetType() != wxT("value"))
+			return nullptr;
+		return &static_cast<const ibVariantDataValue*>(value.GetData())->GetValue();
+	}
+
+	// THE FORMAT THE COLUMN SHOWS ITS CELLS WITH — its own where it has one, else the one its model column
+	// gives (the attribute's, else its type's). Null while the column stands in no table model.
+	const ibFormatString* GetCellFormat() const {
+		if (m_tableBoxColumn == nullptr)
+			return nullptr;
+		const ibTranslateString& format = m_tableBoxColumn->GetFormat();
+		if (!format.IsEmpty())
+			return &ibBackendTypeConfigFactory::GetFormatFromColumn(format, m_tableBoxColumn->GetTypeDesc());
+		ibValueModelTableBox* owner = m_tableBoxColumn->GetOwner();
+		ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
+		const ibValueModel::ibValueModelColumnCollection* columns = model != nullptr ? model->GetColumnCollection() : nullptr;
+		return columns != nullptr ? &columns->GetColumnFormat(m_tableBoxColumn->GetModelColumn()) : nullptr;
+	}
+
+	// …FOUND ONCE FOR A PAINT PASS OVER THE COLUMN, and kept — every cell of the column in the pass is written
+	// through it. Finding it per cell was a third of preparing a value (13 us of 38 per cell, Debug, paint probe
+	// 2026-09-26): the column looked up by id, its type copied, its format's text read.
+	virtual void StartColumn(const ibDataViewModel* WXUNUSED(model), unsigned WXUNUSED(column)) override {
+		const ibFormatString* format = GetCellFormat();
+		m_columnFormat = format != nullptr ? std::optional<ibFormatString>(*format) : std::nullopt;
+		m_inColumn = true;
+	}
+	virtual void FinishColumn() override {
+		m_inColumn = false;
+		m_columnFormat.reset();
+	}
+
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const override { return m_valueText; }
 #endif // wxUSE_ACCESSIBILITY
@@ -219,6 +299,12 @@ private:
 	wxVariant m_valueVariant;
 	// The same value as text, built once in SetValue - see Render and GetSize.
 	wxString  m_valueText;
+	// A boolean cell's mark, set in SetValue; empty for any other value (drawn as text).
+	std::optional<bool> m_valueFlag;
+	// Inside a paint pass over this column, and the format its cells are written through there — see
+	// StartColumn.
+	bool m_inColumn = false;
+	std::optional<ibFormatString> m_columnFormat;
 };
 
 // ----------------------------------------------------------------------------

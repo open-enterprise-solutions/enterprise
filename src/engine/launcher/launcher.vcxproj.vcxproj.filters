@@ -5,6 +5,9 @@
     <ClCompile Include="launcher.cpp">
       <Filter>windows</Filter>
     </ClCompile>
+    <ClCompile Include="launcher_res.cpp">
+      <Filter>res</Filter>
+    </ClCompile>
     <ClCompile Include="connectionDB.cpp">
       <Filter>windows</Filter>
     </ClCompile>

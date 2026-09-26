@@ -18,10 +18,10 @@
 // IS NULL / NOT, predicate tree), JOIN / subquery sources / UNION, register virtual
 // tables with source args, dot-walk across projection / WHERE / ORDER / aggregates,
 // flat GROUP BY + HAVING, hierarchical TOTALS, TOP, and the optimizer rewrite pass.
-// The realized state lives in docs/query-language-arc.md §23.4 / §23.8 / §23.9 —
+// The realized state lives in docs/private/query-language-arc.md §23.4 / §23.8 / §23.9 —
 // grow that doc, not this list.
 //
-// See docs/query-language-arc.md §14 / §22 / §23.
+// See docs/private/query-language-arc.md §14 / §22 / §23.
 
 #include "queryAST.h"
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibDataQueryBuilder
@@ -90,6 +90,14 @@ public:
 		std::shared_ptr<ibBackendQueryColumn> m_ownedCol;
 		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
 		ibColumnRole                m_role = ibColumnRole::Detail;
+
+		// ⭐ WHAT IT HOLDS, ASKED HERE — not worked out by each reader: m_type where the query states one (a
+		// fold's is the fold's — TypeOfFold), else the column it is read from; empty = unknown. A report, a
+		// field picker and a temp table's snapshot all ask it. Read off m_col alone, a resource is typed as
+		// what it FOLDS — COUNT(Amount) as an amount.
+		const ibTypeDescription& GetTypeDesc() const {
+			return m_type.IsOk() || m_col == nullptr ? m_type : m_col->GetTypeDesc();
+		}
 	};
 
 	// Resolve + build + run. Fills outSchema (in projection order). Throws
@@ -235,7 +243,7 @@ public:
 	                                       const std::map<wxString, ibValue>& params,
 	                                       std::vector<OutputColumn>& outSchema);
 
-	// === A PACKAGE — several statements as ONE trip (docs/query-constructor.md §5) ===
+	// === A PACKAGE — several statements as ONE trip (docs/private/query-constructor.md §5) ===
 	//
 	// One entry per statement, IN WRITTEN ORDER, and the array is deliberately
 	// HETEROGENEOUS by position, because the statements are:

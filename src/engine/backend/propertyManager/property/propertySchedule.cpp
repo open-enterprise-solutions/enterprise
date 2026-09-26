@@ -2,7 +2,7 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantSchedule.h"
 
-wxVariantData* ibPropertySchedule::CreateVariantData(const ibJobScheduleDescription& schedule) const
+wxVariantData* ibPropertySchedule::CreateVariantData(const ibJobScheduleDescription& schedule)
 {
 	return new ibVariantDataSchedule(schedule);
 }

@@ -29,7 +29,7 @@
 //      RAM-materialising the inner through ibSubqueryQueryable.
 //
 // The pass deep-clones the input — the cached parse on the Query value object is
-// NEVER mutated (one parse feeds many executes). (docs/query-language-arc.md §23)
+// NEVER mutated (one parse feeds many executes). (docs/private/query-language-arc.md §23)
 
 #include "queryAST.h"
 

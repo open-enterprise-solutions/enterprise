@@ -3,7 +3,7 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
 
-wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
+wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
 	return new ibVariantDataOwner(property, typeDesc);

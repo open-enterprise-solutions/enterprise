@@ -83,7 +83,7 @@ void ibApplicationData::CreateTableEvent()
 }
 
 // sys_lock — long-held pessimistic-lock coordination table (see
-// docs/record-locks.md "Planned upgrade path"). One row per held
+// docs/private/record-locks.md "Planned upgrade path"). One row per held
 // lock. ibLockManager INSERTs on Acquire, DELETEs on Release / on
 // session end / on zombie sweep. Index on (namespace, keyHash) drives
 // the per-acquire conflict-check; index on sessionGuid drives the

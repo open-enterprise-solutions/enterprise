@@ -1,117 +1,15 @@
 #include "chartBox.h"
 
-/* XPM */
-static const char* s_chartBox_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 83 1",
-	"( c Black",
-	"C c #57A3E5",
-	"o c #FF4B16",
-	"y c #FF7A42",
-	"& c #FF7A43",
-	"V c #509CE3",
-	"v c #3A8FDD",
-	"D c #F7ED7C",
-	"0 c #F7D229",
-	"X c #FF3906",
-	"@ c #FF6E36",
-	"E c #91CAF5",
-	"t c #E8C939",
-	"s c #FFEF67",
-	"j c #FFE64D",
-	"< c #E8BA0E",
-	"a c #FFDD32",
-	"7 c #FFD10F",
-	"K c #85C2F1",
-	"; c #AF4200",
-	"f c #7E1ACB",
-	"F c #569EE1",
-	"* c #FF945A",
-	"2 c #FF945B",
-	"Y c #79BAEE",
-	"N c #1755B2",
-	"% c #FF5620",
-	"3 c #E9A441",
-	"l c #F6E870",
-	"T c #81BFF1",
-	", c #F6C70C",
-	". c #990000",
-	"^ c #CB9A06",
-	"J c #75B7ED",
-	"R c #89C4F3",
-	"P c #D8AC15",
-	"q c #FFAE72",
-	"$ c #FF410D",
-	"S c #F7DA41",
-	"h c #0B6DD0",
-	"I c #E8D151",
-	"m c #FFFA8A",
-	"n c #FFF780",
-	"p c #FFEE67",
-	"b c #FFEE68",
-	"r c #FFE54C",
-	"w c #FFDC32",
-	"B c #4797E0",
-	"4 c #DEAB00",
-	"+ c #FF612B",
-	"L c #A8B38B",
-	"O c #FF5520",
-	"H c #6DB1EB",
-	"# c #FF874F",
-	"u c #FFB97D",
-	"d c #FEF57D",
-	"Q c #A4D7FA",
-	"~ c #BFB870",
-	"> c #FECE07",
-	"M c #D8B124",
-	"1 c #D8A809",
-	"= c #D8A500",
-	"W c #9DD3F9",
-	"/ c #AB8A1F",
-	"g c #0245AA",
-	"  c None",
-	"! c #B1CBC1",
-	"5 c #F7C400",
-	"z c #5123B9",
-	"k c #FFF374",
-	"- c #FFA167",
-	"c c #3389DA",
-	"i c #FFEA5A",
-	"e c #FFE13F",
-	": c #E8B500",
-	"8 c #FFD519",
-	"9 c #FFD825",
-	"A c #DEB317",
-	"6 c #FFCC00",
-	"U c #4825B6",
-	"G c #65ABE8",
-	"Z c #94A584",
-	"x c #1D6AC5",
-	/* pixels */
-	"                ",
-	" ......         ",
-	".XoO+@#.        ",
-	".$%%@&*.  ==    ",
-	".o+@&#-;=:>,<1  ",
-	".O@&#234567890  ",
-	".@#*-q:6>79wert ",
-	".y*-qu5>78wrrip=",
-	" .....>789arisd=",
-	"   fgh,89ajiskl=",
-	"  zxcv10ejbknmM ",
-	"  NBVCZASiknmD  ",
-	"  FGHJKLPtdlIM  ",
-	" UYTREWQ!~^/M   ",
-	"          ((    ",
-	"          ((    "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_chartBox_png = "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";
 
 wxIcon ibValueChartBox::GetIcon() const
 {
-	return wxIcon(s_chartBox_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_chartBox_png, wxSize(16, 16));
 }
 
 wxIcon ibValueChartBox::GetIconGroup()
 {
-	return wxIcon(s_chartBox_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_chartBox_png, wxSize(16, 16));
 }

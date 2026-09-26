@@ -1,7 +1,8 @@
 #include "fs.h"
 #include "lz/lzhuf.h"
 
-#include "backend/fstring.h"   // ibString — r_stringZ(ibString&)
+#include "backend/fstring.h"          // ibString — r_stringZ(ibString&)
+#include "backend/backend_exception.h" // a read past the end of a block is refused, not asserted
 
 typedef unsigned char byte_t;
 
@@ -84,11 +85,20 @@ void	ibWriter::w_printf(const char* format, ...)
 // memory
 ibWriterMemory::~ibWriterMemory()
 {
-	wxDELETE(m_data);
+	// ONE ROAD OUT: the release lives in ibWriterMemory::free (fs.h), which says why it is not
+	// `delete`. Repeating it here is how the buffer came to have two ways of being let go.
+	free();
 }
 
 void ibWriterMemory::w(const void* ptr, u32 count)
 {
+	// A WRITE OF NOTHING IS NOT A WRITE. memcpy forbids a null source even for zero bytes, and
+	// the writers above do hand one over for an empty payload (an empty string, a zero-length
+	// chunk) - UBSan: "null pointer passed as argument 2, which is declared to never be null".
+	// Leaving early also spares the buffer a growth it does not need.
+	if (count == 0 || ptr == nullptr)
+		return;
+
 	if (m_pos + count > m_mem_size) {
 		// reallocate
 		if (m_mem_size == 0)	
@@ -229,6 +239,18 @@ ibReader* ibReader::open_chunk_iterator(u64& ID, ibReader* _prev) const
 	ID = r_u64();
 	u64 _size = r_u64();
 
+	// 🛑 THE SIZE CAME OUT OF THE DATA, SO IT IS A CLAIM AND NOT A MEASUREMENT — and the lines below
+	// hand it to a new reader as though somebody had checked it. find_chunk, one road over, has
+	// asked this question since a corrupt size was found building a reader on memory that was never
+	// there; the two ITERATOR roads never did, and an iterator is what walks a frame that arrived
+	// over a wire. Refusing here is what keeps the difference between "declared" and "present"
+	// visible: by the time the over-read happens it reads as a crash inside memcpy, subsystems away
+	// from the frame that lied (2026-09-23, the designer, while it was debugging).
+	if (_size > (u64)elapsed())
+		ibBackendCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
+
 	if (false)
 	{
 		// compressed
@@ -245,7 +267,23 @@ ibReader* ibReader::open_chunk_iterator(u64& ID, ibReader* _prev) const
  
 void	ibReader::r(void* p, int cnt) const
 {
-	wxASSERT(m_pos + cnt <= m_size);
+	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a wxASSERT followed by the copy:
+	// the assert is a line in the journal and nothing else, so an over-read was ANNOUNCED and then
+	// performed, leaving m_pos past m_size for whoever read next. That is how the designer died on
+	// 2026-09-23 while it was debugging - two asserts from one worker thread at 01:36:38 (this line
+	// and advance's), and a second later the same thread walked off the end of the page inside
+	// memcpy: access violation, 348 MB of dump, and a stack that named nothing because the binary
+	// had been rebuilt since.
+	//
+	// Reading past the end of a block is never a legitimate thing to do, so it is an answer, not a
+	// remark. The numbers are in the message because the question a reader of it asks next is
+	// "by how much" - a frame short by four bytes is a truncated write, one short by thousands is
+	// a different format altogether.
+	if (cnt < 0 || (long long)m_pos + cnt > (long long)m_size)
+		ibBackendCoreException::Error(
+			_("Reading %i bytes at offset %i would pass the end of a %i-byte block"),
+			cnt, m_pos, m_size);
+
 	std::memcpy(p, pointer(), cnt);
 	advance(cnt);
 };
@@ -381,6 +419,13 @@ ibReaderMemory* ibReaderMemory::open_chunk_iterator(u64& ID, ibReaderMemory* _pr
 
 	ID = r_u64();
 	u64 _size = r_u64();
+
+	// The same question the reader's own iterator asks, and for the same reason — see the note
+	// there. This is the copy that walks a buffer held in memory, which is what a received frame is.
+	if (_size > (u64)elapsed())
+		ibBackendCoreException::Error(
+			_("Chunk %llu declares %llu bytes, and %i are left in the block"),
+			ID, _size, elapsed());
 
 	if (false) {
 		// compressed

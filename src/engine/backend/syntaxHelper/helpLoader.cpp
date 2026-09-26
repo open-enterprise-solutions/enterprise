@@ -10,6 +10,8 @@
 
 #include "backend/syntaxHelper/helpCorpus.h"
 #include "backend/syntaxHelper/helpEntry.h"
+#include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — an article's class_id, checked
+#include "backend/stringUtils.h"
 
 #include <wx/dir.h>
 #include <wx/file.h>
@@ -29,23 +31,30 @@ using nlohmann::json;
 
 namespace {
 
-// Map a serialised kind string to ibHelpKind. Unknown values default to
-// kKeyword and the caller records a kWarning — keeps the loader
-// forward-compatible with corpora that introduce new kinds before the
-// runtime supports them.
-ibHelpKind ParseKind(const std::string& s) {
-	if (s == "keyword")           return ibHelpKind::kKeyword;
-	if (s == "system_function")   return ibHelpKind::kSystemFunction;
-	if (s == "system_constant")   return ibHelpKind::kSystemConstant;
-	if (s == "system_enum")       return ibHelpKind::kSystemEnum;
-	if (s == "metaobject_type")   return ibHelpKind::kMetaObjectType;
-	if (s == "metaobject_attribute") return ibHelpKind::kMetaObjectAttribute;
-	if (s == "metaobject_method") return ibHelpKind::kMetaObjectMethod;
-	if (s == "primitive_type")    return ibHelpKind::kPrimitiveType;
-	if (s == "collection")        return ibHelpKind::kCollection;
-	if (s == "event")             return ibHelpKind::kEvent;
-	if (s == "operator")          return ibHelpKind::kOperator;
-	return ibHelpKind::kKeyword;
+// Map a serialised kind string to ibHelpKind. ANSWERS WHETHER IT KNEW THE WORD — the entry still
+// loads as kKeyword either way (the prose is right even when its classification is not), but the
+// caller writes a kWarning, which is the half the comment here used to promise and nothing did.
+// That silence is what let four words the corpus writes every day — property, method, procedure,
+// system_procedure — read as "keyword" for as long as they existed.
+bool TryParseKind(const std::string& s, ibHelpKind& kind) {
+	kind = ibHelpKind::kKeyword;
+	if (s == "keyword")           return true;
+	if (s == "system_function")   { kind = ibHelpKind::kSystemFunction;      return true; }
+	if (s == "system_constant")   { kind = ibHelpKind::kSystemConstant;      return true; }
+	if (s == "system_enum")       { kind = ibHelpKind::kSystemEnum;          return true; }
+	if (s == "metaobject_type")   { kind = ibHelpKind::kMetaObjectType;      return true; }
+	if (s == "metaobject_attribute") { kind = ibHelpKind::kMetaObjectAttribute; return true; }
+	if (s == "metaobject_method") { kind = ibHelpKind::kMetaObjectMethod;    return true; }
+	if (s == "primitive_type")    { kind = ibHelpKind::kPrimitiveType;       return true; }
+	if (s == "collection")        { kind = ibHelpKind::kCollection;          return true; }
+	if (s == "event")             { kind = ibHelpKind::kEvent;               return true; }
+	if (s == "operator")          { kind = ibHelpKind::kOperator;            return true; }
+	if (s == "property")          { kind = ibHelpKind::kProperty;            return true; }
+	if (s == "method")            { kind = ibHelpKind::kMethod;              return true; }
+	if (s == "procedure")         { kind = ibHelpKind::kProcedure;           return true; }
+	if (s == "system_procedure")  { kind = ibHelpKind::kSystemProcedure;     return true; }
+	if (s == "enum_type")         { kind = ibHelpKind::kEnumType;            return true; }
+	return false;
 }
 
 wxString Utf8(const std::string& s) {
@@ -292,10 +301,47 @@ void ParseBucket(const std::string&            raw,
 			e.example        = Utf8(SafeStr(obj, "example"));
 			e.exampleVes     = Utf8(SafeStr(obj, "example_ves"));
 			e.availability   = Utf8(SafeStr(obj, "availability"));
-			e.kind           = ParseKind(SafeStr(obj, "kind", "keyword"));
+			// A MISSING kind is the documented default and says nothing; a kind that is PRESENT and
+			// unknown to this build is a warning, because from here on it reads as something else.
+			const std::string kindWord = SafeStr(obj, "kind", "keyword");
+			if (!TryParseKind(kindWord, e.kind)) {
+				ibHelpLoadError warn;
+				warn.bucketPath = bucketPath;
+				warn.severity   = ibHelpLoadSeverity::kWarning;
+				warn.message    = wxString::Format(
+					wxT("%s: kind '%s' is not a word this build knows, so the article is read as 'keyword'."),
+					e.id, Utf8(kindWord));
+				errors.push_back(std::move(warn));
+			}
 			e.categoryKeys   = SafeStrArray(obj, "category_keys");
 			e.seeAlso        = SafeStrArray(obj, "see_also");
 			e.reviewed       = SafeBool(obj, "reviewed", false);
+
+			// The hidden class id (helpEntry.h), checked against the registry HERE: an article whose
+			// class was renamed or removed says so at load instead of pointing at nothing. The entry
+			// still loads - the prose is right even when the join key is not.
+			const auto classIt = obj.find("class_id");
+			if (classIt != obj.end()) {
+				ibHelpLoadError warn;
+				warn.bucketPath = bucketPath;
+				warn.severity   = ibHelpLoadSeverity::kWarning;
+				const ibClassID asked = classIt->is_number_unsigned() ? classIt->get<ibClassID>() : 0;
+				if (asked == 0 || !ibValue::IsRegisterCtor(asked)) {
+					warn.message = wxString::Format(
+						wxT("%s: class_id %s names no registered class."), e.id, Utf8(classIt->dump()));
+					errors.push_back(std::move(warn));
+				}
+				else {
+					e.classId = asked;
+					const wxString registered = ibValue::GetNameObjectFromID(asked);
+					if (!stringUtils::CompareString(registered, e.nameEn)) {
+						warn.message = wxString::Format(
+							wxT("%s: class_id %s is registered as '%s', but the article is about '%s'."),
+							e.id, Utf8(classIt->dump()), registered, e.nameEn);
+						errors.push_back(std::move(warn));
+					}
+				}
+			}
 
 			// modes: array of "ves" / "ces"; missing or empty = both.
 			const auto modeArr = SafeStrArray(obj, "modes");

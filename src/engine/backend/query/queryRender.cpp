@@ -74,8 +74,12 @@ wxString RenderLiteral(const ibValue& value)
 			date.GetYear(), date.GetMonth() + 1, date.GetDay(),
 			date.GetHour(), date.GetMinute(), date.GetSecond());
 	}
+	// ⭐ THE RUNTIME'S EMPTY VALUE, WRITTEN AS ITSELF. It used to be printed as `NULL`, which is the
+	// database's absence and a different thing — and printing it so made a round trip lose it: the text
+	// came back as a NULL literal, and a query rebuilt from its own rendering no longer asked what it had
+	// asked. Now the language has the word (queryKeywords.h), so the rendering has it too.
 	case ibValueTypes::TYPE_EMPTY:
-		return Kw(ibQueryKeyword::Null);
+		return Kw(ibQueryKeyword::Undefined);
 	default:
 		return value.GetString();
 	}

@@ -5,7 +5,10 @@
 #include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges
+#include <mutex>    // ibSocketLock
 #include <vector>
+
+#include <wx/socket.h>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
@@ -15,6 +18,77 @@
 
 #include "debugClientBridge.h"
 #include "backend/session/sessionHolder.h"   // ibSessionWatch — whose worker a reply goes to, watched
+
+// ⭐⭐ A SOCKET THAT MORE THAN ONE THREAD MAY WANT TO CLOSE — and wxSocketBase::Close() is not written
+// to be called twice at once.
+//
+// wxSocketImpl::Close() is `if (m_fd != INVALID_SOCKET) { DoClose(); m_fd = INVALID_SOCKET; }`: a check,
+// then the work, with nothing between them. Two threads that both pass the check both run DoClose().
+// On Windows and Linux that is a second closesocket() on a dead descriptor. On macOS DoClose() removes
+// the socket's source from the run loop and RELEASES it, so the second thread would hand
+// CFRunLoopRemoveSource a source that is already gone — which is the shape of the designer's crash in
+// #155 (`CFRunLoopRemoveSource -> CFSetContainsValue -> CFHash`, on the connection's own thread).
+//
+// ⚠ THAT IS AN INFERENCE FROM THE STACK, NOT A REPRODUCTION. Two threads calling Close() on one
+// loopback socket, 6000 rounds on macOS 15.6 / arm64, did not crash (tests/test_socketLock.cpp keeps the
+// control): the window is a few instructions wide. What is certain is that the debugger's client
+// connection DOES close one socket from two threads — the designer's main thread ends a session
+// (DetachConnection, from the Debug menu or `app_run restart`) while the connection's own thread,
+// having just watched the far end go away, closes it on its way out — and that closing twice at once
+// is not something wx promises to survive.
+//
+// The lock takes them in turn: the second Close finds the descriptor already invalid and does nothing.
+// Destroy takes the pointer OUT of its slot under the lock, so a Close that arrives after it finds the
+// slot empty instead of a socket that is being freed — and only one thread ever calls Destroy on it.
+//
+// ⚠ IT SERIALISES CLOSING, NOT USING. A thread that is blocked in WaitForRead on the socket while
+// another closes it is a separate hazard, and this does not remove it; the slot is what the owning
+// thread reads through, and only the owner should be doing anything but Close with it.
+//
+// It lives HERE, beside the one class that holds such a socket, rather than in a header of its own.
+class ibSocketLock {
+public:
+
+	// Close the socket in `slot`, if there is one. Any thread; two at once are taken in turn.
+	// `slot` is read UNDER the lock — take it by reference, never by value at the call site.
+	template <class Socket>
+	void Close(Socket* const& slot) {
+		const std::lock_guard<std::mutex> hold(m_mutex);
+		if (slot != nullptr)
+			slot->Close();
+	}
+
+	// Empty `slot` and destroy what was in it, once. Whoever gets here first destroys; everyone after
+	// finds it empty.
+	template <class Socket>
+	void Destroy(Socket*& slot) {
+		Socket* taken = nullptr;
+		{
+			const std::lock_guard<std::mutex> hold(m_mutex);
+			taken = slot;
+			slot = nullptr;
+		}
+		if (taken != nullptr)
+			taken->Destroy();
+	}
+
+	// Put a new socket into `slot`. Under the lock so a concurrent Close sees the old one or the new
+	// one, never a half-written pointer.
+	template <class Socket>
+	void Assign(Socket*& slot, Socket* socket) {
+		const std::lock_guard<std::mutex> hold(m_mutex);
+		slot = socket;
+	}
+
+	// For a reader that must look at the slot and the socket in one step (IsConnected) — the socket
+	// cannot be destroyed between the null check and the call while this is held.
+	std::unique_lock<std::mutex> Hold() const {
+		return std::unique_lock<std::mutex>(m_mutex);
+	}
+
+private:
+	mutable std::mutex m_mutex;
+};
 
 class BACKEND_API ibDebuggerClient {
 
@@ -138,6 +212,10 @@ class BACKEND_API ibDebuggerClient {
 		}
 
 		bool IsConnected() const {
+			// The pointer and the socket behind it are read in ONE step: the connection's own thread
+			// destroys the socket on its way out, and a check that ran before that with a call that ran
+			// after it was a use of freed memory (see ibSocketLock).
+			const auto hold = m_socketLock.Hold();
 			if (m_socketClient == nullptr)
 				return false;
 			if (!m_socketClient->IsConnected())
@@ -193,8 +271,7 @@ class BACKEND_API ibDebuggerClient {
 			if (debugClient != nullptr)
 				debugClient->DeleteConnection(this);
 
-			if (m_socketClient != nullptr)
-				m_socketClient->Destroy();
+			m_socketLock.Destroy(m_socketClient);
 		}
 
 		// entry point for the thread - called by Run() and executes in the context
@@ -228,6 +305,22 @@ class BACKEND_API ibDebuggerClient {
 		unsigned short	m_port;
 
 		wxSocketClient* m_socketClient;
+
+		// Every Close / Destroy / assignment of m_socketClient goes through this: the designer's main
+		// thread ends a session while this connection's own thread closes the same socket.
+		mutable ibSocketLock m_socketLock;
+
+		// ⭐⭐ …AND ONE THREAD AT A TIME USES IT. A separate lock from the one above, deliberately: that
+		// one guards the SLOT and must never be held while waiting for bytes, or a Close would queue
+		// behind a read that is waiting for a frame nobody is sending. This one is held for exactly one
+		// frame in or out.
+		//
+		// 🛑 THERE WAS NONE. The window's thread sends a step while the connection's thread reads the
+		// answer to the last one, and wxSocketBase keeps its blocking FLAGS on the object — a read raises
+		// WAITALL for its own duration, a write does the same, and each restores what it found. Overlap
+		// them and a read obliged to wait for every byte comes back SHORT, on a socket that is connected
+		// and healthy. The far end has had this lock for its writes all along (debugServer.h).
+		std::mutex m_socketMutex;
 
 		wxString		m_confGuid;
 		wxString		m_md5Hash;
@@ -602,10 +695,13 @@ private:
 	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
 	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
+	// WHAT IS WATCHED, AND WHO ASKED FOR EACH — re-registered with the runtime after every reconnect
+	// (CommandId_GetArrayBreakpoint), which is the moment the name has to be said again and cannot be
+	// worked out. See ibWatchedExpression (debugDefs.h).
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	std::map <unsigned long long, wxString> m_listExpression;
+	std::map <unsigned long long, ibWatchedExpression> m_listExpression;
 #else 
-	std::map <unsigned int, wxString> m_listExpression;
+	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif  
 
 	bool	m_enterLoop, m_connectionSuccess;

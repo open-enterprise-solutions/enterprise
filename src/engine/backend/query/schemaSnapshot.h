@@ -11,7 +11,7 @@
 // metadata of the two in-memory configurations), never owned — valid only for the duration of a save.
 //
 // Identity, not name, is the match key: a table is its metaID, a column its model id. So a renamed /
-// retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/query-language-arc.md)
+// retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/private/query-language-arc.md)
 
 #include "backend/backend.h"
 #include "backend/query/queryColumn.h"   // ibBackendColumnRawDB (the snapshot OWNS its scaffold raw columns)
@@ -92,7 +92,7 @@ struct ibSchemaSeedRow
 
 // ==========================================================================
 // DERIVED-STATE declaration — a table whose rows are a FUNCTION of another table's rows, kept
-// current by a database trigger. Today: a register's totals. (docs/register-totals-strategy.md)
+// current by a database trigger. Today: a register's totals. (docs/private/register-totals-strategy.md)
 //
 // The metaobject declares INTENT here — which table feeds this one, what the key is, what each
 // resource accumulates, at what period grain. It never renders SQL and never names an engine:
@@ -137,13 +137,19 @@ struct ibSchemaMaterialize
 	const ibBackendQueryable* m_source = nullptr;
 
 	// The source's physical table — resolved from the queryable, for the trigger DDL.
-	wxString SourceTable() const;
+	BACKEND_API wxString SourceTable() const;
 
 	// Lower this DECLARATION into the L2-2 render spec: logical columns expand into their physical
 	// fields (a reference dimension is two), the source queryable resolves to a table name. That
 	// expansion is a metadata question, so it happens HERE and never inside the renderer — which is
 	// what keeps L2-1 metadata-blind and the dependency pointing downward.
-	ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
+	BACKEND_API ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
+
+	// …AND FOR A READ OF THE ROWS AS THEY STAND (RenderStoredRows / RenderMovementRows): the same spec with
+	// its IR forms filled — the guard, the movement's instant, each contribution — lowered by the source's
+	// own door from the regeneration forms declared below, so a reading counts a movement by the very
+	// expression a rebuild sums it by. Only a reading asks for this; the apply renders text and never pays.
+	BACKEND_API ibMaterializeSpec ToReadSpec(const wxString& tableName) const;
 
 	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
@@ -184,7 +190,7 @@ struct ibSchemaMaterialize
 	// schedule the read pays O(N) shards on every row forever, so splitting is for registers PROFILED
 	// hot on write. Once ibDerivedState::Collapse runs regularly the tax shrinks to the OPEN period
 	// alone — closed ones fold back to one row per key — and a wider default becomes defensible;
-	// docs/register-totals-strategy.md §6a). The view absorbs the split — it sums the shards — so nothing above L3 can
+	// docs/private/register-totals-strategy.md §6a). The view absorbs the split — it sums the shards — so nothing above L3 can
 	// tell a split register from a plain one. Engines without ibMaterializationDialect::
 	// m_connectionIdExpr (SQLite) collapse to 1: single-writer engines have no contention to split.
 	unsigned int m_shards = 1;
@@ -378,8 +384,21 @@ BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& table
 // lookup path for reads that name those columns first: the second index of a hashed totals key above,
 // and a calculation register's "records of this employee". Both ceilings are the engine's (segments,
 // and bytes — a string is declared in characters and indexed in bytes); nothing fits = no index.
+//
+// ⭐ `closing` IS A COLUMN THE INDEX ENDS WITH WHATEVER IS CUT. "Equalities on these, a RANGE on that" - the
+// dimensions of a totals table and its period - is served only while the range column stands right after the
+// equalities that were kept. Cut greedily from the end it was the PERIOD that went first, and the index a
+// register with many dimensions got could narrow by them and then walk the key's whole history. With a
+// closing column the cut takes trailing `cols` instead and the closing one stays last.
 BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const wxString& indexName,
-                                      const std::vector<const ibBackendQueryColumn*>& cols);
+                                      const std::vector<const ibBackendQueryColumn*>& cols,
+                                      const ibBackendQueryColumn* closing = nullptr);
+
+// Which columns such an index takes - apart from the declaration so that the cut can be asked with a ceiling
+// of the caller's own (`fits(fields, bytes)`): a suite has no engine to ask, and with none nothing is ever cut.
+BACKEND_API std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+	const std::function<bool(size_t fields, size_t bytes)>& fits);
 
 class BACKEND_API ibSchemaSnapshot
 {

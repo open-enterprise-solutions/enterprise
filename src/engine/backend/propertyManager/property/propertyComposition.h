@@ -12,8 +12,8 @@
 // description, exactly as there is one ibPropertyType for every kind of typed field.
 class BACKEND_API ibPropertyComposition : public ibProperty {
 	// ONE maker with a default — ibPropertySpreadsheet's shape over its own description.
-	wxVariantData* CreateVariantData(ibPropertyObject* property,
-	                                 const ibCompositionDescription& val = ibCompositionDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property,
+	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 
 	ibCompositionDescription& GetValueAsCompositionDesc() const;

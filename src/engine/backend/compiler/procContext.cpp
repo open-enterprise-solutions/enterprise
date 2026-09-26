@@ -136,6 +136,55 @@ ibRunContext::~ibRunContext()
 	DestroyLocals();
 }
 
+//*************************************************************************************************
+//*                                     RunCaptureContext                                         *
+//*************************************************************************************************
+
+ibRunCaptureContext::~ibRunCaptureContext()
+{
+	m_destroying = true;
+	// Our own slots go first, and a lambda living in one of them dies here and lets go of us —
+	// which the flag above absorbs. Letting go of the frames THAT lambda held is then its own
+	// business, so the chain comes apart from the inside out without this frame knowing the shape
+	// of it. DestroyLocals is idempotent by design (see its note), so the base destructor running
+	// it again is fine.
+	DestroyLocals();
+}
+
+void ibRunCaptureContext::DecrRef()
+{
+	if (m_destroying)
+		return;
+
+	wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid frame reference count");
+	if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+		delete this;
+}
+
+void ibRunCaptureContext::ReleaseTemporarySlots()
+{
+	if (m_currentFunction == nullptr || m_pLocVars == nullptr)
+		return;
+
+	// ⭐ THE BYTECODE ALREADY SAYS WHICH SLOTS ARE TEMPORARY, by leaving them out: compileCode.cpp
+	// skips `m_bTempVar` entries when it writes m_listLocals, so a slot that no entry claims — and
+	// is not a parameter — is one the compiler minted for an expression. Nothing is matched by name.
+	for (long slot = m_lParamCount; slot < m_lVarCount; slot++) {
+
+		if (m_pLocVars[slot].m_bReadOnly)
+			continue;
+
+		bool named = false;
+		for (const ibByteCode::ibByteCodeVarInfo& local : m_currentFunction->m_listLocals) {
+			if (local.m_slotIndex == slot) { named = true; break; }
+		}
+		if (named)
+			continue;
+
+		m_pLocVars[slot].Reset();
+	}
+}
+
 const ibByteCode* ibRunContext::GetByteCode() const
 {
 	return m_procUnit != nullptr ?

@@ -154,7 +154,7 @@ using OutputColumn = ibQueryLowering::OutputColumn;
 // a value follow with an unreachable dummy return — the codebase's Error();return idiom).
 //
 // ⭐ THE TIER RAISES ITS OWN VARIETY. A query that does not hold up is not "an error with no
-// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/exceptions.md §3).
+// subsystem" — it is L3 refusing, and the exception TYPE is what says so (docs/private/exceptions.md §3).
 // Typed as Core it could only be caught by catching everything, which is the same as not being able
 // to catch it at all: a script's Try/Except around a query, a tool that wants to show the author
 // where the query is wrong, and a caller that must let real faults through were all indistinguishable.
@@ -371,6 +371,20 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	std::vector<ibQuerySourceParameter> declared;
 	if (ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(ns, name))
 		descriptor->DescribeParameters(declared);
+
+	// 🛑 AN ARGUMENT PAST THE LAST ONE THE SOURCE DECLARED IS REFUSED, NOT DROPPED. A source reads its
+	// arguments by position and never looks past the ones it declared, so an extra one simply vanished: the
+	// accounting listing asked for `"Period DESC", 10` after it lost its Order and Top came back unordered and
+	// uncut, and read as an answer (measured 2026-09-21) - an ignored ORDER BY is the kind of wrong nobody
+	// notices. A source that declares nothing is not judged here: it has not said what it takes.
+	if (!declared.empty() && src.m_args.size() > declared.size()) {
+		wxString names;
+		for (const ibQuerySourceParameter& parameter : declared)
+			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + parameter.m_name;
+		ibBackendQueryNameException::ErrorAt(src.m_line, src.m_col,
+			_("'%s' takes %d arguments (%s), and %d were given. How its rows are ordered and how many are taken is said in the query around it: ORDER BY, TOP."),
+			ns + wxT(".") + name, static_cast<int>(declared.size()), names, static_cast<int>(src.m_args.size()));
+	}
 
 	// ⚠ A CONDITION SLOT TAKES EITHER SHAPE, and the shape decides the road — not the declaration.
 	// `Balance(&P, Warehouse = &W)` is a predicate and becomes a condition; `Balance(&P, &Filter)`
@@ -1851,11 +1865,43 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			}
 		}
 
-		ibQueryPredicatePtr acc;
-		for (const ibValue& v : values) {
-			ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(CondEq(cols, v));
-			acc = acc ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, acc, eq) : eq;
+		// 🛑 FOLDED AS A BALANCED TREE, NOT AS A CHAIN. `acc = Or(acc, eq)` builds a tree as DEEP as the
+		// list is long, and everything downstream walks a predicate recursively — the lowering, the
+		// renderer, the RAM evaluator, the destructor. A list of some 155 references ran a checked build
+		// out of stack: `WHERE Ref IN (&Items)` with an array of 300 took the client down with 0xc0000005
+		// and no dump (measured 2026-09-19, reproducible on an empty catalog). Halving keeps the depth at
+		// log2(N), so a list of a thousand is ten levels. OR is associative: the rows selected are the same.
+		// ⭐ A PLAIN LIST OVER ONE COLUMN TRAVELS AS ONE SET-VALUED LEAF — the `In` the door already has
+		// (WhereIn, the semi-join reduction), which both providers render: the database as the engine's
+		// own IN wherever the values allow it (DecomposeIn), RAM as membership. A hundred references
+		// spelled as a hundred `(tag = ? AND table = ? AND id = ?)` branches were weighed one branch at a
+		// time against every row (measured 2026-09-19: a balance of 100 items 0.4 s, of all 500 — 0.1 s).
+		// ⚠ Only where nothing else rides on the leaf: no walk through a reference, at least two values,
+		// none of them NULL (`IN (…, NULL)` is the classic trap, and m_values must never carry one).
+		if (cols.size() == 1 && values.size() > 1
+		    && std::none_of(values.begin(), values.end(), [](const ibValue& v) { return v.IsNull(); })) {
+			ibQueryCondition set;
+			set.m_col    = cols.back();
+			set.m_op     = ibQueryFilterOp::In;
+			set.m_values = values;
+			ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(set);
+			return e.m_negated ? ibQueryPredicate::Not(leaf) : leaf;
 		}
+
+		std::vector<ibQueryPredicatePtr> level;
+		level.reserve(values.size());
+		for (const ibValue& v : values)
+			level.push_back(ibQueryPredicate::Leaf(CondEq(cols, v)));
+		while (level.size() > 1) {
+			std::vector<ibQueryPredicatePtr> next;
+			next.reserve((level.size() + 1) / 2);
+			for (size_t i = 0; i < level.size(); i += 2)
+				next.push_back(i + 1 < level.size()
+					? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, level[i], level[i + 1])
+					: level[i]);
+			level.swap(next);
+		}
+		ibQueryPredicatePtr acc = level.empty() ? nullptr : level.front();
 		if (!acc) {
 			// Empty IN ( ) — matches NOTHING. Encode as a contradiction (col IS NULL AND col IS NOT NULL);
 			// NOT IN of an empty set then matches everything (the outer Not below).
@@ -2422,6 +2468,35 @@ private:
 	ibMetaID                  m_id;
 };
 
+// ⭐ A NUMBER WHOSE SCALE NOBODY CAN STATE — precision 0, the type system's "no limit": nothing is rounded to
+// it (valueType.cpp) and it is shown with the digits it has. What arithmetic and an average answer with. A bare
+// Number(10,0) claims a scale of none, and a report written through the type would show `1500.5` as `1501`.
+static ibTypeDescription UnboundedNumber()
+{
+	return ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(0, 0));
+}
+
+// ⭐ WHAT A FOLD ANSWERS WITH, given what it folds — asked alike by a SELECT's aggregate (TypeOfExpr) and a
+// TOTALS resource. A SUM is in the units of what it adds up (kopecks summed are kopecks), MIN / MAX are one of
+// the values they compared, COUNT counts. An AVERAGE divides, and no scale holds for a quotient.
+static ibTypeDescription TypeOfFold(ibQueryKeyword func, const ibTypeDescription& argType)
+{
+	switch (func) {
+	case ibQueryKeyword::Count:
+		return ibTypeDescription(g_valueNumberCLSID);
+	case ibQueryKeyword::Sum:
+		return argType.GetClsidCount() == 1 && argType.ContainType(ibValueTypes::TYPE_NUMBER)
+			? argType : UnboundedNumber();
+	case ibQueryKeyword::Avg:
+		return UnboundedNumber();
+	case ibQueryKeyword::Min:
+	case ibQueryKeyword::Max:
+		return argType;
+	default:
+		return ibTypeDescription();
+	}
+}
+
 // ⭐ WHAT A COMPUTED OUTPUT HOLDS — the type an expression ANSWERS WITH.
 //
 // A column brings its type with it; an expression has to be asked. Nobody was asking, so every
@@ -2467,7 +2542,7 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 		const bool lNum = l.GetClsidCount() == 1 && l.ContainType(ibValueTypes::TYPE_NUMBER);
 		const bool rNum = r.GetClsidCount() == 1 && r.ContainType(ibValueTypes::TYPE_NUMBER);
 		if (lNum && rNum)
-			return number;
+			return UnboundedNumber();
 		// A date SHIFTED by a number is still a date; a date TIMES anything is not a date, and two
 		// dates subtracted are not one either — neither is claimed here.
 		const bool shift = e.m_arith == ibQueryArithOp::Add || e.m_arith == ibQueryArithOp::Sub;
@@ -2496,19 +2571,7 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 	}
 
 	case ibQueryAstExprKind::Func:
-		// COUNT is a count; SUM / AVG fold numbers into a number. MIN / MAX yield one of the values
-		// they compared, so they answer with the argument's own type.
-		switch (e.m_func) {
-		case ibQueryKeyword::Count:
-		case ibQueryKeyword::Sum:
-		case ibQueryKeyword::Avg:
-			return number;
-		case ibQueryKeyword::Min:
-		case ibQueryKeyword::Max:
-			return e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription();
-		default:
-			return ibTypeDescription();
-		}
+		return TypeOfFold(e.m_func, e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription());
 
 	case ibQueryAstExprKind::ScalarCall: {
 		// 🛑 THE CALLS WERE NOT HERE, so every one of them went out untyped: `MONTH(Date)`,
@@ -3012,6 +3075,27 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 	return WrapSelectAsQueryable(*src.m_subquery, params, owner);   // FROM (SELECT …) AS alias
 }
 
+// ⭐ THE NAME THE SELECTION GAVE A FIELD IS A NAME TO SORT BY — `SELECT G.Description AS D … ORDER BY D`.
+// Only a fold could be sorted by its name (the aggregate branch in PopulateBuilder, 2026-09-04); every
+// other alias was looked for among the SOURCE's attributes, where it never is, and came back "unknown
+// attribute 'D' on source 'G'" (2026-09-26). A bare name that is the explicit alias of a projection that
+// does not fold stands for that projection's expression, and the sort then treats it as if it had been
+// written out — a column, a walk, a computed sort. The alias wins over an attribute of the same name, as
+// an output name does in SQL. A fold keeps its own road: by the output name, after the grouping.
+//
+// ⚠ EVERY ROAD THAT READS AN ORDER BY ASKS THIS — the read, the grouped levels, the prune. The name check
+// already let an output name through (CheckNames), so the check said yes and the run said no.
+const ibQueryAstExprPtr& SortTargetOf(const ibQuerySelect& ast, const ibQueryAstExprPtr& written)
+{
+	if (!written || written->m_kind != ibQueryAstExprKind::Column || written->m_path.size() != 1)
+		return written;
+	for (const ibQueryProjection& p : ast.m_projections)
+		if (p.m_expr && !p.m_alias.IsEmpty() && p.m_alias.IsSameAs(written->m_path.front(), false)
+		    && !ibQueryMentionsAggregate(p.m_expr))
+			return p.m_expr;
+	return written;
+}
+
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
 // (1 = single source, >1 = JOIN) drives column resolution. explicitProjection (a subquery's inner
@@ -3180,7 +3264,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					else
 						b.Aggregate(AggFn(e.m_func), argCols, alias, e.m_distinctArg);
 				}
-				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too: COUNT/SUM/AVG a number, MIN/MAX the argument's own
+				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too — see TypeOfFold
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
@@ -3660,7 +3744,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// it instead, but either way the sort keys on the leaf column.
 	const bool allowOrderDotWalk = allowDotWalk || computedPrimary;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const ibQueryAstExpr& oe = *o.m_expr;
+		const ibQueryAstExpr& oe = *SortTargetOf(ast, o.m_expr);
 		// ORDER BY <expression> — a CASE / arithmetic ("sort by a condition") or a bare constant (value(...) /
 		// &parameter): lower it to an EXPRESSION sort. Single DB source only (like the computed WHERE side); a
 		// computed sort is no keyset key, so the text-query full read is the user. A plain column / dot-walk keeps
@@ -5492,7 +5576,7 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_groupBy.end());
 
 	ast.m_orderBy.erase(std::remove_if(ast.m_orderBy.begin(), ast.m_orderBy.end(),
-		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, o.m_expr)); }), ast.m_orderBy.end());
+		[&](const ibQueryOrderItem& o) { return gone(StillResolves(sources, SortTargetOf(ast, o.m_expr))); }), ast.m_orderBy.end());
 
 	ast.m_indexBy.erase(std::remove_if(ast.m_indexBy.begin(), ast.m_indexBy.end(),
 		[&](const ibQueryAstExprPtr& e) { return gone(StillResolves(sources, e)); }), ast.m_indexBy.end());
@@ -5875,9 +5959,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 	for (size_t i = 0; i < schema.size(); ++i) {
 		const ibMetaID id = static_cast<ibMetaID>(i + 1);
 		ids.push_back(id);
-		static const ibTypeDescription s_anyType;
-		table.AddColumn(id, schema[i].m_name,
-			schema[i].m_col != nullptr ? schema[i].m_col->GetTypeDesc() : s_anyType);
+		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc());
 	}
 
 	while (result.Next()) {
@@ -6847,7 +6929,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// FROM — single source, a JOIN chain, or a UNION stack. In every case the flat read
 	// (b.Execute -> ExecuteRead) realizes the source (server-side or RAM-composed), the TotalBy config is
 	// stamped on the result, and the runtime folds the ONE snapshot — no separate totals terminal. The
-	// dimension / aggregate resolution below reads through `sources`. (docs/query-language-arc.md §22.1b)
+	// dimension / aggregate resolution below reads through `sources`. (docs/private/query-language-arc.md §22.1b)
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
 	// Conditions written INSIDE a virtual table's call — collected here so the totals read applies
@@ -6917,6 +6999,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			const ibBackendQueryColumn* m_col = nullptr;   // null = COUNT(*)
 			wxString                    m_name;
 			bool                        m_distinct = false;
+			ibTypeDescription           m_type;            // what the figure is — TypeOfFold, as the fold's resources say
 		};
 		std::vector<PagedMeasure> pagedMeasures;
 		bool measuresArePlain = true;
@@ -6962,6 +7045,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				}
 				catch (const ibBackendException&) { measuresArePlain = false; break; }
 			}
+			m.m_type = TypeOfFold(agg->m_func, m.m_col != nullptr ? m.m_col->GetTypeDesc() : ibTypeDescription());
 			pagedMeasures.push_back(m);
 		}
 
@@ -6986,9 +7070,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		bool sortIsTheDimension = true;
 		if (pathCols.size() == 1 && pathCols.back() != nullptr) {
 			for (const ibQueryOrderItem& o : ast.m_orderBy) {
-				if (!o.m_expr || IsComputedExprAst(*o.m_expr)) { sortIsTheDimension = false; break; }
+				const ibQueryAstExprPtr& sortBy = SortTargetOf(ast, o.m_expr);
+				if (!sortBy || IsComputedExprAst(*sortBy)) { sortIsTheDimension = false; break; }
 				std::vector<const ibBackendQueryColumn*> orderCols;
-				try { orderCols = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+				try { orderCols = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
 				catch (const ibBackendException&) { sortIsTheDimension = false; break; }
 				if (orderCols.size() != 1 || orderCols.front() != pathCols.back()) { sortIsTheDimension = false; break; }
 			}
@@ -7008,6 +7093,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 				OutputColumn mc; mc.m_name = m.m_name;
 				mc.m_role = ibQueryLowering::ibColumnRole::Measure;
+				mc.m_type = m.m_type;   // its own, not its column's — as the fold's resources carry it
 				if (m.m_col != nullptr) mc.m_col = m.m_col;
 				else { mc.m_alias = m.m_name; mc.m_byAlias = true; }
 				outSchema.push_back(mc);
@@ -7522,6 +7608,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
+		ibTypeDescription                     argType;           // the type of what it folds — see TypeOfFold; empty = unknown
 		if (!agg->m_star) {
 			// A bare identifier may name a SELECTed field (alias) before a metadata attribute.
 			const bool bareName = agg->m_arg->m_kind == ibQueryAstExprKind::Column && agg->m_arg->m_path.size() == 1;
@@ -7558,6 +7645,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// A selected field spelled its SOURCE way (`Catalog1.Parent`) — resolved against the
 			// sources. That it IS selected was settled above, before anything was built.
 			else col = ResolveColumnSingle(sources, *agg->m_arg);
+			// Taken before a repeat is moved to a column of its own below: that one is synthetic and says nothing.
+			if (col != nullptr)
+				argType = col->GetTypeDesc();
 
 			// ⭐ A SECOND AGGREGATE OVER THE SAME COLUMN NEEDS A COLUMN OF ITS OWN. The fold rolls
 			// each one IN PLACE — into the slot keyed by its input column — so `SUM(Amount)` and
@@ -7658,6 +7748,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 		OutputColumn oc; oc.m_name = outName;
 		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS aggregate — the report's resource
+		// ⭐ ITS OWN TYPE, not its column's: m_col is what it FOLDS, and a count of amounts is not an amount.
+		oc.m_type = TypeOfFold(agg->m_func, argType);
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
 		else { oc.m_alias = outName; oc.m_byAlias = true; }              // COUNT(*), or an area folded here — read by name
 		outSchema.push_back(oc);
@@ -7802,10 +7894,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			continue;
 		for (size_t oi = 0; oi < ast.m_orderBy.size(); ++oi) {
 			const ibQueryOrderItem& o = ast.m_orderBy[oi];
-			if (orderConsumed[oi] || !o.m_expr || IsComputedExprAst(*o.m_expr))
+			const ibQueryAstExprPtr& sortBy = SortTargetOf(ast, o.m_expr);
+			if (orderConsumed[oi] || !sortBy || IsComputedExprAst(*sortBy))
 				continue;
 			std::vector<const ibBackendQueryColumn*> oc;
-			try { oc = ResolveWhereTarget(sources, *o.m_expr, /*allowDotWalk*/true); }
+			try { oc = ResolveWhereTarget(sources, *sortBy, /*allowDotWalk*/true); }
 			catch (const ibBackendException&) { continue; }
 			if (oc.size() == 1 && oc.front() == ls.m_col) {
 				levelAscending[li] = o.m_ascending;
@@ -7840,7 +7933,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const ibQueryOrderItem& o = ast.m_orderBy[oi];
 		if (!o.m_expr)
 			continue;
-		const ibQueryAstExpr& oe = *o.m_expr;
+		const ibQueryAstExpr& oe = *SortTargetOf(ast, o.m_expr);
 		if (IsComputedExprAst(oe)
 		    || oe.m_kind == ibQueryAstExprKind::Param
 		    || oe.m_kind == ibQueryAstExprKind::Value

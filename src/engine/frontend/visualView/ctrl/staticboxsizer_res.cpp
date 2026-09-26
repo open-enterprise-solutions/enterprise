@@ -1,40 +1,15 @@
 #include "sizer.h"
 
-/* XPM */
-static const char* s_staticbox_sizer_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 6 1",
-	"  c None",
-	"O c #4949FF",
-	"X c #B7B79B",
-	"o c #0000FF",
-	". c #003399",
-	"+ c #9B9BFF",
-	/* pixels */
-	"     .....      ",
-	"  XX ..... XXX  ",
-	" X            X ",
-	"X  oooooooooo  X",
-	"X oO++++++++Oo X",
-	"X o+        +o X",
-	"X o+        +o X",
-	"X oO++++++++Oo X",
-	"X oooooooooooo X",
-	"X oO++++++++Oo X",
-	"X o+        +o X",
-	"X o+        +o X",
-	"X oO++++++++Oo X",
-	"X  oooooooooo  X",
-	" X            X ",
-	"  XXXXXXXXXXXX  "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_staticBoxSizer_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAz0lEQVR4nOzbsQ3CMBRF0UvEGMwAc1FRMgMlFXPBDOwBfSgsyw4mvHvqVE963z+RMxFuIpwBEG5LZ7vT/cWCntfDho6sAOEMgHAGQLj4AD7O1KXP8dHme4QVIJzvAqUHeu/e31aaaVaAcM4AKv36nlA7s6wA4ZwBNLoc94x0vj1oYQUIZwCEMwDCuQfQqPUcHs0KEM4ACGcAhHMPoJHfA1bOAAhnAIQzAML5PYBwBkC46hmw9jtDc1aAcM6A0gP/fnfYChDO/wUIZwUIFx/AGwAA//9tl+5+AAAABklEQVQDABAjHlEUXZr1AAAAAElFTkSuQmCC";
 
 wxIcon ibValueStaticBoxSizer::GetIcon() const
 {
-	return wxIcon(s_staticbox_sizer_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_staticBoxSizer_png, wxSize(16, 16));
 }
 
 wxIcon ibValueStaticBoxSizer::GetIconGroup()
 {
-	return wxIcon(s_staticbox_sizer_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_staticBoxSizer_png, wxSize(16, 16));
 }

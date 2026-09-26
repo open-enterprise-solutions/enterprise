@@ -5,7 +5,7 @@
 
 //base property for "module"
 class BACKEND_API ibPropertyModule : public ibProperty {
-	wxVariantData* CreateVariantData();
+	static wxVariantData* CreateVariantData();
 public:
 
 	wxString GetValueAsString() const;

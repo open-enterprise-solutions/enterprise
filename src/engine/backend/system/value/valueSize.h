@@ -13,7 +13,7 @@ class BACKEND_API ibValueSize : public ibValueStaticMembers<&ibValueSize_BindNam
 	virtual ~ibValueSize() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::SizeToString(m_size);
 	}
 

@@ -259,8 +259,9 @@ public:
 	// modules no longer use this path — they register into the designer-mgr
 	// directly via RuntimeRegisterCommonModule (see project_common_module_designer_cache).
 	// insert_or_assign semantics (a re-run replaces the prior builder + drops
-	// the built value).
-	bool AddCompileModule(const ibValueMetaObject* moduleObject, std::function<ibValue*()> builder);
+	// the built value). The builder answers with the OWNER of what it built — a data object's
+	// creator does (born owned: its module runs inside the build).
+	bool AddCompileModule(const ibValueMetaObject* moduleObject, std::function<ibValue()> builder);
 	bool RemoveCompileModule(const ibValueMetaObject* moduleObject);
 
 	// Mark a deferred entry as dirty — Designer calls this on form-edit
@@ -287,7 +288,7 @@ public:
 private:
 	struct ibCompileEntry {
 		ibValuePtr<ibValue>           m_value;     // built value; null if pending or invalidated
-		std::function<ibValue*()>     m_deferred;  // rebuilder; set for lazy entries (forms / common modules)
+		std::function<ibValue()>      m_deferred;  // rebuilder; set for lazy entries (forms / common modules)
 		bool                          m_constructing = false; // recursion guard for FindCompileModuleRef
 	};
 	mutable std::map<const ibValueMetaObject*, ibCompileEntry> m_cache;
@@ -540,46 +541,23 @@ public:
 	// Out-of-line (metaData.cpp) — ibSchemaSnapshot is only forward-declared here.
 	class ibSchemaSnapshot BuildSchemaSnapshot() const;
 
-	//runtime support:
-	inline ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	inline ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		return CreateObjectRef(className, paParams, lSizeArray);
+	// runtime support — every factory answers with the OWNER, empty when nothing was made (see
+	// ibValue::CreateObject). A caller that needs the type asks the owner: `ibValuePtr<T> v = ...`.
+	virtual ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const;
+	virtual ibValue CreateObject(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
+		const ibClassID& clsid = GetIDObjectFromString(className);
+		return CreateObject(clsid, paParams, lSizeArray);
 	}
 
 	template<typename T, typename... Args>
 	inline ibValue CreateObjectValue(Args&&... args) const {
-		return CreateObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	virtual ibValue* CreateObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const;
-	virtual ibValue* CreateObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		const ibClassID& clsid = GetIDObjectFromString(className);
-		return CreateObjectRef(clsid, paParams, lSizeArray);
-	}
-	template<typename T, typename... Args>
-	inline ibValue* CreateObjectValueRef(Args&&... args) const {
-		return CreateAndConvertObjectValueRef<T>(std::forward<Args>(args)...);
-	}
-
-	template<class T = ibValue>
-	inline T* CreateAndConvertObjectRef(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		return CastValue<T>(CreateObjectRef(clsid, paParams, lSizeArray));
-	}
-	template<class T = ibValue>
-	inline T* CreateAndConvertObjectRef(const wxString& className, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
-		return CastValue<T>(CreateObjectRef(className, paParams, lSizeArray));
-	}
-	template<typename T, typename... Args>
-	inline T* CreateAndConvertObjectValueRef(Args&&... args) const {
-		T* created_value = new T(args...);
-		if (!IsRegisterCtor(created_value->GetClassType())) {
-			wxDELETE(created_value);
-			wxASSERT_MSG(false, "CreateAndConvertObjectValueRef ret null!");
-			return nullptr;
+		T* const created = new T(args...);
+		const ibValue owner(created);
+		if (!IsRegisterCtor(created->GetClassType())) {
+			wxASSERT_MSG(false, "CreateObjectValue: the type is not registered");
+			return wxEmptyValue;
 		}
-		return created_value;
+		return owner;
 	}
 
 	void RegisterCtor(ibCtorMetaValueType* typeCtor);

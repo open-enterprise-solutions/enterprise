@@ -145,7 +145,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 		ibBackendCoreException::Error(_("the line names no account yet: set the account first - it decides which slot the kind \"%s\" goes to"),
 			varKeyValue.GetString());
 
-	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
+	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	long target = wxNOT_FOUND;
 	for (size_t idx = 0; idx < kinds.size(); idx++)
 		if (kinds[idx].second == varKeyValue) { target = static_cast<long>(idx); break; }
@@ -186,26 +186,21 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 
 	m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), varKeyValue);
 
-	// The kind LIMITS: its own `Type` attribute IS a description of types, read straight off the
-	// reference by the id the chart of characteristic types declares for it.
-	ibValue kindType;
-	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
-	ibValueReferenceDataObject* kindRef = nullptr;
-	if (varKeyValue.ConvertToValue(kindRef) && kindRef != nullptr &&
-		kindRef->GetMetaObject()->ConvertToValue(chart) && chart != nullptr)
-		kindRef->GetValueByMetaID(chart->GetDataType()->GetMetaID(), kindType);
-
-	ibValueTypeDescription* limit = nullptr;
-	const bool limited = kindType.ConvertToValue(limit) && limit != nullptr;
-
-	// LOUD, because there is nothing to deduce from silence here: a kind that carries no type
-	// description means the value went in bounded by the column alone, and the kind's own rule was
-	// never applied. In a release build the posting still goes through — refusing would turn a
-	// metadata problem into lost data.
-	wxASSERT_MSG(limited, "account dimension: the kind carries no Type description, the limit is unknown");
-
-	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(),
-		limited ? slot->AdjustValue(varValue, limit->m_typeDesc) : slot->AdjustValue(varValue));
+	// ⭐⭐ THE KIND BRINGS THE VALUE, AND IT IS ASKED TO — one verb, the same one a link by type uses
+	// (ibValue::AdjustValue). This used to read the kind's `Type` here: two casts to find out what
+	// stood in the value, a third to read the description out of it, and the id of an attribute this
+	// file had no business knowing. All of that lives in the chart now, which is where the knowledge
+	// is; the posting says what it wants — "bound this by that" — and the chart does it, qualifiers
+	// and all. A kind that was told no type narrows nothing and says so in its own place.
+	//
+	// What comes back is a value of what the kind allows either way: the same one when it fits — the
+	// reference itself, nothing rebuilt — or the empty value of the type the kind declares when it does
+	// not. So the column is NOT adjusted on top of it: after the kind has spoken there is one option
+	// left, and a second pass would either change nothing or undo what the kind just decided, at the
+	// cost of another copy per dimension of every line (Max, 2026-09-24).
+	ibValue narrowed;
+	varKeyValue.AdjustOutValue(varValue, narrowed);
+	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), narrowed);
 	return true;
 }
 
@@ -253,7 +248,7 @@ void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Clear()
 	}
 }
 
-wxString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetString() const
+ibString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetString() const
 {
 	return m_creditSide ? wxT("AccountDimensionCr") : wxT("AccountDimension");
 }
@@ -270,9 +265,9 @@ namespace {
 // declares them, and two accounts have different ones. That is why they are resolved per call rather
 // than built into a member table: `row.AccountDimensionDr.Contractor` means whatever the account in
 // THIS row says it means.
-std::vector<std::pair<wxString, ibValue>> KindsOfAccount(const ibValue& account)
+std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 {
-	std::vector<std::pair<wxString, ibValue>> kinds;
+	std::vector<std::pair<ibString, ibValue>> kinds;
 
 	ibValueReferenceDataObject* reference = nullptr;
 	if (!account.ConvertToValue(reference) || reference == nullptr)
@@ -326,7 +321,7 @@ std::vector<std::pair<wxString, ibValue>> KindsOfAccount(const ibValue& account)
 
 } // namespace
 
-const std::vector<std::pair<wxString, ibValue>>&
+const std::vector<std::pair<ibString, ibValue>>&
 ibValueRecordSetObjectAccountingRegister::AccountKinds(const ibValue& account) const
 {
 	auto found = m_accountKinds.find(account);
@@ -355,7 +350,7 @@ ibValue ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Line
 	return account;
 }
 
-std::vector<std::pair<wxString, ibValue>>
+std::vector<std::pair<ibString, ibValue>>
 ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::DeclaredKinds() const
 {
 	const ibValue account = LineAccount();
@@ -364,9 +359,9 @@ ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::DeclaredKind
 	return m_recordSet->AccountKinds(account);
 }
 
-long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindProp(const wxString& strPropName) const
+long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindProp(const ibString& strPropName) const
 {
-	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
+	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	for (size_t idx = 0; idx < kinds.size(); idx++)
 		if (stringUtils::CompareString(kinds[idx].first, strPropName))
 			return static_cast<long>(idx);
@@ -378,15 +373,20 @@ long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetNPro
 	return static_cast<long>(DeclaredKinds().size());
 }
 
-wxString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetPropName(const long lPropNum) const
+const ibString& ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetPropName(const long lPropNum) const
 {
-	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
-	return lPropNum >= 0 && lPropNum < static_cast<long>(kinds.size()) ? kinds[lPropNum].first : wxString();
+	// By reference, so from the set's memory of the account (AccountKinds), not DeclaredKinds' copy.
+	static const ibString s_absent;
+	const ibValue account = LineAccount();
+	if (account.IsEmpty() || m_recordSet == nullptr)
+		return s_absent;
+	const std::vector<std::pair<ibString, ibValue>>& kinds = m_recordSet->AccountKinds(account);
+	return lPropNum >= 0 && lPropNum < static_cast<long>(kinds.size()) ? kinds[lPropNum].first : s_absent;
 }
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
+	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	if (lPropNum < 0 || lPropNum >= static_cast<long>(kinds.size()))
 		return false;
 	// ONE ROAD for every write: by name, by key, or a whole map — all of them end in SetAt, which
@@ -396,7 +396,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetProp
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const std::vector<std::pair<wxString, ibValue>> kinds = DeclaredKinds();
+	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
 	if (lPropNum < 0 || lPropNum >= static_cast<long>(kinds.size()))
 		return false;
 	return GetAt(kinds[lPropNum].second, pvarPropVal);

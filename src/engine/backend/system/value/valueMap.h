@@ -18,7 +18,7 @@
 //     answers in one probe.
 //   * Building is O(n). The old member table published every key as a script
 //     property and rebuilt that O(size) surface on each mutation, so filling an
-//     n-key container was O(n^2) (docs/runtime-perf.md §1g). The member table now
+//     n-key container was O(n^2) (docs/private/runtime-perf.md §1g). The member table now
 //     carries only the fixed METHODS and is built once; the keys never touch it.
 class BACKEND_API ibValueContainer : public ibValueDynamicMembers {
 	public:
@@ -53,7 +53,7 @@ private:
 	// keyed by the ibValue itself, so every insert copied the key — and a string
 	// key copies its buffer, an allocation per field. The footprint probe reads
 	// that as ~1 KB per field of a Structure against 40 bytes of data
-	// (docs/runtime-perf.md §9); the key was already in m_entries, one hop away.
+	// (docs/private/runtime-perf.md §9); the key was already in m_entries, one hop away.
 	//
 	// So: bucket by the key's HASH, map to entry positions, and settle equality
 	// against the entry itself — which is exactly what a hash table does on a
@@ -135,9 +135,9 @@ public:
 	// Get/SetPropVal read / write that entry. GetNProps / GetPropName expose the
 	// keys to introspection (debugger, inspectors) without maintaining a live
 	// surface: they read the store on demand.
-	virtual long FindProp(const wxString& strPropName) const override;
+	virtual long FindProp(const ibString& strPropName) const override;
 	virtual long GetNProps() const override { return (long)m_entries.size(); }
-	virtual wxString GetPropName(const long lPropNum) const override;
+	virtual const ibString& GetPropName(const long lPropNum) const override;
 	virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 

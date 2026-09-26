@@ -277,24 +277,25 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 		}
 	};
 
-	// The order, then the cut. Keys of one direction in a row share a clause; a change of direction
-	// opens the next one. `spell` is how an order key is written where it stands.
+	// The order, then the cut. ONE clause, each key followed by its own way when it runs descending
+	// (`OrderBy g.Group, g.Price Descending, g.Name`). `spell` is how an order key is written where it stands.
 	const auto writeOrderAndCut = [&](const std::function<wxString(const wxString&)>& spell) {
-		for (size_t i = 0; i < m_order.size(); ) {
-			const bool descending = m_order[i].m_descending;
-			wxString keys;
-			for (; i < m_order.size() && m_order[i].m_descending == descending; ++i) {
-				const wxString key = wxString(m_order[i].m_expression).Trim(true).Trim(false);
-				if (key.IsEmpty())
-					continue;
-				finished(key);
-				keys +=(keys.IsEmpty() ? wxString() : wxString(wxT(", "))) + spell(key);
-			}
-			if (keys.IsEmpty())
+		wxString keys;
+		size_t descendingKeys = 0;
+		for (const ibLinqBlockOrder& order : m_order) {
+			const wxString key = wxString(order.m_expression).Trim(true).Trim(false);
+			if (key.IsEmpty())
 				continue;
-			lines.push_back(word(KEY_ORDERBY) + wxT(" ") + keys + (descending ? wxT(" ") + word(KEY_DESCENDING) : wxString()));
+			finished(key);
+			keys += (keys.IsEmpty() ? wxString() : wxString(wxT(", "))) + spell(key)
+				+ (order.m_descending ? wxString(wxT(" ")) + word(KEY_DESCENDING) : wxString());
+			if (order.m_descending)
+				++descendingKeys;
+		}
+		if (!keys.IsEmpty()) {
+			lines.push_back(word(KEY_ORDERBY) + wxT(" ") + keys);
 			say(KEY_ORDERBY, true);
-			if (descending)
+			for (size_t d = 0; d < descendingKeys; ++d)
 				say(KEY_DESCENDING, false);
 		}
 		if (!m_skip.IsEmpty()) {
@@ -590,7 +591,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			return -1;   // the name touches its dot: `o.Select` is a name, as the lexer says
 		for (const int key : { KEY_FROM, KEY_JOIN, KEY_IN, KEY_ON, KEY_EQUALS, KEY_WHERE, KEY_GROUP, KEY_BY, KEY_INTO,
 				KEY_ORDERBY, KEY_ASCENDING, KEY_DESCENDING, KEY_SKIP, KEY_TAKE, KEY_SELECT, KEY_DISTINCT })
-			if (stringUtils::CompareString(lex[i].m_valData.GetString(), Word(key)))
+			if (lex[i].m_valData.GetString().IsSameAs(Word(key), false))
 				return key;
 		return -1;
 	};
@@ -598,7 +599,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		return keyAt(i) == key;
 	};
 	const auto name = [&](size_t i) {
-		return i < end && lex[i].m_lexType == IDENTIFIER ? lex[i].m_valData.GetString() : wxString();
+		return i < end && lex[i].m_lexType == IDENTIFIER ? lex[i].m_valData.GetString() : ibString();
 	};
 	const auto opens = [](int key) {
 		switch (key) {
@@ -721,7 +722,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// for anything else, which stays a column written over the group, as it is.
 	const auto groupColumn = [&](const wxString& column, size_t a, size_t b) {
 		const wxString& group = block.m_groupInto;
-		if (b <= a + 2 || !stringUtils::CompareString(name(a), group) || !isDelimiter(a + 1, wxT('.')))
+		if (b <= a + 2 || !name(a).IsSameAs(group, false) || !isDelimiter(a + 1, wxT('.')))
 			return false;
 		const wxString member = name(a + 2);
 		if (stringUtils::CompareString(member, wxT("Key"))) {
@@ -731,7 +732,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			}
 			if (b == a + 5 && isDelimiter(a + 3, wxT('.')))
 				for (ibLinqBlockField& key : block.m_groupKeys)
-					if (stringUtils::CompareString(key.m_name, name(a + 4))) {
+					if (name(a + 4).IsSameAs(key.m_name, false)) {
 						key.m_name = column;   // the key's field and its column are one name
 						return true;
 					}
@@ -745,7 +746,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		total.m_name = column;
 		bool known = false;
 		for (const ibLinqTotal candidate : { ibLinqTotal::Sum, ibLinqTotal::Count, ibLinqTotal::Min, ibLinqTotal::Max, ibLinqTotal::Average })
-			if (stringUtils::CompareString(ibLinqTotalName(candidate), name(a + 4))) {
+			if (name(a + 4).IsSameAs(ibLinqTotalName(candidate), false)) {
 				total.m_function = candidate;
 				known = true;
 			}
@@ -846,15 +847,17 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		}
 		case KEY_ORDERBY: {
 			rowsCut = rowsCut || !grouped;
-			// The direction closes the clause and is the whole clause's.
-			size_t keysEnd = e;
-			bool descending = false;
-			if (e > s + 1 && (isKey(e - 1, KEY_DESCENDING) || isKey(e - 1, KEY_ASCENDING))) {
-				descending = isKey(e - 1, KEY_DESCENDING);
-				keysEnd = e - 1;
+			// Each key may close with its own way: `OrderBy a, b Descending, c`.
+			for (const auto& part : splitAtTop(s + 1, e, wxT(','))) {
+				size_t keyEnd = part.second;
+				bool descending = false;
+				if (part.second > part.first + 1
+					&& (isKey(part.second - 1, KEY_DESCENDING) || isKey(part.second - 1, KEY_ASCENDING))) {
+					descending = isKey(part.second - 1, KEY_DESCENDING);
+					keyEnd = part.second - 1;
+				}
+				block.m_order.push_back({ span(part.first, keyEnd), descending });
 			}
-			for (const auto& part : splitAtTop(s + 1, keysEnd, wxT(',')))
-				block.m_order.push_back({ span(part.first, part.second), descending });
 			break;
 		}
 		case KEY_SKIP:

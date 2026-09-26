@@ -190,14 +190,14 @@ public:
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyModule->GetMetaObject(); }
 
 	//create empty object
-	virtual ibValueRecordDataObjectConstant* CreateRecordDataObjectValue() const;
+	virtual ibValuePtr<ibValueRecordDataObjectConstant> CreateRecordDataObjectValue() const;
 
 	// GenericData's contract. A constant DOES have a manager (ibValueManagerDataObjectConstant), but
 	// it is built by the constant's own type ctor (constantCtor.h) and descends from
 	// ibValueManagerObject rather than from ibValueManagerDataObject — a single global value has no
 	// record-collection surface to offer. Answering nullptr says exactly that; wiring the existing
 	// manager in here would mean promoting it to a base whose methods it cannot honour.
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const override { return nullptr; }
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const override { return nullptr; }
 
 	//support form
 	virtual ibBackendValueForm* GetObjectForm() const;
@@ -281,9 +281,10 @@ protected:
 	};
 public:
 
-	//override copy constructor
+	// Built by ibValueMetaObjectConstant::CreateRecordDataObjectValue, which initialises it once it holds it.
+	// No copy: nobody copied one, and a copy was a second constructor that ran the module unheld.
 	ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject);
-	ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source);
+	ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source) = delete;
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; the surface is
 	// supplied by FillMembers, bound in the ctor.
@@ -331,7 +332,7 @@ public:
 
 	//Get presentation 
 	virtual wxString GetSourceCaption() const {
-		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString();
+		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString().ToWxString();
 	}
 
 	//support source data
@@ -384,7 +385,7 @@ public:
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 protected:
 

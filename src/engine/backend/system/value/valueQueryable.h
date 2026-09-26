@@ -43,7 +43,7 @@
 // the wrapper is OWNED by this value (m_ownedSource) — metaobject sources stay
 // non-owning (the metadata owns them).
 //
-// See docs/query-language-arc.md §23.5 (L4-2) and the naming canon notes.
+// See docs/private/query-language-arc.md §23.5 (L4-2) and the naming canon notes.
 
 #include "backend/compiler/value.h"
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder (accumulated, by value)
@@ -116,7 +116,7 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	// requirement. Returns true when it handled the op; false on anything outside the slice
 	// (the caller then falls to MaterialiseThenRam — the RAM floor / ibValueJoinState,
 	// always correct). Unifies the two LINQ join paths from the queryable side without
-	// removing the RAM fallback. (docs/query-language-arc.md)
+	// removing the RAM fallback. (docs/private/query-language-arc.md)
 	bool JoinPushDown(ibValue& ret, ibValue** args, long n);
 
 public:
@@ -162,7 +162,7 @@ public:
 	virtual bool IsEmpty() const override { return m_queryable == nullptr; }
 
 	// Watch-safe: a DESCRIPTION of the source + folded ops, never the data.
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// The single consumer surface — LINQ ops fold / execute (see the header note).
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
@@ -220,7 +220,7 @@ public:
 	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName);
 
 	virtual bool     IsEmpty()   const override { return m_source == nullptr; }
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// The ONLY surface: Join(innerQueryable, leftKey, rightKey [, op]) and Where(predicate) — both fold
 	// straight into the target query (never a separate builder).

@@ -63,8 +63,8 @@ public:
 
 	// Form support
 	virtual ibBackendValueForm* ActiveWindow() const override;
-	virtual ibBackendValueForm* CreateNewForm(const ibValueMetaObjectFormBase* creator, class ibBackendControlFrame* ownerControl = nullptr,
-		class ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) override;
+	virtual ibBackendValueForm* CreateNewForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, class ibBackendControlFrame* ownerControl = nullptr,
+		class ibSourceDataObject* srcObject = nullptr) override;
 
 	virtual ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame* ownerControl,
 		const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid);

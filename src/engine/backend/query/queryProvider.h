@@ -14,7 +14,7 @@
 // the whole query through THIS interface, passing the accumulated ibDataQuerySpec and
 // never naming a concrete provider or an L2 type. The providers are STATELESS (the spec
 // carries all state), so a queryable hands back a shared static instance.
-// See docs/query-language-arc.md §22.
+// See docs/private/query-language-arc.md §22.
 
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibRenderedPageCache (all L2-free)
 #include "querySelectorTree.h"  // ibSelectorTree — the folded node tree the totals/hierarchy entries return
@@ -87,7 +87,7 @@ public:
 	// target. METADATA-BACKED, so the resolution lives in the ONE provider that owns metadata (the
 	// DB provider: clsid -> GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData);
 	// the computed provider FORWARDS to it, every other provider inherits null. This query-provider
-	// layer names NO metadata — only the signature. (docs/query-language-arc.md §22 dot-walk)
+	// layer names NO metadata — only the signature. (docs/private/query-language-arc.md §22 dot-walk)
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* /*queryable*/,
 	                                                         const ibBackendQueryColumn* /*refColumn*/) const { return nullptr; }
 	// ALL reference targets of a column — N for a COMPOSITE (multi-type) reference, 1 for a single
@@ -147,7 +147,7 @@ struct ibFoldRequest
 //   * a Join / Union of leaves -> co-locate into ONE SQL where all leaves are SQL-able
 //     on one connection, else push down per leaf + materialise the rest + stitch.
 // The door calls THIS, never a concrete provider — so adding multi-source never
-// reshapes the door. (docs/query-language-arc.md §22.1)
+// reshapes the door. (docs/private/query-language-arc.md §22.1)
 // ==========================================================================
 class BACKEND_API ibQueryComposer
 {
@@ -173,7 +173,7 @@ public:
 	// ⭐ The totals fold in isolation: detail ROWS -> subtotal tree, in ONE PASS. It takes a CURSOR
 	// because that is all a fold ever reads — every row once, in arrival order — and taking the whole
 	// materialised detail instead is what made a report's memory a function of the number of ROWS.
-	// Now it is a function of the number of GROUPS (docs/data-composer.md, the acceptance criterion).
+	// Now it is a function of the number of GROUPS (docs/private/data-composer.md, the acceptance criterion).
 	// Pure (no DB) — unit-testable. The snapshot overload is the same call with the table handed over
 	// as a cursor (ibRamTableCursor), for the callers that already hold their rows.
 	static ibSelectorTree    BuildTotalsTree(ibQueryRowCursor& rows,
@@ -245,7 +245,7 @@ public:
 	// cost-based decision with REAL costs (no estimator: the units are materialised
 	// anyway). Empty result = no connected order (the caller keeps the tree order).
 	// Inner joins commute/associate, so any connected order is semantics-preserving.
-	// Pure (no DB) — unit-testable. (docs/temp-db.md §7 — the same size lever)
+	// Pure (no DB) — unit-testable. (docs/private/temp-db.md §7 — the same size lever)
 	static std::vector<size_t> PlanInnerJoinOrder(const std::vector<long>& rowCounts,
 	                                              const std::vector<std::pair<size_t, size_t>>& edges);
 	// Append one UNION branch's rows to `out`: each output column is read from the branch's

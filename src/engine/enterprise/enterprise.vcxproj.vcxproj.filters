@@ -91,11 +91,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\splashLogo.xpm">
-      <Filter>res\xpm</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <Image Include="enterprise.ico">
       <Filter>res</Filter>
     </Image>

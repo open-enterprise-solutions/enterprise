@@ -2,7 +2,7 @@
 
 **OES Enterprise is source-available, not open source.**
 
-Copyright (C) 2022-2026 Maxim Kornienko and Yurii Bulakh.
+Copyright (C) 2022-2026 Open Enterprise Solutions.
 Licensor: Open Enterprise Solutions — <https://github.com/open-enterprise-solutions>
 
 The source is published so that it can be read, studied, built and experimented with.
@@ -13,10 +13,33 @@ change it, run it on your own machine, write configurations for it, teach a cour
 write a thesis about it, port it somewhere, publish what you learned. You owe nobody a
 notification and nobody an explanation. That is what the sources are published for.
 
-**Commercial use requires a separate license from the licensor.** That includes running
-this software — as published, rebuilt, or modified — in a business, using it to provide a
-service, or shipping it inside anything you are paid for. Write to the licensor to obtain
-one.
+**So is evaluation, for a business too.** A company, or an implementer deciding whether to
+build its practice on OES, may install it, build it and run it to make that decision: model
+its own processes, build trial configurations, load test data, show it to its own people. The
+licensor grants this in addition to the noncommercial license below, and it covers exactly
+that: trying the platform before deciding. It does not cover live work — keeping real
+records, serving customers, anything that is paid for. Once the platform carries real
+operations, that is commercial use.
+
+**Commercial use requires a separate license from the licensor, and it is a license for the
+licensor's build.** Commercial use includes running this software in a business, using it to
+provide a service, or shipping it inside anything you are paid for. A commercial license
+covers releases built and published by the licensor, because then the licensor answers for
+the binary that runs a business — and it is the licensor's build that carries the license
+check. How a build made elsewhere was put together, nobody can say, so nobody can answer for
+it. The platform as you build it yourself from these sources — as published or modified — may
+be used for noncommercial and evaluation purposes: to study it, or to decide whether to use
+it, for example. Write to the licensor to obtain a license.
+
+**The platform under your own brand is a license of its own.** An implementer can take the
+platform to its own customers under its own name. It implements, it builds the platform
+itself, and it licenses it to its customers on terms of its own, with its own logo and style;
+and it answers to them for the build it made. The platform stays the licensor's all the same:
+the licensor owns it, develops it and releases its patches, and a brand license moves none of
+that. Whether and when to take a patch is the implementer's call; it may keep its build as it
+is. Features of its own on top of the platform — ones nobody else has, part of what it sells
+besides the brand — are its own: it wrote them. We own the land; what you cook on it is yours.
+The terms are agreed case by case: write to the licensor.
 
 Two cases named outright, because they are what the sources are most likely to be taken for.
 
@@ -34,17 +57,20 @@ session — so what comes away in your hands is usually the platform.)
 
 ## One platform, not a field of variants
 
-There is a reason the commercial side is a licence from us rather than a fee you pay
+There is a reason the commercial side is a license from us rather than a fee you pay
 yourself. A platform is worth what its users can rely on: that a configuration written this
 year still runs next year, that a fix reaches everyone, that there is one thing to learn.
 Fifty private forks, each patched by whoever was paid to patch it, destroy that — and they
 destroy it for the people who paid, not for us.
 
-So a commercial licence is granted on one principle: **what you build ON the platform is
+So a commercial license is granted on one principle: **what you build ON the platform is
 yours, what you change IN the platform comes back to it.** Configurations, extensions,
 integrations, your customers' work — yours entirely, we want no part of them. Changes to the
-engine itself — go upstream, so there stays one platform to have a licence to. If you want
+engine itself — go upstream, so there stays one platform to have a license to. If you want
 to earn from this, you develop this platform. You do not develop a private copy of it.
+
+The brand license above is the one deliberate exception: a variant under its own name, on
+terms agreed case by case, on land that stays ours.
 
 ## And the line that is not being drawn
 

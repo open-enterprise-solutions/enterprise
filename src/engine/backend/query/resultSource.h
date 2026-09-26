@@ -18,12 +18,18 @@ public:
 	// column here too (the DB source reads it straight off the cursor by RawType; a RAM source
 	// has no row-key, so it yields empty). No separate GuidString accessor. (docs §22.4d)
 	virtual ibValue  Value(const ibBackendQueryColumn* col) const = 0;
-	virtual ibValue  Column(const wxString& alias)          const = 0;   // by output name (aggregates)
-	// …or a METADATA-OBJECT column (reference / enum / composite), reconstructed from its field spread
-	// projected under `prefix` (a dot-walk leaf joined as <prefix>_TYPE/_RTRef/_RRRef/…). Reassembles the
-	// value the way a normal metadata column reads — vs the one above, which reads ONE scalar field. Default:
-	// a plain read by the prefix as alias (a RAM backing already holds the reassembled value under that name).
-	virtual ibValue  Column(const wxString& prefix, const ibBackendQueryColumn* /*col*/) const { return Column(prefix); }
+	// ⭐⭐ AN OUTPUT BY ITS NAME — ONE DOOR, AND THE COLUMN SAYS HOW IT WAS PUT THERE. `col` null means the
+	// output is one scalar field (an aggregate, an arithmetic); `col` given means it was projected as that
+	// column's FIELD SPREAD under this name as a prefix (`<name>_TYPE` / `_RTRef` / `_RRRef` / …), because a
+	// reference or an enum cannot ride one field, and the value is reassembled from them.
+	//
+	// 🛑 IT WAS TWO DOORS, AND THE SECOND HAD A DEFAULT — "read it by the prefix as a plain name", which is
+	// true of a backing whose values are already reassembled and FALSE of a cursor's fields. So a source
+	// could implement one and inherit the other, and the inherited answer was silence: the same query read
+	// a value on one road and an empty cell on the other, with nothing anywhere to say which road it took
+	// (measured 2026-09-24, a CASE over a reference). One door, no default, and every backing has to say
+	// what it does about both shapes.
+	virtual ibValue  Column(const wxString& name, const ibBackendQueryColumn* col = nullptr) const = 0;
 	// ⭐ A BACKING THAT ALREADY IS A TABLE hands the table over, to a caller that was about to copy every
 	// row of it cell by cell into a table of its own: the rows are moved out of it. Only before the first
 	// Next(); null — a cursor's answer, and the default — means the rows are read one by one.

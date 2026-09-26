@@ -10,7 +10,7 @@
 // the web client builds the same struct from URL query params
 // (?parent=Documents.Invoice&role=member_access). Same struct, two producers.
 //
-// See docs/syntax-helper-design.md §3.2 for the contract.
+// See docs/private/syntax-helper-design.md §3.2 for the contract.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_RESOLVER_H_

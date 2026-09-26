@@ -88,15 +88,15 @@ bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
 
 #pragma region _form_creator_h_
 
-ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueMetaObjectFormBase* creator,
-	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
+	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject)
 {
-	return CreateAndBuildForm(creator,
-		creator != nullptr ? creator->GetTypeForm() : defaultFormType, ownerControl, srcObject, formGuid);
+	return CreateAndBuildForm(request, creator,
+		creator != nullptr ? creator->GetTypeForm() : defaultFormType, ownerControl, srcObject);
 }
 
-ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
-	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject, const ibUniqueKey& formGuid)
+ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
+	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject)
 {
 	ibBackendValueForm* result = nullptr;
 
@@ -106,7 +106,7 @@ ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueM
 		auto* cc = metaData->GetCompileCache();
 		const bool foundCached = cc && cc->FindCompileModule(creator, result);
 		if (!foundCached) {
-			result = ibBackendValueForm::CreateNewForm(creator, ownerControl, srcObject, formGuid);
+			result = ibBackendValueForm::CreateNewForm(request, creator, ownerControl, srcObject);
 			if (!creator->GetFormData().IsEmpty() && !creator->LoadFormData(result)) {
 				wxDELETE(result);
 				return nullptr;
@@ -117,7 +117,7 @@ ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueM
 		}
 	}
 	else {
-		result = ibBackendValueForm::CreateNewForm(nullptr, ownerControl, srcObject, formGuid);
+		result = ibBackendValueForm::CreateNewForm(request, nullptr, ownerControl, srcObject);
 		result->BuildForm(form_id);
 	}
 
@@ -348,7 +348,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [metaObject, this]() -> ibBackendValueForm* {
 				// Keyed by the METAFORM: this value IS the compile cache's, one per metaform.
 				return metaObject->CreateObjectForm(this);
-			})]() -> ibValue* {
+			})]() -> ibValue {
 			return deferred.Construct();
 			});
 	}
@@ -400,10 +400,10 @@ ibBackendValueForm* ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlF
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
+		ibFormRequest(wxString(), formGuid),
 		this,
 		ownerControl,
-		nullptr,
-		formGuid
+		nullptr
 	);
 }
 
@@ -431,8 +431,8 @@ bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
 		// common form is standalone (no owning GenericData / source object), so it builds through CreateAndBuildForm
 		// directly; the paste RE-HOME is forced by ibValueMetaObject::PasteObject at paste end (mark still live).
 		if (cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [this]() -> ibBackendValueForm* {
-				return ibValueMetaObjectFormBase::CreateAndBuildForm(this, defaultFormType);
-			})]() -> ibValue* {
+				return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), this, defaultFormType);
+			})]() -> ibValue {
 			return deferred.Construct();
 			})) {
 			return ibValueMetaObjectModuleBase::OnAfterRunMetaObject(flags);

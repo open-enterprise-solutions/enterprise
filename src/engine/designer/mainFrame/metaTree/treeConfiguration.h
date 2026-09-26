@@ -103,8 +103,9 @@ public:
 	// Emptying and refilling is what `Loaded` / `Run` mean, and nothing else: those are the stages
 	// where the whole metadata is new, so nothing on screen still stands for anything.
 
-	// A form is asked what kind it is — every tree that shows metadata to a person asks.
-	void AskFormKind(ibValueMetaObject* object);
+	// A form is asked what kind it is — every tree that shows metadata to a person asks. False when the
+	// person refused: the form is not wanted, and it has been taken away again.
+	bool AskFormKind(ibValueMetaObject* object);
 
 	virtual void MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ibValueMetaObject* object);
 

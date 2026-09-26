@@ -137,8 +137,32 @@ public:
 
 	ibVisualHostClient* GetVisualHost() const { return m_visualHost; }
 
+	// ⭐ THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl, which this view
+	// puts as the focus moves; docview-fork.md). When it holds a view of its own (ibValueFrame::GetControlView —
+	// the grid box, the text box), the form hands that view the menu, the toolbar, the commands, activation,
+	// printing, saving and undo, as a view that shows it would.
+#if wxUSE_MENUS
+	virtual wxMenuBar* CreateMenuBar() const override;
+#endif
+	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
+
+	// The active control's view — null when it is a bare control, or there is none.
+	ibView* GetActiveControlView() const;
+
 private:
 	ibVisualHostClient* m_visualHost;
+
+#ifndef OES_USE_WEB
+	// The focus is watched on the view's window, which an EMBEDDED form does not own and which outlives
+	// it — so the watch is taken off in OnClose, before the view lets the window go.
+	void WatchFocus(bool watch);
+	void OnChildFocus(wxChildFocusEvent& event);
+	void OnActiveControlCommand(wxCommandEvent& event);
+	void OnUpdateActiveControlSave(wxUpdateUIEvent& event);
+
+	const ibView* m_shownControlView = nullptr;   // whose chrome is shown now — compared, never followed
+#endif
 };
 
 class FRONTEND_API ibFormVisualCommandProcessor : public wxCommandProcessor {
@@ -170,6 +194,10 @@ public:
 	virtual void Modify(bool modify) override;
 	virtual bool Save() override;
 	virtual bool SaveAs() override { return true; }
+
+	// The facade on the document's side: the undo the manager asks the current document for is the active
+	// control's document's while it has one; the form's own otherwise.
+	virtual wxCommandProcessor* GetCommandProcessor() const override;
 
 #ifdef OES_USE_WEB
 	// No headless dialog: default ibDocument::OnSaveModified pops a

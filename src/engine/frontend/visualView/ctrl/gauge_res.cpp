@@ -1,52 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_gauge_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 18 1",
-	"  c None",
-	"# c #EEFFFF",
-	"X c #FFFFFF",
-	"@ c #12A50C",
-	"* c #EAFFFF",
-	"o c #F9FFFF",
-	"$ c #2EB71E",
-	"& c #2EB71F",
-	": c #6CE147",
-	"> c #6CE148",
-	", c #DEFFFF",
-	"O c #009900",
-	"= c #4DCC33",
-	"+ c #F6FFFF",
-	"- c #E3FFFF",
-	"; c #6BE148",
-	"% c #2EB81F",
-	". c #333366",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	"                ",
-	" .............. ",
-	".XXXXXXXXXXXXoX.",
-	".XOOXOOXOOoOO++.",
-	".X@@X@@+@@+@@+#.",
-	".o$%+$$+$%#&$#*.",
-	".+==#==#==*==--.",
-	".#;:#>;*;>-:;,-.",
-	".*-*--------,,,.",
-	" .............. ",
-	"                ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_gauge_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAwklEQVR4nOzYMW7CQBQA0QHlQCmSJmmg4CCcjINQQAMNFNwIWnCBhYSQYOZ19roa6a+8O0VuilwBkCsAcgVArgDIFQC5AiBXAOQKgFwBkPsavvj5m535YMf9dnL93Agg1x4w9sFht+Gd/f7P7643Asi1B/Cg79Xi5vm0XL90/dkaAeQKgFwBkNMHmAxfDO8DPu0s0H3AQAGQGz0LjJ2n310jgFz/Acg1AsgVALkCIFcA5AqAXAGQKwByBUCuAMjpA1wAAAD//3Vk2zQAAAAGSURBVAMAWGQbOHYxXNsAAAAASUVORK5CYII=";
 
 wxIcon ibValueGauge::GetIcon() const
 {
-	return wxIcon(s_gauge_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_gauge_png, wxSize(16, 16));
 }
 
 wxIcon ibValueGauge::GetIconGroup()
 {
-	return wxIcon(s_gauge_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_gauge_png, wxSize(16, 16));
 }

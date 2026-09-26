@@ -183,7 +183,8 @@ public:
 			"with the SHAPE of every `from ... select ...` in it - and of every `restrict ...` too, "
 			"which is a query that narrows another one: which names it binds and where each "
 			"came from (a source, a `let`, a `join`, a `group ... into`, the restricted row), which "
-			"COLUMNS the answer will have, whether it groups and whether it orders - and, for each "
+			"COLUMNS the answer will have, whether it groups and whether it orders (with `descending`, "
+			"one per ordering key in the order written) - and, for each "
 			"bound name, WHAT IT OFFERS: the fields of the row that name stands for.\n\n"
 			"WHAT IT IS FOR: writing a query against what is actually bound. A name you can see in "
 			"the outline is a name you can write; a field under `offers` is a field you can read off "
@@ -274,8 +275,13 @@ public:
 			if (!outline.m_groupInto.IsEmpty())
 				entry->SetValue(wxT("into"), outline.m_groupInto);
 			entry->AddField(wxT("orders"), ibDataValue::Bool(outline.m_orders));
-			if (outline.m_orders)
-				entry->AddField(wxT("descending"), ibDataValue::Bool(outline.m_orderDescending));
+			if (outline.m_orders) {
+				// One per key, in the order written - each key has its own way.
+				std::vector<ibDataValue> descending;
+				for (const bool down : outline.m_orderKeysDescending)
+					descending.push_back(ibDataValue::Bool(down));
+				entry->AddField(wxT("descending"), ibDataValue::Array(descending));
+			}
 
 			// The query as it was written, and where it sits in the text — so a caller editing one
 			// replaces exactly what it read rather than looking for it again.

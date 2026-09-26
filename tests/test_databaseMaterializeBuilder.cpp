@@ -16,7 +16,7 @@
 // and produces numbers that look plausible until someone reconciles a year of
 // them. None of that surfaces in a smoke test; all of it surfaces here.
 //
-// (docs/register-totals-strategy.md §4/§4a)
+// (docs/private/register-totals-strategy.md §4/§4a)
 // =============================================================================
 
 #include <gtest/gtest.h>

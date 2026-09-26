@@ -371,6 +371,36 @@ void ibControlTextEditor::EnsureSlotMetrics() const
 	m_cachedSlotH = hFromFont > hMin ? hFromFont : hMin;
 }
 
+int ibControlTextEditor::ComputeMinUsableWidth() const
+{
+	int labelW = 0;
+	if (!m_dvcMode) {
+		wxSize label = ComputeLabelBestSize();
+		if (m_labelMinSize.x > 0) label.x = m_labelMinSize.x;
+		labelW = label.x;
+	}
+	const int labelGap = labelW > 0 ? FromDIP(4) : 0;
+	// the frame's own two border pixels, the visible buttons, and a text area of a few characters
+	return labelW + labelGap + 2 + VisibleButtonCount() * BtnSlotWidth() + FromDIP(kMinimumTextWidth);
+}
+
+wxSize ibControlTextEditor::GetMinSize() const
+{
+	wxSize size = wxWindow::GetMinSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
+}
+
+wxSize ibControlTextEditor::GetMaxSize() const
+{
+	// the same floor: a maximum below the minimum would undo it
+	wxSize size = wxWindow::GetMaxSize();
+	if (size.x > 0)
+		size.x = std::max(size.x, ComputeMinUsableWidth());
+	return size;
+}
+
 wxSize ibControlTextEditor::DoGetBestClientSize() const
 {
 	wxSize size = m_text != nullptr ? m_text->GetBestSize() : wxSize(0, 0);

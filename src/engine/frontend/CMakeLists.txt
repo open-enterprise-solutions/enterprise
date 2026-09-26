@@ -43,7 +43,7 @@ add_library(frontend SHARED ${FRONTEND_SOURCES})
 # where this flag is not in effect. Those headers carry `#pragma GCC system_header`
 # instead; that is the only thing that silences a header at its own definition site.
 #
-# docs/wx-fork.md is the inventory of what is forked and why.
+# docs/private/wx-fork.md is the inventory of what is forked and why.
 # ---------------------------------------------------------------------------
 set(FRONTEND_VENDORED_SOURCES ${FRONTEND_SOURCES})
 list(FILTER FRONTEND_VENDORED_SOURCES INCLUDE REGEX "/(uikit|win/ctrls|win/theme)/")

@@ -66,8 +66,26 @@ public:
 
 #pragma endregion
 
+	// The items a platform group shows — a command filed under a DECLARED group is not among them (see below).
 	bool GetInterfaceItemArrayObject(ibInterfaceCommandSection page,
 		std::vector<ibValueMetaObject*>& array) const;
+
+	// …and the items filed under a group the configuration DECLARES — a command that names it in its Group.
+	// Such a command sits in no platform area, so the overload above leaves it out and this one takes it in.
+	bool GetInterfaceItemArrayObject(const class ibValueMetaObjectCommandGroup* group,
+		std::vector<ibValueMetaObject*>& array) const;
+
+	// ⭐ THE SAME QUESTION WITHOUT AN AREA: everything the section shows, once each — its Important, Default,
+	// Create, Report and Service items in that order, then those of the declared groups, an object listed the
+	// first time it appears.
+	//
+	// 🛑 THE FOUR AREAS ARE NOT FOUR DISJOINT LISTS. A catalog is "combined" — it is both a list and a
+	// create — and the overload above answers it for BOTH Default and Create (see there). A page that asks
+	// the four areas one after another into one array therefore holds every catalog TWICE: the section page
+	// of the running application drew each of them twice, under one heading, both leading to the same list.
+	// First appearance wins, so a combined object is the list entry and not a second "create" that opens the
+	// list again.
+	std::vector<ibValueMetaObject*> GetInterfaceItemArrayObject() const;
 
 #pragma region __filter_h__
 

@@ -71,7 +71,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	// LockAndCheckDataVersion compares this against the row's current
 	// version to detect concurrent updates. New objects (no row yet)
 	// leave m_loadedDataVersion empty so the check is skipped on first
-	// Save. See docs/record-locks.md.
+	// Save. See docs/private/record-locks.md.
 	if (succes && !m_newObject)
 		CaptureLoadedDataVersion();
 	return succes;
@@ -118,7 +118,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		// from its physical fields. DataVersion is NOT a single column: its SQL field name is the
 		// COMPOSITE "<fld>_TYPE,<fld>_S" (type tag + string data), so the former raw
 		// GetResultString(that) failed "field not found" — the provider's attribute assembly is the
-		// only correct read. (docs/record-locks.md)
+		// only correct read. (docs/private/record-locks.md)
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr)   // row LOCK + version read is a physical concurrency op, not a user read:
 		 .From(m_metaObject->GetQueryable())   // lock the RAW row regardless of RLS visibility (RLS is enforced by
@@ -129,7 +129,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibDataQueryResult sel = q.Execute(page);
 
 		const bool rowFound = sel.Next();
-		const wxString dbVer = rowFound ? sel.GetValue(dvAttr->GetQueryColumn()).GetString() : wxString();
+		const wxString dbVer = rowFound ? sel.GetValue(dvAttr->GetQueryColumn()).GetString() : ibString();
 
 		// Row disappeared between our load and write — somebody else
 		// committed a DELETE. Treat as a version conflict for UX
@@ -161,7 +161,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	// consistent because the first Write's commit syncs the marker before
 	// the second Write's check runs.
 	//
-	// Into the slot, past Modify — the write's own stamp, as Posted is (ApplyPostedAttributeOnWrite): the
+	// Into the slot, past Modify — the write's own stamp, as Posted is (SetPosted): the
 	// object's flag says whether anybody CHANGED it, and SaveData asks exactly that before writing its lines.
 	if (bump) {
 		const wxString newStamp = ibDataVersion::NewStamp();
@@ -237,18 +237,29 @@ bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 	return true;
 }
 
-void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
+// A write that never became durable leaves the object as it found it - see ibWriteScope (commonObject.h).
+ibValueRecordDataObjectRef::ibWriteScope::~ibWriteScope()
+{
+	if (m_committed)
+		return;
+	m_object.m_newObject = m_wasNew;          // not in the database after all: the next write INSERTs
+	if (!m_hadNumber)
+		m_object.ResetUniqueIdentifier();     // a number this write gave it: its sequence step was rolled back
+}
+
+void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope, ibWriteScope& objectScope,
                                                    ibBackendValueForm* valueForm,
                                                    bool newObject)
 {
 	scope.SafeCommitTransaction();
+	objectScope.Commit();   // the row is durable: whatever follows, the object stays as written
 
 	// The row is durable — NOW advance the in-memory version marker to the
 	// stamp we just committed (LockAndCheckDataVersion wrote it into the
 	// DataVersion attribute before SaveData). This is the ONLY place the
 	// marker moves forward, so a failed/rolled-back write leaves it matching
 	// the unchanged DB row and the next Save retries cleanly instead of
-	// demanding a form reopen. See docs/record-locks.md.
+	// demanding a form reopen. See docs/private/record-locks.md.
 	CaptureLoadedDataVersion();
 
 	// Audit AFTER SafeCommitTransaction — the row is durable. If the

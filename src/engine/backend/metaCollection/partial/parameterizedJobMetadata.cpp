@@ -57,73 +57,73 @@ ibValueMetaObjectFormBase* ibValueMetaObjectParameterizedJob::GetDefaultFormByID
 
 #include "parameterizedJobManager.h"
 
-ibValueManagerDataObject* ibValueMetaObjectParameterizedJob::CreateManagerDataObjectValue() const
+ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectParameterizedJob::CreateManagerDataObjectValue() const
 {
-	return new ibValueManagerDataObjectJob(this);
+	return ibValuePtr<ibValueManagerDataObject>(new ibValueManagerDataObjectJob(this));
 }
 
-ibValueRecordDataObjectHierarchyRef* ibValueMetaObjectParameterizedJob::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectParameterizedJob::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {
 	ibValueRecordDataObjectParameterizedJob* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->FindCompileModule(m_propertyObjectModule->GetMetaObject(), pDataRef))
-			return new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
+			pDataRef = new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
 	}
 	else {
 		pDataRef = new ibValueRecordDataObjectParameterizedJob(this, guid, mode);
 	}
 
-	return pDataRef;
+	return ibValuePtr<ibValueRecordDataObjectHierarchyRef>(pDataRef);
 }
 
-ibSourceDataObject* ibValueMetaObjectParameterizedJob::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
+ibSourcePtr<ibSourceDataObject> ibValueMetaObjectParameterizedJob::CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const
 {
-	switch (metaObject->GetTypeForm())
+	switch (form_id)
 	{
 	case eFormObject:
-		return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 	case eFormFolder:
-		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+		return ibSourcePtr<ibSourceDataObject>(CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 	case eFormList:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn());
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));
 	case eFormSelect:
-		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateHierarchyList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));
 	case eFormFolderSelect:
-		return ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice);
+		return ibSourcePtr<ibSourceDataObject>(ibCreateFolderList(request, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice));
 	}
 
 	return nullptr;
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetObjectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormObject,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM), formGuid);
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormObject,
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 }
 
-ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetFolderForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormFolder,
-		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER), formGuid);
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormFolder,
+		ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 }
 
-ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormList,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()), formGuid);
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormList,
+		ownerControl, ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));
 }
 
-ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormSelect,
-		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormSelect,
+		ownerControl, CreateSourceObject(request.m_create, eFormSelect));
 }
 
-ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibBackendValueForm* ibValueMetaObjectParameterizedJob::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
-	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormFolderSelect,
-		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn(), ibDynamicListView_Choice), formGuid);
+	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormFolderSelect,
+		ownerControl, CreateSourceObject(request.m_create, eFormFolderSelect));
 }
 #pragma endregion
 
@@ -138,7 +138,7 @@ bool ibValueMetaObjectParameterizedJob::OnCreateMetaObject(ibMetaData* metaData,
 
 	// The job's OWN attributes first — they are declared on this leaf, so this leaf is what gives
 	// them their metadata. An attribute that never got it has no factory behind it, and the first
-	// empty object built from this metatype asserts in CreateValueRef.
+	// empty object built from this metatype asserts in CreateValue.
 	if (!(*m_propertyAttributeActive)->OnCreateMetaObject(metaData, flags) ||
 		!(*m_propertyAttributeSchedule)->OnCreateMetaObject(metaData, flags) ||
 		!(*m_propertyAttributeLastRun)->OnCreateMetaObject(metaData, flags) ||
@@ -266,7 +266,7 @@ bool ibValueMetaObjectParameterizedJob::OnAfterRunMetaObject(int flags)
 
 		// The designer builds the compile value and stops — it must not declare a job.
 		return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(),
-			[this]() -> ibValue* { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
+			[this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 	}
 
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))

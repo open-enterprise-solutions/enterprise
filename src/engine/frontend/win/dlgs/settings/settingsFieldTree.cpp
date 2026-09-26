@@ -11,6 +11,9 @@
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
 #include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 
+#include <map>   // what each field name of a composite field may be, united across its targets
+#include <set>   // …and which names have already been put up, so a shared one goes up once
+
 #include <wx/dialog.h>
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
@@ -67,6 +70,57 @@ static int ibSettingsResourceIcon(wxTreeCtrl* tree)
 	return ibSettingsFieldIcon(tree, ibValueMetaObjectResource::GetIconGroup());
 }
 
+// ONE FIELD, APPENDED. Split out of the walk below because a field that several types SHARE is
+// appended once, with a type WIDER than any one of them holds (`declared`) — see ExpandSourceFieldNode.
+// Passing an empty `declared` means "the column's own", which is every ordinary case.
+static wxTreeItemId AppendFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
+	const ibSourceDataObject::ibSourceExplorer* col, const wxString& prefix,
+	const ibMetaData* metaData, const std::function<bool(const wxString&)>& isResource,
+	const wxString& prefixText, const ibTypeDescription& declared = ibTypeDescription())
+{
+	const ibTypeDescription& type = declared.GetClsidCount() > 0 ? declared : col->GetTypeValueDesc();
+
+	ibSourceFieldNode* data = new ibSourceFieldNode();
+	data->m_path     = prefix.IsEmpty() ? col->GetSourceName() : prefix + wxT(".") + col->GetSourceName();
+	const wxString label = col->GetSourceSynonym().IsEmpty() ? col->GetSourceName() : col->GetSourceSynonym();
+	data->m_presentation = prefixText.IsEmpty() ? label : prefixText + wxT(".") + label;
+	data->m_leafId   = static_cast<ibMetaID>(col->GetSourceId());
+	// The field's type as a FILTER sees it — what a value here may be. A condition holds VALUES on
+	// both sides: the right side is adjusted to this, so a declaration that stands for other types
+	// (a characteristic) would adjust every picked value away to empty.
+	data->m_type     = type;
+	// Branches from what a value may BE: a characteristic declares one class no value carries, and
+	// what it walks into is the chart's own references.
+	data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(type.GetClsidList(), metaData);
+	// THE SYNONYM IS WHAT A USER READS. The name is the technical identifier the
+	// PATH is built from (above) — showing it in the picker makes the form speak
+	// in identifiers instead of in the words the configuration author chose.
+	// GetSynonym falls back to the name when there is none, so nothing is blank.
+	// ⭐ WHAT THIS FIELD IS, IN A PICTURE (Max, 2026-08-22: once a field is added to the report's
+	// resources, the settings list must already show that it is one).
+	//
+	// Two answers, in order. Being a RESOURCE is a DECLARATION the composition makes — the host
+	// answers that, since the field itself knows nothing about it. Otherwise the picture is the
+	// COLUMN'S own (a dimension, a register resource and a plain attribute each vend their own),
+	// so nothing here holds a list of kinds and a kind added tomorrow is dressed the day it
+	// registers.
+	const bool resource = isResource && isResource(data->m_path);
+	const int icon = resource ? ibSettingsResourceIcon(tree)
+	                          : ibSettingsFieldIcon(tree, col->GetSourceIcon());
+	const wxTreeItemId item = tree->AppendItem(parent, label, icon, icon, data);
+	if (!data->m_refTypes.empty())
+		tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
+	return item;
+}
+
+// A field this tree can offer at all: a tabular section binds no condition, and a value kept WHOLE
+// (a schedule, a type description) is one BLOB field that SQL compares in no way — a condition on it
+// could never be lowered into the query, so it is not offered rather than offered and then failing.
+static bool ibFieldIsOfferable(const ibSourceDataObject::ibSourceExplorer* col)
+{
+	return col != nullptr && !col->IsTableSection() && ibIsComparableType(col->GetTypeValueDesc());
+}
+
 static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	const ibSourceDataObject::ibSourceExplorer& explorer, const wxString& prefix,
 	const ibMetaData* metaData, const std::function<bool(const wxString&)>& isResource,
@@ -74,43 +128,8 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 {
 	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 		const auto* col = explorer.GetHelper(i);
-		if (col == nullptr || col->IsTableSection())
-			continue;
-		// A value kept WHOLE (a schedule, a type description) is one BLOB field, and SQL compares no
-		// blobs — a condition on it could never be lowered into the query. Not offered, rather than
-		// offered and then failing when the list is read.
-		if (!ibIsComparableType(col->GetTypeValueDesc()))
-			continue;
-		ibSourceFieldNode* data = new ibSourceFieldNode();
-		data->m_path     = prefix.IsEmpty() ? col->GetSourceName() : prefix + wxT(".") + col->GetSourceName();
-		const wxString label = col->GetSourceSynonym().IsEmpty() ? col->GetSourceName() : col->GetSourceSynonym();
-		data->m_presentation = prefixText.IsEmpty() ? label : prefixText + wxT(".") + label;
-		data->m_leafId   = static_cast<ibMetaID>(col->GetSourceId());
-		// The field's type as a FILTER sees it — what a value here may be. A condition holds VALUES on
-		// both sides: the right side is adjusted to this, so a declaration that stands for other types
-		// (a characteristic) would adjust every picked value away to empty.
-		data->m_type     = col->GetTypeValueDesc();
-		// Branches from what a value may BE: a characteristic declares one class no value carries, and
-		// what it walks into is the chart's own references.
-		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetTypeValueDesc().GetClsidList(), metaData);
-		// THE SYNONYM IS WHAT A USER READS. The name is the technical identifier the
-		// PATH is built from (above) — showing it in the picker makes the form speak
-		// in identifiers instead of in the words the configuration author chose.
-		// GetSynonym falls back to the name when there is none, so nothing is blank.
-		// ⭐ WHAT THIS FIELD IS, IN A PICTURE (Max, 2026-08-22: once a field is added to the report's
-		// resources, the settings list must already show that it is one).
-		//
-		// Two answers, in order. Being a RESOURCE is a DECLARATION the composition makes — the host
-		// answers that, since the field itself knows nothing about it. Otherwise the picture is the
-		// COLUMN'S own (a dimension, a register resource and a plain attribute each vend their own),
-		// so nothing here holds a list of kinds and a kind added tomorrow is dressed the day it
-		// registers.
-		const bool resource = isResource && isResource(data->m_path);
-		const int icon = resource ? ibSettingsResourceIcon(tree)
-		                          : ibSettingsFieldIcon(tree, col->GetSourceIcon());
-		const wxTreeItemId item = tree->AppendItem(parent, label, icon, icon, data);
-		if (!data->m_refTypes.empty())
-			tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
+		if (ibFieldIsOfferable(col))
+			AppendFieldNode(tree, parent, col, prefix, metaData, isResource, prefixText);
 	}
 }
 
@@ -128,21 +147,68 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 	// [+] for good and could never be expanded again — the tree simply stopped
 	// unfolding. Now the placeholder only goes once there is something to replace
 	// it with, and a fruitless attempt can be retried.
+	// ⭐⭐ ONE NAME, ONE FIELD — AND ALL THE NAMES THERE ARE. A field several targets share is one field,
+	// and it is COMPOSITE, because that is what it is: a slot typed by four catalogues has one `Ref`, and
+	// that `Ref` may be any of the four (Max, 2026-09-24: "if the fields repeat, then by their meaning
+	// they are composite"). The targets used to be poured in one after another, so the pane showed `Ref`,
+	// `Code`, `Description`, `Parent` once per type, none of them saying whose.
+	//
+	// ⭐ AND WHAT IS SHOWN IS THE UNION, NOT THE INTERSECTION — every name any target has, once: a `Tax
+	// ID` only a counterparty carries is offered beside the `Ref` they all carry. That is what the QUERY
+	// already accepts — `Recorder.Number` is written without saying which document, and it resolves — so
+	// the picker offers exactly what the language will take (Max, 2026-09-24). Narrowed to the
+	// intersection it would hide the fields an author most often wants, and a per-type branch would ask a
+	// question the path does not carry.
+	//
+	// The type of a shared name is the union of what each target declares for it, so the node walks on
+	// into all of them; a name only one target has keeps that target's own type.
 	const size_t before = tree->GetChildrenCount(item, false);
+
+	// The reference is only what VENDS the fields, and nothing is read to make one
+	// (ibReferenceLoad::OnDemand). It is held for as long as its explorer is walked below.
+	struct ibTargetSource {
+		ibValue                                     m_ref;
+		const ibSourceDataObject::ibSourceExplorer* m_explorer = nullptr;
+	};
+	std::vector<ibTargetSource> targets;
 	for (const ibMetaID& target : data->m_refTypes) {
-		// Nothing is read to answer this: what the loop wants is the target's FIELDS — metadata — and
-		// the reference is only the thing that vends them. Creating one reads nothing by default
-		// (ibReferenceLoad::OnDemand), which is why the mode is not stated here.
-		ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
+		ibTargetSource one;
+		one.m_ref = ibValueReferenceDataObject::Create(metaData, target);
 		ibSourceDataObject* refObj = nullptr;
-		if (!refValue.ConvertToValue(refObj) || refObj == nullptr)
+		if (!one.m_ref.ConvertToValue(refObj) || refObj == nullptr)
 			continue;
-		if (const auto* refExplorer = refObj->GetSourceExplorer())
-			// NO DEPTH LIMIT. The tree unfolds LAZILY — a level exists only where the
-			// user opened it — so a self-referencing type cannot run away on its own.
-			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData, isResource,
-				data->m_presentation);
+		one.m_explorer = refObj->GetSourceExplorer();
+		if (one.m_explorer != nullptr)
+			targets.push_back(one);
 	}
+	if (targets.empty())
+		return;
+
+	// WHAT EACH NAME MAY BE, ACROSS THE TARGETS — gathered first, so a name is put up once and already
+	// knows its whole type. Counted by the TECHNICAL name, since that is what the path is built from.
+	std::map<wxString, ibTypeDescription> united;
+	for (const ibTargetSource& one : targets)
+		for (unsigned int i = 0; i < one.m_explorer->GetHelperCount(); ++i) {
+			const auto* col = one.m_explorer->GetHelper(i);
+			if (!ibFieldIsOfferable(col))
+				continue;
+			ibTypeDescription& type = united[col->GetSourceName()];
+			for (const ibClassID& clsid : col->GetTypeValueDesc().GetClsidList())
+				if (!type.ContainType(clsid))
+					type.AppendMetaType(clsid);
+		}
+
+	// …then put up in the order the targets declare them — the first target's list as it reads, then the
+	// names the next target adds, and so on. A name already up is not put up again.
+	std::set<wxString> shown;
+	for (const ibTargetSource& one : targets)
+		for (unsigned int i = 0; i < one.m_explorer->GetHelperCount(); ++i) {
+			const auto* col = one.m_explorer->GetHelper(i);
+			if (!ibFieldIsOfferable(col) || !shown.insert(col->GetSourceName()).second)
+				continue;
+			AppendFieldNode(tree, item, col, data->m_path, metaData, isResource, data->m_presentation,
+				united[col->GetSourceName()]);
+		}
 
 	if (tree->GetChildrenCount(item, false) <= before)
 		return;   // nothing came back — keep the [+] and let the user try again
@@ -223,10 +289,10 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 // Walk a dotted path down the tree, loading each reference on the way, and land the
 // cursor on the leaf. The path is the technical one (that is what a field stores).
-void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const
+wxTreeItemId ibSettingsFieldTree::FindByPath(wxTreeCtrl* tree, const wxString& path) const
 {
 	if (tree == nullptr || path.IsEmpty())
-		return;
+		return wxTreeItemId();
 	wxTreeItemId parent = tree->GetRootItem();
 	wxStringTokenizer parts(path, wxT("."));
 	while (parts.HasMoreTokens() && parent.IsOk()) {
@@ -246,16 +312,20 @@ void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) c
 			child = tree->GetNextChild(parent, cookie);
 		}
 		if (!found.IsOk())
-			return;
-		if (parts.HasMoreTokens()) {
+			return wxTreeItemId();
+		if (parts.HasMoreTokens())
 			ExpandSourceFieldNode(tree, found, GetMetaData(), m_isResource);   // the road continues — load it
-			tree->Expand(found);
-		}
 		parent = found;
 	}
-	if (parent.IsOk() && parent != tree->GetRootItem()) {
-		tree->SelectItem(parent);
-		tree->EnsureVisible(parent);
+	return parent != tree->GetRootItem() ? parent : wxTreeItemId();
+}
+
+void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const
+{
+	const wxTreeItemId found = FindByPath(tree, path);
+	if (found.IsOk()) {
+		tree->SelectItem(found);
+		tree->EnsureVisible(found);   // …which opens every road above it
 	}
 }
 

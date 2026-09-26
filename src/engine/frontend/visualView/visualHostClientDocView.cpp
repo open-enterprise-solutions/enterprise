@@ -6,6 +6,12 @@
 #include <iostream>
 #endif
 
+#include <functional>
+
+#ifndef OES_USE_WEB
+#include "frontend/mainFrame/mainFrame.h"   // mainFrame->ActivateView — rebuilds the chrome
+#endif
+
 static std::set<ibFormVisualDocument*> s_createdDocFormArray = {};
 
 //********************************************************************************************
@@ -141,6 +147,15 @@ bool ibFormVisualDocument::Save()
 	return true;
 }
 
+wxCommandProcessor* ibFormVisualDocument::GetCommandProcessor() const
+{
+	// While the form's active control is a document of its own, the undo is that document's.
+	const ibValueFrame* const control = m_valueForm != nullptr ? m_valueForm->GetActiveControl() : nullptr;
+	if (const ibView* const view = control != nullptr ? control->GetControlView() : nullptr)
+		return view->GetDocument()->GetCommandProcessor();
+	return ibDocument::GetCommandProcessor();
+}
+
 void ibFormVisualDocument::SetDocParent(ibDocument* docParent)
 {
 	// Base's SetDocParent now lives on ibDocument (step-4 collapse); the
@@ -249,7 +264,7 @@ ibValueForm* ibFormVisualDocument::FindFormByControlUniqueKey(const ibUniqueKey&
 					wxASSERT(visualDoc);
 					ibValueForm* valueForm = visualDoc->GetValueForm();
 					wxASSERT(valueForm);
-					ibValueFrame* ownerControl = valueForm->GetOwnerControl();
+					ibControlFrame* ownerControl = valueForm->GetOwnerControl();
 					if (ownerControl != nullptr) return formKey == ownerControl->GetControlGuid();
 					return false;
 				}
@@ -338,6 +353,17 @@ bool ibFormVisualDocument::UpdateFormUniqueKey(const ibUniqueKeyPair& formKey)
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef OES_USE_WEB
+// What a control prints as — ONE answer for both searches below: the view it holds prints it (a grid box
+// prints as the spreadsheet document does, a text box as the text document), and a bare control prints
+// nothing.
+static wxPrintout* CreateControlPrintout(const ibValueFrame* control)
+{
+	ibView* const view = control->GetControlView();
+	return view != nullptr ? view->OnCreatePrintout() : nullptr;
+}
+#endif
+
 wxPrintout* ibFormVisualEditView::OnCreatePrintout()
 {
 #ifdef OES_USE_WEB
@@ -347,16 +373,45 @@ wxPrintout* ibFormVisualEditView::OnCreatePrintout()
 	// PDF" endpoint instead. Until then, no printout.
 	return nullptr;
 #else
-	wxWindow* focusedWindow = wxWindow::FindFocus();
-	while (focusedWindow != nullptr) {
+	ibValueForm* const form = m_visualHost->GetValueForm();
+	if (form == nullptr)
+		return nullptr;
 
-		ibValueFrame* currentFrame = m_visualHost->GetObjectBase(focusedWindow);
-		if (currentFrame != nullptr)
-			return currentFrame->CreatePrintout();
-
-		focusedWindow = focusedWindow->GetParent();
+	// ⭐ THE ACTIVE CONTROL FIRST: the cursor in a table's cell means that table.
+	//
+	// 🛑 It used to be the FOCUSED control only. A field in focus, which prints nothing, ended the search
+	// there, so a report with the cursor in its settings printed nothing at all and said nothing; and in the
+	// preview the focus is not in the form at all (2026-09-22). The active control stays where it was put.
+	if (const ibValueFrame* const control = form->GetActiveControl()) {
+		if (wxPrintout* const printout = CreateControlPrintout(control))
+			return printout;
 	}
 
+	// …AND FAILING THAT, THE ONE THE FORM HAS. A report or a printed form holds a single table, and it
+	// is what Print means wherever the cursor stands. With several, which one is meant is the person's
+	// to say — by putting the cursor in it.
+	wxPrintout* only = nullptr;
+	int printable = 0;
+
+	std::function<void(ibValueFrame*)> walk = [&](ibValueFrame* frame) {
+		for (unsigned int idx = 0; idx < frame->GetChildCount(); idx++) {
+			ibValueFrame* child = frame->GetChild(idx);
+			if (wxPrintout* printout = CreateControlPrintout(child)) {
+				if (printable++ == 0)
+					only = printout;
+				else
+					delete printout;
+			}
+			walk(child);
+		}
+	};
+
+	walk(form);
+
+	if (printable == 1)
+		return only;
+
+	delete only;
 	return nullptr;
 #endif
 }
@@ -376,11 +431,139 @@ bool ibFormVisualEditView::OnCreate(ibDocument* doc, long flags)
 		ibValueForm* const valueForm = (*foundedVisualDoc)->GetValueForm();
 		wxASSERT(valueForm);
 		m_visualHost = new ibVisualHostClient(*foundedVisualDoc, valueForm, m_viewFrame);
-		return m_visualHost->CreateAndUpdateVisualHost();
+		const bool created = m_visualHost->CreateAndUpdateVisualHost();
+#ifndef OES_USE_WEB
+		if (created) {
+			WatchFocus(true);
+			// EVERY command passes by: which ids are the active control's is its view's to say.
+			Bind(wxEVT_MENU, &ibFormVisualEditView::OnActiveControlCommand, this);
+			Bind(wxEVT_UPDATE_UI, &ibFormVisualEditView::OnUpdateActiveControlSave, this, wxID_SAVE);
+			Bind(wxEVT_UPDATE_UI, &ibFormVisualEditView::OnUpdateActiveControlSave, this, wxID_SAVEAS);
+		}
+#endif
+		return created;
 	}
 
 	return ibView::OnCreate(doc, flags);
 }
+
+//********************************************************************************************
+//*                          The facade over the active control                              *
+//********************************************************************************************
+
+ibView* ibFormVisualEditView::GetActiveControlView() const
+{
+	const ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
+	const ibValueFrame* const control = form != nullptr ? form->GetActiveControl() : nullptr;
+	return control != nullptr ? control->GetControlView() : nullptr;
+}
+
+#if wxUSE_MENUS
+wxMenuBar* ibFormVisualEditView::CreateMenuBar() const
+{
+	if (ibView* view = GetActiveControlView())
+		return view->CreateMenuBar();
+	return nullptr;
+}
+#endif
+
+void ibFormVisualEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+{
+	if (ibView* view = GetActiveControlView())
+		view->OnCreateToolbar(toolbar);
+}
+
+void ibFormVisualEditView::OnActivateView(bool activate, ibView* WXUNUSED(activeView), ibView* deactiveView)
+{
+	if (ibView* view = GetActiveControlView())
+		view->OnActivateView(activate, view, deactiveView);
+}
+
+#ifndef OES_USE_WEB
+
+void ibFormVisualEditView::WatchFocus(bool watch)
+{
+	wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
+	if (frame == nullptr)
+		return;
+
+	if (watch)
+		frame->Bind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+	else
+		frame->Unbind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+}
+
+// ⭐ THE ACTIVE CONTROL IS PUT WHERE THE FOCUS GOES — the first control of this form on the way from the
+// focused window up. A focus outside the form (a menu, a toolbar, the preview) leaves it where it was. The
+// chrome is rebuilt only when the view it comes from changes, and after the focus has settled.
+void ibFormVisualEditView::OnChildFocus(wxChildFocusEvent& event)
+{
+	event.Skip();   // the focus goes where it was going; this only watches it
+
+	if (ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr) {
+		wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
+		for (wxWindow* window = wxWindow::FindFocus(); window != nullptr && window != frame; window = window->GetParent()) {
+			if (ibValueFrame* control = m_visualHost->GetObjectBase(window)) {
+				form->SetActiveControl(control);
+				break;
+			}
+		}
+	}
+
+	const ibView* const shown = GetActiveControlView();
+	if (shown == m_shownControlView)
+		return;
+
+	m_shownControlView = shown;
+
+	// The chrome, and the view it now comes from is ACTIVATED, as a document's view is when its tab is —
+	// a grid box shows its sheet's properties in the inspector, as a spreadsheet document does.
+	CallAfter([this]() {
+		if (mainFrame != nullptr && GetFrame() != nullptr) {
+			mainFrame->ActivateView(this, true);
+			OnActivateView(true, this, nullptr);
+		}
+	});
+}
+
+// ⭐ THE FORM IS A FACADE over the view its active control holds. That view answers its own commands, LOCALLY —
+// it hands nothing further up, since up is where the command came from. Save and Save as are asked of the
+// document behind it: the manager would save the FORM's, and activating the control means its document.
+// Anything else goes on its usual way.
+void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
+{
+	ibView* const view = GetActiveControlView();
+	if (view == nullptr) {
+		event.Skip();
+		return;
+	}
+
+	if (event.GetId() == wxID_SAVE) {
+		view->GetDocument()->Save();
+		return;
+	}
+	if (event.GetId() == wxID_SAVEAS) {
+		view->GetDocument()->SaveAs();
+		return;
+	}
+
+	if (!view->ProcessEventLocally(event))
+		event.Skip();
+}
+
+// …and Save and Save as are offered for it: the manager would ask the FORM's document whether there is anything
+// to save, and whether it may be saved as a file.
+void ibFormVisualEditView::OnUpdateActiveControlSave(wxUpdateUIEvent& event)
+{
+	if (GetActiveControlView() != nullptr)
+		event.Enable(true);
+	else
+		event.Skip();
+}
+
+#endif // !OES_USE_WEB
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 void ibFormVisualEditView::OnUpdate(ibView* sender, wxObject* hint)
 {
@@ -424,6 +607,9 @@ bool ibFormVisualEditView::OnClose(bool deleteWindow)
 	//	Activate(false);
 
 #ifndef OES_USE_WEB
+	// The focus watch comes off before the window is let go: an embedded form's window outlives this view.
+	WatchFocus(false);
+
 	// GetFrame() returns a wxWindow (the ibDocChildFrame hosting this
 	// view on desktop). On web the view's "frame" is an ibWebDocChildFrame
 	// living in ibWebFrame's tab vector — its lifetime is managed by

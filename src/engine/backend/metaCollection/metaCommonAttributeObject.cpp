@@ -212,11 +212,18 @@ ibTypeDescription& ibValueMetaObjectCommonAttributeColumn::GetTypeDesc() const
 	return s_emptyTypeDesc;
 }
 
+const ibTranslateString& ibValueMetaObjectCommonAttributeColumn::GetFormat() const
+{
+	if (const ibValueMetaObjectCommonAttribute* const src = GetSource())
+		return src->GetFormat();
+	return ibValueMetaObjectAttributeBase::GetFormat();
+}
+
 bool ibValueMetaObjectCommonAttributeColumn::OnDeleteMetaObject()
 {
 	// THE REFUSAL BELONGS HERE, and putting it one event earlier was a real bug worth
 	// recording: OnBeforeCloseMetaObject is not "before delete", it is the CLOSE phase of
-	// the metadata lifecycle (load / run / save / close, docs/metadata-lifecycle.md). It
+	// the metadata lifecycle (load / run / save / close, docs/private/metadata-lifecycle.md). It
 	// runs for every metaobject when a configuration closes — so refusing there stopped the
 	// configuration from closing at all, and the next RunDatabase asserted on
 	// !IsConfigOpen().

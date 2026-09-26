@@ -13,7 +13,7 @@
 //
 // The report's DEFAULT composer decides what the report IS: the generated form is built from it, so
 // a report that declares one needs no form at all. Several composers = several of them on the form,
-// which is how one report shows four different compositions. (docs/report-engine.md §4b)
+// which is how one report shows four different compositions. (docs/private/report-engine.md §4b)
 //
 // It carries the composition itself — source, query, resources, parameters, structure, variants —
 // through ibValueDataComposition, which already serialises whole (ReadProperty / WriteProperty), so

@@ -1309,12 +1309,12 @@
         "common_lang",
         "linq"
       ],
-      "signature": "orderby <Expression>[, <Expression>...] [ascending|descending]",
-      "description": "Sort clause for a LINQ query. SEVERAL KEYS, comma-separated, in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within each warehouse, by item — the second key is consulted only where the first is equal. Default direction ascending; `descending` written after the last key reverses the whole ordering.",
-      "syntax_block": "orderby <Expression>[, <Expression>...] [ascending|descending]",
+      "signature": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
+      "description": "Sort clause for a LINQ query. SEVERAL KEYS, comma-separated, in the order they decide: `orderby Warehouse, Item` sorts by warehouse and, within each warehouse, by item — the second key is consulted only where the first is equal. Each key has its own direction, written after it; a key that names none runs ascending: `orderby Warehouse, Date descending, Item` sorts by warehouse, within each the latest date first, and within a date by item.",
+      "syntax_block": "orderby <Expression> [ascending|descending][, <Expression> [ascending|descending]...]",
       "parameters": "",
       "return_descr": "",
-      "example": "// by warehouse, then by date within it\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
+      "example": "// by warehouse, and within it the latest first\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "guide.linq",

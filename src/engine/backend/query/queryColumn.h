@@ -20,7 +20,7 @@
 // ibValueMetaObjectAttributeBase::ibMetaAttributeColumn, held by shared_ptr. The reason is
 // ownership: the attribute lives under the runtime's own reference count and this interface is
 // held by std::shared_ptr, and two counts over one object each believe they may destroy it.
-// See docs/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
+// See docs/private/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
 // still meets a plain ibBackendQueryColumn and knows nothing about where it came from.
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
@@ -175,7 +175,7 @@ public:
 //
 // It also retires the question `ibBackendQueryable::ShareColumn` was invented to answer. That asks
 // every SOURCE in turn "did you mint this column, and if so give me its storage"; asking the column
-// itself needs no loop and no knowledge of where it came from. (docs/ownership-authority.md)
+// itself needs no loop and no knowledge of where it came from. (docs/private/ownership-authority.md)
 class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn,
                                          public std::enable_shared_from_this<ibBackendQueryColumn>
 {
@@ -310,18 +310,18 @@ public:
 	// physical fields — is NOT a column method: it is the tier free function ColumnValueFields(col)
 	// over DescribeColumnLayout (columnLayout.h), metadata-free, asked only by the DB provider. The
 	// column stays a pure descriptor; value materialization / binding stays on the queryable.
-	// docs/query-language-arc.md §22.4b)
+	// docs/private/query-language-arc.md §22.4b)
 
 	// (No per-column primary-key flag: a source's uniqueness key is owned by the QUERYABLE —
 	// ibBackendQueryable::GetPrimaryKeyColumns is the ONE authority for both the write UPSERT
 	// match AND the auto-join self-reference key (a record's data-reference); the uuid read keyset
-	// is GetPrimaryKeyColumns. The column stays a pure typed descriptor. docs/query-language-arc.md §22.1)
+	// is GetPrimaryKeyColumns. The column stays a pure typed descriptor. docs/private/query-language-arc.md §22.1)
 
 	// Is this a RAW (direct) physical column — addressed by its concrete field name with NO
 	// metadata translation (no TYPE/_N/_S/_RRRef expansion, no SetValueAttribute decomposition)?
 	// A metadata attribute returns false (it IS translated); ibBackendColumnRawDB returns true. The
 	// provider uses this to decide: bind the value straight (raw) vs decompose it (attribute).
-	// (docs/query-language-arc.md §22)
+	// (docs/private/query-language-arc.md §22)
 	// ⭐⭐ WHAT KIND OF COLUMN THIS IS — one question, one answer.
 	//
 	// It used to be a bit (`IsRawColumn`), and a second bit was about to be added beside it. Two bits

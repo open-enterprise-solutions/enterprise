@@ -50,11 +50,41 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 	// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual bind.)
 }
 
-ibValueModelTable::ibValueModelTable(const ibValueModelTable& valueTable) : ibValueModelStorage(),
-m_tableColumnCollection(valueTable.m_tableColumnCollection)
+// ⭐ A COPY IS THE SAME COLUMNS AND THE SAME ROWS, AND NOTHING SHARED. It was `new ibValueModelTable(*this)`,
+// and that copy constructor built no rows and took the original's column collection itself: `t.Clone()`
+// came back EMPTY, and a column added to the copy was added to the original (read 2026-09-21; no test
+// had asked). The columns are declared again - name, type, caption, width, index - and each row's
+// cells are carried across by the column they stand in; the values themselves are copied as values, so a
+// reference in a cell is the same reference in both.
+ibValuePtr<ibValueModelTable> ibValueModelTable::Clone() const
 {
-	m_members.Bind(this, &ibValueModelTable::FillMembers);
-	// (RAM composer auto-bound in ibValueModelStorage's ctor.)
+	ibValuePtr<ibValueModelTable> copy(new ibValueModelTable());
+
+	std::vector<std::pair<ibMetaID, ibMetaID>> columns;   // a column here -> the same column there
+	for (unsigned int i = 0; i < m_tableColumnCollection->GetColumnCount(); ++i) {
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const from = m_tableColumnCollection->GetColumnInfo(i);
+		if (from == nullptr)
+			continue;
+		ibValueModelColumnCollection::ibValueModelColumnInfo* const made = copy->m_tableColumnCollection->AddColumn(
+			from->GetColumnName(), from->GetColumnType(), from->GetColumnCaption(), from->GetColumnWidth());
+		if (made == nullptr)
+			continue;
+		made->SetColumnIndexed(from->IsColumnIndexed());
+		columns.emplace_back(static_cast<ibMetaID>(from->GetColumnID()), static_cast<ibMetaID>(made->GetColumnID()));
+	}
+
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const from = GetViewData<ibComposerNode>(GetItem(row));
+		if (from == nullptr)
+			continue;
+		const long at = copy->AppendRow();
+		ibComposerNode* const to = copy->GetViewData<ibComposerNode>(copy->GetItem(at));
+		if (to == nullptr)
+			continue;
+		for (const std::pair<ibMetaID, ibMetaID>& column : columns)
+			to->SetValue(column.second, from->GetTableValue(column.first));
+	}
+	return copy;
 }
 
 ibValueModelTable::~ibValueModelTable()
@@ -86,6 +116,8 @@ void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 	helper.AppendFunc(wxT("Sort"), 2, wxT("Sort(column : string, ascending = true : boolean)"));
 	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
+	helper.AppendFunc(wxT("Total"), 1, wxT("Total(column : string) : number"));
+	helper.AppendFunc(wxT("FindRows"), 1, wxT("FindRows(filter : structure) : array"));
 
 	helper.AppendProp(wxT("Columns"));
 }
@@ -165,11 +197,30 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enSort: {
 		// ONE MEANING OF "SORT" for this table: the script's Sort() re-seats the rows, exactly as the two
 		// order commands do. A script that sorts a table and then walks it must walk it sorted.
+		//
+		// 🛑 ONE COLUMN. An order over several keys is a query's to say - `from r in t orderby r.A, r.B` - and not
+		// a second, smaller query language parsed out of a string argument here.
 		ibDataViewColumnItem column;
 		column.m_name = paParams[0]->GetString();
 		if (m_tableColumnCollection->GetColumnByName(column.m_name) == nullptr)
-			return false;
-		SortValue(column, lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
+			ibBackendCoreException::Error(_("Table column '%s' not found"), column.m_name);
+		// (⚠ It read paParams[1] whenever there was ANY argument - `Sort("A")` looked one past what was given.)
+		SortValue(column, lSizeArray > 1 ? paParams[1]->GetBoolean() : true);
+		return true;
+	}
+
+	// ⭐⭐ THE TOTAL OF A COLUMN and THE ROWS THAT MATCH - see the two methods below.
+	case enTotal:
+		pvarRetValue = TotalOf(paParams[0]->GetString());
+		return true;
+
+	case enFindRows: {
+		// ConvertToValue, not ConvertToType: it CHECKS what the argument is (a string handed in by mistake is
+		// answered with the message below), where the raw cast has no way to say "not one of these".
+		ibValueContainer* filter = nullptr;
+		if (paParams[0] == nullptr || !paParams[0]->ConvertToValue(filter))
+			ibBackendCoreException::Error(_("FindRows expects a Structure of column = value"));
+		pvarRetValue = FindRows(*filter);
 		return true;
 	}
 	}
@@ -380,7 +431,13 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 			// Left as it is on purpose: changing the default would change what every existing table
 			// holds. Say it in the signature instead, so the caller passes a type when they mean a
 			// number — `AddColumn("N", New TypeDescription("Number"))` compares as a number.
-			pvarRetValue = AddColumn(paParams[0]->GetString(), ibTypeDescription(g_valueStringCLSID), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
+			//
+			// ⚠ AND A STRING OF ANY LENGTH (Unqualified). The bare string type carried the designer's
+			// default of ten characters, so a cell kept the first ten of whatever was written into it
+			// (measured 2026-09-21).
+			pvarRetValue = AddColumn(paParams[0]->GetString(),
+				ibTypeDescription(g_valueStringCLSID, ibValueTypeDescription::Unqualified()),
+				paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
 		return true;
 	}
 	}
@@ -618,6 +675,88 @@ void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascen
 	}
 
 	NotifyReset();
+}
+
+ibValue ibValueModelTable::TotalOf(const wxString& column) const
+{
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+		m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(column) : nullptr;
+	if (colInfo == nullptr)
+		ibBackendCoreException::Error(_("Table column '%s' not found"), column);
+
+	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+	ibNumber total(0);
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
+		if (node == nullptr)
+			continue;
+		const ibValue cell = node->GetTableValue(id);
+		if (cell.GetType() == ibValueTypes::TYPE_NUMBER) {
+			total += cell.GetNumber();
+			continue;
+		}
+		if (cell.IsEmpty())
+			continue;   // nothing there adds nothing
+		ibBackendCoreException::Error(_("Table column '%s' holds a value that is not a number (row %d); a column added without a type holds text - declare it as a Number"),
+			column, static_cast<int>(row + 1));
+	}
+	return ibValue(total);
+}
+
+ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
+{
+	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
+	// "no rows" would be the wrong way to say it.
+	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
+	std::vector<Term> terms;
+	for (const std::pair<ibValue, ibValue>& entry : filter.Entries()) {
+		const wxString name = entry.first.GetString();
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
+		if (colInfo == nullptr)
+			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
+		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.second, colInfo->IsColumnIndexed() });
+	}
+
+	// Born held (development.md, "A new value is born owned").
+	ibValuePtr<ibValueArray> found(new ibValueArray());
+
+	// A row is taken when EVERY term matches it.
+	const auto take = [&](const ibDataViewItem& item) {
+		ibComposerNode* const node = GetViewData<ibComposerNode>(item);
+		if (node == nullptr)
+			return;
+		for (const Term& term : terms)
+			if (!(term.m_value == node->GetTableValue(term.m_id)))
+				return;
+		ibValue line;
+		line = GetRowAt(item);
+		found->Add(line);
+	};
+
+	// ⭐ THE INDEX ANSWERS FIRST WHEN A TERM'S COLUMN ASKED FOR ONE, as it does for Find (FindRowValue): that
+	// term's rows - already in row order - are the only candidates, and the other terms only thin them. With
+	// no indexed column in the filter every row is a candidate.
+	const Term* byIndex = nullptr;
+	for (const Term& term : terms) {
+		if (term.m_indexed) {
+			byIndex = &term;
+			break;
+		}
+	}
+
+	if (byIndex != nullptr) {
+		const std::vector<ibDataViewItem>* const rows =
+			GetRowsByValue(static_cast<unsigned int>(byIndex->m_id), byIndex->m_value);
+		if (rows != nullptr)
+			for (const ibDataViewItem& item : *rows)
+				take(item);
+	}
+	else {
+		for (long row = 0; row < GetRowCount(); ++row)
+			take(GetItem(row));
+	}
+	return found;
 }
 
 void ibValueModelTable::EditRow(const ibDataViewItem& row)

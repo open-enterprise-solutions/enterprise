@@ -353,8 +353,13 @@ void ibSpreadsheetEditView::OnMenuEvent(wxCommandEvent& event)
 		// time (OnCreateToolbar / CreateMenuBar) but no wxUpdateUIEvent
 		// handlers exist to resync them on mode flip. Force a rebuild through
 		// mainFrame->ActivateView so both come back in the correct state.
-		if (mainFrame != nullptr)
-			mainFrame->ActivateView(this, true);
+		//
+		// The chrome on show is rebuilt — the manager's current view: this one for a spreadsheet document,
+		// the form's view that is a facade over this one for a grid box.
+		if (mainFrame != nullptr) {
+			ibView* const shown = docManager != nullptr ? docManager->GetCurrentView() : nullptr;
+			mainFrame->ActivateView(shown != nullptr ? shown : this, true);
+		}
 		break;
 	}
 
@@ -390,7 +395,7 @@ bool ibSpreadsheetFileDocument::OnCreate(const wxString& path, long flags)
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 
-	return GetGridCtrl()->AssociatibDocument(m_spreadSheetDocument);
+	return GetGridCtrl()->AssociateDocument(m_spreadSheetDocument);
 }
 
 // Since text windows have their own method for saving to/loading from files,
@@ -510,7 +515,58 @@ bool ibSpreadsheetEditDocument::SaveAs()
 bool ibSpreadsheetEditDocument::DoSaveDocument(const wxString& filename)
 {
 	wxObjectDataPtr<ibBackendSpreadsheetObject>spreadSheetDocument;
-	if (!GetGridCtrl()->GetActivibDocument(spreadSheetDocument))
+	if (!GetGridCtrl()->GetActiveDocument(spreadSheetDocument))
 		return false;
 	return spreadSheetDocument->SaveToFile(filename);
+}
+
+// ----------------------------------------------------------------------------
+// ibSpreadsheetGridBoxDocument / View: the document a form's grid box holds, and its view
+// ----------------------------------------------------------------------------
+
+wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetGridBoxDocument, ibSpreadsheetFileDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetGridBoxView, ibSpreadsheetEditView);
+
+ibSpreadsheetGridBoxDocument::ibSpreadsheetGridBoxDocument() : ibSpreadsheetFileDocument()
+{
+	// The spreadsheet document's template: Save as reads the default extension from it.
+	if (docManager != nullptr)
+		SetDocumentTemplate(docManager->FindTemplateByDocClassInfo(CLASSINFO(ibSpreadsheetFileDocument)));
+	SetTitle(_("Spreadsheet document"));
+}
+
+void ibSpreadsheetGridBoxDocument::SetSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument)
+{
+	m_spreadSheetDocument = spreadSheetDocument;
+
+	if (ibGridEditor* const editor = GetGridCtrl())
+		editor->LoadDocument(m_spreadSheetDocument);
+}
+
+bool ibSpreadsheetGridBoxView::OnCreate(ibDocument* doc, long flags)
+{
+	if (!ibSpreadsheetEditView::OnCreate(doc, flags))
+		return false;
+
+	// The document's undo drives this editor, so it is made with it — as the manager makes a document's —
+	// and dropped in OnClose.
+	delete doc->GetCommandProcessor();
+	doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
+
+	return true;
+}
+
+bool ibSpreadsheetGridBoxView::OnClose(bool WXUNUSED(deleteWindow))
+{
+	// Not the base's close, which destroys the editor and closes the document: the editor is destroyed by
+	// the visual host right after the box's Cleanup, and the document stays with the box. The view only lets
+	// go of the editor, its frame and the undo over them.
+	if (ibDocument* const doc = GetDocument()) {
+		delete doc->GetCommandProcessor();
+		doc->SetCommandProcessor(nullptr);
+	}
+
+	m_gridEditor = nullptr;
+	SetFrame(nullptr);
+	return true;
 }

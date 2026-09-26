@@ -1,5 +1,5 @@
 // Lifecycle / leak-safety tests for the L2 query cursor
-// (docs/query-language-arc.md §12 line 1, §13).
+// (docs/private/query-language-arc.md §12 line 1, §13).
 //
 // Proves the core RAII guarantee WITHOUT the connection pool or appData: an
 // ibQueryResult releases its statement + result set in its destructor — on the

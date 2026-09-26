@@ -14,7 +14,7 @@
 //	This mirrors the L3 schema split one level up: the Describe-walk is the
 //	ContributeTables analogue, the ibDataNode tree is the ibSchemaSnapshot
 //	analogue, and the providers are the consumers (ibStructureBuilder /
-//	ibDataMover analogues). See docs/schema-first-metadata.md.
+//	ibDataMover analogues). See docs/private/schema-first-metadata.md.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <vector>
@@ -118,6 +118,10 @@ template<class T> struct ibDataCodec;
 template<> struct ibDataCodec<wxString> {
 	static ibDataValue To(const wxString& v) { return ibDataValue::String(v); }
 	static wxString    From(const ibDataValue& v) { return v.AsString(); }
+};
+template<> struct ibDataCodec<ibString> {         // the engine's own string — the same String scalar
+	static ibDataValue To(const ibString& v) { return ibDataValue::String(v); }
+	static ibString    From(const ibDataValue& v) { return v.AsString(); }
 };
 template<> struct ibDataCodec<bool> {
 	static ibDataValue To(bool v) { return ibDataValue::Bool(v); }

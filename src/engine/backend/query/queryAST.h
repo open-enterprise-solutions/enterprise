@@ -15,7 +15,7 @@
 // the lowering realizes the subset the L3 door supports and throws a clear
 // "unsupported" otherwise — keeping the surface honest without bloating the door.
 //
-// See docs/query-language-arc.md §14 / §23.
+// See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/compiler/value.h"   // ibValue
 #include "queryKeywords.h"            // ibQueryKeyword (aggregate func tag)
@@ -390,7 +390,7 @@ struct ibQueryTotalAggregate
 	// A branch QUALIFIES the level (`ByCharacteristic.Characteristic`) where two branches carry
 	// levels of the same name — the role a table name plays before a column. A branch alone is not
 	// an area: `SPLIT` does not narrow the rows, so "the total over a branch" is the total of the
-	// node it hangs from. (docs/query-language-arc.md §27)
+	// node it hangs from. (docs/private/query-language-arc.md §27)
 	wxString          m_scope;
 };
 
@@ -442,7 +442,7 @@ struct ibQuerySelect
 	// outright, the read yields nothing for that source instead of raising ibBackendAccessException.
 	// DELIBERATELY not the default: a refusal is normally TOLD, never mimed as an empty selection, and
 	// only the author of a list / a choice form / a composite-type report knows the quiet form is honest
-	// here. (docs/query-constructor.md §5 — ALLOWED.)
+	// here. (docs/private/query-constructor.md §5 — ALLOWED.)
 	bool                           m_allowed = false;
 	// FOR UPDATE — this SELECT does not merely read, it HOLDS the rows it returned until the transaction
 	// ends. Rendered by the driver dialect (m_rowLockSuffix: FOR UPDATE / WITH LOCK); reaches it as
@@ -479,7 +479,7 @@ struct ibQuerySelect
 	// TOTALS — hierarchical subtotals (report-style "TOTALS … BY …"). When m_hasTotals,
 	// the result is a TREE (door SelectTotals): m_totalsAggregates roll IN-PLACE at
 	// every level, m_totalsBy are the dimension levels in order. Distinct from the
-	// flat GROUP BY above. (docs/query-language-arc.md §22.1b)
+	// flat GROUP BY above. (docs/private/query-language-arc.md §22.1b)
 	bool                           m_hasTotals = false;
 	std::vector<ibQueryTotalAggregate> m_totalsAggregates;     // SUM(x) [AS name], MAX(y), …
 	std::vector<ibQueryTotalDim>   m_totalsBy;              // dimension levels (in order)
@@ -520,7 +520,7 @@ using ibQuerySelectPtr = std::shared_ptr<ibQuerySelect>;
 
 // ==========================================================================
 // A PACKAGE — several statements written together, sent in ONE trip and answered by an ARRAY of
-// results addressed by position (docs/query-constructor.md §5 — query batch). Three properties make
+// results addressed by position (docs/private/query-constructor.md §5 — query batch). Three properties make
 // it more than a transport saving:
 //
 //   * statements run IN WRITTEN ORDER;

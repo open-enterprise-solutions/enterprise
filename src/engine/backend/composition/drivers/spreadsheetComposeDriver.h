@@ -21,7 +21,7 @@
 // and the second telling drifted: an all-empty row writes no cell, the cursor
 // and the document disagreed by one, and every fold marker sat a line off.
 //
-// WHAT THE REPORT LOOKS LIKE (see docs/report-engine.md §4d):
+// WHAT THE REPORT LOOKS LIKE (see docs/private/report-engine.md §4d):
 //   * DIMENSIONS stack into ONE column, indented per level;
 //   * MEASURES take a column each, numbers right-aligned;
 //   * a grouping row is tinted per level and bold;
@@ -33,6 +33,7 @@
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/backend_spreadsheet.h"
+#include "backend/formatString.h"   // how a column writes its figures — see m_formats
 
 #include "backend/rowValues.h"   // a cross row's cells — sparse, column key index -> figures
 
@@ -133,6 +134,21 @@ private:
 	std::vector<bool>           m_shown;
 	wxString ColumnPath(size_t column) const {
 		return column < m_paths.size() ? m_paths[column] : wxString();
+	}
+
+	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (GetFormatFromTypeDesc), taken beside
+	// the titles: as many digits after the point as the column keeps, so a sum of kopecks reads `1500.00`
+	// and not `1500`. No codes where the type states nothing — an average, a product — and the value's own
+	// text is written. Nothing is cut before this: the figure travels whole to here.
+	//
+	// ⭐ …AND A REPORT WRITES NOTHING WHERE THERE IS NOTHING: a zero and an empty date are an empty cell
+	// unless the format says how to write them (NZ, DE). A column of amounts reads as the rows that HAVE an
+	// amount, not as a wall of zeros (Max, 2026-09-26). Set once per column in OnOutputBegin.
+	std::vector<ibFormatString> m_formats;
+	wxString ColumnText(size_t column, const ibValue& value) const {
+		if (column < m_formats.size())
+			return m_formats[column].Apply(value);
+		return value.GetString();
 	}
 
 	// ⭐⭐ WHAT A CELL WAS COMPOSED FROM, PACKED WHERE IT IS WRITTEN. The value a figure shows and
@@ -266,6 +282,8 @@ private:
 	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
 	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
 	void WriteCrossTable();
+	// What one level of a column key reads as in a header cell — the key of dimension level `dimLevel`.
+	wxString HeadingText(const std::vector<ibValue>& values, int dimLevel) const;
 	// THE COLUMNS IN PRINTING ORDER — the keys as they came, with each upper heading's subtotal
 	// inserted where that heading ends. Built once per table, because the header and every row have
 	// to agree about which column is which.

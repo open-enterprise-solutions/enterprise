@@ -809,17 +809,15 @@ void ibValueReferenceDataObject::ShowValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
-		ibValueRecordDataObject* objValue = nullptr;
-		if (metaObject != nullptr && m_objGuid.isValid())
-			objValue = metaObject->CreateObjectValue(m_objGuid);
-		else
-			objValue = metaObject->CreateObjectValue();
+		const ibValuePtr<ibValueRecordDataObjectRef> objValue = metaObject != nullptr && m_objGuid.isValid()
+			? metaObject->CreateObjectValue(m_objGuid)
+			: metaObject->CreateObjectValue();
 		if (objValue != nullptr)
 			objValue->ShowFormValue();
 	}
 }
 
-ibValueRecordDataObjectRef* ibValueReferenceDataObject::GetObject() const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueReferenceDataObject::GetObject() const
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
@@ -872,7 +870,7 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 	return &m_sourceExplorer;
 }
 
-wxString ibValueReferenceDataObject::GetString() const
+ibString ibValueReferenceDataObject::GetString() const
 {
 	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
 	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
@@ -917,6 +915,25 @@ wxString ibValueReferenceDataObject::GetClassName() const
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 	wxASSERT(clsFactory);
 	return clsFactory->GetClassName();
+}
+
+// ⭐⭐ A REFERENCE PASSES THE VERB ON, and that is the whole of its part. It holds the two things the
+// answer needs — the metaobject that GOVERNS it and the element it STANDS FOR — so it hands both over
+// and gives back whatever comes. It does not know what narrows a value, which attribute carries a type,
+// or that such a thing as a type description exists.
+//
+// 🛑 AND WHATEVER COMES BACK IS THE ANSWER — there is no second try here. The governor's `false` means
+// "the value did not fit", and it arrives WITH the narrowed value in `out`; reading it as "not mine" and
+// asking somebody else overwrote a correct empty goods reference with an undefined value, which is a
+// subconto quietly losing its type (measured 2026-09-24 on the ledger base). A metaobject that declares
+// no limit answers by its own class in its own place (genericData.h), so every road is already covered
+// before the question reaches here.
+bool ibValueReferenceDataObject::AdjustOutValue(const ibValue& varValue, ibValue& out) const
+{
+	const ibValueMetaObjectGenericData* metaObject = GetSourceMetaObject();
+	return metaObject != nullptr
+		? metaObject->AdjustOutValue(*this, varValue, out)
+		: ibValue::AdjustOutValue(varValue, out);
 }
 
 //****************************************************************************
@@ -1003,6 +1020,9 @@ bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPr
 		if (lPropAlias == eTable && GetValueByMetaID(id, pvarPropVal)) {
 			ibValueTabularSectionDataObjectRef* tabularSection = nullptr;
 			if (pvarPropVal.ConvertToValue(tabularSection)) {
+				// ONCE, WHILE THE READ IS STILL PENDING — the flag says whether the rows are here yet, and
+				// LoadData clears it. Reading again would begin by CLEARING the model and detach every row
+				// already handed out; see the note on IsReadAfter.
 				if (tabularSection->IsReadAfter()) {
 					if (!tabularSection->LoadData(m_objGuid, true)) {
 						pvarPropVal.Reset();

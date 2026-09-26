@@ -92,6 +92,9 @@ public:
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
 			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
+			virtual const ibFormatString& GetColumnFormat() const {
+				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+			}
 
 			ibValueTabularSectionColumnInfo();
 			ibValueTabularSectionColumnInfo(ibValueMetaObjectAttributeBase* attribute);
@@ -145,7 +148,7 @@ public:
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
-		virtual wxString GetString() const;
+		virtual ibString GetString() const;
 
 		friend class ibValueTabularSectionDataObjectBase;
 	private:
@@ -271,7 +274,7 @@ public:
 	virtual bool DeleteData() { return true; }
 
 	virtual bool LoadDataFromTable(ibValueModel* srcTable);
-	virtual ibValueModel* SaveDataToTable() const;
+	virtual ibValuePtr<ibValueModel> SaveDataToTable() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -287,7 +290,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 	// Iterator runtime path lives on ibValueModel (cursor over Get*Fetch
 	// → BuildVisibleView for filter+sort consistency with the GUI).
@@ -322,6 +325,13 @@ class BACKEND_API ibValueTabularSectionDataObject : public ibValueTabularSection
 class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSectionDataObjectBase {
 	public:
 
+	// ⭐⭐ A READ IS STILL PENDING — there are rows in the database that have not been fetched into this
+	// section yet. True from birth for an EXISTING object (a new one has nothing to read), true again
+	// when a load could not run, and false once the rows are here. Whoever hands the section out reads on
+	// it, exactly once (reference.cpp, GetPropVal).
+	//
+	// ⚠ ASKED ONCE FOR A REASON: LoadData begins by CLEARING the model, and a cleared model detaches
+	// every row already handed out — including the row a `foreach` is standing on.
 	bool IsReadAfter() const { return m_readAfter; }
 
 	ibValueTabularSectionDataObjectRef();

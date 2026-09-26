@@ -24,6 +24,7 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaCommonModuleCLSID,     wxTRANSLATE("Common modules"),     ibMetaGroupBand::Common },
 	{ g_metaCommonFormCLSID,       wxTRANSLATE("Common forms"),       ibMetaGroupBand::Common },
 	{ g_metaCommonCommandCLSID,    wxTRANSLATE("Common commands"),    ibMetaGroupBand::Common },
+	{ g_metaCommandGroupCLSID,     wxTRANSLATE("Command groups"),     ibMetaGroupBand::Common },
 	{ g_metaCommonTemplateCLSID,   wxTRANSLATE("Common templates"),   ibMetaGroupBand::Common },
 	// The jobs branch holds the parameterized ones; the predefined sit in a sub-branch of it, so
 	// they are declared right after it.

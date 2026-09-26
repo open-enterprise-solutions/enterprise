@@ -257,7 +257,17 @@ public:
 	// are what a queryable points at, so they are API the moment a configuration is applied.
 	wxString GetBalanceViewName() const            { return GetPhysicalTableName() + wxT("_Balance"); }
 	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
+	// Whether the surface HAS a movement arm — the recorder and the line number a movement is told apart by.
+	// Asked once, by the schema that declares the arm and by every reading that cuts against it.
+	bool HasMovementArm() const { return HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr; }
 	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
+
+	// ⭐⭐ THE ROWS AS THEY STAND — the totals and the movements as two relations, for a reading that folds
+	// them itself (ibMaterializeReadSpec::m_storedRows / m_movedRows). Rendered from the very declaration
+	// ContributeTables makes — the turnovers view's columns over the two tables — so nothing but those two
+	// tables has to exist in the base, and a base built before this reading answers it as it stands.
+	// `moved` is null when there is no movement arm. False when no totals are declared at all.
+	BACKEND_API bool GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const;
 
 	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
 	// parameter (the caller asks for daily / weekly / monthly rows, or for none at all and gets the
@@ -353,7 +363,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetListForm(const wxString& strFormName = wxEmptyString, ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullUniqueKey) const;
+	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//prepare menu for item
@@ -402,13 +412,13 @@ protected:
 	}
 
 	//create manager
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
 
 	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const;
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 
 	//load & save metaData from DB
 

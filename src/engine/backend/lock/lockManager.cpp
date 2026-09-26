@@ -19,7 +19,7 @@
 // On any conflict / driver error mid-batch we rollback the whole TX,
 // so partial acquires never persist (atomic batch semantics).
 //
-// See docs/record-locks.md for the full design.
+// See docs/private/record-locks.md for the full design.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "backend/lock/lockManager.h"

@@ -54,6 +54,14 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 	// cell actually holds: nothing, or a member.
 	if (IsEnum(value.GetClassType()))
 		return value.IsEmpty() ? ibFieldTypes_Empty : ibFieldTypes_Enum;
+
+	// 🛑 AND AN EMPTY REFERENCE IS **NOT** FOLDED INTO `Empty`, though it looks like the same rule one line
+	// up. An empty reference is OF A TYPE — "a Catalogue.Goods, but no particular one" — and the Empty tag
+	// says something else: that nothing was chosen at all. On a composite column those are two different
+	// answers, and the whole of the narrowing arc rests on being able to tell them apart (Max, 2026-09-24:
+	// "an empty reference can be of a concrete type; an empty reference and an undefined that was written
+	// are different values"). An enumeration folds because its unset shape carries no target to remember;
+	// a reference does.
 	return TagForValueType(value.GetType());
 }
 

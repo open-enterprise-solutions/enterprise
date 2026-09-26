@@ -3,7 +3,7 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"   // the registers: their resources, dimensions and attributes
 
-wxVariantData* ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc) const
+wxVariantData* ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc)
 {
 	return new ibVariantDataCalcSchedule(property, scheduleDesc);
 }

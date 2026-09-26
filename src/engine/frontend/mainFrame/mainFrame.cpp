@@ -407,7 +407,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	// BeforeStart / OnStart run on a bare window, and a script that vetoes the start never
 	// gets a home page built for nothing. Being FIRST no longer depends on being created
 	// first — the start page's tab is LOCKED, and wx keeps locked tabs ahead of every normal
-	// one no matter when they joined (docs/home-page.md § 5).
+	// one no matter when they joined (docs/private/home-page.md § 5).
 	CreateStartupPage();
 
 	SetClientSize(FromDIP(wxSize(800, 600)));
@@ -493,7 +493,27 @@ void ibFrontendMainFrame::UpdateFrameManager()
 	if (view_count == 0) m_docToolbar->Clear();
 
 	wxAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_docToolbar);
-	infoToolBar.Show(m_docToolbar->GetToolCount() > 0);
+	const bool showToolBar = m_docToolbar->GetToolCount() > 0;
+
+	// ⭐ THE TOOLBAR THAT COMES AND GOES STANDS LAST IN ITS ROW. A toolbar row keeps its panes by PIXEL offset,
+	// and every layout writes the offsets it arrived at back into them. Appearing before another toolbar, this
+	// one pushed it along; hidden again, it left that one where it had been pushed to — a gap as wide as itself
+	// (the designer's debug toolbar, 2026-09-21). Placed after everything already in the row, its coming moves
+	// nothing and its going leaves nothing behind.
+	if (showToolBar && !infoToolBar.IsShown()) {
+		int rowEnd = 0;
+		const wxAuiPaneInfoArray& panes = m_mgr.GetAllPanes();
+		for (size_t i = 0; i < panes.GetCount(); ++i) {
+			const wxAuiPaneInfo& pane = panes.Item(i);
+			if (&pane == &infoToolBar || !pane.IsShown() || !pane.IsToolbar())
+				continue;
+			if (pane.dock_direction == infoToolBar.dock_direction && pane.dock_layer == infoToolBar.dock_layer
+				&& pane.dock_row == infoToolBar.dock_row && pane.dock_pos + pane.rect.width > rowEnd)
+				rowEnd = pane.dock_pos + pane.rect.width;
+		}
+		infoToolBar.Position(rowEnd);
+	}
+	infoToolBar.Show(showToolBar);
 
 	infoToolBar.BestSize(m_docToolbar->GetSize());
 	infoToolBar.FloatingSize(

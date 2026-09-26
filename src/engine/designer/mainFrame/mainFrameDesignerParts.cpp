@@ -12,6 +12,50 @@
 
 #include "frontend/artProvider/artProvider.h"
 
+// ⭐ THE BUTTONS ARE THE MENU'S COMMANDS, NOT COPIES OF THEM. Each carries the id of its Debug-menu item, so the
+// press lands in the same handler (OnStartDebug, OnRunDebugCommand...) and the button is lit or dimmed by the same
+// OnUpdateDebugCommand that lights the menu item - the frame binds those to the ids, and the toolbar's events
+// climb to the frame. Nothing here decides what a command does or when it is available.
+//
+// What is left out on purpose: the web-client starts (they are a submenu of the two starts, and a button per
+// client would double the row) - they stay in the menu.
+void ibFrontendMainFrameDesigner::CreateDebugToolbar()
+{
+	m_debugToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_debugToolbar->SetToolBitmapSize(wxSize(16, 16));
+
+	const auto add = [this](int id, const wxArtID& art, const wxString& label) {
+		m_debugToolbar->AddTool(id, label,
+			wxArtProvider::GetBitmapBundle(art, wxART_DEBUG, wxSize(16, 16)), label, wxItemKind::wxITEM_NORMAL);
+	};
+
+	add(wxID_DESIGNER_DEBUG_START, wxART_DEBUG_START, _("Start debugging"));
+	add(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, wxART_DEBUG_START_WITHOUT_DEBUGGING, _("Start without debugging"));
+	add(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, wxART_DEBUG_ATTACH, _("Attach for debugging..."));
+	m_debugToolbar->AddSeparator();
+	add(wxID_DESIGNER_DEBUG_NEXT_POINT, wxART_DEBUG_CONTINUE, _("Continue"));
+	add(wxID_DESIGNER_DEBUG_PAUSE, wxART_DEBUG_PAUSE, _("Pause"));
+	add(wxID_DESIGNER_DEBUG_STEP_INTO, wxART_DEBUG_STEP_INTO, _("Step into"));
+	add(wxID_DESIGNER_DEBUG_STEP_OVER, wxART_DEBUG_STEP_OVER, _("Step over"));
+	add(wxID_DESIGNER_DEBUG_STEP_OUT, wxART_DEBUG_STEP_OUT, _("Step out"));
+	add(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, wxART_DEBUG_STOP_DEBUGGING, _("Stop debugging"));
+	add(wxID_DESIGNER_DEBUG_STOP_PROGRAM, wxART_DEBUG_STOP_PROGRAM, _("Stop debugging program"));
+	m_debugToolbar->AddSeparator();
+	add(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, _("Remove all breakpoints"));
+	m_debugToolbar->Realize();
+
+	wxAuiPaneInfo paneInfoDebugTool;
+	paneInfoDebugTool.Name(wxT("debugTool"));
+	paneInfoDebugTool.Caption(_("Debug"));
+	paneInfoDebugTool.ToolbarPane();
+	paneInfoDebugTool.Top();
+	paneInfoDebugTool.Row(1);
+	paneInfoDebugTool.Position(2);
+	paneInfoDebugTool.CloseButton(false);
+	paneInfoDebugTool.DestroyOnClose(false);
+	m_mgr.AddPane(m_debugToolbar, paneInfoDebugTool);
+}
+
 void ibFrontendMainFrameDesigner::CreateWideGui()
 {
 	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -40,6 +84,8 @@ void ibFrontendMainFrameDesigner::CreateWideGui()
 	paneInfoMainTool.CloseButton(false);
 	paneInfoMainTool.DestroyOnClose(false);
 	m_mgr.AddPane(m_mainFrameToolbar, paneInfoMainTool);
+
+	CreateDebugToolbar();
 
 	m_docToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	m_docToolbar->SetToolBitmapSize(wxSize(16, 16));

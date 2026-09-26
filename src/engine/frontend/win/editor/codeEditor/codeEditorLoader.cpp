@@ -744,8 +744,34 @@ void ibCodeEditor::LoadToolTip(const wxPoint& pos)
 	expression.Trim(true).Trim(false);
 
 	if (expression.IsEmpty()) {
-		SetToolTip(nullptr); return;
+		ibCodeEditor::SetDebugValue(wxEmptyString);
+		m_askedExpression.clear();
+		return;
 	}
+
+	// ⭐⭐ ONE QUESTION PER WORD, BUT THE ANSWER PUT BACK ON EVERY MOVEMENT. Both halves matter, and they
+	// are not the same thing.
+	//
+	// The value is shown as the window's TOOLTIP, which the system pops on ITS own schedule and shows
+	// whatever text it finds in place at that moment. Laying the text down again and again is what makes
+	// it appear smoothly — it used to happen by accident, because every movement asked again and the
+	// answer arrived again. ASKING, though, costs a full round trip to the application parked at the
+	// breakpoint; laying the same answer back costs nothing.
+	//
+	// 🛑 THE ASKING WAS MEASURED 2026-09-25, in the technology journal, because it took the debugger down:
+	// moving the mouse over code at one breakpoint was 440 EvalToolTip requests, 36 of them inside the
+	// last 150 ms. (That storm was the CONDITION of the detaching, not its cause — see SendExpressions in
+	// debugServer.cpp for the frame that actually broke.)
+	if (expression == m_askedExpression) {
+		ibCodeEditor::SetDebugValue(m_askedValue);
+		return;
+	}
+
+	// A DIFFERENT WORD — whatever is up belongs to the previous one, and until this one is answered there
+	// is nothing true to show.
+	ibCodeEditor::SetDebugValue(wxEmptyString);
+
+	m_askedExpression = expression;
 
 	const ibValueMetaObject* metaObject = m_document->GetMetaObject();
 	wxASSERT(metaObject);
@@ -790,8 +816,8 @@ void ibCodeEditor::LoadCallTip()
 			break;
 
 		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(at.m_expression);
-		std::unique_ptr<ibValue> newObject(ctor->CreateObject());
-		if (ibValue::ibMemberTable* members = newObject->GetPMethods()) {
+		const ibValue newObject = ctor->CreateObject();
+		if (ibValue::ibMemberTable* members = newObject.GetPMethods()) {
 			for (long idx = 0; idx < members->GetNConstructors(); idx++)
 				description = members->GetConstructorHelper(idx);
 		}
@@ -806,7 +832,7 @@ void ibCodeEditor::LoadCallTip()
 
 		for (ibCaretValue& holder : holders)
 		for (long i = 0; i < holder.m_value.GetNMethods(); i++) {
-			if (stringUtils::CompareString(holder.m_value.GetMethodName(i), at.m_word)) {
+			if (holder.m_value.GetMethodName(i).IsSameAs(at.m_word, false)) {
 				description = holder.m_value.GetMethodHelper(i);
 				break;
 			}

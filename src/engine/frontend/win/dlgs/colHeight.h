@@ -18,7 +18,7 @@
 class ibGridEditor;
 
 class ibDialogColWidth : public wxDialog {
-	wxCheckBox* m_maximumCol;
+	wxCheckBox* m_defaultWidth;
 	wxSpinCtrlDouble* m_spinCtrlWidth;
 	wxStdDialogButtonSizer* m_sdbSizerBottom;
 	wxButton* m_sdbSizerBottomOK;
@@ -28,6 +28,10 @@ public:
 	int GetWidth() const {
 		return m_spinCtrlWidth->GetValue();
 	}
+
+	// On: the columns have no width of their own and take the sheet's default (spreadsheetDescription.h,
+	// HasColSize). A column has no automatic width — what does not fit is the cell's placement to answer.
+	bool IsDefaultWidth() const { return m_defaultWidth->GetValue(); }
 
 	ibDialogColWidth(ibGridEditor* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Column width"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxDEFAULT_DIALOG_STYLE);
 	virtual ~ibDialogColWidth();

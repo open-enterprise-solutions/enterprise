@@ -13,6 +13,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::GetPicture — a row's state picture, by its id
 #ifndef WX_PRECOMP
 #ifdef __WXMSW__
 #include <wx/app.h>          // GetRegisteredClassName()
@@ -3179,6 +3180,19 @@ int ibDataViewCtrl::GetLineHeight(unsigned int row) const
 	return height;
 }
 
+// THE PICTURE FOR AN ID, MADE ONCE. A row's state picture is one of a handful, repeated down the whole list, so each
+// is taken from the picture registry the first time a row shows it and kept here by its id; every row after draws
+// the same bitmap.
+const wxBitmap& ibDataViewCtrl::RowPictureBitmap(const ibPictureID& picture)
+{
+	if (picture == 0)
+		return wxNullBitmap;
+	std::map<ibPictureID, wxBitmap>::const_iterator it = m_rowPictures.find(picture);
+	if (it == m_rowPictures.end())
+		it = m_rowPictures.emplace(picture, ibBackendPicture::GetPicture(picture)).first;
+	return it->second;
+}
+
 int ibDataViewCtrl::QueryAndCacheLineHeight(unsigned int row, ibDataViewItem item) const
 {
 	const ibDataViewModel* model = GetModel();
@@ -5997,6 +6011,12 @@ public:
 			ibDataViewTreeNode* node = m_dvc->GetTreeNodeByRow(row);
 			item = node->GetItem();
 			width = m_dvc->GetIndent() * node->GetIndentLevel() + m_expanderSize;
+			// …and the row's state picture, drawn after the expander (DrawTableContent).
+			if (m_model != NULL) {
+				const ibPictureID picture = m_model->GetRowPicture(item);
+				if (picture != 0)
+					width += ibBackendPicture::GetPicture(picture).GetLogicalWidth() + m_dvc->FromDIP(4);
+			}
 		}
 		else
 		{
@@ -7002,9 +7022,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	CalcDataViewWindowUnscrolledPosition(cw + gridOffset.x, ch + gridOffset.y, &right, &bottom, tableWindow);
 
 	// compute which items needs to be redrawn
+	//
+	// 🛑 UP TO THE LINE AT THE BOTTOM EDGE — `bottom` is a POSITION, like `top`, not a height. It read
+	// `GetLineAt(top + bottom)`, upstream's `update.y + update.height` with the height swapped for a second
+	// position, so the scroll counted twice: ninety rows down, a pass drew 101 rows for the 11 on screen,
+	// and every one of them went through the model, the format and the drawing (paint probe, 2026-09-26).
 	unsigned int item_start = GetLineAt(wxMax(0, top));
 	unsigned int item_count =
-		wxMin((int)(GetLineAt(wxMax(0, top + bottom)) - item_start + 1),
+		wxMin((int)(GetLineAt(wxMax(0, bottom)) - item_start + 1),
 			(int)(GetRowCount() - item_start));
 	unsigned int item_last = item_start + item_count;
 
@@ -7462,6 +7487,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 		int line_top = first_line_start;
 
+		cell->StartColumn(model, col->GetModelColumn());
 		for (unsigned int item = item_start; item < item_last; item++)
 		{
 			// get the cell value and set it into the renderer
@@ -7574,6 +7600,19 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 #endif
 			}
 
+			// ⭐ THE ROW'S STATE PICTURE — the ROW's, drawn here once per row, in the first column after the expander
+			// and before the value, the way the expander is: asked of the model (GetRowPicture) and drawn from this
+			// control's own bitmaps (RowPictureBitmap). The cell's renderer draws its value after it and never sees it.
+			if (col == expander && !isGroupRow && !IsVirtualList()) {
+				const wxBitmap& picture = RowPictureBitmap(model->GetRowPicture(dataitem));
+				if (picture.IsOk()) {
+					wxDCClipper clipPicture(dc, cell_rect);
+					dc.DrawBitmap(picture, cell_rect.x + FromDIP(PADDING_RIGHTLEFT) + indent,
+						cell_rect.y + (cell_rect.height - picture.GetLogicalHeight()) / 2, true);
+					indent += picture.GetLogicalWidth() + FromDIP(4);
+				}
+			}
+
 			wxRect item_rect = cell_rect;
 			item_rect.Deflate(FromDIP(PADDING_RIGHTLEFT), 0);
 
@@ -7604,6 +7643,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 			line_top += line_height;
 		}
+		cell->FinishColumn();
 	}
 
 	// GROUP-row captions — drawn LAST, as ONE continuous span per row, so nothing (column rules, per-cell padding,

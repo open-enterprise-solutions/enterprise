@@ -181,32 +181,10 @@ bool ibGridEditor::ibGridEditorCellTextEditor::EndEdit(int WXUNUSED(row),
 
 void ibGridEditor::ibGridEditorCellTextEditor::ApplyEdit(int row, int col, ibGrid* grid)
 {
-	if (!m_value.IsEmpty()) {
-
-		wxCoord height = 0;
-
-		static wxMemoryDC dc;
-		dc.SetFont(grid->GetCellFont(row, col, grid->GetGridZoom()));
-		dc.GetMultiLineTextExtent(m_value, NULL, &height);
-
-		int cell_rows, cell_cols;
-		CellSpan span = grid->GetCellSize(row, col, &cell_rows, &cell_cols);
-
-		if (span == CellSpan::CellSpan_Main) {
-			int rowSize = 0;
-			for (int i = row; i < row + cell_rows; i++)
-				rowSize += grid->GetRowSize(i, grid->GetGridZoom());
-			if (height > rowSize){
-				int rowOldSize = grid->GetRowSize(row, grid->GetGridZoom()); 
-				grid->SetRowSize(row, height - (rowSize - rowOldSize) + 2, grid->GetGridZoom());
-			}
-		}
-		else if (span == CellSpan::CellSpan_None) {
-			if (height > grid->GetRowSize(row, grid->GetGridZoom()))
-				grid->SetRowSize(row, height + 2, grid->GetGridZoom());
-		}
-	}
-
+	// The row's height is not touched here. A row without a height of its own is fitted to its text once
+	// the document has the value (OnGridTableModified, FitAutoRowHeights), and a row with one keeps it.
+	// This used to grow the row itself — on screen only, never back, blind to wrapping, and over a height
+	// set by hand: a second road to the same answer, and the one that disagreed with the document.
 	grid->SetCellValue(row, col, m_value);
 
 	m_value.clear();

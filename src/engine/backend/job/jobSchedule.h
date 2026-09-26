@@ -199,7 +199,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////
 // The serialiser, split from the data the way every other description in the tree is split from
-// its storage (see docs/descriptions.md): the struct above says what a schedule IS, this says how
+// its storage (see docs/private/descriptions.md): the struct above says what a schedule IS, this says how
 // it is written down. Keeping them apart is what lets the struct stay a plain value — copyable,
 // comparable, usable in a form's state — while the node shape evolves on its own.
 //

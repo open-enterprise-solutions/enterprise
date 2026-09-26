@@ -249,7 +249,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 
 	ibValue created;
 	try {
-		created = ibValue::CreateObjectRef(classType);
+		created = ibValue::CreateObject(classType);
 	}
 	catch (const ibBackendException&) {
 		throw;

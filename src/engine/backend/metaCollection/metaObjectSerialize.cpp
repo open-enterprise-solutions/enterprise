@@ -192,8 +192,8 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 				GetName(), (long long)childNode.GetClsid());
 
 		ibValue* ppParams[] = { this };
-		ibValueMetaObject* newMetaObject =
-			ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(childNode.GetClsid(), ppParams, 1);
+		const ibValuePtr<ibValueMetaObject> newMetaObject =
+			ibValue::CreateObject(childNode.GetClsid(), ppParams, 1);   // this node's child vector keeps it
 		if (newMetaObject == nullptr)
 			ibBackendCoreException::Error(
 				_("Unknown metadata class id %lld while loading subtree of '%s'"),

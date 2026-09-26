@@ -10,6 +10,7 @@
 
 #include "commonObject.h"
 #include "backend/backend_form.h"             // ibBackendControlFrame COMPLETE — the dynamic_cast target in ShowFormValue
+#include "backend/choiceLinkResolver.h"      // a row added in a narrowed list is born matching it
 #include "backend/srcDataObject.h"            // ibSourceDataObject::ibSourceExplorer — FillSourceExplorer's out-param
 #include "backend/system/systemManager.h"     // ibValueSystemFunction::Alert
 #include "backend/picturePredefined.h"        // g_picAdd/Copy/Edit/Delete/MarkAsDelete/AddFolderCLSID — the command band
@@ -138,6 +139,33 @@ ibUniqueKey ibValueMetaObjectRecordDataRef::GetItemKey(const ibRowMetaValues& ro
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// THE ROW'S STATE PICTURE — what a list's first column shows at its left. Read off the row's cells by the kind
+// that owns them, as the key is: the list knows no metadata and asks through the source descriptor.
+// ---------------------------------------------------------------------------------------------------------
+
+// A flag of the row, by the attribute that holds it. A row that does not carry the cell (an arrangement without
+// groups has no folder column) answers false - the ordinary state, not an error.
+static bool ibRowFlag(const ibRowMetaValues& rowValues, const ibValueMetaObjectAttributePredefined* attribute)
+{
+	if (attribute == nullptr)
+		return false;
+	const ibRowMetaValues::const_iterator it = rowValues.find(attribute->GetMetaID());
+	return it != rowValues.end() && it->second.GetBoolean();
+}
+
+ibPictureID ibValueMetaObjectRecordDataMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowItemDeletedCLSID : g_picRowItemCLSID;
+}
+
+ibPictureID ibValueMetaObjectRecordDataHierarchyMutableRef::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	if (ibRowFlag(rowValues, GetDataIsFolder()))
+		return ibRowFlag(rowValues, GetDataDeletionMark()) ? g_picRowFolderDeletedCLSID : g_picRowFolderCLSID;
+	return ibValueMetaObjectRecordDataMutableRef::GetRowPicture(rowValues);
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Writeable-record BASE (MutableRef) — the command set + execution of the ref list models, lifted onto the
 // metaobject so a metadata-blind dynamic list reaches it through the source descriptor. Execute is BY KEY (the
 // front-owned row's handle) + srcForm (parent / to refresh). Hierarchy adds AddFolder, Document adds Post.
@@ -151,6 +179,19 @@ void ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(const ibFormID&
 	commands.emplace_back(eMarkAsDeleteValue, wxT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true);
 }
 
+// ⭐⭐ BORN MATCHING THE LIST IT WAS ADDED TO — see ibChoiceLinkResolver::Fill. ONE place, because a record is
+// added from three handlers below (a flat record, a hierarchical one, a register's) and the rule is the same for
+// all of them. Written into two of them, the one left out was the HIERARCHICAL catalog — contracts kept in
+// folders, which is exactly the list a choice narrows by owner — so a contract added there was never born with
+// its counterparty, and the journal never once showed `choice.fill 'Contracts'` (2026-09-23).
+static void ibFillFromTheList(ibSourceDataObject* obj, const ibBackendValueForm* srcForm)
+{
+	if (obj == nullptr || srcForm == nullptr)
+		return;
+	ibChoiceHolder holder(obj);
+	ibChoiceLinkResolver::Fill(holder, srcForm->GetFormRequest().m_create);
+}
+
 void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const ibUniqueKey& /*anchor*/, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	try {
@@ -158,13 +199,16 @@ void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const i
 		{
 		case eAddValue: {
 			ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue());
-			if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+			if (obj != nullptr) {
+				ibFillFromTheList(obj, srcForm);
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			}
 			break;
 		}
 		case eCopyValue: {
 			if (!key.IsOk()) return;
 			ibValuePtr<ibValueRecordDataObjectRef> obj(CopyObjectValue(key));
-			if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 			break;
 		}
 		case eEditValue:
@@ -212,8 +256,8 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 {
 	if (!key.IsOk()) return;
 	try {
-		ibValueRecordDataObjectRef* obj(CreateObjectValue(key));
-		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+		const ibValuePtr<ibValueRecordDataObjectRef> obj(CreateObjectValue(key));
+		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
 	catch (const ibBackendInterruptException&) {}
 	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
@@ -271,7 +315,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 			if (obj != nullptr) {
 				if (!parent.IsEmpty())
 					obj->SetValueByMetaID(GetDataParent()->GetMetaID(), parent);   // pre-fill the parent from the browsed folder
-				obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+				ibFillFromTheList(obj, srcForm);
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 			}
 		}
 		catch (const ibBackendInterruptException&) {}
@@ -306,19 +351,22 @@ void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueK
 		{
 		case eAddValue: {
 			ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue());
-			if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+			if (obj != nullptr) {
+				ibFillFromTheList(obj, srcForm);   // a register record: the slice it was added in is what it belongs to
+				obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
+			}
 			break;
 		}
 		case eCopyValue: {
 			if (!key.IsOk()) return;
 			ibValuePtr<ibValueRecordManagerObject> obj(CopyRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
-			if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 			break;
 		}
 		case eEditValue: {
 			if (!key.IsOk()) return;
 			ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
-			if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+			if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 			break;
 		}
 		case eDeleteValue: {
@@ -368,7 +416,7 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 
 	try {
 		ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
-		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
+		if (obj != nullptr) obj->ShowFormValue(ibFormRequest(), dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
 	catch (const ibBackendInterruptException&) {}
 	catch (const ibBackendException&) {}   // already reported where it happened - see ProcessExceptionError
@@ -388,6 +436,19 @@ ibValue ibValueMetaObjectRegisterData::GetSelectValue(const ibRowMetaValues& row
 ibUniqueKey ibValueMetaObjectRegisterData::GetItemKey(const ibRowMetaValues& rowValues) const
 {
 	return CreateUniqueKeyPair(rowValues);
+}
+
+// The record, or the same shaded when it is switched off. A register whose rows carry no activity cell (one
+// written without a recorder) has only active records.
+ibPictureID ibValueMetaObjectRegisterData::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	const ibValueMetaObjectAttributePredefined* const active = GetRegisterActive();
+	if (active != nullptr) {
+		const ibRowMetaValues::const_iterator it = rowValues.find(active->GetMetaID());
+		if (it != rowValues.end() && !it->second.IsEmpty() && !it->second.GetBoolean())
+			return g_picRowRecordInactiveCLSID;
+	}
+	return g_picRowRecordCLSID;
 }
 
 // REGISTER variant — all columns (dimensions / resources / period / recorder …) visible by default.

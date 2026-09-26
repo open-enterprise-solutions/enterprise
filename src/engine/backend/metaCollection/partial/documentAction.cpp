@@ -55,6 +55,23 @@ void ibValueMetaObjectDocument::GetCommandCollection(const ibFormID& formType, s
 	commands.emplace_back(eClearPostingValue, wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID);
 }
 
+// The document's row, in three states: marked for deletion, posted, or neither — each read off the row's own
+// cell, as the reference is (commonObjectAction.cpp). The mark is asked first: a row marked for deletion says
+// so whatever its posting.
+ibPictureID ibValueMetaObjectDocument::GetRowPicture(const ibRowMetaValues& rowValues) const
+{
+	const auto flag = [&rowValues](const ibValueMetaObjectAttributePredefined* attribute) {
+		if (attribute == nullptr)
+			return false;
+		const ibRowMetaValues::const_iterator it = rowValues.find(attribute->GetMetaID());
+		return it != rowValues.end() && it->second.GetBoolean();
+	};
+
+	if (flag(GetDataDeletionMark()))
+		return g_picRowDocumentDeletedCLSID;
+	return flag(GetDocumentPosted()) ? g_picRowDocumentPostedCLSID : g_picRowDocumentCLSID;
+}
+
 void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	if (id == ePostValue || id == eClearPostingValue) {

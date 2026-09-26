@@ -47,7 +47,7 @@ class ibPropertyRegistry {
 	// A registered maker: the widget if the property is its type, nullptr if not.
 	//
 	// Keyed on ibBackendProperty, not ibProperty: ibProperty and ibEvent are SIBLINGS under
-	// it (§2 of docs/property-system.md), and the inspector renders both through the same
+	// it (§2 of docs/private/property-system.md), and the inspector renders both through the same
 	// GetProperty/GetEvent pair. One registry serves them; a maker just names the side it
 	// wants in its parameter, and the dynamic_cast sorts it out.
 	using ibPropertyMaker = std::function<wxPGProperty* (ibBackendProperty*)>;

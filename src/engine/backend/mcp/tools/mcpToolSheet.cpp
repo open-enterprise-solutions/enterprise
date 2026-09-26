@@ -354,8 +354,9 @@ const ibArg& ArgFit()
 		ibMcpText("What long text does: wrap, overflow, clip, or ellipsis. On paper this decides "
 			  "whether a name runs into the next cell, is cut, or continues on a further line "
 			  "inside the same cell. `wrap` is what a column heading over a narrow money column "
-			  "almost always wants, and it is the commonest of the four in real blanks; the cell "
-			  "keeps the height the band gives it, so leave room for the lines you expect."));
+			  "almost always wants, and it is the commonest of the four in real blanks. A row with "
+			  "no height of its own grows to the lines its text takes (automatic height); a row "
+			  "given one with sheet_size keeps it, and what does not fit is cut."));
 	return s_a;
 }
 
@@ -406,7 +407,11 @@ const ibArg& ArgFile()
 const ibArg& ArgSize()
 {
 	static const ibArg s_a(wxT("size"), ibArg::Kind::Whole,
-		ibMcpText("The measurement. Omit or 0 puts the band back to the platform's default."));
+		ibMcpText("The measurement. Omit or 0 puts the band back, leaving it none of its own: a row then "
+			"takes its AUTOMATIC height - the default, taller wherever its text needs it (a larger "
+			"font, several lines, a wrapped caption) - and a column the default width, a column "
+			"having no automatic width. A band given a size here keeps exactly that size, so give "
+			"one only where the paper fixes it."));
 	return s_a;
 }
 
@@ -439,7 +444,10 @@ const ibArg& ArgAt()
 {
 	static const ibArg s_a(wxT("at"), ibArg::Kind::Whole,
 		ibMcpText("For a break: the row or column the page ends before. For a freeze: everything "
-			  "up to here stays put; 0 unfreezes."));
+			  "up to here stays put; 0 unfreezes.\n"
+			  "*** A break belongs ABOVE the sheet's last line. The last break in a sheet is where the "
+			  "sheet ENDS - it moves down as the sheet is written into - so a break asked for at the "
+			  "end is refused rather than silently printing as nothing."));
 	return s_a;
 }
 
@@ -1461,15 +1469,30 @@ public:
 
 		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
 
-		if (rowSaid > 0) desc.SetRowSize(row, size);
-		else             desc.SetColSize(col, size);
+		// 🛑 0 IS "PUT IT BACK", as the argument says - and it was written down as a size of nothing, which
+		// is how a HIDDEN band is stored (sheet_get says `hidden` for it): a band put back disappeared.
+		// Either band now gives its size up and carries none (spreadsheetDescription.h, HasRowSize /
+		// HasColSize) - a row is then fitted to its text by whoever shows it, a column takes the default
+		// width, since a column has no automatic width.
+		const bool putBack = size == 0;
+		if (rowSaid > 0) {
+			if (putBack) desc.ResetRowSize(row);
+			else         desc.SetRowSize(row, size);
+		}
+		else {
+			if (putBack) desc.ResetColSize(col);
+			else         desc.SetColSize(col, size);
+		}
 
 		sheet->SetSpreadsheetDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.SetValue(wxT("band"), wxString(rowSaid > 0 ? wxT("row") : wxT("column")));
 		result.AddField(wxT("at"), ibDataValue::Int((s64)(rowSaid > 0 ? rowSaid : colSaid)));
-		result.AddField(wxT("size"), ibDataValue::Int((s64)size));
+		if (putBack)
+			result.AddField(rowSaid > 0 ? wxT("automatic") : wxT("default"), ibDataValue::Bool(true));
+		else
+			result.AddField(wxT("size"), ibDataValue::Int((s64)size));
 		return true;
 	}
 };
@@ -1516,7 +1539,17 @@ public:
 	{
 		return ibMcpText("What a template says about whole rows or columns: a page BREAK (where the "
 			"paper ends, horizontally or vertically), a FREEZE (what stays put while the rest "
-			"scrolls), or a GROUP (a stretch that folds, so a long form stays readable).");
+			"scrolls), or a GROUP (a stretch that folds, so a long form stays readable).\n"
+			"A BREAK IS FOR FORCING AN EARLY ONE, and nothing else: printing starts a new page by "
+			"itself the moment the paper is full, so a break is declared where the PAPER decides - "
+			"an act that must begin its own sheet, a blank printed in two copies, a section nobody "
+			"wants to start at the foot of a page. Across a row it is horizontal (`at` names the row "
+			"the page ends BEFORE); across a column, with `columns`, vertical - which is how a sheet "
+			"wider than the paper is cut into bands instead of being shrunk to fit.\n"
+			"AND THE LAST BREAK IS WHERE THE SHEET ENDS, not a page ending early: it moves down and "
+			"right as the sheet is written into, and it is the dotted line an editor draws at the "
+			"bottom and the right. So a break is placed ABOVE that line - asked for at the end, it is "
+			"refused rather than printing as nothing.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1545,13 +1578,32 @@ public:
 				return false;
 			}
 
+			// ⭐⭐ THE LAST BREAK IN THE LIST IS WHERE THE SHEET ENDS (Max, 2026-09-22: *"the last page
+			// break IS the last row - you do not need to work out where the content ends, it is already
+			// there"*). It moves down and right as the sheet is written into, and printing reads it as
+			// the end rather than as a break.
+			//
+			// 🛑 SO A BREAK MUST NOT BE THE LAST ONE. Placed on a template that carried no breaks at all,
+			// the first one a caller asks for BECAME that end: it printed as nothing, and the verb read
+			// as broken (a blank whose table was to start a page of its own, 2026-09-22). The end is
+			// stamped at the sheet's last line first, so what is added after it is a break and is taken.
+			const s32 last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
+
 			if (remove) {
 				if (columns) desc.DeleteColBrake(at);
 				else         desc.DeleteRowBrake(at);
 			}
+			else if (at >= last) {
+				refusal = wxString::Format(
+					ibMcpText("The sheet already ends at %s %d, so a break there is the end of it "
+						"rather than a page ending early. Place it above the last line that has "
+						"something in it."),
+					columns ? ibMcpText("column") : ibMcpText("row"), (int)LineOut(last));
+				return false;
+			}
 			else {
-				if (columns) desc.AddColBrake(at);
-				else         desc.AddRowBrake(at);
+				if (columns) { desc.SetColBrake(last); desc.AddColBrake(at); }
+				else         { desc.SetRowBrake(last); desc.AddRowBrake(at); }
 			}
 
 			result.SetValue(wxT("what"), wxString(wxT("break")));

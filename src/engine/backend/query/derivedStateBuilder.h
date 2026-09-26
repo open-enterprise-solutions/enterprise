@@ -23,7 +23,7 @@
 // (NeedsRegeneration): most structure changes do not need it, and on a large register a needless
 // rebuild is minutes of exclusive Apply window spent reproducing correct numbers.
 //
-// (docs/register-totals-strategy.md § Engine integration)
+// (docs/private/register-totals-strategy.md § Engine integration)
 
 #include "backend/backend.h"
 
@@ -55,7 +55,7 @@ BACKEND_API int RegenerateAll(const ibSchemaSnapshot& target, ibDatabaseConnecti
 // Fold a SPLIT table's shards back into one row per key — the cheap counterpart of Regenerate.
 //
 // A split totals table spreads one logical key across N physical rows so concurrent writers stop
-// queueing on it (docs/register-totals-strategy.md §6). The read sums them, so the answer is exact
+// queueing on it (docs/private/register-totals-strategy.md §6). The read sums them, so the answer is exact
 // at any distribution — but it sums N rows forever, and that read tax is what keeps the split from
 // being a sane DEFAULT. Collapsing removes the tax for every period nobody writes to any more: a
 // elapsed period folds to one row and stays there, so the split is paid for only where it is

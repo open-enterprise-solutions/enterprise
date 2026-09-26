@@ -6,7 +6,7 @@
 // transaction boundaries (form-open hold until form-close, multi-step
 // business workflows). Short-lived per-TX serialization is already
 // covered by DB-level row locks (SELECT ... FOR UPDATE / WITH LOCK)
-// in the record-locks Phase 5-7 path, see docs/record-locks.md.
+// in the record-locks Phase 5-7 path, see docs/private/record-locks.md.
 //
 // Lock granularity is per-key inside an open-ended namespace string.
 // Conventions today:

@@ -10,9 +10,13 @@
 #include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
 
 class BACKEND_API ibSourceDataObject;
+class BACKEND_API ibValueDataObject;                       // the element a metaobject is asked to limit a value by (valueInfo.h)
+
 class BACKEND_API ibBackendControlFrame;
 class BACKEND_API ibValueManagerDataObject;
 class BACKEND_API ibValueSpreadsheetDocument;
+
+template <class T> class ibSourcePtr;   // srcDataObject.h
 
 class BACKEND_API ibFormTypeList {
 
@@ -132,7 +136,34 @@ public:
 		return 0;
 	}
 
-	//get data selector 
+	// ⭐⭐ NARROW A VALUE BY ONE OF MY ELEMENTS — the verb a reference passes on when it is asked to
+	// narrow one (ibValue::AdjustOutValue). A reference holds the metaobject that governs it and the
+	// element it stands for, so it hands both over and answers with what comes back.
+	//
+	// ⭐ AND WHAT COMES BACK IS A VALUE, never a description of types. A chart of characteristic types
+	// reads its own `Type` off the element and lets THAT bring the value — qualifiers and all, inside,
+	// where the schema belongs. Whoever asked never learns that such an attribute exists, and nothing
+	// that serialises crosses into the runtime's contract (Max, 2026-09-24).
+	//
+	// The element arrives as the plain data object (valueInfo.h): a thing whose values are read by
+	// metaID. That is all any override needs, so a record set line or a comparator answers here just
+	// as a reference does.
+	//
+	// 🛑 AND THE BASE ANSWERS TOO, rather than sending the caller somewhere else: a metaobject that
+	// declares no limit of its own narrows to ITS OWN CLASS, so `out` is filled on every road and the
+	// bool keeps ONE meaning — "the value is usable as it came". That is how two ordinary reference
+	// fields linked to each other work: put a counterparty in the first and the second offers
+	// counterparties. A catalogue of barcode kinds with a type attribute becomes a governing one by
+	// overriding this rather than by resembling a chart (Max, 2026-09-23: "a characteristic is simply a
+	// special case").
+	//
+	// 🛑 IT USED TO RETURN FALSE AND LET THE REFERENCE FALL BACK, and that cost a defect within the hour:
+	// a kind's `false` means "it did not fit" and comes WITH the narrowed value in `out`, so a fallback
+	// read it as "not mine", asked the base, and overwrote a correct empty goods reference with an
+	// undefined value. Two different falses in one seam (measured 2026-09-24 on the ledger base).
+	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const;
+
+	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}
@@ -201,44 +232,36 @@ public:
 	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
 	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
 	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
-	// would have nothing to act on.
+	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
 	virtual ibBackendValueForm* CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
-		const ibUniqueKey& formGuid = wxNullGuid) const {
-		return ibValueMetaObjectGenericData::CreateAndBuildForm(
-			metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
-			metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
-			nullptr,
-			CreateSourceObject(metaForm),
-			formGuid
-		);
-	}
+		const ibUniqueKey& formGuid = wxNullGuid) const;
 
 #pragma region _form_builder_h_
 	//support form 
-	ibBackendValueForm* GetGenericForm(const wxString& strFormName = wxEmptyString,
-		ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
+	ibBackendValueForm* GetGenericForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 #pragma region _form_creator_h_
-	ibBackendValueForm* CreateAndBuildForm(const wxString& strFormName, const ibFormID& form_id = defaultFormType,
+	ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id = defaultFormType,
 		ibBackendControlFrame* ownerControl = nullptr,
-		ibSourceDataObject* srcObject = nullptr,
-		const ibUniqueKey& formGuid = wxNullGuid
+		ibSourceDataObject* srcObject = nullptr
 	) const;
 #pragma endregion
 
 #pragma region _template_builder_h_
 
-	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strFormName) const;
+	class ibValueSpreadsheetDocument* GetTemplate(const wxString& strTemplateName) const;
 
 #pragma endregion
 
-	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const = 0;
+	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const = 0;   // born owned, like every creator
 
 protected:
 
-	//create object data with meta form
-	virtual ibSourceDataObject* CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const { return nullptr; }
+	// create object data with meta form — the OWNER of a new source (a data object is born owned); empty
+	// when the form has none. (Out of line: the holder needs the source complete.)
+	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
 };
 
 // THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its

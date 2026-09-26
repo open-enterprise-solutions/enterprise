@@ -40,6 +40,10 @@ ibValueMetaObject* ibDataReportTree::CreateItem(bool showValue)
 		GetMetaIdentifier()
 	);
 
+	// A form whose kind the person refused is taken away again — see ibConfigurationTree::CreateItem.
+	if (createdObject != nullptr && createdObject->IsDeleted())
+		createdObject = nullptr;
+
 	if (createdObject != nullptr) {
 
 		ibPropertyObject* prev_selected = objectInspector->GetSelectedObject();

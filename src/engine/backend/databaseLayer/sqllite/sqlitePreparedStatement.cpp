@@ -104,7 +104,28 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		int nReturn = sqlite3_bind_double(m_Statements[nIndex], nPosition, dblValue.ToDouble());
+		// 🛑 A WHOLE NUMBER A DOUBLE CANNOT CARRY IS BOUND AS AN INTEGER. Everything went in as a double, and a
+		// double keeps 53 bits: a reference's table id is a kind-typed clsid - sixty bits of it - so on this
+		// driver a reference written through the codec read back naming a type nobody registered, and came out
+		// EMPTY (which is why no test here ever read a reference out of a table: 2026-09-20, a sequence's border
+		// lost its recorder).
+		//
+		// ONLY such a number. Everything a double does carry goes the way it always did, for two reasons: an
+		// INTEGER parameter would turn `Amount / &Count` into SQLite's integer division where it was a real one,
+		// and the exactness test below walks the bignum tier - not something to pay on every bind of a journal
+		// row.
+		//
+		// ⚠ Past int64 is NOT a reference left out. `_RTRef` holds a reference kind (0x10..0x1D, clsid.h), which
+		// fits; the 0x80.. range is a reserved seam nobody registers; and Firebird REFUSES such a value for a
+		// BIGINT outright (firebirdParameter.cpp). Spelling it here as an unsigned int64 would make this driver
+		// accept what the default one refuses - a second road - so a number past int64 goes in as a double.
+		const double approximate = dblValue.ToDouble();
+		long long whole = 0;
+		const bool exact = (approximate >= 9007199254740992.0 || approximate <= -9007199254740992.0)   // 2^53
+			&& dblValue.ToInt(whole) == 0 && ibNumber(whole) == dblValue;
+		int nReturn = exact
+			? sqlite3_bind_int64(m_Statements[nIndex], nPosition, static_cast<sqlite3_int64>(whole))
+			: sqlite3_bind_double(m_Statements[nIndex], nPosition, approximate);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));

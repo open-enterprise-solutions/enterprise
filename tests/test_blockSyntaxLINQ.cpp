@@ -92,21 +92,21 @@ TEST(LinqBlock, ASecondSourceIsAJoinOrAProduct)
 		block.Render(wxString(), refusal));
 }
 
-// The language sets the direction per clause: keys of one direction share one, a change opens the next.
-TEST(LinqBlock, OrderKeysShareAClauseWhileTheirDirectionHolds)
+// The direction is written after the key it belongs to, so every key shares ONE clause - the middle one
+// running the other way included.
+TEST(LinqBlock, OrderKeysShareOneClause_EachWithItsOwnWay)
 {
 	ibLinqBlock block;
 	block.m_sources.push_back(Source(wxT("g"), wxT("t")));
 	block.m_order.push_back({ wxT("g.Group"), false });
-	block.m_order.push_back({ wxT("g.Name"), false });
 	block.m_order.push_back({ wxT("g.Price"), true });
+	block.m_order.push_back({ wxT("g.Name"), false });
 	block.m_take = wxT("10");
 	block.m_distinct = true;
 
 	wxString refusal;
 	EXPECT_EQ(wxT("From g In t\n")
-		wxT("OrderBy g.Group, g.Name\n")
-		wxT("OrderBy g.Price Descending\n")
+		wxT("OrderBy g.Group, g.Price Descending, g.Name\n")
 		wxT("Take 10\n")
 		wxT("Select g\n")
 		wxT("Distinct"),
@@ -182,8 +182,7 @@ TEST(LinqBlock, AfterTheNameTheQueryReadsTheGroups)
 		wxT("Where o.Posted\n")
 		wxT("Group o.Amount By o.Customer Into grp\n")
 		wxT("Where grp.Values.Count() > 1\n")
-		wxT("OrderBy grp.Values.Sum() Descending\n")
-		wxT("OrderBy grp.Key\n")
+		wxT("OrderBy grp.Values.Sum() Descending, grp.Key\n")
 		wxT("Take 10\n")
 		wxT("Select { Customer = grp.Key, Amount = grp.Values.Sum() }"),
 		block.Render(wxString(), refusal)) << refusal.ToStdString();
@@ -350,6 +349,28 @@ TEST(LinqBlock, AGroupWrittenByHandIsRead)
 	EXPECT_EQ(wxT("t.Amount"), block.m_totals[0].m_expression);
 	ASSERT_EQ(1u, block.m_fields.size());
 	EXPECT_EQ(wxT("g.Values"), block.m_fields[0].m_expression);
+}
+
+// An order written by hand reads back key by key, each with the way written after it - the key in the
+// middle included, and a key that names none running ascending.
+TEST(LinqBlock, AnOrderReadsBackKeyByKey)
+{
+	ibLinqBlock block;
+	wxString refusal;
+	ASSERT_TRUE(ibLinqBlock::Parse(
+		wxT("From o In orders\n")
+		wxT("  OrderBy o.Warehouse, o.Date Descending, o.Item Ascending, o.Line\n")
+		wxT("  Select o"), block, refusal)) << refusal.ToStdString();
+
+	ASSERT_EQ(4u, block.m_order.size());
+	EXPECT_EQ(wxT("o.Warehouse"), block.m_order[0].m_expression);
+	EXPECT_FALSE(block.m_order[0].m_descending);
+	EXPECT_EQ(wxT("o.Date"), block.m_order[1].m_expression);
+	EXPECT_TRUE(block.m_order[1].m_descending);
+	EXPECT_EQ(wxT("o.Item"), block.m_order[2].m_expression);
+	EXPECT_FALSE(block.m_order[2].m_descending);
+	EXPECT_EQ(wxT("o.Line"), block.m_order[3].m_expression);
+	EXPECT_FALSE(block.m_order[3].m_descending);
 }
 
 // Written by a person, not by the constructor: other line breaks, other spacing, one column unnamed.

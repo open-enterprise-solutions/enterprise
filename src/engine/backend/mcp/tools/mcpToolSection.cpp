@@ -22,10 +22,14 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSectionObject.h"
+#include "backend/metaCollection/metaCommandGroupObject.h"   // where on the section page an item stands
+#include "backend/typeDescription.h"   // a command's ParameterType — what it is typed FOR
+#include "backend/clsid.h"             // IsReference — read off the id, no lookup
 #include "backend/metadataConfiguration.h"
 #include "backend/stringUtils.h"
 
 #include <functional>
+#include <map>
 #include <set>
 
 namespace {
@@ -358,7 +362,11 @@ public:
 		return ibMcpText("What each section holds - the checked boxes, read back. Without arguments it "
 			"answers every section, which is the whole command interface and the fastest way to "
 			"see what a person can actually reach. Objects belonging to NO section are listed "
-			"separately: they are the ones nobody can open.");
+			"separately: they are the ones nobody can open.\n"
+			"Each item says WHERE on the section page it stands (`shownIn`): the platform's groups - "
+			"'Navigation panel.Important', 'Navigation panel.Normal', 'Actions panel.Create', "
+			"'Actions panel.Reports', 'Actions panel.Service' - or a CommandGroup the configuration "
+			"declares. Those labels are the words a command's `Group` takes in metadata_set.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -409,6 +417,29 @@ public:
 
 				std::vector<ibDataValue> items;
 
+				// ⭐ WHERE ON THE PAGE EACH ONE STANDS — asked of the section the way its page asks it (the platform's
+				// groups, then the declared ones), so this reads what a person will see and not a guess from the
+				// item's kind. A catalog stands in two (its list under Normal, its create under Create); a command
+				// filed under a group of the FORM command bar stands in none of the page's.
+				std::map<const ibValueMetaObject*, std::vector<ibDataValue>> shownIn;
+				auto note = [&shownIn](const std::vector<ibValueMetaObject*>& in, const wxString& label) {
+					for (const ibValueMetaObject* object : in)
+						shownIn[object].push_back(ibDataValue::String(label));
+				};
+				for (const ibInterfaceCommandSection area : g_platformCommandGroups) {
+					std::vector<ibValueMetaObject*> in;
+					section->GetInterfaceItemArrayObject(area, in);
+					note(in, ibCommandGroupLabel(area));
+				}
+				for (const ibValueMetaObjectCommandGroup* group :
+						metaData->GetAnyArrayObject<ibValueMetaObjectCommandGroup>(g_metaCommandGroupCLSID)) {
+					if (group == nullptr || group->IsDeleted() || group->GetCategory() == ibCommandGroupCategory_FormCommandBar)
+						continue;
+					std::vector<ibValueMetaObject*> in;
+					section->GetInterfaceItemArrayObject(group, in);
+					note(in, group->GetLabel());
+				}
+
 				for (ibValueMetaObject* object : everything)
 					if (object != nullptr && !object->IsDeleted()
 						&& object->IsSetInterface(section->GetMetaID())) {
@@ -417,6 +448,12 @@ public:
 						entry->SetValue(wxT("name"), object->GetName());
 						entry->SetValue(wxT("kind"), object->GetClassName());
 						entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+
+						const auto where = shownIn.find(object);
+						if (where != shownIn.end())
+							entry->AddField(wxT("shownIn"), ibDataValue::Array(where->second));
+						else
+							entry->SetValue(wxT("shownIn"), ibMcpText("nowhere on the section page - its group is on a form's command bar"));
 
 						items.push_back(ibDataValue::Child(entry));
 					}
@@ -465,6 +502,27 @@ public:
 				// of exactly such a list.
 				if (!object->IsInterfaceAllowed())
 					continue;
+
+				// ⭐ A COMMON COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a
+				// section: it stands in that group's submenu on every form of the object its ParameterType names.
+				// Reported here it read as "nobody can open it" about a print command that was one click away
+				// (measured 2026-09-22, the first common command filed under Print).
+				//
+				// ⚠ ONLY WHEN IT IS TYPED FOR SOMETHING. The forms it stands on are those of the objects its
+				// ParameterType names; left with the default String it names none, stands on no form and in no
+				// section — and is exactly the command this list exists to report (the audit, 2026-09-22).
+				if (object->GetClassType() == g_metaCommonCommandCLSID) {
+					const ibValueMetaObjectCommand* command = static_cast<const ibValueMetaObjectCommand*>(object);
+					const ibValueMetaObjectCommandGroup* group = command->GetCommandGroup();
+					bool typed = false;
+					for (const ibClassID& clsid : command->GetParameterType().GetClsidList())
+						if (IsReference(clsid)) {
+							typed = true;
+							break;
+						}
+					if (typed && group != nullptr && group->GetCategory() == ibCommandGroupCategory_FormCommandBar)
+						continue;
+				}
 
 				bool anywhere = false;
 

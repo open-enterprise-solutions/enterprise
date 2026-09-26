@@ -523,10 +523,11 @@ private:
 			if (ctor == nullptr)
 				continue;
 
-			// The wrapper IS the owner: ibValue(ibValue*) takes a reference on what it is handed,
-			// and the branch is constructed IN the vector so nothing is ever copied out of a local.
-			if (ibValue* const created = ctor->CreateObject()) {
-				out.emplace_back(created, ibNameOrigin::Member);   // the metadata declared this field
+			// Born owned, and the wrapper takes a reference of its own on what it is handed; the
+			// branch is constructed IN the vector so nothing is ever copied out of a local.
+			const ibValue created = ctor->CreateObject();
+			if (created.IsReference()) {
+				out.emplace_back(created.GetRef(), ibNameOrigin::Member);   // the metadata declared this field
 				any = true;
 			}
 		}
@@ -780,18 +781,18 @@ private:
 
 			// ⭐⭐ AND THEN THE SAME QUESTION THE RUNTIME ASKS, asked of the sample instead of a real
 			// row: does this row NAME its columns? A projection does and a group does, and then the
-			// answer is a TABLE carrying those names — the one exit every query has (docs/linq.md
+			// answer is a TABLE carrying those names — the one exit every query has (docs/private/linq.md
 			// §0.2h-quater). A plain value does not, and then the answer is an Array, which is what
 			// `ToArray` over such rows means.
 			//
 			// 🛑 IT IS THE EXPORTED RULE (`ibLinqNamedColumns`, procUnit.h) and not a second copy of
 			// it here. Two readings of "does it have columns" would eventually disagree, and the one
 			// that drifts is this one — it would go on describing an Array as a table.
-			std::vector<wxString> named;
+			std::vector<ibString> named;
 			if (haveRow && ibLinqNamedColumns(row, named)) {
 				ibValueModelTable* const table = new ibValueModelTable();
 				if (auto* const columns = table->GetColumnCollection())
-					for (const wxString& name : named)
+					for (const ibString& name : named)
 						columns->AddColumn(name, ibTypeDescription(), name);
 				out = table;
 			}
@@ -1695,7 +1696,7 @@ wxString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain&
 		// AMBIGUOUS — green here, a build failure on macOS and Linux (portability.md §1.10). The tree
 		// writes it this way in every other place; this one was the exception, and CI said so.
 		return numMethod != wxNOT_FOUND
-			? value.GetMethodHelper(numMethod) : wxString(wxEmptyString);
+			? value.GetMethodHelper(numMethod) : ibString();
 	}
 
 	wxString signature = fn.m_strRealName + wxT("(");
@@ -1906,6 +1907,18 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// `cat` compiles as a name this text declares, and the dropdown listed `cat` above `Catalogs`
 	// (measured 2026-09-07). A name is not a candidate for its own completion.
 	const auto writtenBelowCaret = [&](const ibByteCode::ibByteCodeVarInfo& var) {
+
+		// 🛑 ONLY A NAME THE TEXT WRITES HAS A PLACE IN IT. `ThisObject`, the object's attributes, a
+		// global bound from outside — kind Context / ContextProp / External — are handed to the module,
+		// visible from its first line to its last, and dating one by the tape asked a question with no
+		// answer: the scan below counts ANY operand of frame 0 as a touch of that cell, an instruction
+		// at the very start of the tape touches cell 0, and whichever binding sat in cell 0 was judged
+		// "written at the caret" and dropped. That was `ThisObject` in every module with no export of
+		// its own — a catalog's, a report's, an external data processor's once its borrowed `Metadata`
+		// and `Data` exports were gone — while a document kept it only because `RegisterRecords` took
+		// cell 0 (measured 2026-09-21).
+		if (var.IsContext() || var.IsContextProp() || var.IsExternal())
+			return false;
 
 		const auto at = declaredAt.find((wxLongLong_t)var.m_slotIndex);
 		if (at != declaredAt.end())
@@ -2343,7 +2356,8 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text, const w
 		outline.m_groups           = query.m_grouped;
 		outline.m_groupInto        = query.m_groupIntoName;
 		outline.m_orders           = query.m_hasOrderBy;
-		outline.m_orderDescending  = query.m_orderByDescending;
+		for (const ibLinqOrderKey& key : query.m_orderByKeys)
+			outline.m_orderKeysDescending.push_back(key.m_descending);
 
 		// The query as it was written — see ibQueryOutline::m_text. Bounds-checked because a
 		// tolerant compile may have stopped mid-query, and then there is no closing position yet.

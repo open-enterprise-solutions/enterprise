@@ -8,7 +8,8 @@ class BACKEND_API ibValueType : public ibValue {
 	public:
 
 	ibClassID GetOwnerTypeClass() const { return m_clsid; }
-	ibTypeDescription GetOwnerTypeDescription() const { return ibTypeDescription(GetOwnerTypeClass()); }
+	// The type as a description with NO qualifier, which limits nothing (ibValueTypeDescription::Unqualified).
+	ibTypeDescription GetOwnerTypeDescription() const;
 
 	ibValueType(const ibClassID& clsid = 0);
 	ibValueType(const ibValue& cObject);
@@ -31,7 +32,7 @@ class BACKEND_API ibValueType : public ibValue {
 		return m_clsid != rValue->m_clsid;
 	}
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 private:
 	ibClassID m_clsid;
@@ -48,6 +49,10 @@ public:
 	{
 	}
 
+	// `New QualifierNumber(precision, scale, nonNegative)` — see the definitions for why these exist at all.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierNumber() const { return m_qNumber; }
 };
 
@@ -62,6 +67,10 @@ public:
 	{
 	}
 
+	// `New QualifierDate(DateFractions.Date)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
+
 	operator ibQualifierDate() const { return m_qDate; }
 };
 
@@ -75,6 +84,10 @@ public:
 		m_qString(length)
 	{
 	}
+
+	// `New QualifierString(length, AllowedLength.Fixed)`.
+	virtual bool Init() override;
+	virtual bool Init(ibValue** paParams, const long lSizeArray) override;
 
 	operator ibQualifierString() const { return m_qString; }
 };
@@ -101,6 +114,10 @@ public:
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
 		const class ibMetaData* metaData = nullptr);
+
+	// ⭐ WHAT A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER HOLDS: anything of that type — a number unrounded
+	// (precision 0), a date with its time, a string of any length (0). See the definition.
+	static ibTypeDescription::ibTypeData Unqualified();
 
 	ibValueTypeDescription();
 
@@ -139,7 +156,7 @@ public:
 	// anyway; what they need is the content, and for a composite that is the whole point of it
 	// being composite. Empty stays empty — a field that has not been given a type says nothing
 	// rather than inventing a word for it.
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// EMPTY MEANS "NAMES NO TYPE". The base answers `false` for every value object — an object
 	// exists, therefore it is not empty — which is right for a schedule (its defaults mean
@@ -150,8 +167,14 @@ public:
 	// bare act of clicking the field.
 	virtual bool IsEmpty() const override { return m_typeDesc.GetClsidCount() == 0; }
 
-public:
+	// ⭐⭐ THE VERB THE RUNTIME ASKS OF EVERY VALUE, answered here by `AdjustValue` above, which this class
+	// has always had: a description narrows an incoming value to what it describes, qualifiers included.
+	// An ordinary value narrows to its own class (ibValue::AdjustOutValue), a reference passes the question
+	// on. One verb, three answers.
+	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const override;
 
+public:
+ 
 	bool ContainType(const ibValue& cType) const;
 	ibValue AdjustValue() const;
 	ibValue AdjustValue(const ibValue& varValue) const;

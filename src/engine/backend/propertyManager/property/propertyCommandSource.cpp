@@ -9,7 +9,7 @@ ibBackendCommandReceiver::~ibBackendCommandReceiver() {}
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const wxString& display) const
+wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const wxString& display)
 {
 	// The owning button / bar item IS-A command-source factory (WalkCommand validates the binding) — the variant keeps
 	// it and checks existence SERVER-SIDE (runtime too), exactly as ibVariantDataSource keeps its source factory.

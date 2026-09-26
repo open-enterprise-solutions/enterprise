@@ -30,7 +30,7 @@ namespace {
 // stays spread, which is where the split is doing its job.
 //
 // Why this is safe to run unattended, and why the manager needs nothing extra
-// for it (docs/register-totals-strategy.md § 6a):
+// for it (docs/private/register-totals-strategy.md § 6a):
 //   - figures MOVE by arithmetic (col = col + delta, computed by the DB), so a
 //     posting landing mid-fold composes with the adjustment instead of being
 //     overwritten by it;

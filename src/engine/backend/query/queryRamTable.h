@@ -7,7 +7,7 @@
 // Selector's job (ibSelector over this snapshot), and the product is a SEPARATE ibSelectorTree
 // (querySelectorTree.h). L3 names no runtime type but ibValue: cells are ibValue, columns are
 // id/name/type. Turning the snapshot (or the folded tree) into a runtime model is the RUNTIME's
-// job. (docs/query-language-arc.md §22.1, §22.1b)
+// job. (docs/private/query-language-arc.md §22.1, §22.1b)
 
 #include "queryColumn.h"                 // ibBackendQueryColumn / ibTypeDescription / ibMetaID
 #include "backend/compiler/value.h"      // ibValue

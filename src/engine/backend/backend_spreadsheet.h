@@ -229,7 +229,13 @@ public:
 	bool GetParameter(const wxString& strParameter, ibValue& valueParam) const;
 	void SetParameter(const wxString& strParameter, const ibValue& valueParam = ibValue());
 
-	wxString ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type = ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) const;
+	// ⭐⭐ THE TEXT A CELL SHOWS — the one door the grid, the printout, the script and the landing of an
+	// area (PutArea / JoinArea) all go through: a caption or a template in the language asked for, a
+	// parameter by its value. Without a language, the document's own (and without that, the one in force);
+	// an area landing in another document is read in THAT one's.
+	wxString ComputeStringValueFromParameters(const wxString& strValue,
+		ibSpreadsheetFillType type = ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter,
+		const wxString& strLangCode = wxEmptyString) const;
 
 	//special value return 
 	ibValue GetParameter(const wxString& strParameter) const { ibValue valueParam; GetParameter(strParameter, valueParam); return valueParam; }

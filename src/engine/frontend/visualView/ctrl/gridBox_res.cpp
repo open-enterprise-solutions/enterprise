@@ -1,38 +1,15 @@
 #include "gridBox.h"
 
-/* XPM */
-static const char* s_grid_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 4 1",
-	"  c Black",
-	"o c #FFFFFF",
-	"X c #C9C7C7",
-	". c #6C77B5",
-	/* pixels */
-	"                ",
-	" ...X......X... ",
-	" XXXXXXXXXXXXXX ",
-	" ...XooooooXooo ",
-	" ...XooooooXooo ",
-	" ...XooooooXooo ",
-	" ...XooooooXooo ",
-	" XXXXXXXXXXXXXX ",
-	" ...XooooooXooo ",
-	" XXXXXXXXXXXXXX ",
-	" ...XooooooXooo ",
-	" XXXXXXXXXXXXXX ",
-	" ...XooooooXooo ",
-	" ...XooooooXooo ",
-	" ...XooooooXooo ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_gridBox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA+klEQVR4nOzbMQ4BQQCF4Z+4Ak6gUkloaLjMHmpPoNNpaWhIVConwCGoJHYSJpvZjY33vm6QKf7M2p1Jto24NuIcAHGd8IPxdP7gjx3329b72CuAhsnzvDDOsow6eQXEftDt9SljvVqS4nS+FMaH3YYUk9ni6/e+DSLOARDnAIhzAMQ5AOK8F6Bi4bP8r+d77S4/7Sp9CSDO/wFUbDQckCK85lPn83lAhAMgzgEQ5wCIcwDEOQDifB6AOAdAnM8DEOcAiHMAxDkA4hwAcQ6AOAdAnAMgLnoecL9dKSO2/44J3xhJnS/GK4CGqfsdoZD8CmghzrdBxMkHeAIAAP//wef5egAAAAZJREFUAwC/CS7gV6/leQAAAABJRU5ErkJggg==";
 
 wxIcon ibValueGridBox::GetIcon() const
 {
-	return wxIcon(s_grid_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_gridBox_png, wxSize(16, 16));
 }
 
 wxIcon ibValueGridBox::GetIconGroup()
 {
-	return wxIcon(s_grid_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_gridBox_png, wxSize(16, 16));
 }

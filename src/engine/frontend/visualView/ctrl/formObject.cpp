@@ -517,7 +517,7 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 	}
 
 	if (!createContext || !appData->DesignerMode()) {
-		// Soft-lock UX (docs/record-locks.md Phase B.3): try to acquire
+		// Soft-lock UX (docs/private/record-locks.md Phase B.3): try to acquire
 		// the long-held sys_lock on the form's source, but DO NOT
 		// block form open on conflict. Users can view / edit
 		// in-memory even when another session holds the lock; the
@@ -776,7 +776,7 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 	if (selectDataType->ShowModal(sel_id)) {
 		const ibValueMetaObjectRecordDataMutableRef* meta = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataMutableRef>(sel_id);
 		if (meta != nullptr) {
-			ibValueRecordDataObjectRef* genObj = meta->CreateObjectValue(obj, true);
+			const ibValuePtr<ibValueRecordDataObjectRef> genObj = meta->CreateObjectValue(obj, true);
 			if (genObj != nullptr) {
 				genObj->ShowFormValue();
 				selectDataType->Destroy();

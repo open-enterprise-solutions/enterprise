@@ -423,7 +423,7 @@ MCP_TOOL_REGISTER(ibMcpToolConfigRollback);
 //
 // ⭐ AND IT ANSWERS IN OBJECTS, NOT IN DDL. What a person approves is "the
 // document Goods receipt gained an attribute", not an ALTER TABLE: the diff is
-// the source of truth about the schema (docs/schema-authority.md), and the DDL
+// the source of truth about the schema (docs/private/schema-authority.md), and the DDL
 // is derived from it further down. Naming the derived form here would invite a
 // caller to reason about tables, which is exactly the layer this platform keeps
 // nobody's business.

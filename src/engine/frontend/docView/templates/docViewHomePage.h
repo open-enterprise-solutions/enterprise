@@ -29,7 +29,7 @@
 //
 // WHAT is shown comes from the config root (ibHomePageDescription on
 // ibValueMetaObjectConfiguration), edited in the designer through the workspace editor.
-// See docs/home-page.md.
+// See docs/private/home-page.md.
 
 // docView.h first — it pulls in wx/app.h + wx/docview.h (see docViewAuditLog.h).
 #include "frontend/docView/docView.h"

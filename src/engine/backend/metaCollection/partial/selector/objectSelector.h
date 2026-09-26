@@ -32,7 +32,7 @@ class BACKEND_API ibValueSelectorDataObject : public ibValueDynamicMembers {
 
 	//types
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 protected:
 
@@ -63,7 +63,7 @@ class BACKEND_API ibValueSelectorRecordDataObject : public ibValueSelectorDataOb
 
 	ibValueSelectorRecordDataObject(const ibValueMetaObjectRecordDataMutableRef* metaObject);
 
-	virtual ibValueRecordDataObjectRef* GetObject(const ibGuid& guid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectRef> GetObject(const ibGuid& guid) const;
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {
@@ -102,7 +102,7 @@ class BACKEND_API ibValueSelectorRegisterDataObject :
 	public:
 	ibValueSelectorRegisterDataObject(const ibValueMetaObjectRegisterData* metaObject);
 
-	virtual ibValueRecordManagerObject* GetRecordManager(const ibRowMetaValues& keyValues) const;
+	virtual ibValuePtr<ibValueRecordManagerObject> GetRecordManager(const ibRowMetaValues& keyValues) const;
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const {

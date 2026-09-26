@@ -8,12 +8,12 @@
 // GetClassType()). Only CreateObject() remains.
 
 // The chart overrides the type factory's `GetTypeDesc()` with its own CONTOUR (the composition
-// `GetTypesOfCharacteristics` names), so the inherited `CreateValueRef()` already builds a value out
+// `GetTypesOfCharacteristics` names), so the inherited `CreateValue()` already builds a value out
 // of what a characteristic may be: one type in the contour gives that very type, several give an
 // undefined. Nothing to add here — a branch of our own would be the same rule spelled twice.
-ibValue* ibCtorMetaValueTypeCharacteristic::CreateObject() const
+ibValue ibCtorMetaValueTypeCharacteristic::CreateObject() const
 {
-	return m_metaObject->CreateValueRef();
+	return m_metaObject->CreateValue();
 }
 
 // ⭐ WHAT THIS TYPE ADMITS — the CONTOUR, i.e. the chart's own composition. A characteristic's value is

@@ -382,6 +382,23 @@ public:
 	}
 };
 
+// ⭐⭐ A WATCHED EXPRESSION AND WHO ASKED FOR IT — what BOTH ends keep about one row of a watch window,
+// for the same reason and under one name. It is not a shape that travels: each end registers what it
+// knows so it can say the name again later. The client re-registers everything after a reconnect
+// (CommandId_GetArrayBreakpoint); the runtime refreshes everything at every stop (SendExpressions), and
+// an answer only reaches the listener it is addressed to — every other one lets it pass
+// (ibWatchWindowData::GetBridgeId below).
+//
+// 🛑 KEPT AS THE TEXT ALONE, both ends had nobody to name when the moment came: the refresh wrote its
+// item count where the reader expects the asker, and the re-registration left the field out entirely. A
+// frame read one field out of step walks off its own end, and the side reading it closes the connection
+// rather than parse rubbish — "the debugger detaches by itself", deterministically, on the first step
+// with anything in the watch window (2026-09-25).
+struct ibWatchedExpression {
+	wxString m_asker;        // the bridge that asked — empty means nobody is listening for it
+	wxString m_expression;
+};
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 #define defaultDebuggerPort 1650
