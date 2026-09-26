@@ -701,7 +701,15 @@ void ibMetaTreeBase::EditModule(const ibGuid& moduleName, int line, bool setRunL
 
 void ibMetaTreeBase::NotifyDocuments() const
 {
-	for (auto& doc : docManager->GetDocumentsVector()) {
+	for (ibDocument* doc : docManager->GetDocumentsVector()) {
+		// ⚠ THE LIST WAS COPIED, THE DOCUMENTS WERE NOT. UpdateAllViews runs the editors' own code and
+		// an editor may close documents as its answer, so one that was in the manager a moment ago
+		// can be freed by the time its turn comes — and asking a freed object what class it is
+		// (wxDynamicCast) is the crash. Ask the manager instead; it compares pointers and touches
+		// nothing.
+		if (!docManager->GetDocuments().Member(doc))
+			continue;
+
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 		if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 	}

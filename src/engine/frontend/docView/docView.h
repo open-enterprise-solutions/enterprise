@@ -47,6 +47,7 @@
 #include "wx/fdrepdlg.h"
 
 #include <list>
+#include <memory>
 #include <vector>
 #include <map>
 
@@ -319,6 +320,12 @@ protected:
     // derived classes — ibMetaDocument in particular — can offer typed
     // accessors over the child-doc list without maintaining a shadow.
     std::list<ibDocument*> m_childDocuments;
+
+    // ⭐ TRUE WHILE THIS DOCUMENT EXISTS. UpdateAllViews runs the views' own code, and that code can
+    // close a view, delete a child document or delete THIS document (the last view leaving does
+    // it). The loop cannot ask a freed object whether it is freed, so it holds a copy of this
+    // token — which outlives the document — and the destructor turns it false.
+    std::shared_ptr<bool> m_alive;
 
 private:
     wxDECLARE_ABSTRACT_CLASS(ibDocument);

@@ -140,6 +140,7 @@ ibDocument::ibDocument(ibDocument *parent)
 
     m_commandProcessor = nullptr;
     m_savedYet = false;
+    m_alive = std::make_shared<bool>(true);
 }
 
 bool ibDocument::DeleteContents()
@@ -149,6 +150,19 @@ bool ibDocument::DeleteContents()
 
 ibDocument::~ibDocument()
 {
+    *m_alive = false;
+
+    // ⭐ CHILDREN OUTLIVE A PARENT THAT WAS DELETED DIRECTLY. Close() takes the children down first,
+    // but a document also goes when its LAST VIEW does (OnChangedViewList -> delete this), and that
+    // road never asks the children. Each one kept a pointer to this object as its parent: its
+    // GetDocumentManager() asks the parent — a virtual call on freed memory, from the destructor of
+    // its own view — and its own destructor removes itself from the parent's list, writing into
+    // freed memory. Let go of them here: an orphan is a plain top-level document, which is what it
+    // can still honestly be.
+    for ( ibDocument* childDoc : m_childDocuments )
+        childDoc->m_documentParent = nullptr;
+    m_childDocuments.clear();
+
     delete m_commandProcessor;
 
     if (GetDocumentManager())
@@ -707,20 +721,35 @@ void ibDocument::OnChangedViewList()
 
 void ibDocument::UpdateAllViews(ibView *sender, wxObject *hint)
 {
-    wxList::compatibility_iterator node = m_documentViews.GetFirst();
-    while (node)
+    // ⚠ OnUpdate IS THE VIEW'S OWN CODE, and a view may answer an update by closing itself, closing
+    // another view, deleting a child document — or taking this document with it, since the last
+    // view leaving deletes it. Walking the live lists across that is a walk over freed nodes, so
+    // both lists are copied first and each entry is asked about again just before it is used: the
+    // list still holds it (a pointer comparison, nothing is dereferenced), and this document is
+    // still here.
+    const std::shared_ptr<bool> alive = m_alive;
+
+    for ( ibView* view : GetViewsVector() )
     {
-        ibView *view = (ibView *)node->GetData();
-        if (view != sender)
+        if ( !*alive )
+            return;
+
+        if ( view != sender && m_documentViews.Member(view) )
             view->OnUpdate(sender, hint);
-        node = node->GetNext();
     }
 
     // Step-4 collapse: cascade lifted up from ibMetaDocument. Children get
     // the same update; sender stays propagated so the originating view
     // remains the de-duplication anchor across the whole subtree.
-    for (ibDocument* childDoc : m_childDocuments)
-        childDoc->UpdateAllViews(sender, hint);
+    const std::vector<ibDocument*> children(m_childDocuments.begin(), m_childDocuments.end());
+    for ( ibDocument* childDoc : children )
+    {
+        if ( !*alive )
+            return;
+
+        if ( std::find(m_childDocuments.begin(), m_childDocuments.end(), childDoc) != m_childDocuments.end() )
+            childDoc->UpdateAllViews(sender, hint);
+    }
 }
 
 void ibDocument::NotifyClosing()
