@@ -2128,12 +2128,22 @@ ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
 	// there is no filter and no grouping to obey, and every cell is written explicitly — so the row
 	// is made and put in, and the notify is not sent. Same door (the storage's own Append), one
 	// argument different.
+	//
+	// ⭐ AND EVERY ROW IS A COPY OF ONE BLANK. The row's cells are laid down once, here, and each row
+	// is made by copying them: its storage is ONE allocation of exactly the row's width, and every
+	// cell written below lands on a place that is already there. Made empty and filled cell by cell,
+	// a row grew its storage a step at a time — a reallocation, and a move of what was already in it,
+	// at every step.
+	ibComposerNode blank;
+	for (const unsigned int id : columnIds)
+		blank.AppendTableValue(id);
+
 	for (const ibValue& row : kept.Rows()) {
 		ibValue* const source = row.GetRef();
 		if (source == nullptr)
 			continue;
 
-		ibComposerNode* const node = new ibComposerNode();
+		ibComposerNode* const node = new ibComposerNode(blank);
 
 		// WHICH READ THIS IS WAS DECIDED WHERE THE COLUMNS WERE — see ibRowColumns. A row with a
 		// surface hands over its properties by ordinal; a row that IS the value goes in whole.
@@ -2153,8 +2163,8 @@ ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<wxString>& columns,
 		else {
 			for (size_t i = 0; i < columns.size(); ++i) {
 				ibValue cell;
-				source->GetPropVal((long)i, cell);             // by ordinal on both sides
-				node->AppendTableValue(columnIds[i], cell);    // absent reads land as an empty cell
+				source->GetPropVal((long)i, cell);                        // by ordinal on both sides
+				node->AppendTableValue(columnIds[i], std::move(cell));    // absent reads land as an empty cell
 			}
 		}
 		table->Append(node, /*notify*/ false);
