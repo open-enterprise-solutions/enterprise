@@ -59,11 +59,18 @@ ibString ibValueTypeDescription::GetString() const
 
 #include "backend/system/systemManager.h"
 
-// Does this class id name a family (a barrier that creates nothing and admits its members)?
-static bool IsFamilyType(const ibClassID& clsid)
+// A DESCRIPTION ALLOWS WHAT ONE OF ITS TYPES ALLOWS — each asked by its own gate
+// (ibCtorAbstractType::AllowValue), so a family answers for its members and a characteristic for the
+// types of its chart.
+static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
 {
-	const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
-	return ctor != nullptr && ctor->IsFamily();
+	for (const ibClassID& declared : typeDescription.GetClsidList()) {
+		const ibCtorAbstractType* gate = source != nullptr
+			? source->GetAvailableCtor(declared) : ibValue::GetAvailableCtor(declared);
+		if (gate != nullptr && gate->AllowValue(clsid))
+			return true;
+	}
+	return false;
 }
 
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription,
@@ -75,11 +82,6 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	if (typeDescription.GetClsidCount() == 1) {
 
 		const ibClassID& clsid = typeDescription.GetFirstClsid();
-
-		// A FAMILY (`DocumentRef`, `AnyRef`) has no empty value of its own to hand back — asking the
-		// factory for one raises "cannot be created without arguments". Empty is the answer.
-		if (IsFamilyType(typeDescription.GetFirstClsid()))
-			return wxEmptyValue;
 
 		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
 		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
@@ -149,27 +151,28 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		return varValue;
 	}
 
+	// The same rule as the overload above: the metadata handed in, else the active one - and with neither
+	// (a headless tool before it opens a base, a test) what the value registry can make by itself.
+	const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
+
+	// ⭐ NOT NAMED IS NOT REFUSED. A declared type may admit a class that is not its own — a family
+	// (`AnyRef`, `DocumentRef`) its members, a characteristic the types of its chart — and the type's own
+	// gate says so: AllowValue, the question the interpreter asks a typed variable (OPER_SET_TYPE). A value
+	// a declared type admits passes as it is.
+	//
+	// 🛑 IT WAS NOT ASKED HERE (#157). A reference written into an attribute declared `DocumentRef` is a
+	// `DocumentRef.Other`, not the family's own id, so the search above missed and the branch below built
+	// the family's empty value in its place. A value the declared types do not admit — a catalog's
+	// reference there — still becomes empty, as it does in a composite declaration.
+	//
+	// The empty value is not put to the gates — every one lets it through — and becomes below the empty
+	// value of what is declared (0, an empty date, an empty reference).
+	const ibClassID clsid = varValue.GetClassType();
+	if (clsid != g_valueUndefinedCLSID && AllowValue(typeDescription, clsid, source))
+		return varValue;
+
 	if (typeDescription.GetClsidCount() == 1) {
 
-		// ⭐ A DECLARATION THAT NAMES A FAMILY — `DocumentRef`, `AnyRef`, `CatalogRef` — is met by asking
-		// the family's GATE, the same question the interpreter asks a typed variable (OPER_SET_TYPE): may a
-		// value of this class pass? A member passes exactly as it is; empty passes; anything else has no
-		// "empty one of this type" to become, because a family creates nothing.
-		//
-		// 🛑 IT FELL THROUGH TO THE FACTORY instead: the value's class is the CONCRETE reference
-		// (`DocumentRef.Other`), which is not the family's id, so the comparison above missed, and the
-		// branch below asked the factory for a `DocumentRef` — which cannot be built without arguments.
-		// Every assignment of a reference to an attribute of a generic type raised that (#157). A
-		// concrete or composite declaration carries the member's own id, which is why only the generic
-		// ones failed.
-		if (const ibCtorAbstractType* family = ibValue::GetAvailableCtor(typeDescription.GetFirstClsid())) {
-			if (family->IsFamily())
-				return family->AllowValue(varValue.GetClassType()) ? varValue : wxEmptyValue;
-		}
-
-		// The same rule as the overload above: the metadata handed in, else the active one - and with neither
-		// (a headless tool before it opens a base, a test) what the value registry can make by itself.
-		const ibMetaData* const source = metaData != nullptr ? metaData : activeMetaData;
 		if (source != nullptr ? source->IsRegisterCtor(typeDescription.GetFirstClsid())
 			: ibValue::IsRegisterCtor(typeDescription.GetFirstClsid())) {
 
@@ -351,8 +354,13 @@ bool ibValueTypeDescription::AdjustOutValue(const ibValue& varValue, ibValue& ou
 	// then holds, and its TYPE is what a caller asking "what does this narrow to" reads off it, so the
 	// question is asked once (Max, 2026-09-24). The place that watches for a value going in and not
 	// coming out is ibChoiceLinkResolver::Adjust, which says so in the journal.
+	//
+	// A value one of the declared types ADMITS came out as it went in, and says so — the same gate
+	// AdjustValue passed it by.
 	out = AdjustValue(m_typeDesc, varValue);
-	return m_typeDesc.ContainType(varValue.GetClassType());
+	const ibClassID clsid = varValue.GetClassType();
+	return m_typeDesc.ContainType(clsid)
+		|| (clsid != g_valueUndefinedCLSID && AllowValue(m_typeDesc, clsid, activeMetaData));
 }
 
 bool ibValueTypeDescription::ContainType(const ibValue& cType) const

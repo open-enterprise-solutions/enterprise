@@ -88,12 +88,6 @@ ibValue ibBackendTypeConfigFactory::CreateValue() const
 	wxASSERT(metaData);
 	const ibTypeDescription& typeDesc = GetTypeDesc();
 	if (typeDesc.GetClsidCount() == 1) {
-		// A family (`DocumentRef`, `AnyRef`) creates nothing: asking the factory raised and swallowed an
-		// exception on every declaration of one — it showed in the journal as a throw that changed nothing.
-		const ibCtorAbstractType* declared = ibValue::GetAvailableCtor(typeDesc.GetFirstClsid());
-		if (declared != nullptr && declared->IsFamily())
-			return nullptr;
-
 		const ibCtorMetaValueType* so = metaData->GetTypeCtor(typeDesc.GetFirstClsid());
 		if (so != nullptr) {
 			try {

@@ -76,12 +76,6 @@ public:
 	// / RecordSet). Lets selection / form-build ask the factory instead of a source explorer.
 	virtual bool IsTableValue() const { return false; }
 
-	// ⭐ A FAMILY NAMES NO SINGLE TYPE — `AnyRef`, `CatalogRef`, `DocumentRef`, `Any`. It exists to be
-	// DECLARED: it creates nothing (CreateObject answers nullptr) and its gate, AllowValue, admits every
-	// member. So there is no "empty one" to become and no object to build; whoever turns a declared type
-	// into a value has to ask the gate instead of the factory. Everything else answers false.
-	virtual bool IsFamily() const { return false; }
-
 	// THE GATE, and the ONLY question asked when a declared type meets a value:
 	// may a value of this class pass as this type?
 	//

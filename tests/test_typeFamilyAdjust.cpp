@@ -8,6 +8,9 @@
 // factory for a `DocumentRef`, which "cannot be created without arguments". So every assignment of a
 // reference to an attribute of a generic type raised.
 //
+// It asks the declared type's gate now, the same one a typed variable is checked by, and the value door
+// answers a type with nothing of its own to make with the empty value instead of a refusal.
+//
 // No database and no configuration: the families are registered by the platform itself, and a member's
 // class id is all the gate looks at, so a probe value that answers a class id stands in for a reference.
 // =============================================================================
@@ -54,7 +57,6 @@ TEST(TypeFamilyAdjust, AnyRef_AReference_PassesAsItIs)
 {
 	const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef"));
 	ASSERT_NE(anyRef, nullptr);
-	ASSERT_TRUE(anyRef->IsFamily());
 
 	const ibValue reference = ReferenceTo(kMember);
 	const ibValue result = ibValueTypeDescription::AdjustValue(Declares(anyRef->GetClassType()), reference, nullptr);
@@ -78,7 +80,6 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 {
 	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
 	ASSERT_NE(family, nullptr) << "the DocumentRef family is registered with the Document metatype";
-	ASSERT_TRUE(family->IsFamily());
 
 	family->AddMember(kMember);   // what registering a document's reference does
 
@@ -89,6 +90,26 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 
 	const ibValue stranger = ibValueTypeDescription::AdjustValue(declared, ReferenceTo(kStranger), nullptr);
 	EXPECT_TRUE(stranger.IsEmpty()) << "a reference to something that is not a document is not kept";
+
+	family->RemoveMember(kMember);
+}
+
+// …and says it fit: AdjustOutValue answers by the same gate AdjustValue passed the value by, or a caller
+// watching for a value going in and not coming out would report one that did.
+TEST(TypeFamilyAdjust, DocumentRef_AMember_IsReportedAsFitting)
+{
+	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
+	ASSERT_NE(family, nullptr);
+
+	family->AddMember(kMember);
+
+	ibValueTypeDescription declared(Declares(family->GetClassType()));
+	ibValue out;
+	EXPECT_TRUE(declared.AdjustOutValue(ReferenceTo(kMember), out));
+	EXPECT_EQ(out.GetClassType(), kMember);
+
+	EXPECT_FALSE(declared.AdjustOutValue(ReferenceTo(kStranger), out));
+	EXPECT_TRUE(out.IsEmpty());
 
 	family->RemoveMember(kMember);
 }
@@ -117,11 +138,17 @@ TEST(TypeFamilyAdjust, DefaultValueOfAFamily_IsEmpty_AndDoesNotThrow)
 	EXPECT_TRUE(result.IsEmpty());
 }
 
-// ---- a type that is NOT a family is untouched --------------------------------------------------------
+// ---- a type that admits only itself is untouched -----------------------------------------------------
 
-TEST(TypeFamilyAdjust, NotAFamily_IsNotClaimed)
+// The empty value is not put to the gate — every gate lets it through — so a declared Number still turns
+// Undefined into the number 0, the typed empty a column is read by, and not into Undefined.
+TEST(TypeFamilyAdjust, Number_Undefined_BecomesZero)
 {
 	const ibCtorAbstractType* number = ibValue::GetAvailableCtor(wxT("Number"));
 	ASSERT_NE(number, nullptr);
-	EXPECT_FALSE(number->IsFamily()) << "only the barriers that create nothing answer yes";
+
+	const ibValue result = ibValueTypeDescription::AdjustValue(Declares(number->GetClassType()), ibValue(), nullptr);
+
+	EXPECT_EQ(result.GetType(), ibValueTypes::TYPE_NUMBER);
+	EXPECT_TRUE(result.GetNumber().IsZero());
 }
