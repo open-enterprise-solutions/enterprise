@@ -44,7 +44,7 @@ public:
 	}
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
-	ibValue* CreateObject() const override { return nullptr; }
+	ibValue CreateObject() const override { return wxEmptyValue; }
 	bool IsFamily() const override { return true; }
 
 	// EMPTY PASSES (class id 0). A declared parameter nobody passed, a reference
@@ -68,7 +68,7 @@ public:
 	}
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
-	ibValue* CreateObject() const override { return nullptr; }
+	ibValue CreateObject() const override { return wxEmptyValue; }
 	bool IsFamily() const override { return true; }
 
 	bool AllowValue(const ibClassID&) const override { return true; }

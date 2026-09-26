@@ -120,7 +120,8 @@ public:
 		//}
 		ibCodeEditor* const codeEditor = GetCodeEditor();
 		wxASSERT(codeEditor);
-		codeEditor->SetToolTip(resultStr);
+		// The editor's own door, not the window's: it keeps the answer as well as showing it.
+		codeEditor->SetDebugValue(resultStr);
 
 	}
 

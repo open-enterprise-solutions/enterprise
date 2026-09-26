@@ -1,44 +1,15 @@
 #include "widgets.h"
 
-/* XPM */
-static const char* s_slider_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 10 1",
-	"  c None",
-	"@ c #E2DFCF",
-	"+ c #D4D1C3",
-	"o c #ECE9D8",
-	"X c #66CC33",
-	"# c #BBB9AD",
-	"O c #E3DFD0",
-	". c #716F64",
-	"$ c #E2E0CF",
-	"% c #E2E0D0",
-	/* pixels */
-	"                ",
-	"                ",
-	"                ",
-	"    ...         ",
-	"   .XXX.        ",
-	"   .oO+.        ",
-	"   .o@+.        ",
-	" ##.o@+.####### ",
-	"#oo.o@+.ooooooo#",
-	" ##.o$+.####### ",
-	"   .o@+.        ",
-	"   .o%+.        ",
-	"   .XXX.        ",
-	"    ...         ",
-	"                ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_slider_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABaElEQVR4nOzavUrDUBiH8ecEd0EvwkGkF2EX8XMQnP24BkXESRS9ie6Cg+BHFz8mcRYV78BNRffmeBCEDqbWJG8R3v9vKITk0PCQk3DaZDiX4ZwC4JwC4JwC4JwC4JwC4JwC4JwC4NwQAzDRas5nxHViGCcw3PPgyDshPnbysPewdnGGsYCxRmtyJn3NCSXkoTN9v3x9jqFBTIFNSspitoUx8wARxiipyth+md8DAmG0e3tncaPn8dtHB4VjLegxiHMKgHMKgHMKgHMKgHP6PaBox9TCUqQGz7xQRV3n0T4+/HHprymAc7oHFO0omjN/1ZhrVprDdZ1HEU0BnFMAnFMAnFMAnFMAnNNaAGMx8hoCI9/b3f/99TMWY+ZXQFrJPFFSlbH9sp8CIe5TUk6+izHzAHcrl6fpYp6NMd6mzY/fjk9r57f0cfP1dsjqVRtj5q/I/Hd6DOKcAuCcAuCcAuCcAuCc+wCfAAAA//+BPaTnAAAABklEQVQDAFu8SDvvgciQAAAAAElFTkSuQmCC";
 
 wxIcon ibValueSlider::GetIcon() const
 {
-	return wxIcon(s_slider_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_slider_png, wxSize(16, 16));
 }
 
 wxIcon ibValueSlider::GetIconGroup()
 {
-	return wxIcon(s_slider_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_slider_png, wxSize(16, 16));
 }

@@ -4690,7 +4690,7 @@ void ibComposerSettingsPanel::MoveStructureLevel(int delta)
 //
 // ⚠ THE SAME NAMES THE ENGINE RESOLVES BY. A level is addressed by its PATH here (that is what the
 // composition stores and what the rendered `TOTALS … BY` writes), so what is picked is what the
-// lowering will find (docs/query-language-arc.md §27).
+// lowering will find (docs/private/query-language-arc.md §27).
 std::vector<wxString> ibComposerSettingsPanel::ResourceScopeNames() const
 {
 	std::vector<wxString> names;

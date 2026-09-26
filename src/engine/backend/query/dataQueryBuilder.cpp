@@ -6,7 +6,7 @@
 //	              that lives behind the provider in queryProvider.cpp; the terminal
 //	              bodies (Select / SelectAggregate / Upsert / DeleteByKey / WriteRow)
 //	              are defined THERE. This TU holds only the surface: the fluent verbs
-//	              + EffectiveSort. See docs/query-language-arc.md §18, §22.
+//	              + EffectiveSort. See docs/private/query-language-arc.md §18, §22.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataQueryBuilder.h"

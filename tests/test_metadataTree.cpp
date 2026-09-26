@@ -95,6 +95,7 @@ const ibMetaKindCandidate kMetaKindCandidates[] = {
 	{ g_metaCommonModuleCLSID,                 "CommonModule"                 },
 	{ g_metaCommonFormCLSID,                   "CommonForm"                   },
 	{ g_metaCommonCommandCLSID,                "CommonCommand"                },
+	{ g_metaCommandGroupCLSID,                 "CommandGroup"                 },
 	{ g_metaCommonTemplateCLSID,               "CommonTemplate"               },
 	{ g_metaCommonAttributeCLSID,              "CommonAttribute"              },
 	{ g_metaSessionParameterCLSID,             "SessionParameter"             },

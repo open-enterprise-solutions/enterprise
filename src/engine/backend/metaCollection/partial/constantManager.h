@@ -22,7 +22,7 @@ class ibValueManagerDataObjectConstant :
 
 	//types
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 protected:
 	const ibValueMetaObjectConstant* m_metaObject;

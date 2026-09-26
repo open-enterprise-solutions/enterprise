@@ -290,9 +290,6 @@
     <ClInclude Include="win\editor\visualEditor\visualEditor.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\splashLogo.xpm" />
-  </ItemGroup>
-  <ItemGroup>
     <Image Include="designer.ico" />
   </ItemGroup>
   <ItemGroup>

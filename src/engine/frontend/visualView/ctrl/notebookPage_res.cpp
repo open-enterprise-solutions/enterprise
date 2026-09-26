@@ -1,47 +1,15 @@
 #include "notebook.h"
 
-/* XPM */
-static const char* s_page_xpm[] = {
-	/* columns rows colors chars-per-pixel */
-	"16 16 13 1",
-	"% c None",
-	". c #FFFFFF",
-	"$ c #ECFFFF",
-	"o c #808080",
-	"+ c #F9FFFF",
-	"= c #848284",
-	"@ c #F5FFFF",
-	"# c #EBEBEB",
-	"& c #EDFFFF",
-	"O c #0066CC",
-	"* c #E3FFFF",
-	"X c #DDE2EC",
-	"  c #333366",
-	/* pixels */
-	"                ",
-	" .... XXXXXXXXX ",
-	" .... Xoooooooo ",
-	" .  . Xo....... ",
-	" .... Xoooooooo ",
-	" .... XXXXXXXXX ",
-	" .... Xoooooooo ",
-	" OOOO Xo....... ",
-	" OOOO Xoooooooo ",
-	" ++++ XXXXXXXXX ",
-	" @@@@ XX######X ",
-	" @  @ X#$%$$$%# ",
-	" $$$& X#%$%$%$# ",
-	" $$$$ X######## ",
-	" **** XX======X ",
-	"                "
-};
+#include "backend/backend_picture.h"
+
+static const wxString s_notebookPage_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA+0lEQVR4nOzbsQ7BUBjF8T/xEAbvYGFhYbXZvEWfxVvYbFYWllq8g8FbkDQxkFSTG7297Tm/ReIOksN3+kXaPuL6iHMAiHMAiBuUHYyy25Ma3bfjHgnwCCDOASDOV4HvNyazRdH+D+r1/pzYrpfTx9XHI4A4dwANyc9HYpjOlz/P/QsoOxjmWfEa65tqiksQcQ4AcQ4AcQ4Acd4ECbRab0jJYb8jhEcAce4AAoXOXGo8AohzBxAo9h5QV+d4BBDnDiCQ94COcACIa+3/Af/qII8A4twBBPIe0BEOAHEOAHEOAHGVe0DVfXZt5xFAnHwASTy51SSPAOLkA3gBAAD//4VV4JEAAAAGSURBVAMAJ6UhpAkQEXAAAAAASUVORK5CYII=";
 
 wxIcon ibValueNotebookPage::GetIcon() const
 {
-	return wxIcon(s_page_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_notebookPage_png, wxSize(16, 16));
 }
 
 wxIcon ibValueNotebookPage::GetIconGroup()
 {
-	return wxIcon(s_page_xpm);
+	return ibBackendPicture::GetIconFromBase64(s_notebookPage_png, wxSize(16, 16));
 }

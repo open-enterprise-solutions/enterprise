@@ -42,7 +42,7 @@ public:
 	// or undefined. Everything that already sits at a moment vends its own PointInTime() instead.
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 	virtual bool IsEmpty() const { return !m_date.IsValid(); }
 
 	// The date, then the reference. See the .cpp for what an absent reference means.

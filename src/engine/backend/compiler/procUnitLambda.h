@@ -105,11 +105,11 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
 
 	// ibEventDispatcher — a lambda IS its own dispatcher: run its own body with the args (+ trailing cancel). NOT const
-	// (the invoke may heap-promote / mutate the lambda's captured frames). IsEmpty is false: a bound lambda is set.
+	// (the invoke may build a capture frame / mutate the chain the lambda holds). IsEmpty is false: a bound lambda is set.
 	virtual bool IsEmpty() const override { return false; }
 
 	// NOT transferable across sessions: m_parentBc points into the COMPILING
-	// session's bytecode (see the lifetime note above), and m_capturedFrames holds
+	// session's bytecode (see the lifetime note above), and the captured chain holds
 	// that session's locals. Dispatched elsewhere this runs one session's bytecode
 	// on another's interpreter, and once the owner closes the pointer dangles.
 	virtual bool IsTransferable() const override { return false; }
@@ -131,23 +131,38 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		return &m_parentBc->m_listFunc[m_funcIndex];
 	}
 
-	// Captured enclosing-frame chain — populated at OPER_LFUNC
-	// materialise. [0] = direct enclosing fn frame, [1] = outer-outer,
-	// ... down to root. Only heap-promoted ancestors land here; stack-
-	// allocated frames (caller's fn has m_needsHeapFrame=false) are
-	// skipped by the weak_from_this().lock() guard at capture time.
-	// Vector size = nesting depth of heap-promoted ancestors at
-	// materialise site (≤ closure nesting count, not per-reference).
-	// At OPER_CALL_LAMBDA invoke, shim's m_ppArrayContext[k+1] is wired to
-	// m_capturedFrames[k]->m_pRefLocVars for the call duration.
-	std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
+	// ⭐⭐ THE CHAIN AS THIS LAMBDA SAW IT, and that is why it is kept HERE. Filled at OPER_LFUNC
+	// materialise: [0] is the frame the lambda was written in, [1] the one outside it, down to the
+	// root — the depths the compiler emitted, counted at that moment. The shim wires
+	// m_ppArrayContext[k + 1] to CapturedAt(k) for the call duration.
+	//
+	// 🛑 IT CANNOT LIVE ON THE FRAMES. A link in the frame (`m_outer`) was tried and crashed the
+	// live base: a frame is shared by every closure made under it, so a DEEPER capture lengthens the
+	// one chain, the layer list comes out longer than the code was compiled against, and a lambda
+	// reads the wrong layer — 0xcdcdcdcd in an operand, procUnit.cpp:1308, inside a Where lambda
+	// (2026-09-24). The depth is a fact about the LAMBDA, not about the frames it walks.
+	//
+	// Each entry is a hold, so the frames stay alive exactly as long as some lambda needs them;
+	// only frames a closure may take are in it (ibRunLifetime::Captured).
+	std::vector<ibRunCapturePtr> m_capturedFrames;
 
-	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames that
-	// had to be HEAP-PROMOTED to survive the call that made them; a module body's frame needs no
-	// promoting because it never ends while the module is loaded — it is a member of the
-	// ibProcUnit (ibRunLifetime::Retained). So `weak_from_this().lock()` returns nothing for it and
-	// the capture walk skipped it, silently: a lambda could not see the module's own variables at
-	// all, and read whatever sat at that depth in the shim instead.
+	ibRunCaptureContext* GetCaptured() const {
+		return m_capturedFrames.empty() ? nullptr : m_capturedFrames.front().Get();
+	}
+
+	// The k-th frame outwards, as this lambda recorded them — null past the end.
+	ibRunCaptureContext* CapturedAt(size_t k) const {
+		return (k < m_capturedFrames.size()) ? m_capturedFrames[k].Get() : nullptr;
+	}
+
+	size_t CapturedDepth() const { return m_capturedFrames.size(); }
+
+	// ⭐⭐ AND THE MODULE'S OWN FRAME, WHICH IS NOT ONE OF THEM. The chain above holds frames a
+	// closure took in order to survive the call that made them; a module body's frame needs no
+	// taking because it never ends while the module is loaded — it is a member of the
+	// ibProcUnit (ibRunLifetime::Retained, not Captured). So the capture walk skipped it, silently:
+	// a lambda could not see the module's own variables at all, and read whatever sat at that depth
+	// in the shim instead.
 	//
 	// Measured 2026-09-08, and it was quiet in the worst way — an ANSWER, not a refusal:
 	//     var s = "hi"; var f = Function(x){ return s; };  f(0)  →  "Data"
@@ -169,7 +184,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// m_needsHeapFrame. OPER_CALL_LAMBDA reads it as a single field
 	// access on the lambda value, no need to dereference through
 	// m_parentBc->m_listFunc[m_funcIndex]. True ⇒ this lambda's own
-	// frame must be heap-promoted at invoke time (some inner lambda
+	// frame must be a capture frame at invoke time (some inner lambda
 	// captures from it).
 	bool m_needsHeapFrame = false;
 
@@ -203,7 +218,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		// Closure capture (Phase B) — install captured frames as
 		// extra layers in shim's m_ppArrayContext for the call
 		// duration. Lambda body OPER_GET / OPER_SET at depth k+1
-		// (k in [0, N)) reads/writes through m_capturedFrames[k]'s
+		// (k in [0, N)) reads/writes through CapturedAt(k)'s
 		// m_pRefLocVars. Pre-existing parent layers (root, common
 		// modules) shift from positions [1..] to [N+1..] so the
 		// previously-emitted depths still hit the correct frames.
@@ -214,7 +229,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		ibRunContext** newList  = nullptr;
 		bool           ownsList = false;   // true = this invoke malloc'd it and must free it
 		unsigned int origSize = 0;
-		const unsigned int N  = (unsigned int)m_capturedFrames.size();
+		const unsigned int N  = (unsigned int)CapturedDepth();
 
 		// The module's own frame is one more layer, and it goes AFTER the captured ones — the
 		// order the compiler counted the depths in. See ibValueFunction::m_moduleFrame.
@@ -247,9 +262,8 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 			// m_ppArrayContext[0] is unused in normal execution but kept for
 			// the bDelta=true case where slot=-1 lands here.
 			newList[0] = prevList ? prevList[0] : nullptr;
-			for (unsigned int k = 0; k < N; ++k) {
-				newList[k + 1] = m_capturedFrames[k].get();
-			}
+			for (unsigned int k = 0; k < N; ++k)
+				newList[k + 1] = m_capturedFrames[k].Get();
 			if (M != 0)
 				newList[N + 1] = m_moduleFrame;
 			for (unsigned int i = 1; i < origSize; ++i) {
@@ -333,14 +347,11 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 	if (&cValue1 == &cValue2)
 		return;
 
-	// STRING ONTO STRING KEEPS THE BUFFER, and the check has to come BEFORE Reset()
-	// because Reset() is exactly what throws the buffer away. Overwriting the text
-	// reuses the allocation, so a loop assigning into the same slot pays for one.
+	// STRING ONTO STRING SHARES THE TEXT — one more owner, no characters copied.
 	if (!cValue1.m_bReadOnly &&
-		cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr != nullptr &&
+		cValue1.m_typeClass == ibValueTypes::TYPE_STRING &&
 		cValue2.m_typeClass == ibValueTypes::TYPE_STRING) {
-		if (cValue2.m_pStr != nullptr) *cValue1.m_pStr = *cValue2.m_pStr;
-		else cValue1.m_pStr->Clear();                 // null source = the empty string
+		cValue1.m_sData = cValue2.m_sData;
 		return;
 	}
 
@@ -371,12 +382,9 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// Buffer copy, exactly like ibValue::Copy. SetString(GetString()) went
-		// ibString -> wxString -> ibString: two conversions and two allocations
-		// per copied string, on the interpreter's per-instruction path. The
-		// destination was Reset() above, so its m_pStr is already null — no
-		// second Reset needed either.
-		cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
+		// The text shared, exactly like ibValue::Copy. The destination was Reset()
+		// above, so its word is the empty string already.
+		cValue1.m_sData = cValue2.m_sData;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -426,22 +434,9 @@ struct ibReleaseRef {
 inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 {
 	// 🛑 THE DESTINATION'S PREVIOUS TAG, read before it is overwritten. It is the only
-	// thing that says whether m_pStr is a buffer WE own — to be reused or released —
-	// or a stale alias of m_pRef that must never be touched. Without it this function
-	// either leaks the old buffer or deletes a pointer that was never an ibString;
-	// SetString() used to supply the answer by Reset()ing, at the price of the buffer.
+	// thing that says what the word holds — a string's text or a number's heap tier WE
+	// own, to be let go, or a stale alias of m_pRef that must never be touched.
 	const ibValueTypes destWas = cValue1.m_typeClass;
-	ibString* const destBuffer =
-		(destWas == ibValueTypes::TYPE_STRING) ? cValue1.m_pStr : nullptr;
-
-	// A destination that HELD a string and is about to become something else releases
-	// it here — once the tag has moved on, nothing downstream knows the pointer was a
-	// buffer. (The old SetString() road freed it only when the new value was a string
-	// too, so a string overwritten by a number was simply lost.)
-	if (destBuffer != nullptr && cValue2.m_typeClass != ibValueTypes::TYPE_STRING) {
-		delete cValue1.m_pStr;
-		cValue1.m_pStr = nullptr;
-	}
 
 	// 🛑⭐⭐ AND A DESTINATION THAT HELD AN OBJECT LETS IT GO — this overload never did. It is the LET road
 	// (`r = …` in a script: procUnit's OPER_LET reads its source const), and it overwrote an object
@@ -459,6 +454,18 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 	// 2026-09-10: 1M × 3 assignments, 110 → 136 ms).
 	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);
 
+	// A destination that held ANOTHER KIND lets go of its text or its number here (its object
+	// went to the guard above), and its word is zeroed — the empty state of every kind (value.h,
+	// the union) — so the member written below writes over a valid empty one. The same kind
+	// simply assigns over itself (a string then shares the source's text).
+	if (destWas != cValue2.m_typeClass) {
+		if (destWas == ibValueTypes::TYPE_STRING)
+			cValue1.m_sData.~ibString();
+		else if (destWas == ibValueTypes::TYPE_NUMBER)
+			cValue1.m_fData.~ibNumber();
+		cValue1.m_dData = 0;
+	}
+
 	cValue1.m_typeClass = cValue2.m_typeClass;
 	switch (cValue2.m_typeClass)
 	{
@@ -471,16 +478,8 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// STRING ONTO STRING KEEPS THE BUFFER. This is the LET road — `b = a` — so a
-		// loop assigning into the same slot would otherwise free and remake the buffer
-		// on every iteration; overwriting the text reuses the allocation instead.
-		if (destBuffer != nullptr) {
-			if (cValue2.m_pStr != nullptr) *destBuffer = *cValue2.m_pStr;
-			else destBuffer->Clear();                    // null source = the empty string
-		}
-		else {
-			cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
-		}
+		// The LET road — `b = a` — shares the text: one more owner, no characters copied.
+		cValue1.m_sData = cValue2.m_sData;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -517,8 +516,14 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		return;
 
 	const ibValueTypes destWas = cValue1.m_typeClass;
-	const std::unique_ptr<ibString> destBuffer(destWas == ibValueTypes::TYPE_STRING ? cValue1.m_pStr : nullptr);
 	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);   // adopts the destination's reference
+
+	// The destination's own text or number goes now, and its word is zeroed (value.h, the union).
+	if (destWas == ibValueTypes::TYPE_STRING)
+		cValue1.m_sData.~ibString();
+	else if (destWas == ibValueTypes::TYPE_NUMBER)
+		cValue1.m_fData.~ibNumber();
+	cValue1.m_dData = 0;
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
 
@@ -533,10 +538,9 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_fData = std::move(cValue2.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// A move MOVES the buffer — same as ibValue::Move. The source is an
-		// expiring value (Reset() at the tail of this function), so nulling
-		// m_pStr here is what keeps that Reset from freeing what we took.
-		cValue1.m_pStr = cValue2.m_pStr; cValue2.m_pStr = nullptr;
+		// A move MOVES the text — same as ibValue::Move. The source is an expiring
+		// value (Reset() at the tail of this function), left holding no text.
+		cValue1.m_sData = std::move(cValue2.m_sData);
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = std::move(cValue2.m_dData);

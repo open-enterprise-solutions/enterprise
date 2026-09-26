@@ -239,7 +239,7 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetReference());
 		return true;
 	case enModified: pvarRetValue = m_objModified; return true;
-	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
+	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case Func::enGetMetadata: pvarRetValue = m_metaObject; return true;
 	case Func::enLock:   TryAcquireFormLock(); return true;

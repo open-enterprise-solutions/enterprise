@@ -367,6 +367,12 @@ void ibTranslateCode::SkipSpaces() const
 						unsigned int j_utf8 = i_utf8;
 						unsigned int j_utf8_offset = j_utf8;
 #endif	
+						// ⭐ A COMMENT ENDS AT ITS LINE END, AND THE WALK THEN CONTINUES FROM THERE - IN THIS LOOP. It used to
+						// CALL ITSELF for the next line, so n comment lines in a row were n frames deep: a module with a
+						// big block of commented-out code overflowed the stack of the thread compiling it (enterprise died
+						// on 2026-09-21 with 511+ frames of SkipSpaces, one per line). Nothing here needs a new call: the
+						// outer `for` already walks the buffer, and the line end is just the next character it meets.
+						bool commentEnded = false;
 						for (unsigned int j = i; j < m_bufferSize; j++) {
 
 							const auto& w = m_strBuffer[j];
@@ -382,11 +388,18 @@ void ibTranslateCode::SkipSpaces() const
 							m_currentUtf8Pos = j_utf8;
 #endif
 							if (w == wxT('\n') || w == wxT('\r')) {
-								//process next line
-								SkipSpaces();
-								return;
+								// Resume the outer walk AT the line end: `i++` lands on it, where it is whitespace like
+								// any other and counts the line (m_currentLine) exactly as the recursive call did.
+								i = j - 1;   // j > i here (the comment starts with '/', which is not a line end)
+#ifdef UTF8_LEXEM_TRANSLATE
+								i_utf8_offset = j_utf8;   // ... and the UTF-8 offset of that same character
+#endif
+								commentEnded = true;
+								break;
 							}
 						}
+						if (commentEnded)
+							continue;
 						i = m_currentPos + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
 						i_utf8 = m_currentUtf8Pos + i_utf8_step;
@@ -1157,18 +1170,25 @@ bool ibTranslateCode::PrepareLexem()
 
 				const int k = IsKeyWord(s);
 
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
 				//undefined
-				if (k == KEY_UNDEFINED) {
+				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
 				}
 				//boolean
-				else if (k == KEY_TRUE || k == KEY_FALSE) {
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetBoolean(s);
 				}
 				//null
-				else if (k == KEY_NULL) {
+				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
 				}
@@ -1486,18 +1506,25 @@ void ibTranslateCode::PrepareLexem(const ibTextEdit& edit)
 
 				const int k = IsKeyWord(s);
 
+				// ⭐ AFTER A DOT EVEN A CONSTANT'S WORD IS A MEMBER NAME. `Null`, `Undefined`, `True` and `False` were
+				// classified here, BEFORE the "after a dot a keyword is a member name" rule below was reached - so
+				// an enumeration could not have a member called Null (`JSONValueType.Null` did not compile:
+				// "Identifier expected"), and a Structure read from `{"null": 1}` could not be asked `s.null`.
+				// Nothing is a constant in a property position: what stands after a dot names a member.
+				const bool member = PreviousLexemIsDot();
+
 				//undefined
-				if (k == KEY_UNDEFINED) {
+				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_EMPTY);
 				}
 				//boolean
-				else if (k == KEY_TRUE || k == KEY_FALSE) {
+				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetBoolean(s);
 				}
 				//null
-				else if (k == KEY_NULL) {
+				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
 					m_current_lex.m_valData.SetType(ibValueTypes::TYPE_NULL);
 				}

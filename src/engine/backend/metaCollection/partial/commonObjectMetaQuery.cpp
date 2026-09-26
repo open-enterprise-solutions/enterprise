@@ -19,6 +19,7 @@
 #include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibBackendColumnRawDB
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
 #include "backend/system/value/valuePointInTime.h"                // g_valuePointInTimeCLSID — the moment column assembles one
+#include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — the empty value of a declared type
 #include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
 #include "backend/query/columnLayout.h"                           // ColumnFieldNames (column field list via ibBackendQueryColumn)
@@ -41,6 +42,29 @@ wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 
 bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member*/, ibValue& /*out*/) const
 {
+	return false;
+}
+
+// ⭐⭐ A METAOBJECT THAT DECLARES NO LIMIT NARROWS TO ITS OWN CLASS — the answer a plain reference field
+// gives when it governs another: whoever put a counterparty in the first one sees counterparties offered
+// in the second. Written here for every metaobject at once, so the verb's `out` is filled on every road
+// and the bool means one thing throughout: the value came through as it was.
+//
+// ⭐ AND THE EMPTY VALUE IS MADE THE WAY THE TREE ALREADY MAKES IT — the metadata this metaobject belongs
+// to, handed to the same adjustment a field's own type uses (Max, 2026-09-24: "you have the metadata, you
+// pass it to AdjustValue and it makes the empty reference for you"). Nothing new builds a reference here,
+// and a class the registry cannot make — a register, a constant, anything that is not a reference at all —
+// comes back undefined, which is the honest answer for a thing no value can narrow to.
+bool ibValueMetaObjectGenericData::AdjustOutValue(const ibValueDataObject& /*element*/, const ibValue& varValue,
+	ibValue& out) const
+{
+	const ibTypeDescription mine(reference_to_clsid(GetMetaID()));
+	if (mine.ContainType(varValue.GetClassType())) {
+		out = varValue;
+		return true;
+	}
+
+	out = ibValueTypeDescription::AdjustValue(mine, GetMetaData());
 	return false;
 }
 
@@ -119,7 +143,7 @@ wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 // authority, and the last of them was retired for pretending to be a second one: it answered with a
 // SORT whose tail happened to be the key, so a source that sorts by something else first (an
 // enumeration, by Order) handed a number to everyone who wanted identity.
-// (docs/query-language-arc.md §22.1)
+// (docs/private/query-language-arc.md §22.1)
 // ⚠ THE ROW KEY IS NOT AN ALTERNATIVE ANSWER HERE, however well it fits a source that stores no reference
 // of its own (an enumeration). This key is read by TWO tiers that want different things from it: the cursor
 // expands it into PHYSICAL fields, where the row key is exactly right — and the composer writes its NAME into
@@ -312,7 +336,7 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 // registers — no single row-key; composite identity (recorder+line / period?+dims),
 // carried as real attributes; the consumer assembles the row identity. No reference.
 // ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
-// column, it holds one (docs/ownership-authority.md). The signatures are untouched.
+// column, it holds one (docs/private/ownership-authority.md). The signatures are untouched.
 const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const wxString& name) const {
 	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
 	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
@@ -333,7 +357,7 @@ const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->
 const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
 // Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register
 // (its dimensions are data); period + dimensions for an information register. The queryable is
-// the authority — no per-column / per-attribute flag. (docs/query-language-arc.md §22.1)
+// the authority — no per-column / per-attribute flag. (docs/private/query-language-arc.md §22.1)
 std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyColumns() const {
 	std::vector<const ibBackendQueryColumn*> cols;
 	// The key's parts, each by its query face — asked in one place so a missing one cannot slip in

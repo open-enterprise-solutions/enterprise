@@ -30,7 +30,7 @@ bool ibValueMetaObjectParameterizedJob::WriteData(ibDataNode& node) const
 	node.SetValue(m_propertyDefFormFolderSelect->GetName(), GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()).str());
 
 	// Both sides in the same commit — a property declared and never serialised is "the one failure
-	// mode that looks like the feature working" (SplitTotals, docs/scheduled-jobs.md § 12).
+	// mode that looks like the feature working" (SplitTotals, docs/private/scheduled-jobs.md § 12).
 	node.SetProperty(m_propertyUse->GetName(), m_propertyUse->GetNodeValue());
 	node.SetProperty(m_propertySchedule->GetName(), m_propertySchedule->GetNodeValue());
 	node.SetProperty(m_propertyRetryCount->GetName(), m_propertyRetryCount->GetNodeValue());

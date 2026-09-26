@@ -18,7 +18,7 @@
 //                    (per-config entry shadowing a platform entry),
 //                    unknown category key. Entry still loads.
 //
-// See docs/syntax-helper-design.md §3.3 for the contract.
+// See docs/private/syntax-helper-design.md §3.3 for the contract.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_HELP_LOAD_ERROR_H_

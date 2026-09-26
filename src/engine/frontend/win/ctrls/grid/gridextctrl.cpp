@@ -639,8 +639,14 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 	int row, int col,
 	bool isSelected)
 {
+	// 🛑 IN FROM THE SIDES ONLY. Taken in by one on all four, the text lost two pixels of the height, and
+	// DrawTextRectangle starts it a margin down besides: out of a row of 15 (one line of the 8 pt default
+	// font, 13 high) the text kept 11, so every default row cut its descenders - "by" read "bv", and a line
+	// of underscores to sign on was not there at all. The printout gives the same row its whole height, so
+	// paper and screen disagreed on every line, and a row fitted to its text (ibSpreadsheetRowHeight) came
+	// out cut on the screen alone (2026-09-22).
 	wxRect rect = rectCell;
-	rect.Inflate(-1);
+	rect.Inflate(-1, 0);
 
 	// erase only this cells background, overflow cells should have been erased
 	ibGridCellRenderer::Draw(grid, attr, dc, rectCell, row, col, isSelected);
@@ -738,7 +744,7 @@ void ibGridCellStringRenderer::Draw(ibGrid& grid,
 			}
 
 			rect = rectCell;
-			rect.Inflate(-1);
+			rect.Inflate(-1, 0);   // from the sides only - see the top of this method
 			rect.width++;
 		}
 	}

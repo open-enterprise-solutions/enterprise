@@ -106,7 +106,18 @@ public:
 #pragma warning(push)
 #pragma warning(disable:4995)
 #endif
-	inline void			free() { m_file_size = 0; m_pos = 0; m_mem_size = 0; wxDELETE(m_data); }
+	// 🛑 FREED THE WAY IT WAS ALLOCATED, and this is the ONE place that does it — the destructor
+	// calls here rather than repeating the two lines, because the buffer had two ways of being
+	// released and only one of them was ever corrected. `w()` grows it with malloc / realloc, so
+	// `wxDELETE` was `delete` over a malloc'd block: undefined behaviour, invisible on MSVC where
+	// both roads end in one heap, and reported 37 times as alloc-dealloc-mismatch on the first
+	// sanitised run (2026-09-22).
+	// ⚠ `::free` with the scope, not `free` — this class has a member of that name (you are reading
+	// it), and inside it the bare word is the member, which takes no arguments.
+	inline void			free() {
+		m_file_size = 0; m_pos = 0; m_mem_size = 0;
+		if (m_data != nullptr) { ::free(m_data); m_data = nullptr; }
+	}
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

@@ -24,12 +24,12 @@
 //*                              Frame                                       *
 //****************************************************************************
 
-ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
-	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
+ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
+	ibSourceDataObject* srcObject) : ibValueFrame(),
 	ibRuntimeModuleDataObject(m_members, this),
 	m_formType(defaultFormType), m_formModified(false),
 	m_closeOnChoice(true), m_closeOnOwnerClose(true),
-	m_metaFormObject(nullptr), m_controlOwner(nullptr),
+	m_metaFormObject(nullptr), m_controlOwner(nullptr), m_request(request),
 	m_formCollectionControl(new ibValueFormCollectionControl(this))
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
@@ -43,7 +43,7 @@ ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFram
 	m_commandBar->SetOwner(this);
 
 	//init default params
-	ibValueForm::InitializeForm(creator, ownerControl, srcObject, formGuid);
+	ibValueForm::InitializeForm(creator, ownerControl, srcObject, request.m_formGuid);
 
 	//set default params
 	m_controlId = defaultFormId;
@@ -75,7 +75,7 @@ ibValueForm::~ibValueForm()
 	// such ref; scripts holding the value contribute others). While
 	// any holder is alive the source is still "in use" by someone, so
 	// keeping the lock matches user-visible semantics. See
-	// docs/record-locks.md Phase B.3.
+	// docs/private/record-locks.md Phase B.3.
 }
 
 void ibValueForm::Update(wxObject* wxobject, ibVisualHost* visualHost)
@@ -224,6 +224,23 @@ bool ibValueForm::IsViewOnly() const
 	return false;
 }
 
+static bool HoldsControl(const ibValueFrame* frame, const ibValueFrame* control)
+{
+	if (frame == control)
+		return true;
+	for (unsigned int idx = 0; idx < frame->GetChildCount(); idx++) {
+		if (HoldsControl(frame->GetChild(idx), control))
+			return true;
+	}
+	return false;
+}
+
+ibValueFrame* ibValueForm::GetActiveControl() const
+{
+	// One that has left the form since — a control removed at run time, a form rebuilt — is not answered.
+	return m_activeControl != nullptr && HoldsControl(this, m_activeControl) ? m_activeControl : nullptr;
+}
+
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
@@ -237,7 +254,8 @@ enum Prop {
 	eUniqueKey,
 	eCloseOnChoice,
 	eCloseOnOwnerClose,
-	eReadOnly
+	eReadOnly,
+	eCurrentItem
 };
 
 enum Func
@@ -270,6 +288,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	helper.AppendProp(wxT("CloseOnChoice"), eCloseOnChoice, eSystem);
 	helper.AppendProp(wxT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
 	helper.AppendProp(wxT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
+	helper.AppendProp(wxT("CurrentItem"), eCurrentItem, eSystem);   // the control in focus (read only)
 
 	helper.AppendProc(wxT("Show"), wxT("Show()"));
 	helper.AppendProc(wxT("Activate"), wxT("Activate()"));
@@ -407,6 +426,9 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 			return true;
 		case eReadOnly:
 			pvarPropVal = IsViewOnly();   // reflects the explicit flag OR the rights-derived mode
+			return true;
+		case eCurrentItem:
+			pvarPropVal = static_cast<ibValue*>(GetActiveControl());
 			return true;
 		}
 	}

@@ -38,31 +38,11 @@ void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
 {
 	ibValue standartProcessing = true;
 	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
+	// ⭐ THE SAME DOOR A TYPED VALUE GOES THROUGH, as on a form's field (ibValueTextCtrl::ChoiceProcessing).
+	// This wrote the row and the editor by itself — the same lines as SetControlValue, less the refresh —
+	// so a chosen value and a typed one reached the cell by two roads.
 	if (standartProcessing.GetBoolean()) {
-		
-		ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
-		
-		if (currentLine != nullptr) {
-			currentLine->SetValueByMetaID(
-				GetModelColumn(), vSelected
-			);
-		}
-
-		ibDataViewColumnObject* columnObject =
-			dynamic_cast<ibDataViewColumnObject*>(GetWxObject());
-
-		if (columnObject != nullptr) {
-			ibDataViewValueRenderer* renderer = columnObject->GetRenderer();
-			wxASSERT(renderer);
-			ibControlTextEditor* textEditor = dynamic_cast<ibControlTextEditor*>(renderer->GetEditorCtrl());
-			if (textEditor != nullptr) {
-				textEditor->SetValue(vSelected.GetString());
-				textEditor->SetInsertionPointEnd();
-			}
-			else {
-				renderer->FinishSelecting();
-			}
-		}
+		SetControlValue(vSelected);
 		ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
 	}
 }

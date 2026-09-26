@@ -35,9 +35,9 @@ BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& r
 // loop does, which is what a frame slot means.
 BACKEND_API bool ibLinqSeen(ibValue& scratch, const ibValue& value);
 // `row` null = this instruction carries only a further ordering key for the row already kept;
-// `keyAt` is that key's position among the clause's keys. See the definition.
-BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt);
-// `ordering`: 0 leave as they came · 1 descending by key · 2 ascending · 3 simply reversed.
+// `keyAt` is that key's position among the clause's keys, `descending` the way it runs. See the definition.
+BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt, bool descending);
+// `ordering`: 0 leave as they came · 2 by the keys, each the way it was kept with · 3 simply reversed.
 // `wantFirst` asks for the first row instead of all of them (an empty value when there are none).
 //
 // What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a
@@ -57,7 +57,7 @@ BACKEND_API void ibLinqGroups(ibValue& out, ibValue& scratch);
 // by `\n`), read only when the shape is made: once per query, in `shapeSlot`. Every row after that
 // is an allocation of `count` values, filled BY POSITION — `ibLinqField` is handed the ordinal the
 // compiler assigned while it was compiling, so no name is looked up per row or per field.
-BACKEND_API void ibLinqRow(ibValue& out, ibValue& shapeSlot, const wxString& names, long count);
+BACKEND_API void ibLinqRow(ibValue& out, ibValue& shapeSlot, const ibString& names, long count);
 BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
 
 // ⭐⭐ DOES THIS ROW NAME ITS COLUMNS? — the one question that decides whether a query answers with a
@@ -68,7 +68,7 @@ BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
 //
 // True with the names filled for a projected row (`select { … }`) and for a group (Key / Values);
 // false for a plain value, an object, a reference — anything whose columns nobody named.
-BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<wxString>& outNames);
+BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames);
 
 // ⭐ AND A SAMPLE OF WHAT A GROUPING ANSWERS WITH — the collection a grouped query hands back, with
 // one group in it. Exported for the same reason as the rule above: the editor has to say what a query
@@ -200,35 +200,35 @@ public:
 	// running code, and outside it the ROOT's own — which the session hands over, because the frame
 	// is not a thing to publish: `ibSession::EvaluateInRoot` does the evaluation and answers with a
 	// value (session.h).
-	static bool Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
+	static bool Evaluate(const ibString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
 		bool bCompileBlock, ibEvalMode evalMode = eval_watch);
 	bool CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetValue, ibCompileCode& cModule, bool bCompileBlock);
 
 	//call an arbitrary function of the executable module
-	long FindExportMethod(const wxString& strMethodName) const { return FindMethod(strMethodName, false, 2); }
+	long FindExportMethod(const ibString& strMethodName) const { return FindMethod(strMethodName, false, 2); }
 
 	//Search for export functions
-	long FindMethod(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindMethod(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 
-	long FindFunction(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
-	long FindProcedure(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindFunction(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
+	long FindProcedure(const ibString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 
 	// Comma-separated-args wrappers over the ppParams array forms below. Return TRUE if the named method
 	// was found and run, FALSE if there is no such method (nothing ran) — same contract as the array forms.
 	template <typename ...Types>
-	inline bool CallAsProc(const wxString& funcName, Types&&... args) {
+	inline bool CallAsProc(const ibString& funcName, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
 		return CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
 	}
 
 	template <typename ...Types>
-	inline bool CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, Types&&... args) {
+	inline bool CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
 		return CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
 	}
 
-	bool CallAsProc(const wxString& funcName, ibValue** ppParams, const long lSizeArray);
-	bool CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
+	bool CallAsProc(const ibString& funcName, ibValue** ppParams, const long lSizeArray);
+	bool CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
 
 	void CallAsProc(const long lCodeLine, ibValue** ppParams, const long lSizeArray);
 	void CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray);
@@ -251,12 +251,12 @@ public:
 	//             unit.GetPropVal((long)v, value);
 	//
 	// (job/jobRunByteCode.cpp does exactly this to carry a run's `Result` back.)
-	long FindProp(const wxString& strPropName) const;
+	long FindProp(const ibString& strPropName) const;
 
-	bool SetPropVal(const wxString& strPropName, const ibValue& varPropVal);
+	bool SetPropVal(const ibString& strPropName, const ibValue& varPropVal);
 	bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
 
-	bool GetPropVal(const wxString& strPropName, ibValue& pvarPropVal);
+	bool GetPropVal(const ibString& strPropName, ibValue& pvarPropVal);
 	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);//attribute value
 
 	// Interpreter state (currentRunModule, runContext stack, errorPlace,
@@ -280,10 +280,10 @@ protected:
 	int m_numAutoDeleteParent; //flag for deleting the parent module
 
 	// 🛑 NO SCRATCH BUFFER LIVES HERE, and the two that briefly did are worth a line
-	// so nobody adds them back. They were the runtime's copy of the buffer
-	// `ibValue::GetString(ibString&)` wants, hoisted here because a local is built
+	// so nobody adds them back. They were the runtime's copy of the buffer the
+	// (since removed) `ibValue::GetString(ibString&)` wanted, hoisted here because a local is built
 	// per call and `Execute` is RE-ENTERED. Both true, and both beside the point: a
-	// STRING value is already holding its buffer (`m_pStr` IS the pointer), so the
+	// STRING value is already holding its text (`m_sData`), so the
 	// scratch was only ever for an operand with no text yet — and that one now builds
 	// its text straight into the destination. The parameter went away with the need
 	// for it; see AddStringValue in procUnit.cpp.

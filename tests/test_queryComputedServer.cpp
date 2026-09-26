@@ -7,7 +7,7 @@
 // the fallback." A reference column travels as its ibReference blob (the temp stores the spread) — grouping
 // / filtering by the reference needs NO decomposition. A DOT-WALK (navigate THROUGH a reference) is not
 // promoted (stays the RAM path). This harness proves the SERVER path produces the correct result on a real
-// embedded SQLite. (docs/temp-db.md)
+// embedded SQLite. (docs/private/temp-db.md)
 //
 // Needs a real connection (temp tables) so it brings up appData + the connection pool over an in-memory
 // SQLite, like test_tempDbSqlite. Skips (not fails) if the headless env cannot come up.
@@ -41,11 +41,18 @@
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibScan / ibFunc — a statement written by hand (the codec test)
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
 #include "backend/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 
+#include "backend/clsid.h"                                   // reference_to_clsid — a reference column's type
+#include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
+#include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
+#include "backend/query/dbTableProvider.h"                   // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
+#include "backend/databaseLayer/databaseQueryBuilder.h"      // ibQueryRenderer — the SQL a set becomes
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 
 namespace {
@@ -421,6 +428,42 @@ MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const wxString& table
 
 } // namespace
 
+// =============================================================================
+// A CELL WHOSE TAG THE RESULT DOES NOT CARRY reads as the column's TYPED EMPTY value, and `false`.
+//
+// That is ibColumnCodec::ReadValue's documented answer to "field not in the result set": a caller that
+// projected one field of a metadata column (a MAX over its date, say) and read it back through the column.
+//
+// 🛑 It was an ACCESS VIOLATION in a process with no active configuration. The codec built the empty value
+// with AdjustValue(type) and left the metadata it had been handed behind, so AdjustValue went to
+// `activeMetaData->` - which a headless tool before it opens a base, and every test here, does not have.
+// Where a configuration IS active the same line quietly used THAT one instead of the caller's - wrong for a
+// second configuration held beside it (compare / merge, an external processor). Found through a sequence's
+// border, whose retreat read a lone MAX this way: on a file base it lost the border, under a test it crashed.
+// =============================================================================
+TEST_F(ComputedServerFix, Codec_ACellWhoseTagIsNotInTheResultReadsAsTheTypedEmptyValue)
+{
+	if (!ready) return;
+
+	TypedCol region(wxT("region"), 370, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m7"), &region, { { wxT("North"), 10 } });
+	ASSERT_EQ(f.fields.size(), 2u);
+
+	// One field of the column's two: the value, with no `_TYPE` beside it.
+	ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(ibScan(wxT("m7"), wxT("r")));
+	q.Project({ ibQueryProjItem{ ibFunc(wxT("MAX"), { ibCol(wxT("r"), f.strField) }), f.strField } });
+	ibQueryResult rs = q.Execute();
+	ASSERT_TRUE(rs.Next());
+
+	ibValue value(ibNumber(7));   // anything but what it must become
+	bool read = true;
+	ASSERT_NO_THROW(read = ibColumnCodec::ReadValue(region.GetPhysicalName(), &region, /*metaData*/ nullptr, value, rs));
+	EXPECT_FALSE(read) << "the cell was not read - the caller is told so";
+	EXPECT_EQ(value.GetType(), ibValueTypes::TYPE_STRING) << "the column's typed empty value, not what was there before";
+	EXPECT_TRUE(value.GetString().IsEmpty());
+}
+
 TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 {
 	if (!ready) return;
@@ -508,4 +551,125 @@ TEST_F(ComputedServerFix, In_MetadataColumnEmptySetReturnsNoRows)
 	int rows = 0;
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 0) << "an empty OR-fold must not degrade to 'no predicate' (the whole table)";
+}
+
+// =============================================================================
+// A SET OF REFERENCES (DecomposeIn, through the door that writes every WHERE).
+//
+// A reference is three fields — its type tag, its table, its id — and a list of items of ONE catalog spells
+// the first two alike. Said pair by pair, a hundred items were a hundred `(tag = ? AND table = ? AND id = ?)`
+// branches weighed one at a time against every row, folded as a chain as deep as the list is long (which the
+// renderer walks recursively: some 155 references ran a checked build out of stack). No database is needed:
+// a catalog in a configuration in memory is enough to mint references of it.
+// =============================================================================
+namespace {
+
+class MetaPhysicalQ : public PhysicalQ {
+public:
+	MetaPhysicalQ(const wxString& table, ibMetaID id, const ibMetaData* metaData) : PhysicalQ(table, id), m_metaData(metaData) {}
+	const ibMetaData* GetMetaData() const override { return m_metaData; }
+private:
+	const ibMetaData* m_metaData;
+};
+
+struct ReferenceSetFix {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObject* items = nullptr;
+	ibValueMetaObject* units = nullptr;
+
+	ReferenceSetFix() {
+		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		if (root == nullptr) return;
+		items = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+		units = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+	}
+	bool Ready() const { return items != nullptr && units != nullptr; }
+
+	ibValue RefTo(const ibValueMetaObject* catalog) const {
+		return ibValue(ibValueReferenceDataObject::Create(&cfg, catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
+	}
+	// `column IN (values)` over a table of this configuration, as the SQL the door writes for it.
+	wxString SqlOfSet(const ibBackendQueryColumn* column, ibMetaID tableId, const std::vector<ibValue>& values) const {
+		MetaPhysicalQ table(wxT("T"), tableId, &cfg);
+		table.AddCol(column);
+		ibQueryCondition set;
+		set.m_col    = column;
+		set.m_op     = ibQueryFilterOp::In;
+		set.m_values = values;
+		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(&table, ibQueryPredicate::Leaf(set));
+		if (!predicate) return wxString();
+		ibDatabaseQueryBuilder q;
+		q.From(wxT("T")).Where(predicate);
+		return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(q.Build()).m_sql;
+	}
+	static int CountOf(const wxString& haystack, const wxString& needle) {
+		int n = 0;
+		for (size_t at = 0; (at = haystack.find(needle, at)) != wxString::npos; at += needle.length()) ++n;
+		return n;
+	}
+};
+
+} // namespace
+
+TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	const std::vector<wxString> fields = ColumnFieldNames(&item);
+	ASSERT_EQ(fields.size(), 3u) << "a single-target reference is expected to spread as _TYPE + _RTRef + _RRRef";
+
+	std::vector<ibValue> values;
+	for (int i = 0; i < 100; ++i)
+		values.push_back(f.RefTo(f.items));
+
+	const wxString sql = f.SqlOfSet(&item, 343, values);
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 1) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 0) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, fields[0] + wxT(" = ")), 1) << "the type tag, once";
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, fields[1] + wxT(" = ")), 1) << "the table, once";
+	EXPECT_TRUE(sql.Contains(fields[2] + wxT(" IN (")));
+}
+
+// References of TWO tables do not agree on the table, so nothing may be said once: pair by pair, as before —
+// and folded as a balanced tree, which a renderer can walk whatever the size of the set.
+TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID()));
+	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID()));
+	TypedCol subject(wxT("subject"), 341, both);
+
+	std::vector<ibValue> values;
+	for (int i = 0; i < 1000; ++i)
+		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
+
+	const wxString sql = f.SqlOfSet(&subject, 344, values);   // a chain a thousand deep is what this must survive
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << "two tables share no tag to say once";
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 999);
+}
+
+// 🛑 AN EMPTY REFERENCE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. "Not filled" is the zero-guid
+// sentinel OR SQL NULL in a row, and only the equality road says both (DecomposeEquality); inside the engine's
+// IN the empty value would match the sentinel alone, and the rows stored as NULL would silently stop being found.
+TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	const std::vector<ibValue> values{ f.RefTo(f.items), f.RefTo(f.items), ibValue(), f.RefTo(f.items) };
+
+	const wxString sql = f.SqlOfSet(&item, 345, values);
+	ASSERT_FALSE(sql.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 1) << sql;
 }

@@ -31,7 +31,7 @@
 // level down over the inner select — which is why the dialog is built around a sub-AST rather than
 // around "the query", and why the nested case needs no separate editor.
 //
-// See docs/query-constructor.md.
+// See docs/private/query-constructor.md.
 //
 ////////////////////////////////////////////////////////////////////////////
 

@@ -35,7 +35,7 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 
 	ibValueGridBox();
 	// The compose reports back through CallAfter, which can land after this control is gone.
-	virtual ~ibValueGridBox() { *m_aliveToken = false; }
+	virtual ~ibValueGridBox();
 
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost *visualHost) override;
 	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost *visualHost, bool firstCreated) override;
@@ -91,8 +91,10 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	// showing a COMPOSITION is a report, and a report has two verbs: build it, and configure it.
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) override;
 	virtual void CallAsAction(const ibActionID& lNumAction, class ibBackendValueForm* srcForm) override;
-	//support printing
-	virtual wxPrintout* CreatePrintout() const;
+
+	// The view of the document this box holds — the form's view is a facade over it while the box is the
+	// active control (menu, toolbar, commands, printing, saving).
+	virtual ibView* GetControlView() const override;
 
 	// ⭐⭐ THE ONE DOOR THE MODEL ARRIVES THROUGH. A model is HANDED to this control — by the form when
 	// it binds its source, by a script assigning `Items.Grid.Value`, by whatever else holds one — and
@@ -163,6 +165,12 @@ private:
 	// A wxWeakRef would WRITE into the control as it dies, racing the copy the worker holds; this is
 	// only ever copied by the worker and only ever read on the thread the destructor runs on.
 	std::shared_ptr<bool> m_aliveToken = std::make_shared<bool>(true);
+
+	// The document (it holds the sheet on show) and its view, both as long as the box lives — held side by side
+	// so nothing is cast to find them. The box's events drive the view: Create creates it, Update updates it,
+	// Cleanup empties it (docview-fork.md, "the form is a facade").
+	class ibSpreadsheetGridBoxDocument* m_gridDocument = nullptr;
+	class ibSpreadsheetGridBoxView*     m_gridView = nullptr;
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),

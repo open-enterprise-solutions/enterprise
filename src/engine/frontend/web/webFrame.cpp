@@ -201,10 +201,10 @@ bool ibWebFrame::ResolveModal(const std::string& id, int result)
 }
 
 ibBackendValueForm* ibWebFrame::CreateNewForm(
+	const ibFormRequest& request,
 	const ibValueMetaObjectFormBase* creator,
 	ibBackendControlFrame* backendControl,
-	ibSourceDataObject*    srcObject,
-	const ibUniqueKey&     formGuid)
+	ibSourceDataObject*    srcObject)
 {
 	std::cerr << "[tabs] CreateNewForm creator=" << (void*)creator
 		<< " tabs_before=" << m_tabs.size() << std::endl;
@@ -221,7 +221,7 @@ ibBackendValueForm* ibWebFrame::CreateNewForm(
 	// ownerControl + access to backend_mainFrame for the UI fallback.
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
 	return new ibValueForm(
-		creator, ownerControl, srcObject, formGuid);
+		request, creator, ownerControl, srcObject);
 }
 
 ibUniqueKey ibWebFrame::CreateFormUniqueKey(

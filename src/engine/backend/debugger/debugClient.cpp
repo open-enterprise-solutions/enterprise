@@ -20,6 +20,8 @@
 
 #include "backend/fileSystem/fs.h"
 #include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
+#include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
+#include "backend/diagnostics/journal.h"     // …and the reason is written down before the socket goes
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif 
@@ -455,6 +457,11 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_AddExpression);
+	// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
+	// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
+	// question about the same stop and has to say it too, or the far end works the answer out in whichever
+	// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
+	commandChannel.w_stringZ(m_currentSessionGuid);
 	// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
 	commandChannel.w_stringZ(asker);
 	commandChannel.w_stringZ(strExpression);
@@ -466,8 +473,8 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
-	//set expression in map 
-	m_listExpression.insert_or_assign(id, strExpression);
+	//set expression in map
+	m_listExpression.insert_or_assign(id, ibWatchedExpression{ asker, strExpression });
 }
 
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
@@ -479,6 +486,7 @@ void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned 
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_ExpandExpression);
+	commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 	commandChannel.w_stringZ(asker);   // see AddExpression
 	commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
@@ -516,6 +524,7 @@ void ibDebuggerClient::SetLevelStack(unsigned int level)
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetStack);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_u32(level);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
@@ -526,6 +535,7 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalToolTip);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_stringZ(strFileName);
 		commandChannel.w_stringZ(strModuleName);
 		commandChannel.w_stringZ(strExpression);
@@ -543,6 +553,7 @@ void ibDebuggerClient::RunSandbox(const wxString& code)
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_RunSandbox);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_stringZ(code);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
@@ -613,6 +624,7 @@ void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const w
 	if (ibDebuggerClient::IsEnterLoop()) {
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalAutocomplete);
+		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
 		commandChannel.w_stringZ(strFileName);
 		commandChannel.w_stringZ(strModuleName);
 		commandChannel.w_stringZ(strExpression);
@@ -656,14 +668,22 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 {
 	if (m_connectionType == ConnectionType::ConnectionType_Debugger) {
 
+		// 🔎 THIS END ASKED FOR IT — the only detach that is somebody's decision rather than a loop
+		// running out of reasons to go on. Written down so the journal can tell the two apart: a line
+		// here means the Debug menu, `app_run restart` or an apply of the configuration ended the
+		// session; no line here, and the session ended by itself.
+		ibJournalInfo(wxT("debugger"),
+			wxT("debug client: detaching because this process asked to (%s)"),
+			kill ? wxT("stop the program") : wxT("stop debugging"));
+
 		m_connectionType = ConnectionType::ConnectionType_Scanner;
 
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(kill ? CommandId_Destroy : CommandId_Detach);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 
-		if (m_socketClient != nullptr)
-			m_socketClient->Close();
+		// From the caller's thread, while the connection's own thread may be closing it too.
+		m_socketLock.Close(m_socketClient);
 
 		m_verifiedConnection = false;
 
@@ -690,6 +710,11 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 {
 	if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger) {
 
+		// 🔎 The third way a session can end — the connection's thread being killed outright, which
+		// nothing above it announces.
+		ibJournalInfo(wxT("debugger"),
+			wxT("debug client: the connection thread was killed while debugging"));
+
 		// Send the exit event message to the UI.
 		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
 
@@ -699,23 +724,19 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 {
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
+	m_socketLock.Destroy(m_socketClient);
 
 	wxIPV4address addr;
 	addr.Hostname(m_hostName);
 	addr.Service(m_port);
 
 	// set the appropriate flags for the socket
-	m_socketClient = new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL);
+	m_socketLock.Assign(m_socketClient, new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL));
 
 	// step wait connect  
 	m_number_connection_attempts = 0;
@@ -789,56 +810,135 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart, m_socketClient);
 				}
 
+				// 🔎 WHY THE SESSION ENDED — the word this loop leaves by, printed once below.
+				//
+				// Every exit here is a detach the person at the designer sees as "the debugger fell off",
+				// and from outside they all looked the same: the loop ended, the socket was closed, the
+				// Debug menu went dark, and nothing said which of the six doors it left by. That is the
+				// one question a log could answer and did not (Max, 2026-09-25: *"the connection is not
+				// being killed — it detaches by itself"*), so the answer travels in a word and is
+				// reported with the state the doors are judged on.
+				const wxChar* leftBy = wxT("the loop's own condition - IsConnected() answered no");
+
 				while (ibDebuggerClientConnection::IsConnected()) {
 
 					if (m_socketClient != nullptr && m_socketClient->WaitForRead(0, waitDebuggerTimeout)) {
-						m_socketClient->ReadMsg(&length, sizeof(unsigned int));
-						// short read on the length header — treat as disconnect
-						if (m_socketClient->LastCount() != sizeof(unsigned int))
-							break;
-						// guard against hostile/garbled server sending an absurd size
-						static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
-						if (length > kMaxDebugPacket)
-							break;
-						if (m_socketClient == nullptr)
-							break;
-						// No second WaitForRead before the payload —
-						// the socket was created with wxSOCKET_BLOCK |
-						// wxSOCKET_WAITALL so ReadMsg blocks until
-						// every requested byte arrives. The previous
-						// WaitForRead(0, 50ms) gate timed out under
-						// network jitter / multi-tab debug traffic
-						// and skipped the payload while the length
-						// had already been consumed; the next outer
-						// iteration read the payload's first bytes
-						// as a fresh length header (huge value),
-						// tripped the kMaxDebugPacket guard, and
-						// detached. Symmetric fix to the server side.
-						wxMemoryBuffer bufferData(length);
-						m_socketClient->ReadMsg(bufferData.GetData(), length);
-						if (m_socketClient->LastCount() != length)
-							break;
+						wxMemoryBuffer bufferData;
+						{
+							// 🛑⭐⭐ ONE THREAD AT A TIME MAY USE THIS SOCKET — and this end had nothing of
+							// the kind, while the far end had half of it (debugServer.h, m_socketMutex).
+							// wxSocketBase keeps its blocking FLAGS on the object: a read raises WAITALL
+							// for the length of its read and a write does the same for its write, each
+							// restoring what it found. Overlap them — the window's thread sending a step
+							// while this thread reads the answer to the last one — and one restores the
+							// other's flags mid-frame, so a read obliged to wait for every byte comes back
+							// SHORT, on a socket that is connected, healthy and not closed.
+							//
+							// The wait stays outside the lock: a reader must not hold the socket while
+							// nothing is arriving. Inside is one whole frame, and the dispatch below stays
+							// outside — it answers, and answering takes this same lock.
+							std::lock_guard<std::mutex> lk(m_socketMutex);
+
+							m_socketClient->ReadMsg(&length, sizeof(unsigned int));
+							// short read on the length header — treat as disconnect
+							if (m_socketClient->LastCount() != sizeof(unsigned int)) {
+								leftBy = wxT("a short read on the length header");
+								break;
+							}
+							// guard against hostile/garbled server sending an absurd size
+							static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
+							if (length > kMaxDebugPacket) {
+								leftBy = wxT("a declared frame size past the 16 MiB ceiling");
+								break;
+							}
+							if (m_socketClient == nullptr) {
+								leftBy = wxT("the socket was taken out of its slot by another thread");
+								break;
+							}
+							// No second WaitForRead before the payload —
+							// the socket was created with wxSOCKET_BLOCK |
+							// wxSOCKET_WAITALL so ReadMsg blocks until
+							// every requested byte arrives. The previous
+							// WaitForRead(0, 50ms) gate timed out under
+							// network jitter / multi-tab debug traffic
+							// and skipped the payload while the length
+							// had already been consumed; the next outer
+							// iteration read the payload's first bytes
+							// as a fresh length header (huge value),
+							// tripped the kMaxDebugPacket guard, and
+							// detached. Symmetric fix to the server side.
+							bufferData.SetBufSize(length);
+							m_socketClient->ReadMsg(bufferData.GetData(), length);
+							if (m_socketClient->LastCount() != length) {
+								leftBy = wxT("a short read on the payload");
+								break;
+							}
+						}
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
+							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
+							// refuses a chunk whose declared size is larger than what arrived (fileSystem/fs.cpp),
+							// and that refusal travels up here - on a worker thread, where an escaping exception
+							// takes the whole designer down with it. It did, on 2026-09-23, while the designer
+							// was debugging: two asserts in the journal and an access violation inside memcpy a
+							// second later, from a thread whose entire record was those two lines.
+							//
+							// What a bad frame means is that this end and the far end no longer agree about the
+							// wire, and the only honest thing left is to stop reading it. The loop above already
+							// treats a short read that way (`LastCount() != length`).
+							try {
 #if _USE_NET_COMPRESSOR == 1
-							BYTE* dest = nullptr; unsigned int dest_sz = 0;
-							_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
-							RecvCommand(dest, dest_sz); free(dest);
+								BYTE* dest = nullptr; unsigned int dest_sz = 0;
+								_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
+								RecvCommand(dest, dest_sz); free(dest);
 #else
-							RecvCommand(bufferData.GetData(), length);
+								RecvCommand(bufferData.GetData(), length);
 #endif
+							}
+							catch (const ibBackendException& err) {
+								ibJournalError(wxT("debugger"),
+									wxT("debug client: a frame of %u bytes could not be read, closing the connection: %s"),
+									length, err.GetErrorDescription());
+								leftBy = wxT("a frame this end could not read");
+								break;
+							}
 							length = 0;
 						}
 					}
 
-					if (TestDestroy()) break;
+					if (TestDestroy()) {
+						leftBy = wxT("this thread was told to stop");
+						break;
+					}
+				}
+
+				// 🔎 THE ONE LINE THAT NAMES THE DOOR. The state comes with it because that is what the
+				// doors are judged on and what tells a connection that DIED from one this end walked away
+				// from: `closed` is the far end having gone, and connected=1 ok=1 closed=0 with a reason of
+				// "the loop's own condition" means the socket was alive and something else in IsConnected()
+				// said otherwise. Read it against the enterprise journal's own line for the same moment —
+				// whichever end printed first is the end that ended the session.
+				ibJournalIf {
+					const auto hold = m_socketLock.Hold();
+					const wxSocketClient* sock = m_socketClient;
+					ibJournalInfo(wxT("debugger"),
+						wxT("debug client: the read loop gave up on %s - socket %s, connected=%d, ok=%d, closed=%d, lastError=%d, lastCount=%u, type=%d"),
+						leftBy,
+						sock != nullptr ? wxT("held") : wxT("gone"),
+						sock != nullptr ? static_cast<int>(sock->IsConnected()) : -1,
+						sock != nullptr ? static_cast<int>(sock->IsOk()) : -1,
+						sock != nullptr ? static_cast<int>(sock->IsClosed()) : -1,
+						sock != nullptr ? static_cast<int>(sock->LastError()) : -1,
+						sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
+						static_cast<int>(m_connectionType));
 				}
 
 				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger)
 					sessionEnded = true;
 			}
 
-			if (m_socketClient != nullptr)
-				m_socketClient->Close();
+			// The far end has gone (or this thread was told to stop) — and DetachConnection may be closing
+			// the same socket right now, from another thread.
+			m_socketLock.Close(m_socketClient);
 
 			m_number_connection_attempts = 0;
 		}
@@ -860,10 +960,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 
 	m_number_connection_attempts = -1;
 
-	if (m_socketClient != nullptr)
-		m_socketClient->Destroy();
-
-	m_socketClient = nullptr;
+	m_socketLock.Destroy(m_socketClient);
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, unsigned int length)
@@ -871,6 +968,12 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	ibReaderMemory commandReader(pointer, length);
 	wxASSERT(ms_debugClient != nullptr);
 	u16 commandFromServer = commandReader.r_u16();
+
+	// 🔎 WHAT ARRIVED, IN ORDER — the last frames before a detach are the ones worth seeing, and the
+	// chain of `if`s below drops a command it does not know without a word.
+	ibJournalInfo(wxT("debugger.wire"),
+		wxT("debug client <- command %d of %u bytes, type=%d"),
+		static_cast<int>(commandFromServer), length, static_cast<int>(m_connectionType));
 
 	if (commandFromServer == CommandId_VerifyConnection) {
 
@@ -885,8 +988,19 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			m_connectionType = ConnectionType::ConnectionType_Debugger;
 		else if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Scanner)
 			m_connectionType = ConnectionType::ConnectionType_Scanner;
-		else
+		else {
+			// 🔎 ANSWERING "UNKNOWN" IS ITSELF A DETACH — the far end disconnects on purpose when it
+			// reads this (debugServer.cpp, CommandId_SetConnectionType), so the reason it is being
+			// said belongs in the journal next to it.
+			ibJournalWarning(wxT("debugger"),
+				wxT("debug client: answering 'unknown' to %s - %s (configuration over there %s, ours %s)"),
+				m_hostName, m_verifiedConnection
+					? wxT("this connection is neither a waiter nor a scanner")
+					: wxT("it runs a different configuration"),
+				m_confGuid, activeMetaData->GetConfigGuid().str());
+
 			m_connectionType = ConnectionType::ConnectionType_Unknown;
+		}
 
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetConnectionType);
@@ -898,16 +1012,23 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		m_connectionType = static_cast<ConnectionType>(commandReader.r_u16());
 	}
 	else if (commandFromServer == CommandId_GetArrayBreakpoint) {
-		//send expression 
-		for (auto& expression : ms_debugClient->m_listExpression) {
+		// EVERYTHING WATCHED, REGISTERED AGAIN — and in the same words AddExpression uses, the asker
+		// first. 🛑 The name was left out here, so the runtime read the expression's text as the asker
+		// and the id's bytes as the expression, then asked for an id past the end of the frame: an
+		// exception on its connection thread, which is the thread the whole debug session lives on.
+		for (const auto& watched : ms_debugClient->m_listExpression) {
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_AddExpression);
-			commandChannel.w_stringZ(expression.second);
+			// Re-registering is about no stop in particular — the name is empty here, and an empty name
+			// means "whoever is parked", which is what a registration wants.
+			commandChannel.w_stringZ(wxEmptyString);
+			commandChannel.w_stringZ(watched.second.m_asker);
+			commandChannel.w_stringZ(watched.second.m_expression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-			commandChannel.w_u64(expression.first);
-#else 
-			commandChannel.w_u32(expression.first);
-#endif 
+			commandChannel.w_u64(watched.first);
+#else
+			commandChannel.w_u32(watched.first);
+#endif
 			SendCommand(commandChannel.pointer(), commandChannel.size());
 		}
 
@@ -1227,18 +1348,48 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, unsigned int length)
 {
+	bool sent = false;
+
+	// ⭐⭐ THE SOCKET IS USED BY ONE THREAD AT A TIME. Two calls go out here, a header and then its
+	// payload, and they must not be split — by another sender, nor by the READER on the connection's own
+	// thread. The far end has held this lock for its writes all along (debugServer.h); this end held
+	// nothing, and the window's thread sending a step while the connection's thread read the answer to
+	// the last one is what left a read short on a live socket. See the read loop in EntryClient.
+	std::lock_guard<std::mutex> lk(m_socketMutex);
+
 #if _USE_NET_COMPRESSOR == 1
 	BYTE* dest = nullptr; unsigned int dest_sz = 0;
 	_compressLZ(&dest, &dest_sz, pointer, length);
 	if (m_socketClient && m_socketClient->IsOk()) {
 		m_socketClient->WriteMsg(&dest_sz, sizeof(unsigned int));
 		m_socketClient->WriteMsg(dest, dest_sz);
+		sent = true;
 	}
 	free(dest);
 #else
 	if (m_socketClient && ibDebuggerClientConnection::IsConnected()) {
 		m_socketClient->WriteMsg(&length, sizeof(unsigned int));
 		m_socketClient->WriteMsg(pointer, length);
+		sent = true;
 	}
 #endif
+
+	// 🔎 WHO WROTE, AND WHETHER IT WENT OUT — the wire as this end sees it, one line per command.
+	//
+	// Two facts are worth having and neither was recorded. WHICH THREAD — the journal's own column says
+	// that, and it is worth reading here: the pair of WriteMsg calls above is a header and then its
+	// payload, and the lock that keeps them together is young (see above). AND WHETHER IT WENT AT ALL: a
+	// command dropped because IsConnected() said no leaves the person pressing a key that does nothing —
+	// which is what "the debugger fell off" looks like from the outside, before anything is closed.
+	ibJournalIf {
+		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
+		const auto hold = m_socketLock.Hold();
+		const wxSocketClient* sock = m_socketClient;
+		ibJournalInfo(wxT("debugger.wire"),
+			wxT("debug client -> command %d of %u bytes %s (wrote=%u, lastError=%d)"),
+			static_cast<int>(command), length,
+			sent ? wxT("sent") : wxT("DROPPED - the connection did not answer to being connected"),
+			sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
+			sock != nullptr ? static_cast<int>(sock->LastError()) : -1);
+	}
 }

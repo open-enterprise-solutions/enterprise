@@ -1,7 +1,7 @@
 ﻿/////////////////////////////////////////////////////////////////////////////
 // ibHelpCorpus — immutable help-corpus snapshot.
 //
-// See helpCorpus.h and docs/syntax-helper-design.md §3 for the contract.
+// See helpCorpus.h and docs/private/syntax-helper-design.md §3 for the contract.
 // All read paths are concurrent-safe by virtue of immutability — no locks
 // in the hot path. Reload happens by building a NEW corpus and atomically
 // swapping the published shared_ptr on appData.

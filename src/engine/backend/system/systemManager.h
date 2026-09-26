@@ -5,6 +5,7 @@
 
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
+#include "backend/createRequest.h"   // ibFormRequest — a common form is opened with one too
 
 //-- Constants:
 #define PageBreak wxT("\n\n")
@@ -177,8 +178,8 @@ public:
 	static bool AccessRight(const wxString& strRoleName, const ibValue& cData);
 	static bool IsInRole(const ibValue& cData);
 
-	static ibValue GetCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
-	static void ShowCommonForm(const wxString& strFormName, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static ibValue GetCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static void ShowCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 
 	static ibValue GetCommonTemplate(const wxString& strTemplateName);
 
@@ -191,7 +192,7 @@ public:
 	// does NOT wait for any of them. A file deployment has no daemon to keep time,
 	// so the schedule advances only when something calls this — the platform timer
 	// on a desktop host, the compute server's own loop where one exists, or script
-	// that wants to force a round. See docs/job-manager.md § "The tick".
+	// that wants to force a round. See docs/private/job-manager.md § "The tick".
 	static int  RunScheduledJobs();
 
 	// Run one job now, ignoring its interval and window. False when the name is

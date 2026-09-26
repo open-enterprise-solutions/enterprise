@@ -1,29 +1,12 @@
 #ifndef _TYPE_CTOR_H__
 #define _TYPE_CTOR_H__
 
-#include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID
+#include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID, ibCtorObjectType
+#include "backend/compiler/value.h"  // every ctor answers with the owner of what it made — a complete ibValue
 #include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
 #include <type_traits>          // std::is_default_constructible_v — does this type HAVE an empty form
 
-class ibValue;
 class ibCtorAbstractType;
-
-enum ibCtorObjectType {
-	ibCtorObjectType_object_primitive = 1,
-	ibCtorObjectType_object_value,
-	ibCtorObjectType_object_control,
-	ibCtorObjectType_object_system,
-	ibCtorObjectType_object_enum,
-	ibCtorObjectType_object_context,
-
-	ibCtorObjectType_object_metadata,
-	ibCtorObjectType_object_meta_value
-};
-
-enum ibCtorObjectTypeEvent {
-	ibCtorObjectTypeEvent_Register,
-	ibCtorObjectTypeEvent_UnRegister,
-};
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -66,7 +49,7 @@ public:
 	// Default = typeid(void) for ctors that carry no concrete C++ type
 	// (meta/control ctors that derive this base directly); their objects
 	// override GetClassType() and never reach the typeid resolution path.
-	// See docs/value-audit.md Phase 3.
+	// See docs/private/value-audit.md Phase 3.
 	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 
@@ -75,7 +58,17 @@ public:
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
 
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {}
-	virtual ibValue* CreateObject() const = 0;
+
+	// ⭐⭐ A NEW VALUE IS BORN OWNED — the ibValue that holds it, never a bare pointer.
+	//
+	// 🛑 A BARE POINTER STARTS AT REFERENCE COUNT ZERO, and anything that took a reference and let it go
+	// before the caller wrapped it deleted it. A new object runs code of its own on the way out of here —
+	// Init(), a data object's InitializeObject with the module's Filling in it — and `ThisObject.A = 0`
+	// there loads the object into a temporary ibValue: zero, one, zero, and the object was freed in the
+	// middle of its own initialisation (issue #154, a document with a Filling handler). Every factory
+	// above this one handed the pointer on the same way, so the owner is created HERE and passed up.
+	// Empty (not a reference) means nothing was created.
+	virtual ibValue CreateObject() const = 0;
 
 	// Class-factory table trait (see ibValue::IsTableValue): does this TYPE create tabular
 	// sources? Answered by CLSID, no instance needed. Default = false; value-type ctors
@@ -115,6 +108,42 @@ public:
 		return clsid == g_valueUndefinedCLSID || clsid == GetClassType();
 	}
 };
+
+/////////////////////////////////////////////////////////////////////////
+// value_register — after the ctor it registers is complete (the refusal names it)
+
+template<typename typeCtor>
+value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
+	try {
+		if (m_so != nullptr) {
+			ibValue::RegisterCtor(m_so);
+		}
+	}
+	catch (...) {
+#ifdef DEBUG
+		ibJournalError(wxT("value"), wxT("failed to register class: %s"), m_so->GetClassName());
+#endif
+		wxDELETE(m_so);
+	}
+}
+
+template<typename typeCtor>
+value_register<typeCtor>::~value_register() {
+	try {
+		if (m_so != nullptr) {
+			ibValue::UnRegisterCtor(m_so);
+		}
+	}
+	catch (...) {
+#ifdef DEBUG
+		ibJournalError(wxT("value"), wxT("failed to unregister class: %s"), m_so->GetClassName());
+#endif
+		wxDELETE(m_so);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////
+
 class ibCtorValueTypeBase : public ibCtorAbstractType {
 	wxString m_className;
 	const std::type_info* m_typeInfo;   // typeid(T) — registry runtime type key
@@ -132,7 +161,7 @@ public:
 	}
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
-	virtual ibValue* CreateObject() const = 0;
+	virtual ibValue CreateObject() const = 0;
 };
 
 class ibCtorSingleType : public ibCtorValueTypeBase {
@@ -167,7 +196,7 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return new T(m_valType); }
+	virtual ibValue CreateObject() const { return new T(m_valType); }
 };
 
 // 4-arg (legacy): explicit clsid.
@@ -201,7 +230,7 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const { return new T(); }
+	virtual ibValue CreateObject() const { return new T(); }
 };
 
 // 3-arg (legacy): explicit clsid.
@@ -252,10 +281,11 @@ public:
 	// a managerless one "can only fail to resolve every name outside itself", and the variant
 	// that allowed it was REMOVED. Forcing a constructor on those would undo a decision; asking
 	// the type whether it HAS an empty form asks exactly the right question.
-	virtual ibValue* CreateObject() const {
+	virtual ibValue CreateObject() const {
 		if constexpr (std::is_default_constructible_v<T>)
-			return new T();	
-		return nullptr;
+			return new T();
+		else
+			return wxEmptyValue;
 	}
 };
 
@@ -286,11 +316,11 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue* CreateObject() const {
-		T* _ptr = new T();
-		_ptr->CreateEnumeration();
-		return _ptr;
-	};
+	virtual ibValue CreateObject() const {
+		const ibValuePtr<T> created(new T());   // owned before CreateEnumeration runs — see the base
+		created->CreateEnumeration();
+		return created;
+	}
 };
 
 // 3-arg (legacy): explicit clsid.
@@ -327,7 +357,7 @@ public:
 		}
 	}
 
-	virtual ibValue* CreateObject() const { return m_innerObject; }
+	virtual ibValue CreateObject() const { return m_innerObject; }
 };
 
 // 3-arg (legacy): explicit clsid.

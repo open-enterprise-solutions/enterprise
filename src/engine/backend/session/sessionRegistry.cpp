@@ -1313,7 +1313,7 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// row teardown below. Cluster-aware — every wes process owning the
 	// session sees the DELETE on next snapshot tick (or on next acquire
 	// attempt against the same key, which then succeeds). See
-	// docs/record-locks.md "Planned upgrade path".
+	// docs/private/record-locks.md "Planned upgrade path".
 	if (auto* lm = ibApplicationData::GetLockManager())
 		lm->OnSessionEnd(s.Identity().m_guid);
 
@@ -1587,7 +1587,7 @@ void ibSessionRegistry::JobSweepStale()
 	// Row-lock probes (TryProbeRowLock) were tried as a fast path but
 	// removed: nobody holds a long-running WITH LOCK on their own
 	// rows anymore (that design ate a self-deadlock — see
-	// docs/session-registry.md §4). Without HoldRowLocks the probe
+	// docs/private/session-registry.md §4). Without HoldRowLocks the probe
 	// just succeeds on *every* row, making it useless for
 	// distinguishing alive from dead.
 	// The silence both roads use (kSilentBeats) — force-killed owners disappear

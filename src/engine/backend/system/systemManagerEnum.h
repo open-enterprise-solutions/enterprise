@@ -53,6 +53,34 @@ class ibValueEnumRoundMode : public ibValueEnumeration<ibRoundMode> {
 	}
 };
 
+class ibValueEnumTextEncoding : public ibValueEnumeration<ibTextEncoding> {
+	public:
+	ibValueEnumTextEncoding() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibTextEncoding::ibTextEncoding_UTF8, wxT("UTF8"), _("UTF-8"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_UTF16, wxT("UTF16"), _("UTF-16"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_ANSI, wxT("ANSI"), _("ANSI code page of the system"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_OEM, wxT("OEM"), _("OEM code page of the system"));
+		AddEnumeration(ibTextEncoding::ibTextEncoding_System, wxT("System"), _("Encoding of the current locale"));
+	}
+};
+
+class ibValueEnumHttpMethod : public ibValueEnumeration<ibHttpMethod> {
+	public:
+	ibValueEnumHttpMethod() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Get, wxT("Get"), _("Get"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Post, wxT("Post"), _("Post"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Put, wxT("Put"), _("Put"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Patch, wxT("Patch"), _("Patch"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Delete, wxT("Delete"), _("Delete"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Head, wxT("Head"), _("Head"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Options, wxT("Options"), _("Options"));
+	}
+};
+
 class ibValueChars : public ibValueEnumeration<ibChars> {
 	public:
 	ibValueChars() : ibValueEnumeration() {}
@@ -73,6 +101,36 @@ class ibValueChars : public ibValueEnumeration<ibChars> {
 private:
 	void AddChar(ibChars c, const wxString& name) {
 		AddEnumeration(c, name, wxString(static_cast<wxChar>(c)));
+	}
+};
+
+class ibValueEnumJsonValueType : public ibValueEnumeration<ibJsonValueType> {
+	public:
+	ibValueEnumJsonValueType() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibJsonValueType::ibJsonValueType_None, wxT("None"), _("None"));
+		// `JSONValueType.Null` is writable since the lexer takes a constant's word after a dot as a member name
+		// (translateCode.cpp) - before that, a member of this name was one nobody could spell.
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Null, wxT("Null"), _("Null"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Boolean, wxT("Boolean"), _("Boolean"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_Number, wxT("Number"), _("Number"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_String, wxT("String"), _("String"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_PropertyName, wxT("PropertyName"), _("Property name"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ObjectStart, wxT("ObjectStart"), _("Object start"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ObjectEnd, wxT("ObjectEnd"), _("Object end"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ArrayStart, wxT("ArrayStart"), _("Array start"));
+		AddEnumeration(ibJsonValueType::ibJsonValueType_ArrayEnd, wxT("ArrayEnd"), _("Array end"));
+	}
+};
+
+class ibValueEnumJsonFormatting : public ibValueEnumeration<ibJsonFormatting> {
+	public:
+	ibValueEnumJsonFormatting() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Compact, wxT("Compact"), _("Compact"));
+		AddEnumeration(ibJsonFormatting::ibJsonFormatting_Indented, wxT("Indented"), _("Indented"));
 	}
 };
 

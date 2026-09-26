@@ -63,6 +63,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Refs,     wxT("REFS")     },
 	{ ibQueryKeyword::True,     wxT("TRUE")     },
 	{ ibQueryKeyword::False,    wxT("FALSE")    },
+	{ ibQueryKeyword::Undefined, wxT("UNDEFINED") },
 	{ ibQueryKeyword::Case,     wxT("CASE")     },
 	{ ibQueryKeyword::When,     wxT("WHEN")     },
 	{ ibQueryKeyword::Then,     wxT("THEN")     },

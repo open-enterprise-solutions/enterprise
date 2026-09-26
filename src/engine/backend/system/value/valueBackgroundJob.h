@@ -5,7 +5,7 @@
 //
 // VENDED, never created: a job comes into being by being STARTED, so
 // `New BackgroundJob()` would have nothing to refer to. That is what
-// SYSTEM_TYPE_REGISTER means (docs/script-value-types.md § 1) — the ctor
+// SYSTEM_TYPE_REGISTER means (docs/private/script-value-types.md § 1) — the ctor
 // registry returns nullptr for it and only RunBackground() hands one out.
 //
 // It is a thin skin over ibBackgroundRun, which is shared with the worker
@@ -31,7 +31,7 @@ public:
 	explicit ibValueBackgroundJob(std::shared_ptr<ibBackgroundRun> run);
 	virtual ~ibValueBackgroundJob();
 
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 	virtual bool     IsEmpty()   const override { return m_run == nullptr; }
 
 	// The run is shared state, not a session-bound object — the whole point of it

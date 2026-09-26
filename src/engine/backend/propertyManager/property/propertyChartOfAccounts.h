@@ -6,7 +6,7 @@
 
 //base property for "chart of accounts" selection
 class BACKEND_API ibPropertyChartOfAccounts : public ibProperty {
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;

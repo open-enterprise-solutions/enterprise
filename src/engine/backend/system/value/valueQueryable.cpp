@@ -32,7 +32,7 @@ namespace {
 // ⭐⭐ AT THE ADDRESS THE COMPILER WORKED OUT — no search at all.
 //
 // The lambda body's own instruction says `frame, cell`, and that is verbatim how the INVOKED lambda
-// addresses the same value: `m_capturedFrames[k]` IS depth k+1 for the call duration
+// addresses the same value: `CapturedAt(k)` IS depth k+1 for the call duration
 // (procUnitLambda.h, the OPER_CALL_LAMBDA shim). So the fold reads what the interpreter would read,
 // by the same coordinates, with nothing to look up.
 //
@@ -42,9 +42,9 @@ namespace {
 bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue& out)
 {
 	const long k = frame - 1;   // frame 1 = the context the lambda was written in
-	if (k < 0 || (size_t)k >= fn->m_capturedFrames.size())
+	if (k < 0)
 		return false;
-	const ibRunContext* const ctx = fn->m_capturedFrames[(size_t)k].get();
+	const ibRunContext* const ctx = fn->CapturedAt((size_t)k);
 	if (ctx == nullptr || ctx->m_pRefLocVars == nullptr)
 		return false;
 	if (slot < 0 || slot >= ctx->GetLocalCount() || ctx->m_pRefLocVars[slot] == nullptr)
@@ -63,8 +63,8 @@ bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue
 // engine takes the road above.
 bool ResolveCapturedByName(const ibValueFunction* fn, const wxString& name, ibValue& out)
 {
-	for (const std::shared_ptr<ibRunContext>& sp : fn->m_capturedFrames) {
-		const ibRunContext* frame = sp.get();
+	for (size_t k = 0; k < fn->CapturedDepth(); ++k) {
+		const ibRunContext* frame = fn->CapturedAt(k);
 		if (frame == nullptr || frame->m_currentFunction == nullptr)
 			continue;
 		for (const ibByteCode::ibByteCodeVarInfo& local : frame->m_currentFunction->m_listLocals) {
@@ -316,7 +316,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
 	return std::make_shared<ibSubqueryQueryable>(inner, m_take);
 }
 
-wxString ibValueQueryable::GetString() const
+ibString ibValueQueryable::GetString() const
 {
 	if (m_ops.empty())
 		return wxString::Format(wxT("Queryable(%s)"), m_sourceName);
@@ -870,7 +870,7 @@ ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const i
 	// Join/Where in here and running it does NOT re-enter the policy — no recursion.
 }
 
-wxString ibValueQueryDecorator::GetString() const
+ibString ibValueQueryDecorator::GetString() const
 {
 	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
 }
@@ -992,7 +992,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column - for a multi-hop key restrict with Where(x => x.Ref.Field = ...) instead"));
 
-		// DISPATCH by inner kind (docs/access-policy-rls.md — semi-join):
+		// DISPATCH by inner kind (docs/private/access-policy-rls.md — semi-join):
 		if (innerQ != nullptr && innerQ->IsSingleSource()) {
 			// A REAL, SINGLE-source source (a permission REGISTER / catalog) → a correlated EXISTS (semi-join):
 			// the outer row passes iff a permitting row EXISTS in the inner. FILTERS once/zero per row — never
@@ -1018,7 +1018,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			// them; a value table has none) — and semi-join over the temp: the EXISTS then runs SERVER-SIDE in the
 			// one statement, exactly like the register-direct path. On Firebird (no temp dialect) Materialise
 			// returns null and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap until the
-			// pure-SQL-subquery-EXISTS lands; docs/access-policy-rls.md).
+			// pure-SQL-subquery-EXISTS lands; docs/private/access-policy-rls.md).
 			// …and CAN is asked BEFORE the rows are computed: without temp tables the RAM join below computes
 			// the inner again, so rows taken first would be read twice (ibTempTableManager::CanMaterialise).
 			std::shared_ptr<ibTempTableManager> mgr;

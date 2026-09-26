@@ -150,7 +150,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::GetDialect() const
 // (auto-dropped on disconnect). Like PostgreSQL we DROP explicitly via the manager's
 // pinning scope rather than lean on disconnect — a pooled connection is long-lived and
 // reused, so explicit DROP keeps it tidy and deterministic (m_autoDrops=false). Its mere
-// PRESENCE flips SQLite off the RAM floor onto the server-side temp path. (docs/temp-db.md)
+// PRESENCE flips SQLite off the RAM floor onto the server-side temp path. (docs/private/temp-db.md)
 const ibTempTableDialect& ibDatabaseLayerSQLite::TempDialect()
 {
 	static const ibTempTableDialect s_temp = [] {

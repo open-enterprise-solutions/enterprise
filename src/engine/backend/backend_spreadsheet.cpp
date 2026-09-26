@@ -40,8 +40,10 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 			}
 		}
 
+		// A height only where the row has one — a row without keeps its automatic height (HasRowSize).
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
@@ -72,7 +74,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		}
 
 		for (int row = rowLeft; row < rowRight; row++)
-			spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - rowLeft, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
@@ -93,7 +96,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetArea(int rowLeft, int ro
 		}
 
 		for (int row = 0; row <= lastRow; row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = colTop; col < colBottom; col++)
 			spreadsheetDesc.SetColSize(col - colTop, m_spreadsheetDesc.GetColSize(col));
@@ -136,8 +140,10 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 			}
 		}
 
+		// A height only where the row has one — see GetArea.
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
@@ -156,7 +162,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		}
 
 		for (int row = r->m_start; row <= (int)r->m_end; row++)
-			spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row - r->m_start, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = 0; col <= lastCol; col++)
 			spreadsheetDesc.SetColSize(col, m_spreadsheetDesc.GetColSize(col));
@@ -178,7 +185,8 @@ ibSpreadsheetDescription ibBackendSpreadsheetObject::GetAreaByName(const wxStrin
 		}
 
 		for (int row = 0; row <= lastRow; row++)
-			spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
+			if (m_spreadsheetDesc.HasRowSize(row))
+				spreadsheetDesc.SetRowSize(row, m_spreadsheetDesc.GetRowSize(row));
 
 		for (int col = c->m_start; col <= (int)c->m_end; col++)
 			spreadsheetDesc.SetColSize(col - c->m_start, m_spreadsheetDesc.GetColSize(col));
@@ -205,10 +213,13 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 
 			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
 
-			if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate || cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-				cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-				cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
-			}
+			// ⭐⭐ WHAT LANDS IS THE TEXT, in THIS document's language. The template keeps every language
+			// and its fill instructions; the document it is put into keeps what they came to — a caption
+			// included, which used to arrive as it was written down, every language at once, and was
+			// printed that way. Rendered once here, so the grid, the printout, a script and an export all
+			// read the same text and none of them has to take a stored form apart.
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const wxString& detailsParameter =
 				cell->m_detailsParameter;
@@ -227,8 +238,10 @@ void ibBackendSpreadsheetObject::PutArea(const wxObjectDataPtr<ibBackendSpreadsh
 		}
 	}
 
+	// A height only where the area's row has one — a row without keeps its automatic height (HasRowSize).
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(col, doc->GetColSize(col));
@@ -259,10 +272,9 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 
 			cell->SetCell(doc->GetSpreadsheetDesc().GetCell(row, col));
 
-			if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate || cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-				cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-				cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
-			}
+			// what lands is the text, in this document's language — see PutArea
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const wxString& detailsParameter =
 				cell->m_detailsParameter;
@@ -278,8 +290,10 @@ void ibBackendSpreadsheetObject::JoinArea(const wxObjectDataPtr<ibBackendSpreads
 		}
 	}
 
+	// a height only where the area's row has one — see PutArea
 	for (int row = 0; row < doc->GetNumberRows(); row++)
-		SetRowSize(row, doc->GetRowSize(row));
+		if (doc->GetSpreadsheetDesc().HasRowSize(row))
+			SetRowSize(row, doc->GetRowSize(row));
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(maxColBrake + col, doc->GetColSize(col));
@@ -537,14 +551,28 @@ void ibBackendSpreadsheetObject::SetParameter(const wxString& strParameter, cons
 
 #include "backend_localization.h"
 
-wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type) const
+// 🛑 IT HANDED BACK THE STORED FORM. A caption came out as it was written down — every language at once,
+// `en = '…'; ru = '…';` — and a filled template or parameter came out WRAPPED into that form again, so
+// each reader had to take it apart itself: the grid did, the printout did not and put every language on
+// the paper (2026-09-21), a script's Value did with a fallback of its own. Now the door answers with
+// the text, and every value read through it — a caption, a template, a parameter's value — is read the
+// one way a translated text is read (GetTranslateGetRawLocText).
+wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxString& strValue, ibSpreadsheetFillType type, const wxString& strAskedLangCode) const
 {
+	const wxString& strLangCode = strAskedLangCode.IsEmpty() ? m_docLangCode : strAskedLangCode;
+
+	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
+		ibValue cVal;//scratch for one call — see the template below
+		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
+			return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
+		return wxT("");
+	}
+
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
 
 		if (!strValue.IsEmpty()) {
 
-			wxString strTemplateValue;
-			ibBackendLocalization::GetTranslateGetRawLocText(m_docLangCode, strValue, strTemplateValue);
+			wxString strTemplateValue = ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
@@ -569,7 +597,8 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 						// re-enters. Constructing one is cheap; the static was not a win.
 						ibValue cVal;
 						if (GetParameter(token, cVal))
-							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, cVal.GetString());
+							strTemplateValue.replace(start_pos, end_pos - start_pos + 1,
+								ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString()));
 						else
 							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, wxT(""));
 					}
@@ -589,19 +618,13 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 				start_pos = strTemplateValue.find_first_of(wxT("[]"), start_pos);
 			}
 
-			return ibBackendLocalization::CreateLocalizationRawLocText(strTemplateValue);
+			return strTemplateValue;
 		}
-	}
-	else if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-
-		ibValue cVal;//scratch for one call — see the sibling above
-		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
-			return ibBackendLocalization::CreateLocalizationRawLocText(cVal.GetString());
 
 		return wxT("");
 	}
 
-	return strValue;
+	return ibBackendLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 }
 
 #pragma endregion 

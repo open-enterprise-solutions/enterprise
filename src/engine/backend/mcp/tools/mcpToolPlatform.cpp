@@ -38,7 +38,8 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("What decides how anything here must be written, RIGHT NOW: the script dialect "
+		return ibMcpText("What decides how anything here must be written, RIGHT NOW: WHICH BASE this is "
+			"(its path, and how it is connected), the script dialect "
 			"(word-fenced or C-style), the languages this configuration declares, its "
 			"compatibility version, the platform build, and who you are acting as. ASK IT BEFORE "
 			"WRITING CODE. The same facts are handed over at connection, but that was a snapshot "

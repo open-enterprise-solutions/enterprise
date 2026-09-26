@@ -6,7 +6,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibValueTypes type) const
+wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibValueTypes type)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)
@@ -14,7 +14,7 @@ wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, con
 	return new ibVariantDataAttribute(propFactory, type);
 }
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibClassID& clsid) const
+wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibClassID& clsid)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)
@@ -22,7 +22,7 @@ wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, con
 	return new ibVariantDataAttribute(propFactory, clsid);
 }
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc) const
+wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)

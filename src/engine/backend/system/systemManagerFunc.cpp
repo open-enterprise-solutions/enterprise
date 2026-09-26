@@ -163,44 +163,37 @@ ibValue ibValueSystemFunction::Sqrt(const ibValue& cValue)
 //--- Strings:
 int ibValueSystemFunction::StrLen(const ibValue& cValue)
 {
-	ibString scratch;
-	return static_cast<int>(cValue.GetString(scratch).Length());
+	return static_cast<int>(cValue.GetString().Length());
 }
 
 bool ibValueSystemFunction::IsBlankString(const ibValue& cValue)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).IsBlank();
+	return cValue.GetString().IsBlank();
 }
 
 ibString ibValueSystemFunction::TrimL(const ibValue& cValue)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).Trim(false);
+	return ibString(cValue.GetString()).Trim(false);   // Trim works in place, on a copy here
 }
 
 ibString ibValueSystemFunction::TrimR(const ibValue& cValue)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).Trim(true);
+	return ibString(cValue.GetString()).Trim(true);    // Trim works in place, on a copy here
 }
 
 ibString ibValueSystemFunction::TrimAll(const ibValue& cValue)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).TrimAll();
+	return cValue.GetString().TrimAll();
 }
 
 ibString ibValueSystemFunction::Left(const ibValue& cValue, unsigned int nCount)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).Left(nCount);
+	return cValue.GetString().Left(nCount);
 }
 
 ibString ibValueSystemFunction::Right(const ibValue& cValue, unsigned int nCount)
 {
-	ibString scratch;
-	return cValue.GetString(scratch).Right(nCount);
+	return cValue.GetString().Right(nCount);
 }
 
 // ⚠ 1-BASED, AND THE LENGTH IS OPTIONAL — both changed on 2026-09-04 (Max's call).
@@ -211,24 +204,21 @@ ibString ibValueSystemFunction::Right(const ibValue& cValue, unsigned int nCount
 // string, which is not what anybody writing `Mid(s, 5)` intends.
 ibString ibValueSystemFunction::Mid(const ibValue& cValue, size_t nFirst, size_t nCount)
 {
-	ibString scratch;
 	if (nFirst < 1) nFirst = 1;   // position 0 reads as the first character
-	return cValue.GetString(scratch).Mid(nFirst - 1, nCount);
+	return cValue.GetString().Mid(nFirst - 1, nCount);
 }
 
 unsigned int ibValueSystemFunction::Find(const ibValue& cValue, const ibValue& cValue2, unsigned int nStart)
 {
 	if (nStart < 1) nStart = 1;
-	ibString s1, s2;
 	// npos + 1 wraps to 0 — same "not found → 0" contract as the old wxString.find path.
-	return static_cast<unsigned int>(cValue.GetString(s1).Find(cValue2.GetString(s2), nStart - 1) + 1);
+	return static_cast<unsigned int>(cValue.GetString().find(cValue2.GetString(), nStart - 1) + 1);
 }
 
 ibString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue& cValue1, const ibValue& cValue2)
 {
-	ibString sSrc, sFrom, sTo;
-	ibString result(cSource.GetString(sSrc));   // mutable copy of the source
-	result.Replace(cValue1.GetString(sFrom), cValue2.GetString(sTo));
+	ibString result(cSource.GetString());   // mutable copy of the source
+	result.Replace(cValue1.GetString(), cValue2.GetString());
 	return result;
 }
 
@@ -239,9 +229,8 @@ ibString ibValueSystemFunction::StrReplace(const ibValue& cSource, const ibValue
 // "how many times does this appear" means.
 int ibValueSystemFunction::StrCountOccur(const ibValue& cSource, const ibValue& cValue1)
 {
-	ibString s1, s2;
-	const ibString src = cSource.GetString(s1);
-	const ibString sub = cValue1.GetString(s2);
+	const ibString src = cSource.GetString();
+	const ibString sub = cValue1.GetString();
 
 	// An empty needle has no meaningful count — it "occurs" between every pair of
 	// characters. Zero, rather than a loop that never ends.
@@ -249,7 +238,7 @@ int ibValueSystemFunction::StrCountOccur(const ibValue& cSource, const ibValue& 
 		return 0;
 
 	int count = 0;
-	for (size_t pos = src.Find(sub); pos != ibString::npos; pos = src.Find(sub, pos + sub.Length()))
+	for (size_t pos = src.find(sub); pos != ibString::npos; pos = src.find(sub, pos + sub.Length()))
 		count++;
 	return count;
 }
@@ -329,14 +318,12 @@ wxString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int n
 
 ibString ibValueSystemFunction::Upper(const ibValue& cSource)
 {
-	ibString scratch;
-	return cSource.GetString(scratch).Upper();
+	return cSource.GetString().Upper();
 }
 
 ibString ibValueSystemFunction::Lower(const ibValue& cSource)
 {
-	ibString scratch;
-	return cSource.GetString(scratch).Lower();
+	return cSource.GetString().Lower();
 }
 
 wxString ibValueSystemFunction::Chr(short nCode)
@@ -346,8 +333,7 @@ wxString ibValueSystemFunction::Chr(short nCode)
 
 short ibValueSystemFunction::Asc(const ibValue& cSource)
 {
-	ibString scratch;
-	const ibString& s = cSource.GetString(scratch);
+	const ibString& s = cSource.GetString();
 	if (s.IsEmpty()) return 0;
 	return static_cast<short>(s[0]);
 }
@@ -365,19 +351,11 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 // or the source text when there is none" - and the function did not keep it (2026-09-09; the
 // helper's own example, `Message(Tstr("Total", "uk"));`, showed an empty line).
 //
-// The three-argument reader is the one that says WHETHER it found anything, which is what makes
-// the fallback possible at all - the string-returning overload cannot tell "no translation" from
-// "translated to nothing".
+// Since 2026-09-21 the reading itself says so — a source in no format is itself — and this function
+// no longer adds it back by hand.
 wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
-	const wxString source = cSource.GetString();
-
-	wxString translated;
-	if (ibBackendLocalization::GetTranslateGetRawLocText(
-			cLanguage.GetString(), source, translated))
-		return translated;
-
-	return source;
+	return ibBackendLocalization::GetTranslateGetRawLocText(cLanguage.GetString(), cSource.GetString());
 }
 
 //--- Date and time:
@@ -1121,27 +1099,27 @@ bool ibValueSystemFunction::IsInRole(const ibValue& cData)
 	return false;
 }
 
-ibValue ibValueSystemFunction::GetCommonForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+ibValue ibValueSystemFunction::GetCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
-	if (!strFormName.IsEmpty()) {
+	if (!request.m_formName.IsEmpty()) {
 
 		const ibValueMetaObjectCommonForm* creator =
-			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(strFormName, g_metaCommonFormCLSID);
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(request.m_formName, g_metaCommonFormCLSID);
 
 		if (creator != nullptr)
 			return creator->GetObjectForm(ownerControl, unique ? ((ibGuid)*unique) : ibGuid());
 	}
 
-	ibBackendCoreException::Error(_("Common form not found '%s'"), strFormName);
+	ibBackendCoreException::Error(_("Common form not found '%s'"), request.m_formName);
 	return wxEmptyValue;
 }
 
-void ibValueSystemFunction::ShowCommonForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
 	if (ibBackendException::IsEvalMode())
 		return;
 
-	const ibValue& cValue = GetCommonForm(strFormName, ownerControl, unique);
+	const ibValue& cValue = GetCommonForm(request, ownerControl, unique);
 
 	ibBackendValueForm* valueForm = dynamic_cast<ibBackendValueForm*>(cValue.GetRef());
 	if (valueForm != nullptr) valueForm->ShowForm();

@@ -29,6 +29,7 @@
 #include <wx/vector.h>
 #include <wx/timer.h>    // the busy indicator's tick
 #include <functional>
+#include <map>           // the row pictures, by id
 #include <memory>        // the alive token + the background-run handles
 #include <vector>
 #if wxUSE_ACCESSIBILITY
@@ -1390,6 +1391,9 @@ public:
 	int GetLineAt(unsigned int y) const;       // y / m_lineHeight in fixed mode
 	int QueryAndCacheLineHeight(unsigned int row, ibDataViewItem item) const;
 
+	// The bitmap of a row's state picture (ibDataViewModel::GetRowPicture), from m_rowPictures; null for 0.
+	const wxBitmap& RowPictureBitmap(const ibPictureID& picture);
+
 	ibDataViewTreeNode* GetTreeNodeByRow(unsigned int row) const;
 
 	// Methods for building the mapping tree
@@ -1557,6 +1561,10 @@ private:
 	bool                        m_currentColSetByKeyboard;
 
 	class HeightCache* m_rowHeightCache;
+
+	// THE ROW'S STATE PICTURES, one bitmap per picture id: made the first time a row shows it and reused for every
+	// row after — a list shows a handful of them down its whole length. See RowPictureBitmap.
+	std::map<ibPictureID, wxBitmap>  m_rowPictures;
 
 #if wxUSE_DRAG_AND_DROP
 	int                         m_dragCount;

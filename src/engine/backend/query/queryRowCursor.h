@@ -11,7 +11,7 @@
 //
 // So the fold takes a CURSOR. The tree it builds is unchanged; what changes is that memory becomes
 // a function of the number of GROUPS rather than of the number of ROWS — the composition's own
-// acceptance criterion (docs/data-composer.md), and the reason a report over a million movements
+// acceptance criterion (docs/private/data-composer.md), and the reason a report over a million movements
 // stops being a question about RAM.
 //
 // A materialised table is still a perfectly good cursor (ibRamTableCursor) — the composed
@@ -22,7 +22,7 @@
 //
 // ibQueryRow is the row alone — the same abstraction seen by a per-row expression evaluator
 // (EvalColumnExprRow), which likewise only ever read the CURRENT row through a (table, index) pair.
-// (docs/query-language-arc.md §22.1b)
+// (docs/private/query-language-arc.md §22.1b)
 
 #include "queryRamTable.h"   // ibQueryRamTable / ibQueryRamColumn + ibValue + ibMetaID
 

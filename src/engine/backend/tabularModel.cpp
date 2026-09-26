@@ -64,9 +64,16 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	if (iterator == m_nodeValues.end())
 		return false;
 	ibValue& cValue = m_nodeValues.at(id);
-	if (notify && m_valueTable != nullptr && cValue != variant)
-		m_valueTable->RowValueChanged(this, id);
+
+	// 🛑 THE VALUE FIRST, THE NEWS AFTER IT. The notification went out while the cell still held the OLD
+	// value, and whatever reacts to it — the view recomputing the row, a handler reading the cell — read
+	// that. A cell being edited hides it, since its editor shows the chosen value by itself; a NEIGHBOUR
+	// emptied by a link did not: the kind changed, the value cell was cleared to `False`, and the grid kept
+	// drawing the old blank (2026-09-23: the row held `False` while the screen showed an empty cell).
+	const bool changed = cValue != variant;
 	cValue = variant;
+	if (notify && m_valueTable != nullptr && changed)
+		m_valueTable->RowValueChanged(this, id);
 	return true;
 }
 
@@ -436,6 +443,22 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetProp
 	}
 
 	return false;
+}
+
+#include "backend/backend_localization.h"   // ibTranslateString — a column here has no format written on it
+#include "backend/formatString.h"           // ibFormatString — what GetColumnFormat answers with
+
+const ibFormatString& ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetColumnFormat() const
+{
+	static const ibTranslateString s_none;
+	return ibBackendTypeConfigFactory::GetFormatFromColumn(s_none, GetColumnType());
+}
+
+const ibFormatString& ibValueModel::ibValueModelColumnCollection::GetColumnFormat(unsigned int col) const
+{
+	static const ibFormatString s_none;
+	const ibValueModelColumnInfo* column = GetColumnByID(col);
+	return column != nullptr ? column->GetColumnFormat() : s_none;
 }
 
 ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel::ibValueModelColumnCollection::GetColumnByID(unsigned int col) const

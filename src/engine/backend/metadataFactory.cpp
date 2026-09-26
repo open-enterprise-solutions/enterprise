@@ -44,34 +44,37 @@ ibCtorMetaValueType* ibMetaImage::FindCtor(const ibValueMetaObject* metaValue, i
 	return result;
 }
 
-ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
+ibValue ibMetaData::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
 {
 	const ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
 
 	if (typeCtor != nullptr) {
 
-		ibValue* newObject = typeCtor->CreateObject();
-		wxASSERT(newObject);
-
-		if (newObject == nullptr) return nullptr;
+		// Owned from the moment it exists — see ibValue::CreateObject. A refusal throws, and the owner
+		// lets it go.
+		//
+		// ⚠ WHAT THE CTOR MAKES IS THE ANSWER, WHATEVER IT IS — an object, a manager, a reference, and for a
+		// characteristic the value its chart makes, which for a chart of several types is the empty value and
+		// holds no object at all. `IsReference()` stood here, the old pointer's null check carried into a value
+		// (2026-09-21), and it asked the wrong thing: the empty cell of a characteristic column (an account's
+		// analytics) asserted in Debug and was thrown away in Release (2026-09-26, two dumps from a ledger's
+		// list). Init() asks the held object, and a value that holds none has nothing to initialise.
+		ibValue newObject = typeCtor->CreateObject();
 
 		bool succes = true;
 		if (lSizeArray > 0)
-			succes = newObject->Init(paParams, lSizeArray);
+			succes = newObject.Init(paParams, lSizeArray);
 		else
-			succes = newObject->Init();
+			succes = newObject.Init();
 
-		if (!succes) {
-			wxDELETE(newObject);
+		if (!succes)
 			ibBackendCoreException::Error(_("Error initializing object '%s'"), typeCtor->GetClassName());
-			return nullptr;
-		}
 
 		// Name surface builds lazily on first GetPMethods() — no eager populate.
 		return newObject;
 	}
 
-	return ibValue::CreateObjectRef(clsid, paParams, lSizeArray);
+	return ibValue::CreateObject(clsid, paParams, lSizeArray);
 }
 
 void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)

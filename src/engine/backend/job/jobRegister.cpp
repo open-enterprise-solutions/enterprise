@@ -191,7 +191,7 @@ ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettin
 	// It is caught by TYPE now rather than by a Kind on the query family: "there is no connection to
 	// work on" is the SESSION refusing, not the query tier failing at its job, and the two are told
 	// apart by which exception arrives. That is the same split the query varieties were given
-	// (docs/exceptions.md §3) — the type says WHO refused.
+	// (docs/private/exceptions.md §3) — the type says WHO refused.
 	catch (const ibBackendSessionException&) {
 		return ibWriteOutcome::NoBase;
 	}

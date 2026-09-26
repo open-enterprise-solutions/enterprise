@@ -20,7 +20,7 @@
 // a null tree is the difference between a server-side query and a full scan, and it used to be
 // invisible.
 //
-// See docs/query-language-arc.md §23.5 (L4-2) and docs/linq.md §0.
+// See docs/private/query-language-arc.md §23.5 (L4-2) and docs/private/linq.md §0.
 #include "translateCode.h"   // ibLexem
 
 #include <functional>
@@ -56,7 +56,7 @@ struct ibQueryAstExpr;   // backend/query/queryAST.h — fwd only (the .cpp incl
 // ⚠ It is a stopgap in the right direction, not the destination: the fold currently re-finds that
 // value AT RUNTIME by walking the captured frames and comparing names case-insensitively
 // (valueQueryable.cpp, ResolveCapturedByName) — a search for something the compiler had in its hand.
-// Carrying the coordinates INTO the tree removes both the name and the search. (docs/linq.md §0.2e)
+// Carrying the coordinates INTO the tree removes both the name and the search. (docs/private/linq.md §0.2e)
 BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAstFromCode(
 	const struct ibByteCode& byteCode, long funcIndex, wxString* outRefusal = nullptr,
 	const std::function<wxString(long framesOut, long slot)>& nameOfOuter = nullptr);

@@ -767,7 +767,7 @@ bool ibApplicationData::DestroyAppDataEnv()
 
 		// The ibPropertyObject live-register used to be printed here. It answered its question —
 		// "none alive, clean teardown" — and the answer is now kept by something cheaper and
-		// wider: the CRT exit dump is empty (docs/engineering-playbook/25-memory-leaks.md), so a
+		// wider: the CRT exit dump is empty (docs/private/engineering-playbook/25-memory-leaks.md), so a
 		// property object that outlives teardown shows up there by itself, named, with the
 		// tracker able to produce its stack. A mutex and a set on every construction, in every
 		// Debug run, to re-answer a settled question was the wrong trade.

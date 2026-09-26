@@ -13,7 +13,7 @@
 // ⭐ THE UNFOLD IS THE LANGUAGE'S OWN WORD, and this header exists so every tier can name it without
 // dragging a tier down (query/queryUnfold.h). A twin enum here would be a second vocabulary for one
 // fact — and it WAS one: the runtime enumeration is registered over ibQueryDimUnfold, so a window
-// speaking the twin got an enumeration nobody had (an assert in CreateAndConvertEnumObjectRef).
+// speaking the twin got an enumeration nobody had (an assert in CreateEnumObject).
 #include "backend/query/queryUnfold.h"
 
 #include <vector>

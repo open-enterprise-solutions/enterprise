@@ -11,6 +11,8 @@
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
 
+#include <algorithm>   // std::find — the columns both halves of a cut carry, each named once
+
 // The RAM twin of the dialect truncation expressions. Every branch mirrors what the SQL does, and
 // the mirroring is the requirement: if these two ever disagree, the same query returns different
 // numbers depending on whether the read pushed down or folded in memory — a discrepancy that looks
@@ -1012,6 +1014,94 @@ static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValu
 		ibBinOp(ibQueryBinOp::And, ibBinOp(ibQueryBinOp::Eq, period, edge), inside));
 }
 
+// ============================================================================
+// ⭐⭐ THE ARMS OF A VIEW, AS RELATIONS — the rows as they stand, for a reader that folds them.
+//
+// RenderView spells a view's two arms as text for a CREATE VIEW; these spell the SAME arms of the same
+// declaration as IR, for a reading to put in its own FROM. So the reading needs nothing in the database
+// beyond the two tables themselves — no second view to create, none a base built before it lacks, none a
+// downgrade leaves standing — and it pays for nothing it does not name: no coarser calendar unit is
+// computed and no shard fold groups the stored rows, because the reader groups by the key itself, above a
+// condition the engine was free to push down to an index.
+//
+// The columns and their names are the view's (`view.m_columns`, `view.m_movementColumns`), each figure
+// spelled the way that arm of the view spells it.
+// ============================================================================
+
+ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializeView& view)
+{
+	std::vector<ibQueryProjItem> proj;
+	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty())
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_periodColumn), spec.m_periodColumn });   // as stored: no coarser unit
+	for (const wxString& k : spec.m_keyColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(k), k });
+
+	for (const ibMaterializeViewColumn& c : view.m_columns) {
+		const ibQueryExprPtr a = ibCol(c.m_columnA);
+		const bool difference = c.m_agg != ibMaterializeAgg::Value && !c.m_columnB.IsEmpty();
+		proj.push_back(ibQueryProjItem{ difference ? ibBinOp(ibQueryBinOp::Sub, a, ibCol(c.m_columnB)) : a, c.m_alias });
+	}
+
+	// The movement-only columns, NULL here — TYPED, for the reason the view casts them: a bare NULL in an
+	// arm of a UNION is an expression of no type, and Firebird refuses the statement that holds it.
+	for (const auto& c : view.m_movementColumns)
+		proj.push_back(ibQueryProjItem{ ibCast(ibConst(ibValue()), c.second), c.first });
+
+	ibDatabaseQueryBuilder q;
+	q.From(spec.m_table).Project(proj);
+	return q.Build().m_root;
+}
+
+ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterializeView& view)
+{
+	// Without its read forms the spec cannot say what a movement counts for, nor which movements count at
+	// all — and rows read past the guard would be figures the totals below them never held.
+	if (!spec.m_guard.IsEmpty() && !spec.m_guardIR)
+		return nullptr;
+
+	std::vector<ibQueryProjItem> proj;
+	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty()) {
+		if (!spec.m_periodSourceIR)
+			return nullptr;
+		proj.push_back(ibQueryProjItem{ spec.m_periodSourceIR, spec.m_periodColumn });   // the instant, untruncated
+	}
+	for (const wxString& k : spec.m_keyColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_source, k), k });
+
+	// What a movement contributes to a stored column — looked up, never re-derived, exactly as the view's
+	// movement arm looks it up. A column with no delta contributes nothing.
+	bool unreadable = false;
+	const auto contribution = [&](const wxString& column) -> ibQueryExprPtr {
+		for (const ibMaterializeDelta& d : spec.m_deltas)
+			if (d.m_column == column) {
+				if (!d.m_valueIR)
+					unreadable = true;
+				return d.m_valueIR;
+			}
+		return ibCast(ibConst(ibValue(0.0)), ibTypeNumber(18, 6));
+	};
+	for (const ibMaterializeViewColumn& c : view.m_columns) {
+		const ibQueryExprPtr a = contribution(c.m_columnA);
+		const ibQueryExprPtr figure = c.m_columnB.IsEmpty() ? a
+			: ibBinOp(ibQueryBinOp::Sub, a, contribution(c.m_columnB));
+		proj.push_back(ibQueryProjItem{ figure, c.m_alias });
+	}
+	if (unreadable)
+		return nullptr;
+
+	for (const auto& c : view.m_movementColumns)
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_source, c.first), c.first });
+
+	ibDatabaseQueryBuilder q;
+	q.From(spec.m_source).Project(proj);
+	// The SAME guard the trigger accumulates under — the stored rows hold only what was in force.
+	if (spec.m_guardIR)
+		q.Where(spec.m_guardIR);
+	if (spec.m_periodIsDateIR)
+		q.Where(spec.m_periodIsDateIR);
+	return q.Build().m_root;
+}
+
 ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wxString& alias)
 {
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
@@ -1117,8 +1207,15 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 	if (!anyAggregate && !periodised && !spec.m_periodColumn.IsEmpty())
 		proj.insert(proj.begin(), ibQueryProjItem{ ibCol(spec.m_periodColumn), wxString() });
 
+	// The rows as they stand when the reading was handed them (m_storedRows), the named surface otherwise.
+	const wxString rows = spec.m_rowsAlias.IsEmpty() ? alias + wxT("_rows") : spec.m_rowsAlias;
+
 	ibDatabaseQueryBuilder q;
-	q.From(spec.m_view).Project(proj);
+	if (spec.m_storedRows)
+		q.From(ibSubquery(spec.m_storedRows, rows)).Project(proj);
+	else
+		q.From(spec.m_view).Project(proj);
+	bool filtersRideInside = false;   // set where a cut is read half by half (below)
 
 	// The OUTER bound of the scan. Rows past the interval belong to no reported figure, so they are
 	// excluded before grouping rather than conditioned away column by column.
@@ -1205,11 +1302,85 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 					BoundedByMoment(period, spec.m_from, spec.m_boundaryHead, /*atMost*/ false, spec.m_fromExcluding));
 
 			q.Where(ibBinOp(ibQueryBinOp::Or, stored, moved));
+
+			// ⭐⭐ …AND EACH HALF IS ALSO READ ON ITS OWN, so its bound can ride an index.
+			//
+			// The cut above is one condition: `(stored AND period < floor) OR (moved AND period >= floor)`.
+			// True, and useless to a planner — a bound under an OR is not a bound it can take to an index,
+			// so the movement half walked EVERY movement to keep today's, on every reading that stops
+			// inside a grain: every balance as of a document, i.e. every posting (measured 2026-09-19 on
+			// 203 000 movements: 0.20 s of a 0.26 s balance, against ~0 when the floor reaches the index).
+			//
+			// The two halves are DISJOINT — the mark is null in one and not null in the other — so the
+			// union of the two selections IS the selection by their OR, row for row. Each is given
+			// everything that narrows it: its half of the cut, the upper bound, the caller's filters.
+			// The conditions above stay where they were; over rows already chosen by them they cost
+			// nothing and keep this a change of ROAD, not of meaning.
+			//
+			// ONLY WHERE THE READING HOLDS THE HALVES APART (m_storedRows / m_movedRows). A reading that names one
+			// dressed relation for both - the accounting register's - would have each half select from that same
+			// union view: four arms expanded where there were two, the shard fold of the stored arm evaluated
+			// twice, and nothing gained, since neither half is any nearer an index than the OR was. It keeps
+			// the single selection above, exactly as it was.
+			//
+			// 🛑 STORED ROWS WITHOUT THE MOVEMENTS CANNOT BE CUT. The relation above holds no movement at all, so
+			// the partial grain would be read from nowhere — a balance short of today's postings, silently. The
+			// movement rows are null only where the spec could not say what a movement counts for.
+			if (spec.m_storedRows && !spec.m_movedRows)
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+					_("A reading inside the stored grain was handed the stored rows without the movements to complete them"));
+			if (spec.m_movedRows) {
+				std::vector<wxString> carried;
+				const auto carry = [&carried](const wxString& name) {
+					if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
+						carried.push_back(name);
+				};
+				for (const wxString& k : spec.m_keyColumns) carry(k);
+				carry(spec.m_periodColumn);
+				carry(spec.m_markColumn);
+				for (const auto& b : spec.m_boundaryHead) carry(b.first);
+				for (const auto& b : spec.m_boundaryTail) carry(b.first);
+				for (const ibMaterializeReadColumn& c : spec.m_columns) { carry(c.m_columnA); carry(c.m_columnB); }
+
+				// A plain turnover reads nothing below its interval: every stored row before `from` adds a zero to
+				// its group, and with all-zero rows dropped anyway the group is the same without them. Said to the
+				// stored half, it lets the index bound the period on BOTH sides — a day's turnovers no longer walk
+				// the warehouse's whole history. (With a head split the stored half is already bounded below.)
+				const bool boundStoredBelow = !readsHistory && !headSplit && spec.m_dropZeroRows
+					&& spec.m_from.GetType() == TYPE_DATE;
+
+				// Both halves read under ONE name (`rows`): they are separate SELECTs, and the filters were lowered
+				// against it — a walk through a reference finds its outer row under that name in either.
+				const auto half = [&](const ibQueryExprPtr& cut, const ibQueryRelPtr& relation) {
+					std::vector<ibQueryProjItem> columns;
+					for (const wxString& name : carried)
+						columns.push_back(ibQueryProjItem{ ibCol(name), wxString() });
+					ibDatabaseQueryBuilder arm;
+					arm.From(ibSubquery(relation, rows)).Project(columns);
+					arm.Where(cut);
+					if (spec.m_to.GetType() == TYPE_DATE)
+						arm.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
+					for (const ibQueryExprPtr& f : spec.m_filters)
+						if (f) arm.Where(f);
+					return arm.Build().m_root;
+				};
+				// Each half of its OWN relation: asked of a union, the stored half still made the engine visit
+				// the movements to learn they hold no stored row, and the other way round (measured 2026-09-19:
+				// 0.15 s through the union against 0.05 s off the stored rows alone, for the same rows).
+				if (boundStoredBelow)
+					stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
+				filtersRideInside = true;
+				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_storedRows),
+					half(moved, spec.m_movedRows)), alias + wxT("_cut")));
+			}
 		}
 	}
 
-	for (const ibQueryExprPtr& f : spec.m_filters)
-		if (f) q.Where(f);
+	// …unless both halves of a cut already carry them: the relation above then publishes only the columns
+	// the reading names, and a filter is an opaque expression — it may name a column that is not among them.
+	if (!filtersRideInside)
+		for (const ibQueryExprPtr& f : spec.m_filters)
+			if (f) q.Where(f);
 
 	if (anyAggregate) {
 		for (const ibQueryExprPtr& k : keys) q.GroupBy(k);
@@ -1322,11 +1493,11 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	// point of the variety: the engine merely REPORTED the fault, it did not commit it. The trigger
 	// body is text WE generated, and "Column unknown NEW.FLDnnnn_RTRef" says our declaration named a
 	// column our own schema does not carry — a translation failure by any reading. Typed as a DB
-	// fault it would inherit DB retry semantics (docs/exceptions.md §3), and retrying a mistranslation
+	// fault it would inherit DB retry semantics (docs/private/exceptions.md §3), and retrying a mistranslation
 	// is an infinite loop.
 	//
 	// The driver's message rides along verbatim, because it names the exact column and no summary of
-	// ours could. A refusal is an exception (docs/exceptions.md §5a).
+	// ours could. A refusal is an exception (docs/private/exceptions.md §5a).
 	// AND THE STATEMENT TRAVELS WITH IT. The driver names the fault ("expression evaluation not
 	// supported") but not what it was evaluating, and the maintenance is the ONE place where the
 	// failing text is OURS — a trigger body this level rendered a moment ago. Reported without it,
@@ -1395,7 +1566,7 @@ ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMateria
 	}
 
 	// Apply RAISES when it cannot install the bundle — so reaching this line means it is installed,
-	// and there is no failing value to answer with (docs/exceptions.md §5a).
+	// and there is no failing value to answer with (docs/private/exceptions.md §5a).
 	sql.Apply(conn);
 	return ibMaterializeApply::Rebuilt;
 }

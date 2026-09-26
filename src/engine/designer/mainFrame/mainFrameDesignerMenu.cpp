@@ -66,21 +66,31 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// and its menu bar
 	m_menuFile = new wxMenu();
 
-	m_menuFile->Append(wxID_NEW);
-	m_menuFile->Append(wxID_OPEN);
+	// The file and edit commands carry the pictures their buttons carry on the main toolbar — one
+	// command, one picture, wherever it is pressed from, the same rule the debug menu below follows.
+	// These are wx's own stock pictures, so the client says which SIZE a menu wants rather than which
+	// picture; a command wx has none for keeps its label and nothing else, instead of borrowing one
+	// that means something different.
+	const auto stockPicture = [](wxMenuItem* item, const wxArtID& art) {
+		item->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
+		return item;
+	};
 
-	m_menuFile->Append(wxID_CLOSE);
-	m_menuFile->Append(wxID_SAVE);
-	m_menuFile->Append(wxID_SAVEAS);
+	stockPicture(m_menuFile->Append(wxID_NEW), wxART_NEW);
+	stockPicture(m_menuFile->Append(wxID_OPEN), wxART_FILE_OPEN);
+
+	stockPicture(m_menuFile->Append(wxID_CLOSE), wxART_CLOSE);
+	stockPicture(m_menuFile->Append(wxID_SAVE), wxART_FILE_SAVE);
+	stockPicture(m_menuFile->Append(wxID_SAVEAS), wxART_FILE_SAVE_AS);
 	m_menuFile->Append(wxID_REVERT, _("Re&vert..."));
 
 	m_menuFile->AppendSeparator();
-	m_menuFile->Append(wxID_PRINT);
+	stockPicture(m_menuFile->Append(wxID_PRINT), wxART_PRINT);
 	m_menuFile->Append(wxID_PRINT_SETUP, _("Print &Setup..."));
 	m_menuFile->Append(wxID_PREVIEW);
 
 	m_menuFile->AppendSeparator();
-	m_menuFile->Append(wxID_EXIT);
+	stockPicture(m_menuFile->Append(wxID_EXIT), wxART_QUIT);
 
 	m_frameMenuBar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 
@@ -92,46 +102,53 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 #endif // wxUSE_CONFIG
 
 	m_menuEdit = new wxMenu;
-	m_menuEdit->Append(wxID_UNDO);
-	m_menuEdit->Append(wxID_REDO);
+	stockPicture(m_menuEdit->Append(wxID_UNDO), wxART_UNDO);
+	stockPicture(m_menuEdit->Append(wxID_REDO), wxART_REDO);
 	m_menuEdit->AppendSeparator();
-	m_menuEdit->Append(wxID_CUT);
-	m_menuEdit->Append(wxID_COPY);
-	m_menuEdit->Append(wxID_PASTE);
-	m_menuEdit->Append(wxID_DELETE);
+	stockPicture(m_menuEdit->Append(wxID_CUT), wxART_CUT);
+	stockPicture(m_menuEdit->Append(wxID_COPY), wxART_COPY);
+	stockPicture(m_menuEdit->Append(wxID_PASTE), wxART_PASTE);
+	stockPicture(m_menuEdit->Append(wxID_DELETE), wxART_DELETE);
 	m_menuEdit->Append(wxID_SELECTALL);
 	m_menuEdit->AppendSeparator();
-	m_menuEdit->Append(wxID_FIND);
+	stockPicture(m_menuEdit->Append(wxID_FIND), wxART_FIND);
 
 	m_frameMenuBar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 
 	m_menuDebug = new wxMenu;
 
+	// The debugger's commands carry the pictures their buttons carry on the debug toolbar (wxART_DEBUG) — one
+	// command, one picture, wherever it is pressed from.
+	const auto debugPicture = [](wxMenuItem* item, const wxArtID& art) {
+		item->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_DEBUG, wxSize(16, 16)));
+		return item;
+	};
+
 	// "Start debugging" → GUI / Web
 	wxMenu* subStart = new wxMenu;
-	subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thick client (GUI)"));
+	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thick client (GUI)")), wxART_DEBUG_START);
 	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
-	m_menuDebug->AppendSubMenu(subStart, _("Start debugging"));
+	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
 	// "Start without debugging" → GUI / Web
 	wxMenu* subStartNoDebug = new wxMenu;
-	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thick client (GUI)"));
+	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thick client (GUI)")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
-	m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging"));
+	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, _("Attach for debugging..."));
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, _("Attach for debugging...")), wxART_DEBUG_ATTACH);
 	m_menuDebug->AppendSeparator();
 
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_NEXT_POINT, _("Continue"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_PAUSE, _("Pause"), _("Pause"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_INTO, _("Step into"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OVER, _("Step over"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OUT, _("Step out"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, _("Stop debugging"), _("Stop debugging"))->Enable(false);
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_PROGRAM, _("Stop debugging program"), _("Stop program"))->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_NEXT_POINT, _("Continue")), wxART_DEBUG_CONTINUE)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_PAUSE, _("Pause"), _("Pause")), wxART_DEBUG_PAUSE)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_INTO, _("Step into")), wxART_DEBUG_STEP_INTO)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OVER, _("Step over")), wxART_DEBUG_STEP_OVER)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STEP_OUT, _("Step out")), wxART_DEBUG_STEP_OUT)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_DEBUGGING, _("Stop debugging"), _("Stop debugging")), wxART_DEBUG_STOP_DEBUGGING)->Enable(false);
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_PROGRAM, _("Stop debugging program"), _("Stop program")), wxART_DEBUG_STOP_PROGRAM)->Enable(false);
 
 	m_menuDebug->AppendSeparator();
-	m_menuDebug->Append(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, _("Remove all breakpoints"));
+	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, _("Remove all breakpoints")), wxART_DEBUG_REMOVE_ALL_BREAKPOINTS);
 
 	m_menuConfiguration = new wxMenu;
 

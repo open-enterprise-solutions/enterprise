@@ -122,7 +122,7 @@ private:
 // editor's own choice type is the front's job. It exists because the three of them used
 // to build a wxPGChoices right here and pass it through the ms_property* slot, which the
 // seam does not allow (wxObject* is the most derived type backend may name — §4 of
-// docs/property-system.md) and which dragged propgrid into every backend TU. The data
+// docs/private/property-system.md) and which dragged propgrid into every backend TU. The data
 // was already ours; only the conversion sat on the wrong side.
 // HOW MANY OF THE CHOICES MAY BE HELD AT ONCE. Today this is folklore: the chart-of-characteristic-
 // types property states "exactly one" in a comment while its editor is a multi-select tree, and a

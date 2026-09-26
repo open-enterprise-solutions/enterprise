@@ -187,7 +187,7 @@ private:
 // _RTRef/_RRRef), so the ordinary DB read (GetValueColumn over the spread + this queryable's metaData)
 // reconstructs reference / enum / variant values from a temp EXACTLY like from a real table — keys AND
 // outputs. The manager fills the spread via SetValueColumn. Read-only scan source: no keyset, no write
-// key. (docs/temp-db.md)
+// key. (docs/private/temp-db.md)
 // ==========================================================================
 class ibDbTempTableQueryable : public ibBackendQueryable
 {
@@ -313,7 +313,7 @@ private:
 //
 // The columns are the inner query's OUTPUT columns, shared (not copied): the inner door published
 // them and outlives the read through the builder the CTE holds.
-// (docs/query-language-arc.md §24.4 — result links)
+// (docs/private/query-language-arc.md §24.4 — result links)
 // ==========================================================================
 class ibCteQueryable : public ibBackendQueryable
 {

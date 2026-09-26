@@ -1,0 +1,766 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.HTTPConnection",
+      "name_local": "HTTPConnection",
+      "name_en": "HTTPConnection",
+      "kind": "collection",
+      "class_id": 158798361530298929,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPConnection(host : string [, port : number = 80 [, user : string, password : string [, timeout : number = 30]]])",
+      "description": "A line to ONE machine, opened on the first request and kept for the next: the host and the port are the connection's, the path is each request's. Get, Post, Put, Patch, Delete and Head send an HTTPRequest over it; CallMethod sends one with any member of HTTPMethod, Options among them. Every one of them answers with an HTTPResponse.\n\nAN ANSWER AND A FAILURE ARE TWO THINGS. 404, 500 and a 3xx are ANSWERS: a response comes back, StatusCode says which, and what to do about it is the script's decision. A failure is when there is NO answer - the name does not resolve, nothing listens on the port, nobody spoke within the time allowed, the line dropped halfway - and that RAISES, with the method, the address and the reason in the sentence. Catch it with try / except.\n\nTHE HOST IS A NAME - \"api.example\", \"10.0.0.5\", \"::1\" - not an address. Refused: \"http://api.example\" and anything else carrying a scheme, a slash, a backslash, '@', '?', '#' or a space; a name carrying its port (\"api.example:8080\" - the port is the second argument); an IPv6 address in brackets (\"[::1]\" - it is given bare); a name that is not in its ASCII punycode (xn--) form. The port is 1 to 65535 and, when it is left out, 80 - or 443 once a SecureConnection is set - 0 is refused rather than read as \"left out\". `New HTTPConnection()` with no host at all is refused too: a connection to nowhere is not one.\n\nA user and a password go out as Basic authorization with EVERY request, unless the request carries an Authorization header of its own; a user name cannot hold ':', which is what parts it from the password. An answer is held in memory whole, up to 100 MB.",
+      "syntax_block": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\ntry {\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\n} except {\n    Message(ErrorDescription());                 // no answer at all\n}",
+      "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
+      "parameters": "host - the machine's name, never an address: \"api.example\", \"10.0.0.5\", \"::1\".\nport - 1 to 65535; left out it is 80, and 443 once a SecureConnection is set.\nuser, password - sent as Basic authorization with every request, unless the request says who it is itself.\ntimeout - seconds, 1 to 86400 (a day); 30 when it is left out.",
+      "return_descr": "HTTPConnection.",
+      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 and 500 are ANSWERS, not failures\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"answered \" + Response.StatusCode);\n    }\n} except {\n    Message(\"no answer: \" + ErrorDescription());   // no resolve, no listener, or 30 s passed\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection.SecureConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPConnection.Timeout",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Host",
+      "name_local": "Host",
+      "name_en": "Host",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Host : string",
+      "description": "The name the connection was made with, exactly as it was given. Read-only: a connection speaks to one machine, and another machine is another connection.",
+      "syntax_block": "Connection.Host",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message(Connection.Host);   // api.example",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Port"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Port",
+      "name_local": "Port",
+      "name_en": "Port",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Port : number",
+      "description": "The port this connection speaks on: the one the constructor was given, or - when it was given none - 80 for http and 443 once a SecureConnection is set. Read at the request, so setting or clearing SecureConnection moves it. Read-only, for the same reason Host is.",
+      "syntax_block": "Connection.Port",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Message(Connection.Port);   // 80 unless said, 443 once it is secure",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Host"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Timeout",
+      "name_local": "Timeout",
+      "name_en": "Timeout",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Timeout : number",
+      "description": "The time allowed for one request, in seconds - 30 unless the constructor said otherwise. It bounds making the connection, sending the request and reading the answer AS A WHOLE, not each read of it. Two things stand outside it: resolving the name (the resolver's own time) and writing a large body to a server that takes it slowly, where each write is bounded on its own.\n\n1 is the least and 86400 - a day - the most, and 0 is refused rather than read as \"no limit\": a background job waiting on a server that went quiet is a job nobody will hear from again. A value refused leaves the one that stood. Writing it drops the kept socket, so the NEXT request is the one made with the new bound.",
+      "syntax_block": "Connection.Timeout\nConnection.Timeout = seconds;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Connection.Timeout = 5;    // 0 raises, and 30 goes on standing",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Get(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method GET and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nA GET asks, and normally carries no body - a body set on the request would still go out, because the engine takes none away.",
+      "syntax_block": "Response = Connection.Get(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/sales?shift=42\");\nResponse = Connection.Get(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Post",
+      "name_local": "Post",
+      "name_en": "Post",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Post(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method POST and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nA POST hands something over: set the body with SetBodyFromString or SetBodyFromBinaryData, and SAY WHAT IT IS - a body sent with no Content-Type goes out as text/plain, which is rarely what an API wants.",
+      "syntax_block": "Response = Connection.Post(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.Post(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Put",
+      "name_local": "Put",
+      "name_en": "Put",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Put(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method PUT and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nA PUT hands over the whole of what a resource should now be; the body is set as for Post, and its Content-Type said.",
+      "syntax_block": "Response = Connection.Put(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Put(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Patch",
+      "name_local": "Patch",
+      "name_en": "Patch",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Patch(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method PATCH and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nA PATCH hands over a change to what is there; the body is set as for Post, and its Content-Type said.",
+      "syntax_block": "Response = Connection.Patch(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Patch(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Delete(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method DELETE and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nThe HTTP method DELETE - a request to the OTHER system. Nothing in this platform is deleted by it.",
+      "syntax_block": "Response = Connection.Delete(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.Delete(Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.Head",
+      "name_local": "Head",
+      "name_en": "Head",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Head(request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method HEAD and answers with the HTTPResponse that came back. What is sent is an HTTPRequest: a string, or nothing at all, is refused with a sentence rather than handed back as Undefined. 404 and 500 are answers, and a 3xx is one too - it is not followed; no answer at all raises.\n\nA HEAD asks for the headers of what a GET would answer with, and for no body: the response has its StatusCode and its Headers, and its body is empty.",
+      "syntax_block": "Response = Connection.Head(Request);",
+      "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.Head(Request);\nMessage(Response.Headers[\"Content-Length\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPConnection.CallMethod",
+      "name_local": "CallMethod",
+      "name_en": "CallMethod",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.CallMethod(method : HTTPMethod, request : HTTPRequest) : HTTPResponse",
+      "description": "Sends the request with the method named. HTTPMethod has seven members - Get, Post, Put, Patch, Delete, Head and Options - and Options is reachable HERE ALONE: the connection has no Options verb of its own.\n\nAn HTTPMethod value and nothing else: the string \"GET\" is refused, which is what the enumeration is there instead of. What is sent is an HTTPRequest, as for the named verbs.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Options, Request);",
+      "parameters": "method - HTTPMethod.Get, .Post, .Put, .Patch, .Delete, .Head or .Options.\nrequest - an HTTPRequest.",
+      "return_descr": "HTTPResponse.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPConnection.Get",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse",
+        "enum.HTTPMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest",
+      "name_local": "HTTPRequest",
+      "name_en": "HTTPRequest",
+      "kind": "collection",
+      "class_id": 173159082903524425,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPRequest([resourceAddress : string [, headers : Structure]])",
+      "description": "What a connection sends: an address on the host, headers, and a body. It is made by a script, and the same request may be sent again and over another connection - sending changes nothing in it.\n\nTHE ADDRESS IS A PATH, and it starts with '/' - the host and the port are the connection's. Left out it is \"/\", and \"\" is read as \"/\". A line break or a control character is refused, and so is a fragment (#...), which is never sent to a server: spell a '#' inside a query as %23. What cannot stand in a request target - a space, Cyrillic - goes out percent-encoded as its UTF-8; what is already encoded (%20) is left alone, and so are the '?' and the '&' that part a query.\n\nTHE HEADERS ARE A Structure, and the one handed to the constructor is SHARED with whoever handed it over, as any assigned value is: a name added to it later is seen by every request holding it.",
+      "syntax_block": "Request = New HTTPRequest(resourceAddress, headers);\nRequest.ResourceAddress = \"/v1/orders\";\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(text, TextEncoding.UTF8);\nRequest.SetBodyFromBinaryData(data);\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
+      "parameters": "resourceAddress - the path and the query, starting with '/'; left out, \"/\".\nheaders - a Structure of name = value; left out, an empty one.",
+      "return_descr": "HTTPRequest.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPResponse",
+        "cls.HTTPRequest.Headers",
+        "cls.HTTPRequest.SetBodyFromString",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.ResourceAddress",
+      "name_local": "ResourceAddress",
+      "name_en": "ResourceAddress",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.ResourceAddress : string",
+      "description": "The path and the query the request asks for. It starts with '/'; \"\" is read as \"/\". A line break, a control character and a fragment (#...) are refused - and what is refused leaves the address that stood.",
+      "syntax_block": "Request.ResourceAddress\nRequest.ResourceAddress = \"/v1/orders\";",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Request.ResourceAddress = \"/v1/sales?shift=42\";",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.Headers : Structure",
+      "description": "The headers the request carries, as a Structure whose keys FOLD CASE - which is what a header's name does: Headers[\"content-type\"] and Headers[\"Content-Type\"] are one entry. A value is a string or a number; whitespace around it is dropped, so \"Bearer t0ken \" pasted with its trailing space goes out as the token.\n\nTHEY ARE READ WHEN THE REQUEST IS SENT, and what is wrong is refused there, BY NAME, before a byte goes out: a name that is not a header name, a value that is neither a string nor a number, a value holding a line break or a control character, and the seven that say how the message is framed and carried - Content-Length, Transfer-Encoding, Host, Connection, Expect, Proxy-Authorization, Upgrade - which are the engine's. Beyond those and the library's User-Agent, which a script may replace, the engine adds nothing of its own; it does not ask for a compressed answer, and a script that does (Accept-Encoding) gets a failure, since no decoder is compiled in.\n\nAssigning something that is not a Structure is refused and leaves the headers that stood.",
+      "syntax_block": "Request.Headers.Insert(name, value);\nRequest.Headers = New Structure(\"Accept\", \"application/json\");",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Request.Headers.Insert(\"Authorization\", \"Bearer t0ken\");\nMessage(Request.Headers[\"authorization\"]);   // one entry: the name folds case",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest",
+        "cls.HTTPResponse.Headers",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.SetBodyFromString",
+      "name_local": "SetBodyFromString",
+      "name_en": "SetBodyFromString",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.SetBodyFromString(text : string, encoding : TextEncoding = UTF8)",
+      "description": "Puts text in the body, as bytes in the encoding said - UTF-8 unless a TextEncoding is given, and NO byte-order mark is written: a body is not a file, and a mark in front of JSON is a parse error at the other end. Empty text is an empty body. Text that cannot be written in the encoding is refused.\n\nSetting the body says nothing about what it IS: put that in the headers, or it goes out as text/plain.",
+      "syntax_block": "Request.SetBodyFromString(text);\nRequest.SetBodyFromString(text, TextEncoding.UTF16);",
+      "parameters": "text - what to send.\nencoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
+      "return_descr": "",
+      "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"shift\"\": 42}\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.GetBodyAsString",
+        "cls.HTTPRequest.SetBodyFromBinaryData",
+        "cls.HTTPRequest.Headers",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.SetBodyFromBinaryData",
+      "name_local": "SetBodyFromBinaryData",
+      "name_en": "SetBodyFromBinaryData",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.SetBodyFromBinaryData(data : BinaryData)",
+      "description": "Puts bytes in the body, exactly as they are - a file read into a BinaryData, an image, a signed envelope. Anything but a BinaryData is refused with a sentence.",
+      "syntax_block": "Request.SetBodyFromBinaryData(data);",
+      "parameters": "data - a BinaryData.",
+      "return_descr": "",
+      "example": "Data = New BinaryData();\nData.Read(\"C:\\out\\receipt.pdf\");\nRequest.Headers.Insert(\"Content-Type\", \"application/pdf\");\nRequest.SetBodyFromBinaryData(Data);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromString",
+        "cls.HTTPRequest.GetBodyAsBinaryData",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "The body read back as text, in the encoding said - UTF-8 unless a TextEncoding is given. Bytes that are not text in that encoding are REFUSED rather than handed over as something else: take them with GetBodyAsBinaryData(). A body nobody set reads as \"\".",
+      "syntax_block": "Request.GetBodyAsString()\nRequest.GetBodyAsString(TextEncoding.UTF16)",
+      "parameters": "encoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
+      "return_descr": "String.",
+      "example": "Message(Request.GetBodyAsString());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromString",
+        "cls.HTTPRequest.GetBodyAsBinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPRequest.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsBinaryData() : BinaryData",
+      "description": "The body as bytes, whatever they are - the way to read back what SetBodyFromBinaryData put there.",
+      "syntax_block": "Request.GetBodyAsBinaryData()",
+      "parameters": "None.",
+      "return_descr": "BinaryData.",
+      "example": "Message(Request.GetBodyAsBinaryData().Size());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPRequest.SetBodyFromBinaryData",
+        "cls.HTTPRequest.GetBodyAsString"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse",
+      "name_local": "HTTPResponse",
+      "name_en": "HTTPResponse",
+      "kind": "collection",
+      "class_id": 317272071956123875,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Connection.Get(request : HTTPRequest) : HTTPResponse",
+      "description": "What came back. A SCRIPT NEVER MAKES ONE - `New HTTPResponse()` does not compile - it is handed out by a connection's Get, Post, Put, Patch, Delete, Head or CallMethod.\n\nEvery answer is a response: 200 as much as 404, 500 and a 3xx. StatusCode says which, Headers are the ones that came, and the body is read as text or as bytes. A failure - no answer at all - is the other thing entirely, and it raises instead of handing one of these back.\n\nThe body is held in memory whole, up to 100 MB; an answer larger than that ends the request as a failure.",
+      "syntax_block": "Response = Connection.Get(Request);\nResponse.StatusCode   Response.Headers[\"Location\"]\nResponse.GetBodyAsString(TextEncoding.UTF8)   Response.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode = 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode = 302) {\n    Message(\"it moved to \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"answered \" + Response.StatusCode);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection",
+        "cls.HTTPRequest",
+        "cls.HTTPResponse.StatusCode",
+        "cls.HTTPResponse.Headers",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.StatusCode",
+      "name_local": "StatusCode",
+      "name_en": "StatusCode",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.StatusCode : number",
+      "description": "The status the server answered with - 200, 404, 500, 302. Read-only. A number, so it compares as one: `if (Response.StatusCode = 200)`.",
+      "syntax_block": "Response.StatusCode",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "if (Response.StatusCode <> 200) { Message(\"answered \" + Response.StatusCode); }",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.Headers",
+        "cls.HTTPConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.Headers : Structure",
+      "description": "The headers the answer carried, as a Structure whose keys FOLD CASE, as a header's name does. Read-only as a property: the answer is what it is.\n\nA name the answer carries TWICE is joined with \", \", as the protocol says - except Set-Cookie, whose values hold commas of their own, where the LAST one stays.\n\nLocation is here after a 3xx: a redirect is an answer and is not followed, so where to go, with which method and which headers, is the script's decision.",
+      "syntax_block": "Response.Headers[\"Location\"]\nResponse.Headers[\"Content-Type\"]",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Message(Response.Headers[\"content-type\"]);   // the name folds case\nMessage(Response.Headers[\"Location\"]);       // after a 3xx",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPRequest.Headers",
+        "cls.HTTPResponse.StatusCode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "The answer's body read as text, in the encoding said - UTF-8 unless a TextEncoding is given. The charset a Content-Type may carry is NOT read: the encoding is the script's to say. Bytes that are not text in that encoding are REFUSED rather than handed over as something else - take them with GetBodyAsBinaryData(). A 204, or a HEAD, reads as \"\".",
+      "syntax_block": "Response.GetBodyAsString()\nResponse.GetBodyAsString(TextEncoding.ANSI)",
+      "parameters": "encoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
+      "return_descr": "String.",
+      "example": "Text = Response.GetBodyAsString();             // UTF-8 unless said",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.GetBodyAsBinaryData",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPResponse.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsBinaryData() : BinaryData",
+      "description": "The answer's bytes, whatever they are: an image, a PDF, a zip, or text in an encoding this build cannot read. Write(path) puts them in a file as they came.",
+      "syntax_block": "Response.GetBodyAsBinaryData()",
+      "parameters": "None.",
+      "return_descr": "BinaryData.",
+      "example": "Response.GetBodyAsBinaryData().Write(\"C:\\in\\answer.bin\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPResponse",
+        "cls.HTTPResponse.GetBodyAsString",
+        "guide.textFiles"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod",
+      "name_local": "HTTPMethod",
+      "name_en": "HTTPMethod",
+      "kind": "enum_type",
+      "class_id": 382927474864707642,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Get, .Post, .Put, .Patch, .Delete, .Head, .Options",
+      "description": "The verb a request is sent with, as a value: HTTPMethod has seven members - Get, Post, Put, Patch, Delete, Head and Options - and a member is written HTTPMethod.<Name>. A script never makes one: `New HTTPMethod()` does not compile, and the string \"GET\" is not one either - the enumeration is there instead of it.\n\nIT IS READ IN ONE PLACE - the first argument of HTTPConnection.CallMethod. Six of the seven also have a named method on the connection, and the two roads are one and the same request: `Connection.Get(Request)` sends what `Connection.CallMethod(HTTPMethod.Get, Request)` sends. Options has NO named method - CallMethod is where it is reached.\n\nTHE VERB IS A WORD, and it is the only thing that differs: one road builds one message for every member and puts the verb's name in it. The engine takes NO body away and adds none - a body set on the request goes out with a GET or a DELETE exactly as it would with a POST. A 3xx is not followed for any of them either. What a verb ought to carry is the script's to decide.",
+      "syntax_block": "Response = Connection.CallMethod(HTTPMethod.Options, Request);\nResponse = Connection.CallMethod(HTTPMethod.Get, Request);   // the same request as Connection.Get(Request)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPConnection",
+        "enum.HTTPMethod.Options",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Get",
+      "description": "GET - asks for what is at the address, and normally carries nothing of its own. The connection has a named method for it, so `Connection.Get(Request)` and `Connection.CallMethod(HTTPMethod.Get, Request)` are one and the same request.\n\nA body set on the request STILL GOES OUT with it: the engine takes none away from a verb that is not supposed to carry one.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Get, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Get, Request);   // the same as Connection.Get(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Get",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Post",
+      "name_local": "Post",
+      "name_en": "Post",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Post",
+      "description": "POST - hands something over at the address. The connection has a named method for it: `Connection.Post(Request)` is `Connection.CallMethod(HTTPMethod.Post, Request)`.\n\nThe body is the request's - SetBodyFromString or SetBodyFromBinaryData - and SAYING WHAT IT IS is the script's: a body sent with no Content-Type of its own goes out as text/plain, which is rarely what an API wants.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Post, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.CallMethod(HTTPMethod.Post, Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Post",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Put",
+      "name_local": "Put",
+      "name_en": "Put",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Put",
+      "description": "PUT - hands over the whole of what a resource should now be. The connection has a named method for it: `Connection.Put(Request)` is `Connection.CallMethod(HTTPMethod.Put, Request)`.\n\nThe body is set as for Post, and its Content-Type said.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Put, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Put, Request);   // the same as Connection.Put(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Put",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Patch",
+      "name_local": "Patch",
+      "name_en": "Patch",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Patch",
+      "description": "PATCH - hands over a change to what is already there, rather than the whole of it. The connection has a named method for it: `Connection.Patch(Request)` is `Connection.CallMethod(HTTPMethod.Patch, Request)`.\n\nThe body is set as for Post, and its Content-Type said.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Patch, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Response = Connection.CallMethod(HTTPMethod.Patch, Request);   // the same as Connection.Patch(Request)",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Patch",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Delete",
+      "description": "DELETE - asks the OTHER system to remove what is at the address. Nothing in this platform is deleted by it. The connection has a named method for it: `Connection.Delete(Request)` is `Connection.CallMethod(HTTPMethod.Delete, Request)`.\n\nA DELETE normally carries no body, and one set on the request still goes out: the engine takes none away.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Delete, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.CallMethod(HTTPMethod.Delete, Request);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Delete",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Head",
+      "name_local": "Head",
+      "name_en": "Head",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Head",
+      "description": "HEAD - asks for the headers of what a GET would answer with, and for no body: the response has its StatusCode and its Headers, and its body is empty. It is the way to read a Content-Length or a Last-Modified without pulling the thing itself. The connection has a named method for it: `Connection.Head(Request)` is `Connection.CallMethod(HTTPMethod.Head, Request)`.\n\nA body set on the request still goes out: the engine takes none away.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Head, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.CallMethod(HTTPMethod.Head, Request);\nMessage(Response.Headers[\"Content-Length\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.Head",
+        "cls.HTTPConnection.CallMethod"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.HTTPMethod.Options",
+      "name_local": "Options",
+      "name_en": "Options",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "HTTPMethod.Options",
+      "description": "OPTIONS - asks what may be done at the address; the answer's Allow header names the verbs.\n\nTHE ONE MEMBER WITH NO NAMED METHOD on the connection - there is no `Connection.Options(...)` - so it is sent through CallMethod and nowhere else. That is what CallMethod is for.\n\nA body set on the request still goes out: the engine takes none away.",
+      "syntax_block": "Connection.CallMethod(HTTPMethod.Options, Request);",
+      "parameters": "",
+      "return_descr": "HTTPMethod.",
+      "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "enum.HTTPMethod",
+        "cls.HTTPConnection.CallMethod",
+        "cls.HTTPResponse.Headers"
+      ],
+      "reviewed": false
+    }
+  ]
+}

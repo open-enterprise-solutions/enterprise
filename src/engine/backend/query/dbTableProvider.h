@@ -6,7 +6,7 @@
 // data-access TEMPLATE — the one place a column's value is lifted from / bound to a DB row.
 // It lives in its OWN L2-coupled file (it traffics L2 IR: BuildPageIR -> ibQueryIR), kept off
 // the deliberately L2-free queryProvider.h. The lighter providers (RAM / temp) do NOT inherit
-// it. (docs/query-language-arc.md §22.4)
+// it. (docs/private/query-language-arc.md §22.4)
 
 #include "queryProvider.h"                                          // ibBackendQueryProvider / ibDataQuerySpec / ibReadPageRequest / ibDataQueryResult
 #include "backend/databaseLayer/databaseQueryBuilder.h"             // ibQueryIR / ibQueryResult / ibQuerySortItem / ibRenderedQuery (L2)
@@ -18,7 +18,7 @@ class ibMetaData;   // the metadata context the column-based value-assembly thre
 // the door (dataQueryBuilder.h forward-declares it; the list model holds it via shared_ptr and
 // builds it through ibDataQueryBuilder::NewPageCache). Its FULL layout lives here, where L2 is
 // in scope (it stores an L2 ibRenderedQuery): the DB provider's ExecuteReadCached fills/reads
-// it, and NewPageCache constructs it. (docs/query-language-arc.md §19/§20)
+// it, and NewPageCache constructs it. (docs/private/query-language-arc.md §19/§20)
 struct ibRenderedPageCache
 {
 	wxString                     m_sig;             // signature of the SQL-determining inputs
@@ -43,7 +43,7 @@ public:
 	// Reference dot-walk target resolution — THIS is the ONE metadata-owning provider (clsid ->
 	// metaData->GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData()). The base
 	// returns null and the computed provider forwards here, so the query-provider layer stays
-	// metadata-free while resolution has a single home. (docs/query-language-arc.md §22 dot-walk)
+	// metadata-free while resolution has a single home. (docs/private/query-language-arc.md §22 dot-walk)
 	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 
@@ -63,7 +63,7 @@ public:
 	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
 	void ReadReferences() const override;
 
-	// --- multi-source: co-located server-side JOIN (docs/query-language-arc.md §22.1a) -------
+	// --- multi-source: co-located server-side JOIN (docs/private/query-language-arc.md §22.1a) -------
 	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB
 	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column
 	// owned by a leaf? When true the whole join runs in ONE server-side SELECT (the DBMS does the
@@ -103,7 +103,7 @@ public:
 	static BACKEND_API bool  CanColocateUnion(const ibDataQuerySpec& spec);
 	static ibDataQueryResult ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 
-	// Totals push-down via GROUP BY ROLLUP (docs/query-language-arc.md §22.1b). CanPushRollupTotals:
+	// Totals push-down via GROUP BY ROLLUP (docs/private/query-language-arc.md §22.1b). CanPushRollupTotals:
 	// a single-source DB queryable, SCALAR or REFERENCE group keys (a reference groups by its full spread as ONE
 	// composite ROLLUP((f0,f1,…)) element, reassembled on read) + scalar aggregate inputs, AND the connected dialect
 	// advertises ROLLUP. ExecuteRollupTotals then runs ONE GROUP BY ROLLUP(keys) + the aggregates +
@@ -182,6 +182,13 @@ public:
 	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const ibBackendQueryable* queryable,
 	                                                   const ibQueryPredicatePtr& predicate,
 	                                                   const wxString& qualifier = wxEmptyString);
+
+	// …AND A COMPUTED VALUE, the same way — arithmetic, a CASE, a column read field by field — for the same
+	// caller: one that writes its own SELECT over this table and needs the value in its projection (the rows
+	// of a register's movements, each one's contribution to the totals, ibSchemaMaterialize::ToReadSpec).
+	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const ibBackendQueryable* queryable,
+	                                                    const ibQueryColumnExprPtr& expr,
+	                                                    const wxString& qualifier = wxEmptyString);
 
 private:
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the

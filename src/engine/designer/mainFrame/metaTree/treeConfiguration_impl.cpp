@@ -209,19 +209,19 @@ static bool ibRowCanBeAsked(const wxTreeCtrl* ctrl, const wxTreeItemId& item)
 // ⚠ ONLY A FORM THAT HAS NO KIND YET. A paste, a copy and a tool-made form all arrive here too,
 // and every one of them already knows what it is — asking again would put a dialog in front of
 // somebody who never pressed anything.
-void ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
+bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 {
 	if (object == nullptr || m_bReadOnly)
-		return;
+		return true;
 
 	ibValueMetaObjectForm* form = dynamic_cast<ibValueMetaObjectForm*>(object);
 	if (form == nullptr || form->GetTypeForm() != wxNOT_FOUND)
-		return;
+		return true;
 
 	ibValueMetaObjectGenericData* owner =
 		dynamic_cast<ibValueMetaObjectGenericData*>(form->GetParent());
 	if (owner == nullptr)
-		return;
+		return true;
 
 	// THE DIALOG, right here. It stood in a `SelectFormType` of its own — virtual, and overridden by
 	// nobody: a leftover from when the ENGINE asked this through the tree's interface. Its only
@@ -233,9 +233,16 @@ void ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 
 	dlg.CreateSelector();
 
+	// ⭐ REFUSED — THE FORM IS NOT WANTED, and it goes again, through the door a Delete takes. The ask
+	// comes after the create (the create is the engine's, and a tool makes forms with nobody to ask),
+	// so undoing it is the asker's; it used to return here and leave a form with no kind and no layout
+	// standing in the tree, as if the person had said yes.
 	const ibFormID chosen = dlg.ShowModal();
-	if (chosen == wxNOT_FOUND)
-		return;   // closed the dialog: the form stands, with its kind still to be chosen
+	if (chosen == wxNOT_FOUND) {
+		if (ibMetaData* const metaData = GetMetaData())
+			metaData->RemoveMetaObject(form);
+		return false;
+	}
 
 	// Placed the way the object inspector places one: ask the owner, set, tell the owner — so
 	// whatever watches a property change sees this one too.
@@ -251,6 +258,7 @@ void ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	// branch as the question inside the engine, so skipping the ask skipped the build and the form
 	// came out with nothing in it.
 	owner->OnCreateFormObject(form);
+	return true;
 }
 
 // ONE WALK, THREE TREES. Every row that stands for a metaobject carries an ibTreeDataObject —
@@ -423,7 +431,8 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 	// single add, to work out something the click already knew.
 	case ibMetaDataNotifier::ibMetaStage::Created:
 		if (object != nullptr && !object->IsDeleted()) {
-			AskFormKind(object);
+			if (!AskFormKind(object))
+				return;   // refused and taken away again — its Removed has come and gone, and there is no row
 
 			// ⭐⭐ WHERE THE ROW GOES IS THE OBJECT'S OWN BUSINESS — its OWNER says it.
 			//
@@ -644,7 +653,8 @@ ibValueMetaObject* ibConfigurationTree::NewItem(const ibClassID& clsid, ibValueM
 // The engine used to ask for this (SelectFormType) — a dialog in the middle of a create, with the
 // create refused if the person closed it. Now the create simply happens and states the fact; the
 // watcher that has a person in front of it asks them, and writes the answer in through the ordinary
-// property door. A host with nobody to ask writes nothing, and the form is still made.
+// property door — or, if they refuse, takes the form away again through the door a Delete takes. A
+// host with nobody to ask writes nothing, and the form is still made.
 //
 // ⚠ ONLY A FORM THAT HAS NO KIND YET. A paste, a copy and a tool-made form all arrive here too, and
 // every one of them already knows what it is — asking again would put a dialog in front of somebody
@@ -708,6 +718,11 @@ ibValueMetaObject* ibConfigurationTree::CreateItem(bool showValue)
 		GetClassIdentifier(),
 		GetMetaIdentifier()
 	);
+
+	// A form whose kind the person refused is taken away again before the create returns (AskFormKind):
+	// nothing was made, and there is nothing to open.
+	if (createdObject != nullptr && createdObject->IsDeleted())
+		createdObject = nullptr;
 
 	// ⭐⭐ THE ROW IS NOT DRAWN HERE, and that is the whole concept (Max, 2026-09-01): *"we send our
 	// metadata that we changed, and then we just wait for its answer — it says 'I changed it, show
@@ -1503,7 +1518,7 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, co
 
 // A REPORT is a data processor plus the thing that makes it a report: its COMPOSERS. They are its
 // own children, like its forms — the default one is what the generated form is built from, so a
-// report that declares one needs no form at all (docs/report-engine.md §4b).
+// report that declares one needs no form at all (docs/private/report-engine.md §4b).
 void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	AddDataProcessorItem(metaObject, hParentID);   // same shape, down to the RAM tabular sections
@@ -1609,6 +1624,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaCommonModuleCLSID,     0, ibMetaRow::Item    },
 	{ g_metaCommonFormCLSID,       0, ibMetaRow::Item    },
 	{ g_metaCommonCommandCLSID,    0, ibMetaRow::Command },
+	{ g_metaCommandGroupCLSID,     0, ibMetaRow::Item    },
 	{ g_metaCommonTemplateCLSID,   0, ibMetaRow::Item    },
 
 	// SCHEDULED JOBS: one branch, two kinds inside it. The branch itself holds the PARAMETERIZED jobs

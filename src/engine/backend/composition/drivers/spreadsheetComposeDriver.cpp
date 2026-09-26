@@ -1,4 +1,5 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
+#include "backend/backend_type.h"                           // GetFormatFromTypeDesc — a column's format from its type
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 #include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
 
@@ -29,7 +30,7 @@ constexpr int kMaxColWidth   = 420;
 // rather than announces itself. The deeper the level, the paler the tint, so nesting is visible
 // without a second mechanism.
 //
-// They belong in the palette (docs/ui-palette.md) rather than in a driver, and they are here
+// They belong in the palette (docs/private/ui-palette.md) rather than in a driver, and they are here
 // only until the report gets its own palette roles — a report that prints must eventually take
 // these from the theme, not from a constant.
 const wxColour kHeaderFill(0xD4, 0xE4, 0xD4);
@@ -164,6 +165,19 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_paths.reserve(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i)
 		m_paths.push_back(info.PathOf(i));
+	// …AND HOW EACH COLUMN WRITES ITS FIGURES, asked of its type (OutputColumn::GetTypeDesc) once here rather
+	// than once per cell.
+	m_formats.clear();
+	m_formats.resize(info.m_schema.size());
+	for (size_t i = 0; i < info.m_schema.size(); ++i) {
+		ibFormatString& format = m_formats[i];
+		ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
+		if (!format.m_number.m_zero)
+			format.m_number.m_zero = wxString();
+		if (!format.m_date.m_empty)
+			format.m_date.m_empty = wxString();
+	}
 	// …AND WHICH OF THEM ARE SHOWN, taken here for the same reason as the two above: the layout is
 	// decided later and the info does not outlive this call.
 	m_shown = info.m_shown;
@@ -765,7 +779,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 			continue;
 
 		const ibValue& value = values[i];
-		wxString text = value.GetString();
+		wxString text = ColumnText(i, value);
 		// The indent rides on the FIRST field of the level — the column the grouping is read down.
 		if (isDimension && page > 0 && m_layout[i] == 0)
 			text.insert(0, page * kIndentPerLevel, wxT(' '));
@@ -861,7 +875,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		if (col < m_dimWidth || isDimension)
 			continue;
 		const ibValue& value = values[i];
-		const wxString text = value.GetString();
+		const wxString text = ColumnText(i, value);
 		row->SetCellValue(0, col, text);
 		// ⭐ THE GRAND TOTAL STANDS UNDER NOTHING — it is the figure over everything, so its cells are
 		// packed with no links at all. A click on it still opens the value; there is simply no
@@ -922,20 +936,21 @@ std::vector<size_t> ibColumnsOfLevel(const std::vector<ibQueryLowering::OutputCo
 	return own;
 }
 
+} // namespace
+
 // What one level of a key reads as in a header cell — its fields, side by side, because they are
-// one heading and not several.
-wxString ibHeadingText(const std::vector<ibValue>& values)
+// one heading and not several; each written as its own column writes it.
+wxString ibSpreadsheetComposeDriver::HeadingText(const std::vector<ibValue>& values, int dimLevel) const
 {
+	const std::vector<size_t> at = ibColumnsOfLevel(m_schema, dimLevel);
 	wxString text;
-	for (const ibValue& value : values) {
+	for (size_t f = 0; f < values.size(); ++f) {
 		if (!text.IsEmpty())
 			text += wxT(" ");
-		text += value.GetString();
+		text += ColumnText(f < at.size() ? at[f] : m_schema.size(), values[f]);
 	}
 	return text;
 }
-
-} // namespace
 
 size_t ibSpreadsheetComposeDriver::ColumnKeyIndex(const CrossKey& key)
 {
@@ -1322,7 +1337,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			const CrossKey& key = slots[runStart].m_key;
 			// The level's value where the key reaches this deep; where it stops, this slot is the
 			// TOTAL of the level above — and that is the word its own line carries.
-			const wxString text = (depthAt < key.size()) ? ibHeadingText(key[depthAt])
+			const wxString text = (depthAt < key.size()) ? HeadingText(key[depthAt], static_cast<int>(m_rowLevels + depthAt))
 				: (slots[runStart].m_subtotal && depthAt == key.size() ? wxString(wxT("Total")) : wxString());
 
 			if (!text.IsEmpty()) {
@@ -1464,7 +1479,6 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// cell by construction.
 	wxFont boldFont = s_defaultSpreadsheetFont;
 	boldFont.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
-	const int areaRowHeight = ibBackendSpreadsheetObject().GetRowSize(0);   // what PutArea gave each line
 	// WHAT EACH CELL OF A LINE SAYS, gathered first and written in ONE call per cell (SetCell) — its
 	// text, its alignment, its link and its look — instead of a setter per attribute, each finding the
 	// cell again. Kept across the lines so their storage is reused.
@@ -1527,7 +1541,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		// The heading, indented by its depth — the same indent the streaming layout uses, so a
 		// nested row heading reads the same in both shapes.
 		for (size_t f = 0; f < source.m_heading.size() && static_cast<int>(f) < dimWidth; ++f) {
-			wxString text = source.m_heading[f].GetString();
+			wxString text = ColumnText(f < headingAt.size() ? headingAt[f] : m_schema.size(), source.m_heading[f]);
 			if (f == 0)
 				text.insert(0, source.m_level * kIndentPerLevel, wxT(' '));
 			if (f < m_widest.size())
@@ -1551,7 +1565,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				if (col >= totalCols)
 					break;
 				const size_t c = static_cast<size_t>(col);
-				cellText[c] = figures[m].GetString();
+				cellText[c] = ColumnText(m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(), figures[m]);
 				cellSaid[c] = 1;
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					cellRight[c] = 1;
@@ -1610,9 +1624,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			cell.m_detailsParameter = std::move(cellLink[c]);   // …and its links cleared at its top
 			m_document->SetCell(at, col, cell);
 		}
-		// …and what PutArea said about the line besides its cells: its height, the end of the printed
-		// rows, and the group it folds into at its depth.
-		m_document->SetRowSize(at, areaRowHeight);
+		// …and what PutArea said about the line besides its cells: the end of the printed rows, and the
+		// group it folds into at its depth. NO HEIGHT: a line of a report has automatic height, taller
+		// where its text needs it (spreadsheetDescription.h, HasRowSize) — the 15 it used to be given was
+		// the default written down as a height of its own.
 		m_document->SetRowBrake(at);
 		if (source.m_level > 0)
 			m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(at),
@@ -1636,7 +1651,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				const int col = firstCol + static_cast<int>(m);
 				if (col >= totalCols)
 					break;
-				const wxString text = figures[m].GetString();
+				const wxString text = ColumnText(m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(), figures[m]);
 				totals->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);

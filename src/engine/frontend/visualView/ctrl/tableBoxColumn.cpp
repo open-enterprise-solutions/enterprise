@@ -1,6 +1,7 @@
 #include "tableBox.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
+#include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch it.
@@ -277,11 +278,8 @@ bool ibValueModelTableBoxColumn::CanDeleteControl() const
 bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 {
 	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
-	if (currentLine != nullptr) {
-		currentLine->SetValueByMetaID(
-			GetModelColumn(), varControlVal
-		);
-	}
+	if (currentLine != nullptr)
+		currentLine->SetValueByMetaID(GetModelColumn(), varControlVal);
 
 #ifndef OES_USE_WEB
 	ibDataViewColumnObject* dataViewColumn =
@@ -303,6 +301,23 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 
 	m_formOwner->RefreshForm();
 	return true;
+}
+
+// ⭐⭐ A COLUMN STANDS IN TWO PLACES AT ONCE, and a link may name a field in either: the other cells of
+// THE ROW it is editing, and the attributes of the OBJECT above the section. So the holder is given
+// both — the row it is in, and the source the form is bound to — and the reading tries them in that
+// order (choiceLinkResolver.cpp). A link by type is simply the choice of a field, of the tabular
+// section or of the header (Max, 2026-09-23).
+ibChoiceHolder ibValueModelTableBoxColumn::GetChoiceHolder() const
+{
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	if (currentLine == nullptr)
+		return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
+
+	ibChoiceHolder holder(currentLine->GetOwnerModel(), currentLine->GetLineItem());
+	if (m_formOwner != nullptr)
+		holder.m_source = m_formOwner->GetSourceObject();   // …and the header, for a link that names it
+	return holder;
 }
 
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
@@ -331,6 +346,7 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
 	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
@@ -365,6 +381,7 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
 	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());

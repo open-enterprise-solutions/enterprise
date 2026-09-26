@@ -933,7 +933,7 @@ TEST(RuntimeTest, LinqOrderBy_SecondKeyBreaksTheTie) {
 	EXPECT_EQ(ret.GetInteger(), 111221);
 }
 
-TEST(RuntimeTest, LinqOrderBy_DescendingReversesTheWholeOrdering) {
+TEST(RuntimeTest, LinqOrderBy_DescendingTurnsOnlyItsKey) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function TwoKeysDown() Public\n")
@@ -953,10 +953,41 @@ TEST(RuntimeTest, LinqOrderBy_DescendingReversesTheWholeOrdering) {
 
 	ibValue ret;
 	pu.CallAsFunc(wxT("TwoKeysDown"), ret);
-	// The direction is written ONCE, after the last key, and turns the whole
-	// ordering round: (2,1) (1,2) (1,1) -> 21, 12, 11. Applying it to the LAST
-	// key only would have given 12 before 11 but left A ascending: 11, 12, 21.
-	EXPECT_EQ(ret.GetInteger(), 211211);
+	// The direction is the KEY'S it is written after: A ascending, and within
+	// A = 1 the larger B first - (1,2) (1,1) (2,1) -> 12, 11, 21. Until 2026-09-21
+	// it was one flag for the whole query and turned A round too: 21, 12, 11.
+	EXPECT_EQ(ret.GetInteger(), 121121);
+}
+
+// Every key its own way, the one in the middle included - `orderby f1, f2
+// descending, f3` (Max, 2026-09-21). A key before a comma could not carry a
+// direction at all until then.
+TEST(RuntimeTest, LinqOrderBy_EachKeyRunsItsOwnWay) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function ThreeWays() Public\n")
+		wxT("  var rows; var q;\n")
+		wxT("  rows = New Array;\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 2, 1, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 2, 2));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 1, 1));\n")
+		wxT("  rows.Add(New Structure(\"A, B, C\", 1, 2, 1));\n")
+		wxT("  q = from r in rows orderby r.A, r.B descending, r.C select { V = r.A * 100 + r.B * 10 + r.C };\n")
+		wxT("  If q.Count() <> 5 Then Return -1; EndIf;\n")
+		wxT("  If q[3].V <> 112 Or q[4].V <> 211 Then Return -2; EndIf;\n")
+		wxT("  Return q[0].V * 1000000 + q[1].V * 1000 + q[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("ThreeWays"), ret);
+	// A up; within A = 1, B down; within each B, C up again - C is what puts 121
+	// before 122, which arrived the other way round: 121, 122, 111, 112, 211.
+	EXPECT_EQ(ret.GetInteger(), 121122111);
 }
 
 TEST(RuntimeTest, LinqOrderBy_ThirdKeyIsStillConsulted) {
@@ -1346,6 +1377,51 @@ TEST(RuntimeTest, ClosureWritesBackIntoItsCapturedSlot) {
 }
 
 // ===========================================================================
+// A SLOT HOLDING A REFERENCE THAT RECEIVES A STRING SUM RELEASES IT ONCE
+//
+// CHECK_READONLY (procUnit.cpp) released the destination's reference and left
+// its tag and pointer in place; the string branch of AddValue then cleared the
+// destination again and released the SAME reference a second time. An object a
+// variable still held was freed under it - the three corpus scripts the address
+// sanitizer stopped on (test_closure_iterator, test_closure_linq,
+// test_linq_chain_extended). The probe counts its own destruction, so the second
+// release shows in any build, with a sanitizer or without.
+// ===========================================================================
+
+namespace {
+class ReleaseProbe : public ibValue {
+public:
+	explicit ReleaseProbe(int* destroyed)
+		: ibValue(ibValueTypes::TYPE_VALUE, false), m_destroyed(destroyed) {}
+	~ReleaseProbe() override { ++*m_destroyed; }
+private:
+	int* m_destroyed;
+};
+} // namespace
+
+TEST(RuntimeTest, AStringSumIntoASlotHoldingAReferenceReleasesItOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var keep public; var slot public;\n")
+		wxT("Procedure Run() Public\n")
+		wxT("  slot = keep;\n")
+		wxT("  slot = \"n=\" + 1;\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	int destroyed = 0;
+	ASSERT_TRUE(pu.SetPropVal(wxT("keep"), ibValue(static_cast<ibValue*>(new ReleaseProbe(&destroyed)))));
+	pu.CallAsProc(wxT("Run"));
+
+	EXPECT_EQ(destroyed, 0) << "released by the slot that stopped holding it, and once more";
+	ibValue slot;
+	ASSERT_TRUE(pu.GetPropVal(wxT("slot"), slot));
+	EXPECT_EQ(slot.GetString(), wxString(wxT("n=1")));
+}
+
+// ===========================================================================
 // A BUILT-IN GLOBAL CALLED WITH FEWER ARGUMENTS THAN IT DECLARES
 //
 // `Message` declares two parameters (text, status) and every script passes one.
@@ -1463,7 +1539,7 @@ TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
 	for (size_t i = 0; i < bc.m_listConst.size(); i++)
 		std::printf("  [%u] type=%d text=%s\n", (unsigned)i,
 			(int)bc.m_listConst[i].GetType(),
-			(const char*)bc.m_listConst[i].GetString().ToUTF8());
+			bc.m_listConst[i].GetString().ToUTF8().c_str());
 	std::printf("code %u\n", (unsigned)bc.m_listCode.size());
 	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
 		const ibByteUnit& u = bc.m_listCode[i];
@@ -1562,7 +1638,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	std::printf("direct sqrt(16) = %s\n", (const char*)direct.ToString().ToUTF8());
 
 	std::printf("arg: type=%d text=%s\n",
-		(int)arg.GetType(), (const char*)arg.GetString().ToUTF8());
+		(int)arg.GetType(), arg.GetString().ToUTF8().c_str());
 
 	ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
 
@@ -1571,7 +1647,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	// "Sqrt returned zero" and "the root is right but the conversion is not"
 	// are different defects and this tells them apart.
 	std::printf("ret: type=%d text=%s int=%d\n",
-		(int)ret.GetType(), (const char*)ret.GetString().ToUTF8(), (int)ret.GetInteger());
+		(int)ret.GetType(), ret.GetString().ToUTF8().c_str(), (int)ret.GetInteger());
 
 	EXPECT_EQ(ret.GetInteger(), 4);
 }
@@ -1817,8 +1893,8 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 //
 // The suspected cause is that the pipeline invoke path (procUnitLINQ.cpp,
 // CallLambdaWithArgs) builds a C-stack frame and never honours
-// `m_needsHeapFrame`, so the inner lambda's weak_from_this() on the outer frame
-// is already expired. Promoting it was tried once and made things worse; the
+// `m_needsHeapFrame`, so the outer frame is an ordinary one and the inner
+// lambda finds nothing it may capture. Promoting it was tried once and made things worse; the
 // note there says not to re-apply without a repro that fails first.
 //
 // This is that repro.
@@ -2601,4 +2677,60 @@ TEST_F(BuiltInRuntime, AVariadicBuiltInAcceptsEveryCount) {
 	EXPECT_EQ(v.GetInteger(), 9);
 	ASSERT_TRUE(pu.GetPropVal(wxT("many"), v));
 	EXPECT_EQ(v.GetInteger(), 2);
+}
+
+// ===========================================================================
+// ⭐⭐ A FRAME'S SLOTS LET GO OF ONE ARRAY ONCE, and the walk that reads it is a
+// SECOND holder, not a second owner.
+//
+// AddressSanitizer, nightly of 2026-09-24: a heap-use-after-free inside
+// ibRunContextSmall::DestroyLocals — the SAME loop freed the object and then read
+// it. The 64-byte region was an ibValueArray minted by `New Array`
+// (ibValue::CreateObject, OPER_NEW), and the two readers were two slots of one
+// module frame: whoever walks an array holds it while the walk lasts, and the
+// counting has to survive both ends.
+//
+// It surfaced through ScriptCorpus.EveryScriptRuns — every script of the corpus in
+// one run, so the stack named the destructor and nothing about the shape that got
+// there. This is that shape alone: make an array, walk it, make a second one from
+// it, walk that. Under a sanitiser it either passes or names the place directly.
+//
+// ⚠ It PASSED under ASan on 34715afe while the corpus still failed, so this is not
+// the shape. The corpus now runs one case per script
+// (Corpus/ScriptCorpusRun.RunsToTheEnd/<file>), and the next sanitiser run names
+// the file instead.
+// ===========================================================================
+
+TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var total public; var kept public;\n")
+		wxT("var arr; arr = New Array;\n")
+		wxT("arr.Add(10); arr.Add(20); arr.Add(30);\n")
+		wxT("total = 0;\n")
+		wxT("Foreach x In arr Do\n")
+		wxT("  total = total + x;\n")
+		wxT("EndDo;\n")
+		// A second array, made from the first by a pipeline that walks it — the
+		// iterator holds the source for the length of the fold, and the fold's own
+		// result is then walked in its turn.
+		wxT("var picked; picked = arr.Where(Function(v) Return v >= 20 EndFunction).ToArray();\n")
+		wxT("kept = 0;\n")
+		wxT("Foreach y In picked Do\n")
+		wxT("  kept = kept + 1;\n")
+		wxT("EndDo;\n")))
+		<< "the shape this test is about did not compile";
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("total"), v));
+	EXPECT_EQ(v.GetInteger(), 60) << "the walk itself must still be right";
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), v));
+	EXPECT_EQ(v.GetInteger(), 2);
+
+	// The frame goes here, with both arrays in it. That is the moment the nightly
+	// caught: passing under a sanitiser is the whole assertion.
 }

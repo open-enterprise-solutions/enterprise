@@ -375,11 +375,25 @@ static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBacke
 	return false;
 }
 
-// Create a list with a DEFAULT sort set at creation — the metaobject passes its presentation column. The sort lands
-// on the composer (the store) so the serializer saves it and the user can remove it; NOT re-applied at runtime.
-ibValueDynamicList* ibCreateList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view)
+// ⭐⭐ A LIST IS BORN WITH ITS REQUEST — the one place every factory below makes a list, and the only
+// moment a composer reads what narrows it. Each `field = value` pair of the request becomes a filter line,
+// put on HERE rather than inside the list, because a dynamic list has no business knowing what a request
+// is: it knows filters, the factory knows why there is one. Exactly the arrangement a folder-select list
+// already has — its `IsFolder = true` is a creation-time filter line set by its factory (Max, 2026-09-23:
+// "before creating the list you simply assign it this filter"). Empty request, no lines.
+static ibValueDynamicList* ibNewList(const ibCreateRequest& request, const ibBackendQueryable* queryable, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
+	for (const std::pair<const wxString, ibValue>& parameter : request.m_condition.m_parameters)
+		list->AddFilter(parameter.first, wxT("="), parameter.second);
+	return list;
+}
+
+// Create a list with a DEFAULT sort set at creation — the metaobject passes its presentation column. The sort lands
+// on the composer (the store) so the serializer saves it and the user can remove it; NOT re-applied at runtime.
+ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view)
+{
+	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	if (ibSourceHasColumn(queryable, defaultSort))
 		list->AddSort(defaultSort->GetName());
 	return list;
@@ -387,9 +401,9 @@ ibValueDynamicList* ibCreateList(const ibBackendQueryable* queryable, const ibBa
 
 // Hierarchy list — folder-first sort (folders on top) then presentation. Both are ordinary creation-time sorts on
 // the composer; the metaobject passes the columns. The TREE comes from the queryable's hierarchy (parent) column.
-ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
+ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
 {
-	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
+	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	// ⚠ A FOLDER COLUMN THE SOURCE DOES NOT HAVE IS NO FOLDER COLUMN. An arrangement without folders (a chart of
 	// accounts nests items in items) switches IsFolder off, and the find by name does not answer a switched-off
 	// field. One question for the display column and the sort.
@@ -405,9 +419,9 @@ ibValueDynamicList* ibCreateHierarchyList(const ibBackendQueryable* queryable, c
 // Folder-select list — presentation sort + a fixed `IsFolder = true` filter (only folders). The metaobject passes
 // the columns (folder-select is a filter setting; no structural GetFolderColumn). `view` seeds the default view,
 // same as the sibling factories — the folder-select call site passes ibDynamicListView_Choice.
-ibValueDynamicList* ibCreateFolderList(const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
+ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
 {
-	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
+	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	if (ibSourceHasColumn(queryable, presentationCol))
 		list->AddSort(presentationCol->GetName());
 	if (ibSourceHasColumn(queryable, folderCol))
@@ -467,6 +481,31 @@ const ibUniqueKey& ibValueDynamicList::GetGuid() const
 // register has SEVERAL key columns, so only the metaobject can shape the family-correct key. The list snaps the
 // source descriptor and forwards the row's value map; the metaobject decodes it (record → reference guid, register
 // → composite record key). Same currency (rowValues) as GetItemSelectValue. Neutral surface (custom query) → empty.
+// ⭐⭐ THE ROW'S VALUES — its own cells, or, for a restore stub, the ones its key resolves to.
+//
+// A RESTORE STUB IS A ROW WE KNOW THE KEY OF, not a row without one. FindRowValue answers with a key-only
+// node (m_rowKey set, no cells) and that node becomes the current row after a save — the bootstrap's Select
+// is programmatic and fires no SELECTION_CHANGED, so nothing replaces it until the user clicks. Decoding
+// identity from the CELLS alone therefore returned nothing and every by-key command (Copy / Edit / Delete /
+// MarkAsDelete) silently did nothing on a freshly created element. Resolve the row by its key first — the
+// SAME point lookup the keyset anchor and the breadcrumb walk already run on a stub — and decode from what
+// comes back. One question ("what row is this?"), one existing answer.
+//
+// 🛑 AND THE PICKER ASKS IT TOO. A choice list opened on a field that already holds a value stands on THAT
+// value — which is a stub. Choose on it, and the select value was read off cells the stub does not have: the
+// list handed back the row itself, the field refused it and went empty (Max, 2026-09-23: "choose a value,
+// press choose again, and the second time it clears"; the journal: `list.select … found no reference cell`).
+// The answer lived in GetItemKey only; now both ask it here.
+ibRowMetaValues ibValueDynamicList::GetRowValues(ibValueModel::ibComposerNode* node) const
+{
+	if (!node->IsKeyOnlyAnchor())
+		return node->GetTableValues();
+	ibRowMetaValues resolved;
+	for (const auto& cell : ResolveAnchorByKey(node->GetRowKey()))
+		resolved.insert_or_assign(cell.first, cell.second);
+	return resolved;
+}
+
 ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
 {
 	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
@@ -475,20 +514,19 @@ ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
 	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
 	if (holder == nullptr)
 		return ibUniqueKey();
-	// A RESTORE STUB IS A ROW WE KNOW THE KEY OF, not a row without one. FindRowValue answers with a key-only
-	// node (m_rowKey set, no cells) and that node becomes the current row after a save — the bootstrap's Select
-	// is programmatic and fires no SELECTION_CHANGED, so nothing replaces it until the user clicks. Decoding
-	// identity from the CELLS alone therefore returned nothing and every by-key command (Copy / Edit / Delete /
-	// MarkAsDelete) silently did nothing on a freshly created element. Resolve the row by its key first — the
-	// SAME point lookup the keyset anchor and the breadcrumb walk already run on a stub — and decode identity
-	// from what comes back. One question ("what row is this?"), one existing answer, asked in a third place.
-	if (node->IsKeyOnlyAnchor()) {
-		ibRowMetaValues resolved;
-		for (const auto& cell : ResolveAnchorByKey(node->GetRowKey()))
-			resolved.insert_or_assign(cell.first, cell.second);
-		return holder->GetItemKey(resolved);
-	}
-	return holder->GetItemKey(node->GetTableValues());
+	return holder->GetItemKey(GetRowValues(node));
+}
+
+// ⚠ NO LOOKUP FOR A KEY-ONLY ROW. GetItemKey resolves a restore stub by its key because a command needs the row;
+// the picture is asked on every paint, and a point read per paint is the price of a picture - so a stub shows
+// none until the fetch that replaces it. A heading is not a row, and shows none either.
+ibPictureID ibValueDynamicList::GetRowPicture(const ibDataViewItem& item) const
+{
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr || node->IsGroup() || node->IsKeyOnlyAnchor())
+		return 0;
+	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
+	return holder != nullptr ? holder->GetRowPicture(node->GetTableValues()) : 0;
 }
 
 // Selection-restore after a child-form save (createdValue / changedValue → the current row is re-found): the list
@@ -549,7 +587,7 @@ ibValue ibValueDynamicList::GetItemSelectValue(const ibDataViewItem& item) const
 	if (node == nullptr)
 		return ibValue();
 	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
-	return holder != nullptr ? holder->GetSelectValue(node->GetTableValues()) : ibValue();
+	return holder != nullptr ? holder->GetSelectValue(GetRowValues(node)) : ibValue();
 }
 
 const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
@@ -593,7 +631,7 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 		else
 			m_sourceExplorer.AppendColumn(column.m_name,
 				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.m_col != nullptr ? column.m_col->GetTypeDesc() : ibTypeDescription());
+				column.GetTypeDesc());
 	}
 	// The list's DEFAULT view rides onto the explorer: a Choice list stamps the choice flag the form auto-build copies
 	// onto the mainTableBox (where it serialises per-form). A Normal list leaves it off. This is the ONE propagation.

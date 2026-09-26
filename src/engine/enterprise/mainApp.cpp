@@ -20,7 +20,8 @@
 #include "backend/system/value/valueOLE.h"   // ibValueOLE::ReleaseComObjects in normal OnExit
 #endif
 
-#include "resources/splashLogo.xpm"
+#include "backend/backend_picture.h"
+#include "frontend/artProvider/splash/splashLogo.h"   // one picture for the designer and the application
 
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 #include <wx/xrc/xh_auinotbk.h>
@@ -187,7 +188,7 @@ int ibAppEnterprise::DoOnRun()
 	}
 
 	ibProcessSplashScreen* splashScreenLoader =
-		new ibProcessSplashScreen(wxBitmap(splashLogo_xpm),
+		new ibProcessSplashScreen(ibBackendPicture::GetBitmapFromBase64(s_splashLogo_png),
 			wxSPLASH_CENTRE_ON_SCREEN,
 			-1, nullptr, -1, wxDefaultPosition, wxDefaultSize,
 			wxBORDER_SIMPLE
@@ -318,9 +319,6 @@ int ibAppEnterprise::OnExit()
 	ibValueOLE::ReleaseComObjects();
 #endif
 
-	if (wxSocketBase::IsInitialized())
-		wxSocketBase::Shutdown();
-
 	// Tear every session down through the session manager BEFORE
 	// wxApp::OnExit. registry->Stop() submits Remove@Urgent for each
 	// session in m_own and drains the queue — OnDisconnect listeners
@@ -334,6 +332,23 @@ int ibAppEnterprise::OnExit()
 	bool success_exit = wxApp::OnExit();
 
 	appDataDestroy();
+
+	// ⭐⭐ THE SOCKET LAYER GOES LAST, AFTER EVERYTHING THAT OWNS A SOCKET.
+	//
+	// 🛑 IT WAS THE FIRST THING THIS FUNCTION DID, and the debugger's server lives in appData: its
+	// listening and connection sockets are closed by ~ibDebuggerServer, inside appDataDestroy() a few
+	// lines up. wxSocketBase::Shutdown() releases wx's socket manager, and on macOS that manager holds
+	// the run loop every socket's source is removed from — set to null by Shutdown, and read by the
+	// next Close():
+	//
+	//   CFRunLoopRemoveSource(NULL, source, mode)   -> EXC_BAD_ACCESS at 0x8
+	//
+	// So an application with the debugger attached could die on its way out — on the main thread
+	// (ShutdownServer -> wxSocketBase::Destroy) or on the debugger's own thread while the main one
+	// waited for it. Windows and Linux close a descriptor after the manager is gone without noticing,
+	// which is why it was only ever seen on macOS (#155).
+	if (wxSocketBase::IsInitialized())
+		wxSocketBase::Shutdown();
 
 	// Why the session was closed from outside, if it was — said once everything is let go: the session,
 	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.

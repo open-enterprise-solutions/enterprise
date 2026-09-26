@@ -429,7 +429,7 @@ bool ibDialogJobSchedule::ShowScheduleDialog(ibPropertySchedule* property)
 
 	if (ibPropertyObject* owner = property->GetPropertyObject()) {
 		// Raise the change from the property's REAL owner, so a holder reacts first and the signal
-		// bubbles along the attach chain (docs/property-system.md § 8.3).
+		// bubbles along the attach chain (docs/private/property-system.md § 8.3).
 		owner->OnChildChanged();
 
 		// MARK THE CONFIGURATION DIRTY. An ordinary grid edit reaches this through the inspector's

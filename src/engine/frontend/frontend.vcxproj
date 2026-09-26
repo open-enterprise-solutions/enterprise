@@ -22,6 +22,7 @@
     <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
+    <ClCompile Include="docView\print\printPreview.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
     <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
@@ -74,6 +75,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropOwner.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPicture.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp" />
@@ -351,6 +353,8 @@
     <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp" />
+    <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp" />
+    <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
@@ -497,8 +501,10 @@
   <ItemGroup>
     <ClInclude Include="artProvider\artProvider.h" />
     <ClInclude Include="artProvider\private\picturePredefined.h" />
+    <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
+    <ClInclude Include="docView\print\printPreview.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
     <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
@@ -544,6 +550,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropOwner.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />
@@ -754,6 +761,8 @@
     <ClInclude Include="win\dlgs\rowValueCell.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h" />
+    <ClInclude Include="win\dlgs\choiceLink\choiceLink.h" />
+    <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />
@@ -793,16 +802,6 @@
     <ClInclude Include="win\theme\luna_dockart.h" />
     <ClInclude Include="win\theme\luna_tabart.h" />
     <ClInclude Include="win\theme\luna_toolbarart.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="win\ctrls\res\checked2.xpm" />
-    <None Include="win\ctrls\res\checked_d.xpm" />
-    <None Include="win\ctrls\res\checked_ld.xpm" />
-    <None Include="win\ctrls\res\checked_mo.xpm" />
-    <None Include="win\ctrls\res\unchecked2.xpm" />
-    <None Include="win\ctrls\res\unchecked_d.xpm" />
-    <None Include="win\ctrls\res\unchecked_ld.xpm" />
-    <None Include="win\ctrls\res\unchecked_mo.xpm" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\frontend.rc" />

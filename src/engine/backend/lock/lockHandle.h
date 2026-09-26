@@ -6,7 +6,7 @@
 // Move-only — there is exactly one owner of each lock-row set at any
 // time. Released early via explicit Release().
 //
-// See docs/record-locks.md.
+// See docs/private/record-locks.md.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_LOCK_HANDLE_H_

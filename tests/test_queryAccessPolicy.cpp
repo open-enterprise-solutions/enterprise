@@ -8,7 +8,7 @@
 // PURE: no database and no session. A REFUSING policy never reaches the composer, which is exactly
 // what makes the guard testable without one — the refusal happens at the door or not at all.
 //
-// See docs/access-policy-rls.md — "Coverage".
+// See docs/private/access-policy-rls.md — "Coverage".
 
 #include <gtest/gtest.h>
 

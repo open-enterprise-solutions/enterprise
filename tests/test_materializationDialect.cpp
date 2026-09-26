@@ -17,7 +17,7 @@
 // against ANY dialect, which means a driver added later is checked the moment
 // it is vended, without anyone remembering to extend this file.
 //
-// (docs/register-totals-strategy.md § Engine integration)
+// (docs/private/register-totals-strategy.md § Engine integration)
 // =============================================================================
 
 #include <gtest/gtest.h>

@@ -170,13 +170,49 @@ public:
 		m_server.set_payload_max_length(kMaxRequestBytes);
 		m_server.set_tcp_nodelay(true);
 
+		// 🛑🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — because on Windows the default
+		// does NOT say it. httplib asks for SO_REUSEADDR (there is no SO_REUSEPORT there), and on
+		// Windows that option means something else than it does everywhere else: it lets a SECOND
+		// socket bind a port another process is already listening on, and WHICH OF THEM a connection
+		// reaches is undefined.
+		//
+		// Measured 2026-09-23, two designers on two different bases: netstat listed BOTH of them
+		// LISTENING on 127.0.0.1:3737, both believed their server was up, and both showed the
+		// endpoint in the status bar. An assistant connecting to that port then edits whichever
+		// base answered — silently, and not necessarily the one the person is looking at. A wrong
+		// configuration written confidently is the worst outcome this server has.
+		//
+		// SO_EXCLUSIVEADDRUSE is the Windows way to say "this port is mine": the second bind then
+		// FAILS, which is what the refusal below is written for and what the designer already knows
+		// how to report. Everywhere else the default is right and is left alone.
+#ifdef _WIN32
+		// The socket type is httplib's own and is not spelled here: a generic lambda converts to its
+		// SocketOptions whatever that turns out to be, and the option itself is the OPERATING
+		// SYSTEM's, asked for directly rather than through a helper of the library's.
+		m_server.set_socket_options([](auto sock) {
+			const int yes = 1;
+			::setsockopt((SOCKET)sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+				reinterpret_cast<const char*>(&yes), sizeof(yes));
+		});
+#endif
+
 		Route();
 
 		const std::string host = std::string(m_settings.m_address.utf8_str());
 
+		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE. This said only "port 3737 is already taken",
+		// which is true and leaves the reader to work out for themselves that the assistant is
+		// therefore NOT LISTENING — and the symptom on the other side is a client that cannot
+		// connect, which looks exactly like the access being switched off (2026-09-23: two
+		// designers open, the second one silently without a server).
+		//
+		// ⚠ AND IT NAMES THE LIKELY HOLDER. Another designer already open is the ordinary reason,
+		// not a fault, so the message says so rather than leaving a person looking for one.
 		if (!m_server.bind_to_port(host, (int)m_settings.m_port)) {
 			refusal = wxString::Format(
-				_("Port %u on %s is already taken"),
+				_("Assistant access did not start: port %u on %s is already taken.\n\n"
+				  "Another designer is probably open and holding it - only one can. "
+				  "Close it, or give this one a port of its own in Tools > Options > Assistant access."),
 				(unsigned)m_settings.m_port, m_settings.m_address);
 			return false;
 		}
@@ -1573,6 +1609,15 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 void ibMcpDescribePlatform(ibDataNode& into)
 {
 	into.AddField(wxT("build"), ibDataValue::Int((s64)GetBuildId()));
+
+	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
+	// and two designers can stand open on two different bases — so an answer naming the configuration but
+	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
+	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
+	// else had open). The mode is said beside it because a path means a file base and nothing else does.
+	into.SetValue(wxT("connection"), appData->GetDatabaseModeDescr());
+	if (!appData->GetFile().IsEmpty())
+		into.SetValue(wxT("base"), appData->GetFile());
 
 	const ibUserInfo& who = appData->GetUserInfo();
 

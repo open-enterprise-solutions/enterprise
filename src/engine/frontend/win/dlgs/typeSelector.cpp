@@ -56,68 +56,6 @@ void AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCtorAbstrac
 
 } // namespace
 
-// WHAT THIS SHAPE OFFERS. Built here, from the registry, so no caller keeps a list of metatypes
-// that has to learn about each new one — and so the two callers cannot drift apart.
-static std::vector<ibClassID> ibTypesForKind(ibSelectorDataType kind, const ibMetaData* metaData)
-{
-	std::vector<ibClassID> types;
-
-	const bool anyType = kind == ibSelectorDataType::ibSelectorDataType_any;
-
-	if (anyType)
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY));
-
-	// The primitives. A reference shape carries them too: a characteristic may be a number or a
-	// string just as well as a reference to something.
-	if (anyType || kind == ibSelectorDataType::ibSelectorDataType_reference) {
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_BOOLEAN));
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER));
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_DATE));
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING));
-	}
-	else if (kind == ibSelectorDataType::ibSelectorDataType_boolean) {
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_BOOLEAN));
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER));
-	}
-	else if (kind == ibSelectorDataType::ibSelectorDataType_resource) {
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER));
-	}
-
-	if (anyType)
-		types.push_back(ibValue::GetIDByVT(ibValueTypes::TYPE_NULL));
-
-
-	// ⭐ THE CONTAINER KINDS — what an attribute may BE when it holds ROWS rather than one value: a
-	// table, a dynamic list, a data composition. The attribute's type DROP-DOWN offers all three, so
-	// this dialog offers them too: two lists of what a table-shaped attribute may be is one list too
-	// many, and the one a person reaches for second is the one that turns out to be missing entries
-	// (seen live 2026-08-19 — the drop-down had them, the dialog did not).
-	//
-	// They need no metadata: they are registered value types, not something a configuration declares.
-	if (anyType || kind == ibSelectorDataType::ibSelectorDataType_table) {
-		types.push_back(g_valueTableCLSID);
-		types.push_back(g_valueDynamicListCLSID);
-		types.push_back(g_valueDataCompositionCLSID);
-		// …and the document a gridbox shows: the control creates the variable, so the variable has to
-		// be nameable on its own too.
-		types.push_back(g_valueSpreadsheetCLSID);
-	}
-	if (metaData == nullptr)
-		return types;
-
-	// EVERYTHING REFERENCEABLE, asked of the registry. A table shape wants the tabular sources
-	// instead — those are its references.
-	if (anyType || kind == ibSelectorDataType::ibSelectorDataType_reference ||
-		kind == ibSelectorDataType::ibSelectorDataType_table) {
-		for (auto so : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-			types.push_back(so->GetClassType());
-		for (auto so : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic))
-			types.push_back(so->GetClassType());
-	}
-
-	return types;
-}
-
 bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	const std::vector<ibClassID>& filter, ibTypeDescription& inOut, const ibMetaData* metaData,
 	bool allowEdit, bool single)
@@ -126,7 +64,12 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	// the value ALREADY holds survives either way — an editor must not silently drop what it was
 	// opened on.
 	std::vector<ibClassID> allowed;
-	for (const ibClassID& clsid : ibTypesForKind(kind, metaData)) {
+	//	⭐ ASKED OF THE BACKEND, which is where "what a field of this kind may hold" belongs: it is a fact
+	//	about the field, not about this window. It used to be a static function right here, and so this
+	//	dialog was the only door that knew it — the MCP server could set types it would never offer.
+	std::vector<ibClassID> offered;
+	ibBackendTypeConfigFactory::GetTypesByFilter(kind, metaData, offered);
+	for (const ibClassID& clsid : offered) {
 		if (filter.empty() || std::find(filter.begin(), filter.end(), clsid) != filter.end())
 			allowed.push_back(clsid);
 	}

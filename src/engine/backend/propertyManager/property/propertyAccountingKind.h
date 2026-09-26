@@ -32,7 +32,7 @@ public:
 
 private:
 
-	wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription()) const;
+	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 	Level m_level = Level::Account;
 	// What the owner handed over: "my chart of accounts, or null while I stand on none".
 	std::function<const ibValueMetaObjectChartOfAccounts* ()> m_chartOfAccounts;

@@ -92,7 +92,7 @@ public:
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
 	// The sentence — the same one the manager's journal and the designer's property row show.
-	virtual wxString GetString() const { return ibJobScheduleRules::Describe(m_schedule); }
+	virtual ibString GetString() const { return ibJobScheduleRules::Describe(m_schedule); }
 
 	// A schedule is never "empty": it always answers when its job is due. Saying otherwise would
 	// make an untouched schedule read as an absent one, and an absent schedule is a job that
@@ -145,7 +145,7 @@ constexpr ibClassID g_valueScheduleCLSID = value_to_clsid("VL_SCHED");
 //
 //  Why LIVE settings rather than the metaobject: the declaration answers what the developer wrote,
 //  and the question here is what the base is doing — is this job on, when did it last run, when is
-//  it due. Those live in the base (docs/scheduled-jobs.md § 8), because switching a misbehaving
+//  it due. Those live in the base (docs/private/scheduled-jobs.md § 8), because switching a misbehaving
 //  job off must not mean opening the Designer against production.
 //////////////////////////////////////////////////////////////////////
 
@@ -183,7 +183,7 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 
 		bool ReadSettings();
 
-		virtual wxString GetString() const { return m_jobName; }
+		virtual ibString GetString() const { return m_jobName; }
 		virtual bool IsEmpty() const { return !m_jobKey.isValid(); }
 
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);

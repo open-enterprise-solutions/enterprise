@@ -85,7 +85,7 @@ const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSource
 }
 
 #pragma region _form_builder_h_
-void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
@@ -96,7 +96,7 @@ void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const wxString
 
 	//if form is not initialized then generate  
 	ibBackendValueForm* const valueForm =
-		GetFormValue(strFormName, ownerControl);
+		GetFormValue(request, ownerControl);
 
 	if (valueForm != nullptr) {
 		valueForm->Modify(m_recordSet->IsModified());
@@ -104,18 +104,21 @@ void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const wxString
 	}
 }
 
-ibBackendValueForm* ibValueRecordManagerObjectInformationRegister::GetFormValue(const wxString& strFormName, ibBackendControlFrame* ownerControl)
+ibBackendValueForm* ibValueRecordManagerObjectInformationRegister::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
 	if (foundedForm == nullptr) {
 
+		// A record's window is keyed by the record: one window per record.
+		ibFormRequest recordRequest = request;
+		recordRequest.m_formGuid = m_objGuid;
+
 		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(
-			strFormName,
+			recordRequest,
 			ibValueMetaObjectInformationRegister::eFormRecord,
 			ownerControl,
-			this,
-			m_objGuid
+			this
 		);
 
 		if (createdForm != nullptr)
@@ -393,9 +396,12 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		pvarRetValue = CopyRegister();
 		return true;
 	case recordManager::enWriteRecordManager:
+		// ⚠ `Write()` IS `Write(False)`: a record is added, and a key already taken is refused in words — the same
+		// answer the form gives (informationRegisterAction.cpp). Replacing another record is said out loud, as
+		// `Write(True)` (Max, 2026-09-24: "the manager must complain too, when you try to make the record new").
 		pvarRetValue = WriteRegister(
 			lSizeArray > 0 ?
-			paParams[0]->GetBoolean() : true
+			paParams[0]->GetBoolean() : false
 		);
 		return true;
 	case recordManager::enDeleteRecordManager:
@@ -414,7 +420,7 @@ bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMetho
 		return true;
 	case recordManager::enGetFormRecord:
 		pvarRetValue = GetFormValue(
-			lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString),
+			lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr
 		);
 		return true;

@@ -4,7 +4,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "innerFrame.h"
-#include "res/visualResource.h"
+
+#include "backend/backend_picture.h"
+#include "res/visualResource.h"   // the title bar's buttons
+
+static wxBitmap FrameButton(const wxString& png)
+{
+	return ibBackendPicture::GetBitmapFromBase64(png, wxSize(16, 16));
+}
 
 #include <wx/dcbuffer.h>
 
@@ -56,12 +63,12 @@ END_EVENT_TABLE()
 ibInnerFrame::TitleBar::TitleBar(wxWindow *parent, wxWindowID id, const wxPoint &pos, const wxSize &size, long style)
 	:
 	wxPanel(parent, id, pos, size, 0),
-	m_minimize(minimize_xpm),
-	m_minimizeDisabled(minimize_disabled_xpm),
-	m_maximize(maximize_xpm),
-	m_maximizeDisabled(maximize_disabled_xpm),
-	m_close(close_xpm),
-	m_closeDisabled(close_disabled_xpm),
+	m_minimize(FrameButton(s_frameMinimize_png)),
+	m_minimizeDisabled(FrameButton(s_frameMinimizeDisabled_png)),
+	m_maximize(FrameButton(s_frameMaximize_png)),
+	m_maximizeDisabled(FrameButton(s_frameMaximizeDisabled_png)),
+	m_close(FrameButton(s_frameClose_png)),
+	m_closeDisabled(FrameButton(s_frameCloseDisabled_png)),
 	m_style(style)
 {
 	m_colour1 = wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION);

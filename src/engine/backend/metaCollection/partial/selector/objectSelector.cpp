@@ -37,7 +37,7 @@ wxString ibValueSelectorDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueSelectorDataObject::GetString() const
+ibString ibValueSelectorDataObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
@@ -56,7 +56,7 @@ ibValueSelectorRecordDataObject::ibValueSelectorRecordDataObject(const ibValueMe
 	Reset();
 }
 
-ibValueRecordDataObjectRef* ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
+ibValuePtr<ibValueRecordDataObjectRef> ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
 {
 	if (appData->DesignerMode()) {
 		return m_metaObject->CreateObjectValue();
@@ -79,7 +79,7 @@ ibValueSelectorRegisterDataObject::ibValueSelectorRegisterDataObject(const ibVal
 	Reset();
 }
 
-ibValueRecordManagerObject* ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
+ibValuePtr<ibValueRecordManagerObject> ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
 {
 	if (appData->DesignerMode()) {
 		return m_metaObject->CreateRecordManagerObjectValue();

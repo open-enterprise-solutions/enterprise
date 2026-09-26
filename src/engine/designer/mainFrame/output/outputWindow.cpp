@@ -5,6 +5,7 @@
 
 #include "outputWindow.h"
 #include "frontend/mainFrame/settings/fontcolorsettings.h"
+#include "frontend/artProvider/artProvider.h"
 
 /** Enumeration of commands and child windows. */
 enum
@@ -45,9 +46,11 @@ ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 	for (int margin = 0; margin < GetMarginCount(); margin++)
 		SetMarginCursor(margin, wxSTC_CURSORARROW);
 
-	MarkerDefine(ibStatusMessage_Information, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibStatusMessage_Warning, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxYELLOW);
-	MarkerDefine(ibStatusMessage_Error, wxSTC_MARK_SHORTARROW, *wxWHITE, *wxRED);
+	// The level of a message is the picture in the margin - the provider's (artProvider/service/output*.svg).
+	const wxSize markerSize = FromDIP(wxSize(12, 12));
+	MarkerDefineBitmap(ibStatusMessage_Information, wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(ibStatusMessage_Warning, wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(ibStatusMessage_Error, wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
 
 	wxAcceleratorEntry entries[2];
 	entries[0].Set(wxACCEL_CTRL, (int)'A', idcmdSelectAll);

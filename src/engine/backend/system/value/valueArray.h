@@ -101,6 +101,9 @@ public:
 		return m_listValue.size();
 	}
 
+	// The elements, for a caller in C++ that only reads them (what Entries() is to a Container).
+	const std::vector<ibValue>& Values() const { return m_listValue; }
+
 	ibValue Find(const ibValue& varValue) {
 		auto it = std::find(m_listValue.begin(), m_listValue.end(), varValue);
 		if (it != m_listValue.end())

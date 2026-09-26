@@ -90,7 +90,7 @@ bool ibValueTempTablesManager::CallAsProc(const long lMethodNum, ibValue** /*paP
 
 bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 {
-	m_text = (lSizeArray >= 1) ? paParams[0]->GetString() : wxString();
+	m_text = (lSizeArray >= 1) ? paParams[0]->GetString() : ibString();
 	m_package = ibQueryPackage();
 
 	// An empty query is a valid, statement-less object: its method surface (SetParameter / Execute /
@@ -317,7 +317,7 @@ bool ibValueQueryResult::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		// yields an empty walk rather than falling back to all of them: asking for a branch that is
 		// not there is a mistake worth seeing (ibSelector::CollectVisits says the same).
 		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr && !paParams[1]->IsEmpty())
-			? paParams[1]->GetString() : wxString();
+			? paParams[1]->GetString() : ibString();
 		ibSelector top = branch.IsEmpty() ? m_result->Select(kind) : m_result->Select(kind, branch);
 		ibJournalInfo(wxT("query.walk"), wxT("select(%d)%s: %ld node(s) at the first level"),
 			static_cast<int>(kind),
@@ -423,7 +423,7 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 		// forked (`SPLIT`). Named nothing, the walk goes THROUGH the forks in order and hands back
 		// every group there is, which is what every script written before branches asks for and gets.
 		const wxString branch = (lSizeArray >= 2 && paParams[1] != nullptr)
-			? paParams[1]->GetString() : wxString();
+			? paParams[1]->GetString() : ibString();
 		// ⭐ THE SHAPE OF THE WALK, in the journal: which level was descended from and how many rows
 		// came back. "It shows one value" and "it shows the last of sixty-three" look identical in a
 		// watch window, and this is the line that tells them apart without anyone guessing.

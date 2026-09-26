@@ -5,7 +5,7 @@
 
 //base property for "form"
 class BACKEND_API ibPropertyForm : public ibProperty {
-	wxVariantData* CreateVariantData();
+	static wxVariantData* CreateVariantData();
 public:
 
 	wxString GetValueAsString() const;

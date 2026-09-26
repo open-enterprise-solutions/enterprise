@@ -157,12 +157,15 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 		&& !DeleteData())
 		return false;
 
-	// ⭐⭐ A RECORD UNDER A KEY THAT IS TAKEN IS A REPLACEMENT WHEN REPLACEMENT WAS ASKED FOR. `Write(True)` —
-	// the default — means "this is the record under this key now", whether one was there or not, and the
-	// set's write below replaces by the key. The probe used to refuse it regardless: a price written again
-	// for the same item, a rate for a month already rated, failed with "failed to store the record" and a
-	// message box nobody reads in a script (measured 2026-09-17, both kinds of information register). Only
-	// `Write(False)` asks to add and nothing else — and the door then says why it will not, in words.
+	// ⭐⭐ A RECORD UNDER A KEY THAT IS TAKEN IS A REPLACEMENT WHEN REPLACEMENT WAS ASKED FOR. `Write(True)`
+	// means "this is the record under this key now", whether one was there or not, and the set's write below
+	// replaces by the key. The probe used to refuse it regardless: a price written again for the same item, a
+	// rate for a month already rated, failed with "failed to store the record" and a message box nobody reads
+	// in a script (measured 2026-09-17, both kinds of information register). `Write(False)` asks to add and
+	// nothing else — and the door then says why it will not, in words.
+	//
+	// ⚠ AND ADDING IS WHAT IS ASKED UNLESS REPLACING IS SAID: the form and a bare `Write()` both write False
+	// (2026-09-24). With True as the default a record given another one's dimensions overwrote it silently.
 	if (!replace && ExistData()) {
 		ibBackendCoreException::Error(
 			_("Register '%s': a record with these key values already exists. Write(True) replaces it."),

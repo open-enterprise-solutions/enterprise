@@ -32,6 +32,8 @@ private:
 
 	void OnFind(wxFindDialogEvent& event);
 
+protected:
+
 	ibTextEditor* m_textEditor;
 
 	wxDECLARE_EVENT_TABLE();
@@ -104,6 +106,41 @@ protected:
 
 	wxDECLARE_NO_COPY_CLASS(ibTextFileDocument);
 	wxDECLARE_DYNAMIC_CLASS(ibTextFileDocument);
+};
+
+// ----------------------------------------------------------------------------
+// The document and view a form's text box holds — the grid box's arrangement (docViewSpreadsheet.h)
+// ----------------------------------------------------------------------------
+
+// A text file document in no manager's list and no tab of its own. The text is the editor's, and saving asks
+// the editor, as the text file document does.
+class FRONTEND_API ibTextBoxDocument : public ibTextFileDocument {
+public:
+
+	ibTextBoxDocument();
+
+	// The box holds this document, not its views — none of them going takes it along.
+	virtual void OnChangedViewList() override {}
+
+private:
+
+	wxDECLARE_NO_COPY_CLASS(ibTextBoxDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibTextBoxDocument);
+};
+
+// Its view: created in the box's parent by the box's Create, closed and left empty by its Cleanup; its frame
+// is that parent, so there is no title to mark.
+class FRONTEND_API ibTextBoxView : public ibTextEditView {
+public:
+
+	ibTextBoxView() : ibTextEditView() {}
+
+	virtual bool OnCreate(ibDocument* doc, long flags) override;
+	virtual bool OnClose(bool deleteWindow = true) override;
+	virtual void OnChangeFilename() override {}
+
+private:
+	wxDECLARE_DYNAMIC_CLASS(ibTextBoxView);
 };
 
 #endif

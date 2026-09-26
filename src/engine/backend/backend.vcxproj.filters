@@ -326,6 +326,9 @@
     <ClInclude Include="serialize\jsonProvider.h">
       <Filter>serialize</Filter>
     </ClInclude>
+    <ClInclude Include="serialize\jsonText.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
     <ClInclude Include="fileSystem\types.h">
       <Filter>fileSystem</Filter>
     </ClInclude>
@@ -553,6 +556,9 @@
     <ClInclude Include="propertyManager\property\propertyString.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFormat.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyDataComposition.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -608,6 +614,8 @@
     <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="calcScheduleDescription.h" />
+    <ClInclude Include="choiceLinkDescription.h" />
+    <ClInclude Include="choiceLinkResolver.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
@@ -647,7 +655,19 @@
     <ClInclude Include="system\value\valueBinaryData.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueTextFile.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueHttp.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueSecureConnection.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueGuid.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueJson.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueJob.h">
@@ -731,6 +751,9 @@
     <ClInclude Include="metaCollection\metaCommandObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaCommandGroupObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaScheduledJobObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -765,6 +788,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantPicture.h">
@@ -842,6 +868,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyCalcSchedule.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChoiceLink.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
@@ -1330,6 +1359,9 @@
       <Filter>serialize</Filter>
     </ClCompile>
     <ClCompile Include="serialize\jsonProvider.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonText.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
@@ -1958,6 +1990,7 @@
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -1970,6 +2003,8 @@
     <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="calcScheduleDescription.cpp" />
+    <ClCompile Include="choiceLinkDescription.cpp" />
+    <ClCompile Include="choiceLinkResolver.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
@@ -1992,7 +2027,19 @@
     <ClCompile Include="system\value\valueBinaryData.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueTextFile.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueHttp.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSecureConnection.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueGuid.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueJson.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueJob.cpp">
@@ -2067,6 +2114,12 @@
     <ClCompile Include="metaCollection\metaCommandObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandGroupObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandGroupObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -2120,6 +2173,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantCalcSchedule.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantChoiceLink.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp">
@@ -2223,6 +2279,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
@@ -2918,6 +2977,9 @@
     </ClInclude>
     <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="homePageDescription.h" />
+    <ClInclude Include="metaCollection\createRequest.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaObjectEnum.h">
       <Filter>metaCollection</Filter>
     </ClInclude>

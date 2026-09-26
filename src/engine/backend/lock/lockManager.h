@@ -17,7 +17,7 @@
 // processes on one .fdb see each other's sys_lock rows. Cleanup on
 // session end / zombie sweep handled by ibSessionRegistry (Phase B.2).
 //
-// See docs/record-locks.md.
+// See docs/private/record-locks.md.
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_LOCK_MANAGER_H_

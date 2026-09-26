@@ -8,6 +8,7 @@
 #include "backend/metaCollection/metaLanguageObject.h"
 #include "backend/stringUtils.h"
 
+#include <wx/button.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 
@@ -21,7 +22,7 @@ static wxString LanguageLabel(const wxString& code, const wxString& name)
 }
 
 ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, const wxString& title,
-	const ibTranslateString& text, const ibMetaData* metaData, bool readOnly, int maxLength)
+	const ibTranslateString& text, const ibMetaData* metaData, bool readOnly, int maxLength, const ibBoxEditor& boxEditor)
 	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(text)
 {
@@ -61,7 +62,21 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 			wxDefaultPosition, FromDIP(wxSize(360, 44)), boxStyle);
 		if (maxLength > 0)
 			box->SetMaxLength(maxLength);
-		grid->Add(box, wxSizerFlags().Expand());
+		if (boxEditor) {
+			// The box and its `...` share the one cell the box had, so the grid keeps its two columns.
+			wxBoxSizer* cell = new wxBoxSizer(wxHORIZONTAL);
+			cell->Add(box, wxSizerFlags(1).Expand());
+			wxButton* edit = new wxButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+			edit->Bind(wxEVT_BUTTON, [this, box, label, boxEditor](wxCommandEvent&) {
+				wxString boxText = box->GetValue();
+				if (boxEditor(this, label, boxText))
+					box->SetValue(boxText);
+			});
+			cell->Add(edit, wxSizerFlags().Top().Border(wxLEFT, FromDIP(3)));
+			grid->Add(cell, wxSizerFlags().Expand());
+		}
+		else
+			grid->Add(box, wxSizerFlags().Expand());
 		grid->AddGrowableRow(grid->GetItemCount() / 2 - 1, 1);
 		m_boxes.emplace_back(code, box);
 	};

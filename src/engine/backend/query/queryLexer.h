@@ -15,7 +15,7 @@
 // to THROW ibBackendCoreException with line / position, so a lex error aborts
 // loudly. Throw-by-value, catch-by-const-ref.
 //
-// See docs/query-language-arc.md §14 / §23.
+// See docs/private/query-language-arc.md §14 / §23.
 
 #include "backend/compiler/translateCode.h"   // ibTranslateCode (char primitives) + ibValue
 #include "queryKeywords.h"

@@ -6,7 +6,7 @@
 // nested-loop join, no DB) must agree, row-for-row, with what a real SQLite
 // engine returns for the equivalent `A JOIN B ON a.k = b.k`.
 //
-// Why it matters for the LINQ unification (docs/query-language-arc.md): a script
+// Why it matters for the LINQ unification (docs/private/query-language-arc.md): a script
 // `.Join()` on a Data.* queryable now lowers into the L3 door. When the door can
 // co-locate, the JOIN runs server-side (SQL); when it can't, it falls back to
 // JoinRamTables. Those two paths MUST mean the same thing, or a report silently
@@ -192,7 +192,7 @@ TEST_F(JoinParityFix, LeftJoin_KeepsUnmatchedLeft)
 // floor: a heterogeneous JOIN (a computed leaf ⋈ a DB leaf) can materialise the
 // computed side into a server-side temp table on the embedded DB and run the
 // join DB⋈DB (queryProvider.cpp PromoteComputedLeaf), instead of always
-// stitching in RAM. Presence IS the capability (docs/temp-db.md). This locks the
+// stitching in RAM. Presence IS the capability (docs/private/temp-db.md). This locks the
 // capability + its shape WITHOUT a pool; the full CREATE+INSERT+read round-trip
 // is integration scope (it needs a holder/connection) -> oes_temp_db_sqlite_test.
 TEST(SqliteTempDialect, PresentAdHocCreateExplicitDrop)

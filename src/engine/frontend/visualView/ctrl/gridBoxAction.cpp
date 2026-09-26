@@ -9,6 +9,7 @@
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"  // the Settings verb opens the composition's own window
 #include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on
 #include "frontend/win/editor/gridEditor/gridPrintout.h"
+#include "frontend/docView/templates/docViewSpreadsheet.h"
 
 // (No ids of its own any more: the verbs are the MODEL's and their ids are named there —
 //  ibSpreadsheetModelCommand in spreadsheetModel.h. This control lays them out and hands them back.)
@@ -104,14 +105,13 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 					// 🛑 SAID WHERE IT IS SEEN. A refusal routed to the log ends up in a panel that
 					// may not be open, and a report that simply never appears reads as "the button
 					// does nothing" (Max, 2026-08-20). The description is DATA, never a format
-					// string (docs/exceptions.md).
+					// string (docs/private/exceptions.md).
 					wxMessageBox(failure, _("Compose"), wxOK | wxICON_ERROR);
 					return;
 				}
 
 				// The composer swapped the sheet it holds, so the window is re-pointed at it once.
-				if (target != nullptr)
-					target->LoadDocument(keepModel->GetSpreadsheetDocument());
+				self->m_gridDocument->SetSpreadsheetDocument(keepModel->GetSpreadsheetDocument());
 			});
 		});
 		break;
