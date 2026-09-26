@@ -368,3 +368,24 @@ TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
     row.SetPropVal(prop, Text(text));
     EXPECT_EQ(Cell(row, wxT("Note")), text);
 }
+
+// THE COLUMNS OUTLIVE THE TABLE. `t.Columns` is a value, and whoever holds it keeps the collection and
+// its columns after the table is gone - the code editor's completion held `Total.Columns` so (crash dump
+// 2026-09-27). A column that dies after its table must not reach back into it: each named the table as
+// its attach owner, and it asked the freed table to forget it.
+TEST(ValueTableColumns, OutliveTheTableThatMadeThem)
+{
+    ibValue held;
+    {
+        ibValueModelTable* const table = new ibValueModelTable();
+        const ibValue holder(table);
+        table->GetColumnCollection()->AddColumn(wxT("Code"), ibTypeDescription(), wxT("Code"));
+        table->GetColumnCollection()->AddColumn(wxT("Name"), ibTypeDescription(), wxT("Name"));
+        held = ibValue(table->GetColumnCollection());
+    }   // the table is gone here; the collection is held
+
+    const auto* const columns = held.ConvertToType<ibValueModelTable::ibValueModelColumnCollection>();
+    ASSERT_NE(columns, nullptr);
+    EXPECT_EQ(columns->GetColumnCount(), 2u) << "the collection still answers for its own columns";
+    held = ibValue();   // the collection and its columns go now - after the table, without touching it
+}

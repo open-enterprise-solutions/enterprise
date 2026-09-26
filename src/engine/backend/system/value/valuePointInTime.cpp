@@ -35,13 +35,13 @@ bool ibValuePointInTime::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-wxString ibValuePointInTime::GetString() const
+ibString ibValuePointInTime::GetString() const
 {
 	if (IsEmpty())
 		return wxEmptyString;
 
-	const wxString date = ibValue(m_date).GetString();
-	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString();
+	const wxString date = ibValue(m_date).GetString().ToWxString();
+	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString().ToWxString();
 }
 
 // ⭐ THE DATE FIRST, THE REFERENCE INSIDE IT.

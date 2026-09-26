@@ -51,7 +51,8 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	// empty: bytes nobody can reconstruct are not the same thing as no bytes.
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		size_t posError = wxCONV_FAILED;
-		const wxMemoryBuffer decoded = wxBase64Decode(paParams[0]->GetString(), wxNO_LEN,
+		const std::string text = paParams[0]->GetString().ToUtf8();   // base64 is ASCII
+		const wxMemoryBuffer decoded = wxBase64Decode(text.c_str(), text.size(),
 			wxBase64DecodeMode_Strict, &posError);
 		if (posError != wxCONV_FAILED)
 			return false;
@@ -153,7 +154,7 @@ bool ibValueBinaryData::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	return false;
 }
 
-wxString ibValueBinaryData::GetString() const
+ibString ibValueBinaryData::GetString() const
 {
 	if (m_data.GetDataLen() == 0)
 		return wxEmptyString;

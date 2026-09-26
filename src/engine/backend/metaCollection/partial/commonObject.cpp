@@ -448,10 +448,9 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 	if (!GenerateDataDesc(parameter) || parameter.m_first == nullptr)
 		return false;
 	ibValue field;
-	ibString scratch;
 	if (!objValue->GetValueByMetaID(parameter.m_first->GetMetaID(), field))
 		return false;
-	const ibString& first = field.GetString(scratch);
+	const ibString& first = field.GetString();
 	out.reserve(parameter.m_prefix.length() + first.Len() + parameter.m_separator.length());
 	out.assign(parameter.m_prefix).append(first.wc_str(), first.Len());
 	if (parameter.m_second == nullptr)
@@ -460,7 +459,7 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 		out.clear();
 		return false;
 	}
-	const ibString& second = field.GetString(scratch);
+	const ibString& second = field.GetString();
 	out.append(parameter.m_separator).append(second.wc_str(), second.Len());
 	return true;
 }
@@ -1833,7 +1832,7 @@ wxString ibValueManagerDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueManagerDataObject::GetString() const
+ibString ibValueManagerDataObject::GetString() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
 	wxASSERT(valueMetaObject);
@@ -2008,7 +2007,7 @@ wxString ibValueRecordDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordDataObject::GetString() const
+ibString ibValueRecordDataObject::GetString() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
@@ -2563,7 +2562,7 @@ wxString ibValueRecordDataObjectRef::GetClassName() const
 	return ibValueRecordDataObject::GetClassName();
 }
 
-wxString ibValueRecordDataObjectRef::GetString() const
+ibString ibValueRecordDataObjectRef::GetString() const
 {
 	// …and a metatype that has nothing to say leaves the string empty, which is its own answer.
 	wxString desc;
@@ -3585,7 +3584,7 @@ wxString ibValueRecordKeyObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordKeyObject::GetString() const
+ibString ibValueRecordKeyObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey);
@@ -3758,7 +3757,7 @@ wxString ibValueRecordManagerObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordManagerObject::GetString() const
+ibString ibValueRecordManagerObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
@@ -4033,7 +4032,7 @@ wxString ibValueRecordSetObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordSetObject::GetString() const
+ibString ibValueRecordSetObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet);
@@ -4418,7 +4417,7 @@ wxString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetCl
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetString() const
+ibString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetString() const
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();

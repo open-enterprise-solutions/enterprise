@@ -140,6 +140,23 @@ TEST(SpreadsheetCompose, NoHeading_ColumnTitlesOnFirstRow)
 	EXPECT_EQ(1, driver.GetRowsWritten());
 }
 
+// A REPORT WRITES NOTHING WHERE THERE IS NOTHING: a zero figure is an empty cell, so a column of
+// amounts reads as the rows that have one — and a figure that is there keeps its text.
+TEST(SpreadsheetCompose, ZeroFigure_IsAnEmptyCell)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(SchemaInfo(Schema()));
+	driver.OnRow(RowAt(0), { ibValue(wxT("Alpha")), ibValue(0) });
+	driver.OnRow(RowAt(0), { ibValue(wxT("Beta")), ibValue(10) });
+	driver.OnOutputEnd(false);
+
+	EXPECT_EQ(wxT("Alpha"), doc->GetCellValue(1, 0));
+	EXPECT_TRUE(doc->GetCellValue(1, 1).IsEmpty());
+	EXPECT_EQ(wxT("10"), doc->GetCellValue(2, 1));
+}
+
 // A heading pushes the table down and leaves ONE blank row between the two, so
 // the parameters never read as a row of the table.
 TEST(SpreadsheetCompose, Heading_PushesTableDownWithOneBlankRow)

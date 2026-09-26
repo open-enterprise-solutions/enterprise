@@ -7,7 +7,6 @@
 #include "informationRegisterManager.h"
 
 #include "backend/system/value/valueMap.h"
-#include "backend/system/value/valueTable.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From(slice) + Select materialises the slice through L3
@@ -19,16 +18,6 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 {
 	ibRequireOpenBase();
 
-	ibValueModelTable* retTable = new ibValueModelTable();
-	// Held while its rows are made, as every builder of a table holds it (valueQueryable.cpp, M::ToTable).
-	const ibValue keep(retTable);
-	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
-	wxASSERT(colCollection);
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->AddColumn(object->GetName(), object->GetTypeDesc(), object->GetSynonym());
-		colInfo->SetColumnID(object->GetMetaID());
-	}
-
 	// The Structure a script passes becomes the condition here — the SAME converter the query door
 	// uses, so a script's filter and a query's condition are one thing from this point on.
 	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
@@ -36,103 +25,51 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 	// Filtered read through the L3 door: each selected dimension is an Eq condition,
 	// decomposed inside L3 across its physical fields. Rows come from the L3
 	// selection (GetValue) — no statement, no raw result set here.
-	try {
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-					q.Where(filter);
-		ibReadPageRequest page;
-		page.m_count = 0;   // every matching record
-		ibDataQueryResult selection = q.Execute(page);
-		const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
-		std::vector<std::pair<ibMetaID, ibValue>> row;
-		while (selection.Next()) {
-			row.clear();
-			for (const auto object : attributes)
-				row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-			retTable->AppendRow(row);
-		}
-	}
-	catch (...) {}
-
-	return retTable;
+	//
+	// 🛑 NO `catch (...) {}` AROUND THE READS OF THIS FILE ANY MORE: a failed read reached the script as an
+	// empty table, which reads as "there is no such record". The error goes to whoever asked, as it does on
+	// the calculation register (calculationRegisterManager_impl.cpp).
+	ibDataQueryBuilder q;
+	q.From(m_metaObject->GetQueryable());
+	q.Where(filter);
+	ibReadPageRequest page;
+	page.m_count = 0;   // every matching record
+	ibDataQueryResult selection = q.Execute(page);
+	return ibRegSelectionToTable(selection, m_metaObject->GetQueryable());
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibRequireOpenBase();
 
-	ibValueModelTable* retTable = new ibValueModelTable();
-	const ibValue keep(retTable);   // held while its rows are made — see Get(filter) above
-	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
-	wxASSERT(colCollection);
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo =
-			colCollection->AddColumn(
-				object->GetName(),
-				object->GetTypeDesc(),
-				object->GetSynonym()
-			);
-		colInfo->SetColumnID(object->GetMetaID());
+	// A register with neither a period nor a recorder keeps no record AT a period: the answer is its
+	// columns and no rows, as its slices answer (ComputeSlice) — an empty selection on the same road.
+	if (m_metaObject->GetPeriodicity() == ibPeriodicity::eNonPeriodic &&
+		m_metaObject->GetWriteRegisterMode() != ibWriteRegisterMode::eSubordinateRecorder) {
+		ibDataQueryResult none(ibQueryRamTable{}, m_metaObject->GetQueryable());
+		return ibRegSelectionToTable(none, m_metaObject->GetQueryable());
 	}
 
-	if (m_metaObject->GetPeriodicity() != ibPeriodicity::eNonPeriodic ||
-		m_metaObject->GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
-		const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
 
-		// Period + dimension filtered read through the L3 door: the period is the key's condition
-		// (ibRegWhereKeyValue — the whole period), the dimensions the filter's; L3
-		// decomposes each across its physical fields and binds them. Rows come from the L3
-		// selection (GetValue) — no raw statement, no per-DBMS SQL here.
-		try {
-			ibDataQueryBuilder q;
-			q.From(m_metaObject->GetQueryable());
-			ibRegWhereKeyValue(q, m_metaObject, m_metaObject->GetRegisterPeriod(), cPeriod);
-			q.Where(filter);
-			ibReadPageRequest page;
-			page.m_count = 0;   // every matching record
-			ibDataQueryResult selection = q.Execute(page);
-			const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
-			std::vector<std::pair<ibMetaID, ibValue>> row;
-			while (selection.Next()) {
-				row.clear();
-				for (const auto object : attributes)
-					row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-				retTable->AppendRow(row);
-			}
-		}
-		catch (...) {}
-	}
-
-	return retTable;
+	// Period + dimension filtered read through the L3 door: the period is the key's condition
+	// (ibRegWhereKeyValue — the whole period), the dimensions the filter's; L3
+	// decomposes each across its physical fields and binds them. Rows come from the L3
+	// selection (GetValue) — no raw statement, no per-DBMS SQL here.
+	ibDataQueryBuilder q;
+	q.From(m_metaObject->GetQueryable());
+	ibRegWhereKeyValue(q, m_metaObject, m_metaObject->GetRegisterPeriod(), cPeriod);
+	q.Where(filter);
+	ibReadPageRequest page;
+	page.m_count = 0;   // every matching record
+	ibDataQueryResult selection = q.Execute(page);
+	return ibRegSelectionToTable(selection, m_metaObject->GetQueryable());
 }
 
-// SelectionToTable / SelectionToRecord — materialise an L3 selection into the shapes
-// the runtime methods return: Slice* yield the full table, Get* the single boundary
-// row as a structure. Both read every generic attribute through the uniform selection
-// surface (GetValue) — they do not know the rows were computed in RAM.
-static ibValue SelectionToTable(ibDataQueryResult& selection,
-                                const ibValueMetaObjectInformationRegister* meta)
-{
-	ibValueModelTable* table = new ibValueModelTable();
-	const ibValue keep(table);   // held while its rows are made — see Get(filter) above
-	ibValueModelTable::ibValueModelColumnCollection* cols = table->GetColumnCollection();
-	wxASSERT(cols);
-	for (const auto object : meta->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* col =
-			cols->AddColumn(object->GetName(), object->GetTypeDesc(), object->GetSynonym());
-		col->SetColumnID(object->GetMetaID());
-	}
-	const auto attributes = meta->GetGenericAttributeArrayObject();   // once, not once a record
-	std::vector<std::pair<ibMetaID, ibValue>> row;
-	while (selection.Next()) {
-		row.clear();
-		for (const auto object : attributes)
-			row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-		table->AppendRow(row);
-	}
-	return table;
-}
-
+// SelectionToRecord — the single boundary row Get* returns, as a structure. It reads every
+// generic attribute through the uniform selection surface (GetValue) — it does not know the
+// rows were computed in RAM. (Slice* return the whole table: ibRegSelectionToTable, over the
+// slice's columns, which are the register's.)
 static ibValue SelectionToRecord(ibDataQueryResult& selection,
                                  const ibValueMetaObjectInformationRegister* meta)
 {
@@ -169,13 +106,13 @@ ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& c
 {
 	ibSliceFirstQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
 	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
-	return SelectionToTable(selection, m_metaObject);
+	return ibRegSelectionToTable(selection, &slice);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibSliceLastQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
 	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
-	return SelectionToTable(selection, m_metaObject);
+	return ibRegSelectionToTable(selection, &slice);
 }
 

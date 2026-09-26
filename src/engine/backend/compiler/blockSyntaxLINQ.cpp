@@ -591,7 +591,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			return -1;   // the name touches its dot: `o.Select` is a name, as the lexer says
 		for (const int key : { KEY_FROM, KEY_JOIN, KEY_IN, KEY_ON, KEY_EQUALS, KEY_WHERE, KEY_GROUP, KEY_BY, KEY_INTO,
 				KEY_ORDERBY, KEY_ASCENDING, KEY_DESCENDING, KEY_SKIP, KEY_TAKE, KEY_SELECT, KEY_DISTINCT })
-			if (stringUtils::CompareString(lex[i].m_valData.GetString(), Word(key)))
+			if (lex[i].m_valData.GetString().IsSameAs(Word(key), false))
 				return key;
 		return -1;
 	};
@@ -599,7 +599,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		return keyAt(i) == key;
 	};
 	const auto name = [&](size_t i) {
-		return i < end && lex[i].m_lexType == IDENTIFIER ? lex[i].m_valData.GetString() : wxString();
+		return i < end && lex[i].m_lexType == IDENTIFIER ? lex[i].m_valData.GetString() : ibString();
 	};
 	const auto opens = [](int key) {
 		switch (key) {
@@ -722,7 +722,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// for anything else, which stays a column written over the group, as it is.
 	const auto groupColumn = [&](const wxString& column, size_t a, size_t b) {
 		const wxString& group = block.m_groupInto;
-		if (b <= a + 2 || !stringUtils::CompareString(name(a), group) || !isDelimiter(a + 1, wxT('.')))
+		if (b <= a + 2 || !name(a).IsSameAs(group, false) || !isDelimiter(a + 1, wxT('.')))
 			return false;
 		const wxString member = name(a + 2);
 		if (stringUtils::CompareString(member, wxT("Key"))) {
@@ -732,7 +732,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			}
 			if (b == a + 5 && isDelimiter(a + 3, wxT('.')))
 				for (ibLinqBlockField& key : block.m_groupKeys)
-					if (stringUtils::CompareString(key.m_name, name(a + 4))) {
+					if (name(a + 4).IsSameAs(key.m_name, false)) {
 						key.m_name = column;   // the key's field and its column are one name
 						return true;
 					}
@@ -746,7 +746,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 		total.m_name = column;
 		bool known = false;
 		for (const ibLinqTotal candidate : { ibLinqTotal::Sum, ibLinqTotal::Count, ibLinqTotal::Min, ibLinqTotal::Max, ibLinqTotal::Average })
-			if (stringUtils::CompareString(ibLinqTotalName(candidate), name(a + 4))) {
+			if (name(a + 4).IsSameAs(ibLinqTotalName(candidate), false)) {
 				total.m_function = candidate;
 				known = true;
 			}

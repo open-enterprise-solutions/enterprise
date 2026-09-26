@@ -1539,7 +1539,7 @@ TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
 	for (size_t i = 0; i < bc.m_listConst.size(); i++)
 		std::printf("  [%u] type=%d text=%s\n", (unsigned)i,
 			(int)bc.m_listConst[i].GetType(),
-			(const char*)bc.m_listConst[i].GetString().ToUTF8());
+			bc.m_listConst[i].GetString().ToUTF8().c_str());
 	std::printf("code %u\n", (unsigned)bc.m_listCode.size());
 	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
 		const ibByteUnit& u = bc.m_listCode[i];
@@ -1638,7 +1638,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	std::printf("direct sqrt(16) = %s\n", (const char*)direct.ToString().ToUTF8());
 
 	std::printf("arg: type=%d text=%s\n",
-		(int)arg.GetType(), (const char*)arg.GetString().ToUTF8());
+		(int)arg.GetType(), arg.GetString().ToUTF8().c_str());
 
 	ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
 
@@ -1647,7 +1647,7 @@ TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
 	// "Sqrt returned zero" and "the root is right but the conversion is not"
 	// are different defects and this tells them apart.
 	std::printf("ret: type=%d text=%s int=%d\n",
-		(int)ret.GetType(), (const char*)ret.GetString().ToUTF8(), (int)ret.GetInteger());
+		(int)ret.GetType(), ret.GetString().ToUTF8().c_str(), (int)ret.GetInteger());
 
 	EXPECT_EQ(ret.GetInteger(), 4);
 }

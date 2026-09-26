@@ -14,6 +14,7 @@
 #include "backend/system/value/valueMap.h"   // ibValueStructure — the sugar ibRegFilterPredicate converts
 #include "backend/system/value/valueTable.h" // ibValueModelTable — the table a reading hands a script
 #include "backend/query/dataQueryBuilder.h"  // ibDataQueryResult — the selection those rows come off
+#include "backend/query/querySelector.h"     // ibSelector::Snapshot — …as the fast table they go in through
 #include "backend/query/tempTableQueryable.h" // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
 #include "backend/query/schemaSnapshot.h"     // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
 #include "backend/query/queryColumn.h"        // ibBackendQueryColumn::SyntheticId — a derived column's number
@@ -1599,38 +1600,14 @@ inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* m
 //
 // So the shape says what it publishes — names, types, ORDER and now captions — and this copies it.
 // Nothing here knows what a figure is called, which is the point.
+//
+// The rows are read by the column, not by its name: GetColumn reads one scalar field under the read's own
+// alias, and a dimension is a reference of three. Every value used to come back empty.
 inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBackendQueryable* shape)
 {
-	ibValueModelTable* table = new ibValueModelTable();
-	// 🛑 Held while its rows are made, as every table built for a script is: nobody else holds it
-	// yet, and anything that took and let go of a hold meanwhile would delete it. See
-	// valueQueryable.cpp, M::ToTable.
-	const ibValue keep(table);
-	ibValueModelTable::ibValueModelColumnCollection* cols = table->GetColumnCollection();
-	wxASSERT(cols);
-
-	std::vector<const ibBackendQueryColumn*> columns;
 	if (shape != nullptr)
-		columns = shape->GetColumns();
-
-	// Each table column's id, beside the source column it is made from.
-	std::vector<std::pair<const ibBackendQueryColumn*, ibMetaID>> filled;
-	for (const ibBackendQueryColumn* col : columns)
-		if (col != nullptr)
-			if (const auto* added = cols->AddColumn(col->GetName(), col->GetTypeDesc(), col->GetSynonym()))
-				filled.emplace_back(col, added->GetColumnID());
-
-	std::vector<std::pair<ibMetaID, ibValue>> row;
-	while (selection.Next()) {
-		// By the column, not by its name: GetColumn reads one scalar field under the read's own
-		// alias, and a dimension is a reference of three. Every value used to come back empty.
-		row.clear();
-		for (const auto& one : filled)
-			row.emplace_back(one.second, selection.GetValue(one.first));
-		table->AppendRow(row);
-	}
-
-	return table;
+		selection.SetMaterialiseColumns(shape->GetColumns());
+	return selection.Select().Snapshot().ToValueTable();
 }
 
 #endif // __REGISTER_QUERY_LOWERING_H__

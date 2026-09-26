@@ -284,7 +284,7 @@ public:
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 	virtual wxString GetClassName() const;
 
 	// ⭐ THE VERB GOES TO THE GOVERNOR. Asked to narrow a value, a reference hands the question to the

@@ -115,6 +115,14 @@ for one spelling.
 This one shipped four times in a single batch — three in one dialog, one in a new test — and every
 one of them compiled clean on `Debug|x86`. It is invisible to the local build by construction.
 
+### 1.5a′ A wide `printf` is not wide on Apple (2026-09-26)
+
+Apple's libc passes every character of `swprintf` / `vswprintf` through the thread's multibyte locale.
+In the `"C"` locale a character past ASCII — in an argument or in the format itself — fails the call
+(`-1`), which a grow-the-buffer loop reads as "does not fit". glibc and MSVC copy wide characters as
+they are, so only the macOS job sees it. `ibString::Format` formats through one function,
+`ibFStringFormat::Print` (`fstring.cpp`), which runs under its own UTF-8 locale (`uselocale`) there.
+
 ### 1.5b Two string overloads and a literal — the ambiguity MSVC ranks away
 
 ```cpp

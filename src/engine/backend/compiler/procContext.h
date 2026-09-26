@@ -219,7 +219,7 @@ struct ibRunContext : ibRunContextSmall {
 	// It was never used as a map either: the only lookup is a linear `find_if`
 	// with a case-insensitive compare, and the only write happens when that scan
 	// found nothing. A vector is what the code was already doing.
-	std::vector<std::pair<wxString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
+	std::vector<std::pair<ibString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
 };
 
 // ⭐⭐ THE FRAME A CLOSURE TOOK, and it counts its own holders — the mechanism ibValue already

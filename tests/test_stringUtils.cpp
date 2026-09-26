@@ -87,13 +87,13 @@ TEST(StringUtils, MakeUpperFoldsAndTrims) {
 }
 
 TEST(StringUtils, CompareStringCaseInsensitiveByDefault) {
-    EXPECT_TRUE(CompareString(wxT("ABC"), wxT("abc")));
-    EXPECT_FALSE(CompareString(wxT("ABC"), wxT("abc"), /*case_sensitive*/true));
+    EXPECT_TRUE(CompareString(wxString(wxT("ABC")), wxT("abc")));
+    EXPECT_FALSE(CompareString(wxString(wxT("ABC")), wxT("abc"), /*case_sensitive*/true));
 }
 
 TEST(StringUtils, CompareStringLengthAndContent) {
-    EXPECT_FALSE(CompareString(wxT("abc"), wxT("abcd")));   // length differs
-    EXPECT_FALSE(CompareString(wxT("abc"), wxT("abd")));    // content differs
+    EXPECT_FALSE(CompareString(wxString(wxT("abc")), wxT("abcd")));   // length differs
+    EXPECT_FALSE(CompareString(wxString(wxT("abc")), wxT("abd")));    // content differs
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ TEST(StringUtils, CompareStringLengthAndContent) {
 
 TEST(StringUtils, CaseFoldLessNamesEqualWithoutCaseAreOneKey) {
     const ibCaseFoldLess less;
-    EXPECT_TRUE(CompareString(wxT("Partner"), wxT("PARTNER")));
+    EXPECT_TRUE(CompareString(wxString(wxT("Partner")), wxT("PARTNER")));
     EXPECT_FALSE(less(wxT("Partner"), wxT("PARTNER")));
     EXPECT_FALSE(less(wxT("PARTNER"), wxT("Partner")));
 }

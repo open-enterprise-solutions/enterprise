@@ -119,6 +119,10 @@ template<> struct ibDataCodec<wxString> {
 	static ibDataValue To(const wxString& v) { return ibDataValue::String(v); }
 	static wxString    From(const ibDataValue& v) { return v.AsString(); }
 };
+template<> struct ibDataCodec<ibString> {         // the engine's own string — the same String scalar
+	static ibDataValue To(const ibString& v) { return ibDataValue::String(v); }
+	static ibString    From(const ibDataValue& v) { return v.AsString(); }
+};
 template<> struct ibDataCodec<bool> {
 	static ibDataValue To(bool v) { return ibDataValue::Bool(v); }
 	static bool        From(const ibDataValue& v) { return v.AsBool(); }

@@ -95,7 +95,7 @@ public:
 	// WHAT A PERSON READS IN THE CELL — `CatalogRef.Goods.Chair`, as it was written. Held rather than
 	// recomputed: the name is what the designer chose, and it must read the same before there is any
 	// configuration to ask.
-	virtual wxString GetString() const override { return m_written; }
+	virtual ibString GetString() const override { return m_written; }
 
 	// ⚠ AN EMPTY REFERENCE IS NOT AN EMPTY VALUE. `CatalogRef.Goods.EmptyRef` is a value of that type
 	// and a legitimate thing to store — saying otherwise made it skipped on the way to the store, and
@@ -142,7 +142,7 @@ public:
 	// in a filter line is "Country", not "Supplier.Region.Country" — but a field
 	// built from script has no presentation, and showing an empty cell would be
 	// worse than showing the path.
-	virtual wxString GetString() const override {
+	virtual ibString GetString() const override {
 		return m_presentation.IsEmpty() ? m_path : m_presentation;
 	}
 

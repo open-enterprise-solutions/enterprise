@@ -63,15 +63,16 @@
     "query"
    ],
    "signature": "Query.Execute() : QueryResult",
-   "description": "Результат виконання запиту — один знімок даних. Деталь і підсумки читаються з одного знімка, тож розійтися не можуть.\n\n**Методи:**\n- `Select()` — відкрити обхід. Для звичайного SELECT повертає плоский курсор; для запиту з TOTALS — дерево підсумків. В обох випадках повертається `QuerySelect` з одним і тим самим інтерфейсом обходу.",
-   "syntax_block": "var res = q.Execute();\nvar sel = res.Select();",
+   "description": "Результат виконання запиту — один знімок даних. Деталь і підсумки читаються з одного знімка, тож розійтися не можуть.\n\n**Методи:**\n- `Select()` — відкрити обхід. Для звичайного SELECT повертає плоский курсор; для запиту з TOTALS — дерево підсумків. В обох випадках повертається `QuerySelect` з одним і тим самим інтерфейсом обходу.\n- `Unload()` — самі рядки, таблицею значень (`Table`): по колонці на кожну вихідну колонку, з тим іменем і типом, які дає їй запит (колонка, тип якої запит не знає, лишається без типу — число лишається числом). Щоб порахувати рядки, взяти за індексом, відсортувати, знайти чи передати далі. Як і `Select()`, читає результат: повторний `Unload()` відмовляє («already been read») — виконайте запит ще раз. Таблицею віддається лише прямий обхід: `Unload(QueryResultIteration.ByGroups)` відмовляє, згрупований результат обходиться через `Select(...)`.",
+   "syntax_block": "var res = q.Execute();\nvar sel = res.Select();\n// або рядки таблицею\nvar t = q.Execute().Unload();",
    "parameters": "",
-   "return_descr": "Select() повертає QuerySelect.",
-   "example": "",
+   "return_descr": "Select() повертає QuerySelect; Unload() — Table.",
+   "example": "var q = New Query(\"SELECT G.Description AS Name, G.Price AS Price FROM Catalog.Goods AS G\");\nvar t = q.Execute().Unload();\nMessage(String(t.Count()) + \" товарів, усього \" + String(t.Total(\"Price\")));",
    "availability": "enterprise, wenterprise-server, daemon, codeRunner",
    "see_also": [
     "cls.Query",
     "cls.QuerySelect",
+    "cls.Table",
     "q.Totals"
    ],
    "reviewed": true

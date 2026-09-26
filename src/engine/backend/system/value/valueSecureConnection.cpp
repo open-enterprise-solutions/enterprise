@@ -50,7 +50,7 @@ bool ibValueCertificateFile::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
-	Open(paParams[0]->GetString(), lSizeArray > 1 ? paParams[1]->GetString() : wxString());
+	Open(paParams[0]->GetString(), lSizeArray > 1 ? paParams[1]->GetString() : ibString());
 	return true;
 }
 

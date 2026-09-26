@@ -28,7 +28,7 @@ bool ibValueBoundary::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-wxString ibValueBoundary::GetString() const
+ibString ibValueBoundary::GetString() const
 {
 	const wxString side = (m_kind == ibBoundaryKind_Excluding) ? wxT("Excluding") : wxT("Including");
 	return m_value.GetString() + wxT(", ") + side;

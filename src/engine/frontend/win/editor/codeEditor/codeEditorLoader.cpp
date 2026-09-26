@@ -832,7 +832,7 @@ void ibCodeEditor::LoadCallTip()
 
 		for (ibCaretValue& holder : holders)
 		for (long i = 0; i < holder.m_value.GetNMethods(); i++) {
-			if (stringUtils::CompareString(holder.m_value.GetMethodName(i), at.m_word)) {
+			if (holder.m_value.GetMethodName(i).IsSameAs(at.m_word, false)) {
 				description = holder.m_value.GetMethodHelper(i);
 				break;
 			}

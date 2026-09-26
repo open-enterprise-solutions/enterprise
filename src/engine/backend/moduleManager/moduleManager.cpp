@@ -64,7 +64,7 @@ bool ibValueModuleManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	return false;
 }
 
-long ibValueModuleManager::FindProp(const wxString& strName) const
+long ibValueModuleManager::FindProp(const ibString& strName) const
 {
 	if (m_procUnit != nullptr) {
 		return m_procUnit->FindProp(strName);

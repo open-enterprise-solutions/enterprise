@@ -1168,17 +1168,15 @@ TEST(RuntimeBench, DISABLED_IbValueCopyCost) {
         for (long i = 0; i < n; ++i) { ibValue tmp; g_sink += (uint64_t)tmp.IsEmpty(); }
     });
 
-    // ⭐⭐ WHAT A NON-NUMBER PAYS FOR THE NUMBER. `ibNumber m_fData` is a member OUTSIDE
-    // the union, so it is default-constructed by every ibValue — the ctor's
-    // initialiser list does not even name it — and `~ibNumber()` runs on every
-    // destruction, checking the heap tier. A string value carries a number; so
-    // does an object; so does an empty. (Max, 2026-09-09: *"the string always
-    // comes packaged with a number"*.)
+    // ⭐⭐ WHAT A NON-NUMBER USED TO PAY FOR THE NUMBER. `ibNumber m_fData` was a member
+    // OUTSIDE the union, default-constructed by every ibValue and destroyed on every
+    // destruction — a string value carried a number; so did an object; so did an
+    // empty. (Max, 2026-09-09: *"the string always comes packaged with a number"*.)
     //
-    // Its 8 bytes could live in the union — the payload IS one uint64 with a
-    // tier bit, exactly a pointer's width — with the tag owning the lifetime the
-    // way it already owns m_pStr's. This row is what says whether that is worth
-    // doing: the pair below is the price every non-number value pays today.
+    // Since 2026-09-26 it lives IN the union beside the string (one word each, a
+    // heap tier shared and counted), the tag owning both lifetimes, and a
+    // non-number value no longer constructs one. The pair below stays as the
+    // control: what a number costs when one IS made.
     const double numberPair = BestTotalNs(5, [&]{
         // The ADDRESS, not a reader: taking it stops the object being elided
         // without pulling a conversion into the timing (which is the mistake the

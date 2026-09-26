@@ -1,0 +1,406 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.Container",
+      "name_local": "Container",
+      "name_en": "Container",
+      "kind": "collection",
+      "class_id": 158350834197411078,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "New Container()",
+      "description": "Ключ, связанный со значением, и оба они — значения рантайма. Ключом может быть строка, число, дата, ссылка на элемент — что различает `=` языка, то различает и контейнер: «fr» и «FR» — два ключа, а 1 — это не «1».\n\nСтроковый ключ читается и после точки — в том написании, в каком его вставили: `c.Name` находит ключ «Name», а `c.name` — нет. К ключу обращаются через `c[key]` (если ничего не связано — ошибка), через Get (вернёт Undefined), через Property и обходом контейнера, который отдаёт KeyValue на каждую запись в порядке вставки ключей.\n\nДля постоянного набора ИМЁН, которые пишут после точки в любом регистре, есть тип Structure.",
+      "syntax_block": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "parameters": "Нет.",
+      "return_descr": "Container — пустой.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container.Count",
+        "cls.Container.Get",
+        "cls.Container.Property",
+        "cls.Container.Insert",
+        "cls.Container.Delete",
+        "cls.Container.Clear",
+        "cls.KeyValue",
+        "cls.Structure"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Count()",
+      "description": "Сколько ключей в контейнере.",
+      "parameters": "Нет.",
+      "return_descr": "Number.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Get(key)",
+      "description": "Значение, связанное с ключом, или Undefined, если с ним ничего не связано. Ошибки не вызывает — в отличие от `c[key]` — и не требует второго аргумента, в отличие от Property.",
+      "parameters": "key — любое значение. Два строковых ключа — один ключ, когда это один и тот же текст; ключи другого рода сводит порядок значений, а он ставит Undefined и Null в одно место.",
+      "return_descr": "Значение, связанное с ключом, или Undefined.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Property",
+        "cls.Container.Insert"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Property",
+      "name_local": "Property",
+      "name_en": "Property",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Property(key, valueFound)",
+      "description": "Есть ли ключ в контейнере. Связанное с ним значение возвращается через второй аргумент; если ключа нет, аргумент остаётся прежним.",
+      "parameters": "key — любое значение.\nvalueFound — переменная, в которую возвращается значение.",
+      "return_descr": "Boolean — True, если ключ есть.",
+      "example": "Rate = Undefined;\nIf (Rates.Property(\"fr\", Rate)) {\n    Message(Rate);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Insert",
+      "name_local": "Insert",
+      "name_en": "Insert",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Insert(key, value)",
+      "description": "Связывает значение с ключом, которого в контейнере ещё нет. Уже имеющийся ключ вызывает ошибку «Key '<ключ>' is already using!» — чтобы заменить связанное значение, присвойте его: `Rates[\"fr\"] = 2`.",
+      "parameters": "key — любое значение.\nvalue — что с ним связать.",
+      "return_descr": "Нет.",
+      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Delete",
+        "cls.Container.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Delete(key)",
+      "description": "Удаляет ключ и связанное с ним значение. Отсутствующий ключ — не ошибка. Порядок остальных ключей сохраняется.",
+      "parameters": "key — любое значение. Два строковых ключа — один ключ, когда это один и тот же текст; ключи другого рода сводит порядок значений, а он ставит Undefined и Null в одно место.",
+      "return_descr": "Нет.",
+      "example": "Rates.Delete(\"fr\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Container.Clear",
+      "name_local": "Clear",
+      "name_en": "Clear",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Container.Clear()",
+      "description": "Удаляет все ключи.",
+      "parameters": "Нет.",
+      "return_descr": "Нет.",
+      "example": "Rates.Clear();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Container",
+        "cls.Container.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure",
+      "name_local": "Structure",
+      "name_en": "Structure",
+      "kind": "collection",
+      "class_id": 170115149963636206,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "New Structure([fields [, value1, value2, ...]])",
+      "description": "Набор именованных полей. Имя поля — это ИМЯ: регистр не важен (`s.Name`, `s.name` и `s[\"nAmE\"]` — одно поле), и поле читают после точки. Именем поля может быть только строка, всё остальное отвергается.\n\nПоля можно объявить при создании — `New Structure(\"Item, Amount\", \"Paper\", 12)` — или добавлять по одному через Insert. Обход структуры отдаёт KeyValue на каждое поле в порядке добавления.\n\nКогда ключи — ЗНАЧЕНИЯ, а не имена (ссылка, число, две строки, различающиеся регистром), нужен тип Container.",
+      "syntax_block": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
+      "syntax_block_ves": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach Field In Line Do\n    Message(Field.Key + \": \" + Field.Value);\nEndDo;",
+      "parameters": "fields — String, имена полей через запятую. Можно не указывать.\nvalue1, value2, … — значения полей в том же порядке; поле без значения — Undefined.",
+      "return_descr": "Structure — с объявленными полями.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure.Count",
+        "cls.Structure.Get",
+        "cls.Structure.Property",
+        "cls.Structure.Insert",
+        "cls.Structure.Delete",
+        "cls.Structure.Clear",
+        "cls.KeyValue",
+        "cls.Container"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Count()",
+      "description": "Сколько полей в структуре.",
+      "parameters": "Нет.",
+      "return_descr": "Number.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Count());",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Get(name)",
+      "description": "Значение поля (регистр не важен) или Undefined, если такого поля нет. Ошибки не вызывает — в отличие от `s.Name` и `s[\"Name\"]`. Имя, которое не строка, отвергается — как и в любой другой двери структуры.",
+      "parameters": "name — String, имя поля. Регистр не важен.",
+      "return_descr": "Значение поля или Undefined.",
+      "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Get(\"item\"));\nMessage(ValueIsFilled(Line.Get(\"Vat\")));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Property"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Property",
+      "name_local": "Property",
+      "name_en": "Property",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Property(name, valueFound)",
+      "description": "Есть ли в структуре такое поле (регистр не важен). Его значение возвращается через второй аргумент; если поля нет, аргумент остаётся прежним.",
+      "parameters": "name — String, имя поля.\nvalueFound — переменная, в которую возвращается значение.",
+      "return_descr": "Boolean — True, если поле есть.",
+      "example": "Amount = Undefined;\nIf (Line.Property(\"Amount\", Amount)) {\n    Message(Amount);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Insert",
+      "name_local": "Insert",
+      "name_en": "Insert",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Insert(name, value)",
+      "description": "Добавляет поле и задаёт ему значение. Имя должно быть строкой и не должно уже быть полем — в любом регистре: второй Insert «OTHER» после «Other» вызовет ошибку. Чтобы изменить поле, присвойте: `s.Other = 2`.",
+      "parameters": "name — String, имя поля.\nvalue — его значение.",
+      "return_descr": "Нет.",
+      "example": "Line = New Structure();\nLine.Insert(\"Item\", \"Paper\");\nLine.Item = \"Ink\";",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Delete",
+      "name_local": "Delete",
+      "name_en": "Delete",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Delete(name)",
+      "description": "Удаляет поле вместе со значением. Отсутствующее имя — не ошибка; имя, которое не строка, отвергается.",
+      "parameters": "name — String, имя поля. Регистр не важен.",
+      "return_descr": "Нет.",
+      "example": "Line.Delete(\"Amount\");",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Clear"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.Structure.Clear",
+      "name_local": "Clear",
+      "name_en": "Clear",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Structure.Clear()",
+      "description": "Удаляет все поля.",
+      "parameters": "Нет.",
+      "return_descr": "Нет.",
+      "example": "Line.Clear();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.Structure",
+        "cls.Structure.Delete"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue",
+      "name_local": "KeyValue",
+      "name_en": "KeyValue",
+      "kind": "collection",
+      "class_id": 349839053701994867,
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "Foreach (Pair In Container) { ... }",
+      "description": "Одна запись контейнера или структуры — такой, какой её отдаёт обход: ключ и связанное с ним значение. Через New не создаётся: она появляется в Foreach по контейнеру или структуре.",
+      "syntax_block": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Foreach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "parameters": "Нет.",
+      "return_descr": "KeyValue.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue.Key",
+        "cls.KeyValue.Value",
+        "cls.Container",
+        "cls.Structure"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue.Key",
+      "name_local": "Key",
+      "name_en": "Key",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "KeyValue.Key",
+      "description": "Ключ записи: значение — в контейнере, имя поля — в структуре.",
+      "parameters": "Нет.",
+      "return_descr": "Любое значение.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue",
+        "cls.KeyValue.Value"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.KeyValue.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "collections",
+        "containers"
+      ],
+      "signature": "KeyValue.Value",
+      "description": "Значение, связанное с ключом.",
+      "parameters": "Нет.",
+      "return_descr": "Любое значение.",
+      "example": "Foreach (Pair In Rates) {\n    Message(Pair.Value);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.KeyValue",
+        "cls.KeyValue.Key"
+      ],
+      "reviewed": false
+    }
+  ]
+}

@@ -80,7 +80,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 
 	// Reads AS ITS VALUE: comparing a parameter with a field must compare what is in
 	// it, not the holder.
-	virtual wxString GetString() const { return GetValue().GetString(); }
+	virtual ibString GetString() const { return GetValue().GetString(); }
 	virtual bool IsEmpty() const { return GetValue().IsEmpty(); }
 
 	private:

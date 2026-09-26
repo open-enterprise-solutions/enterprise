@@ -31,7 +31,7 @@ public:
 	explicit ibValueBackgroundJob(std::shared_ptr<ibBackgroundRun> run);
 	virtual ~ibValueBackgroundJob();
 
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 	virtual bool     IsEmpty()   const override { return m_run == nullptr; }
 
 	// The run is shared state, not a session-bound object — the whole point of it

@@ -21,7 +21,7 @@ public:
 	virtual ~ibValueColour() {}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::ColourToString(m_colour);
 	}
 

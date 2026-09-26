@@ -418,8 +418,8 @@ bool ibValueHttpConnection::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 	const bool portGiven = ibHttpGiven(paParams, lSizeArray, 1);
 	const int port = portGiven ? static_cast<int>(paParams[1]->GetInteger()) : kDefaultPort;
-	const wxString user = lSizeArray > 2 ? paParams[2]->GetString() : wxString();
-	const wxString password = lSizeArray > 3 ? paParams[3]->GetString() : wxString();
+	const wxString user = lSizeArray > 2 ? paParams[2]->GetString() : ibString();
+	const wxString password = lSizeArray > 3 ? paParams[3]->GetString() : ibString();
 	const int timeout = ibHttpGiven(paParams, lSizeArray, 4) ? static_cast<int>(paParams[4]->GetInteger()) : kDefaultTimeout;
 	Open(paParams[0]->GetString(), port, user, password, timeout, portGiven);
 	return true;

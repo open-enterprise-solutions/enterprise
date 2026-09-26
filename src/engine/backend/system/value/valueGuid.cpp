@@ -22,7 +22,7 @@ bool ibValueGuid::Init(ibValue** paParams, const long lSizeArray)
 		return false;
 
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		const ibGuid& newGuid = paParams[0]->GetString();
+		const ibGuid newGuid(paParams[0]->GetString());
 		if (newGuid.isValid())
 			m_guid = newGuid;
 		return newGuid.isValid();

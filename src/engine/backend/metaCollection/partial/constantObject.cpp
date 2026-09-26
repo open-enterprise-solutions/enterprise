@@ -152,7 +152,7 @@ wxString ibValueRecordDataObjectConstant::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueRecordDataObjectConstant::GetString() const
+ibString ibValueRecordDataObjectConstant::GetString() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	wxASSERT(metaData);

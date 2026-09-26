@@ -19,7 +19,7 @@ void ibValueDataComposer_BindNames(ibValue::ibMemberTable& helper, const ibValue
 
 bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 {
-	const wxString source = (lSizeArray >= 1) ? paParams[0]->GetString() : wxString();
+	const wxString source = (lSizeArray >= 1) ? paParams[0]->GetString() : ibString();
 
 	// A source-less composer is a valid, empty object (designer introspection keeps the
 	// method chain reachable); Execute() on it yields an empty QueryResult.

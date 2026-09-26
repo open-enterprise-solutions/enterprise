@@ -837,7 +837,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		auto side = [](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
 				? (operand.m_presentation.IsEmpty() ? operand.m_path : operand.m_presentation)
-				: operand.m_value.GetString();
+				: operand.m_value.GetString().ToWxString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + wxT(" ")
 			+ ibValue::CreateEnumObject<ibValueEnumComparisonKind>(node.m_comparison).GetString()

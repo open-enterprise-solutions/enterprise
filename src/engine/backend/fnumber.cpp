@@ -4,6 +4,7 @@
 #include "backend/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
 
 #include <algorithm>
+#include <atomic>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -346,6 +347,18 @@ struct ibNumber::BigImpl
 
 };
 
+// A heap-tier number's BigImpl and the count of the numbers holding it — see fnumber.h.
+struct ibNumber::SharedBig
+{
+	std::atomic<long> m_refCount{ 1 };
+	BigImpl           m_big;
+
+	SharedBig() = default;
+	explicit SharedBig(const BigImpl& big) : m_big(big) {}
+
+	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
+};
+
 namespace
 {
 	// Aligns two BigImpl operands to a common exp10 by scaling whichever has the larger
@@ -479,14 +492,19 @@ void TrimFractionZeros(ibNumber::BigImpl& v)
 // ImmMantissa / ImmExp moved to fnumber.h — they are the innermost step of
 // TryImmInts, which every arithmetic and comparison fast path goes through.
 
-ibNumber::BigImpl* ibNumber::HeapPtr() const
+ibNumber::SharedBig* ibNumber::Shared() const
 {
-	return reinterpret_cast<BigImpl*>(static_cast<uintptr_t>(m_payload));
+	return reinterpret_cast<SharedBig*>(static_cast<uintptr_t>(m_payload & ~1ULL));   // drop the tag
 }
 
-void ibNumber::StoreHeap(BigImpl* p) noexcept
+ibNumber::BigImpl* ibNumber::HeapPtr() const
 {
-	m_payload = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p));
+	return &Shared()->m_big;
+}
+
+void ibNumber::StoreHeap(SharedBig* p) noexcept
+{
+	m_payload = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p)) | 1ULL;   // tag 1 = heap
 }
 
 // ---- ctors / dtor / assignment -------------------------------------------------------
@@ -510,8 +528,8 @@ void ibNumber::FromSigned64(int64_t v) noexcept
 		m_payload = PackImmediate(v, 0);
 		return;
 	}
-	BigImpl* p = new BigImpl();
-	p->FromInt64(v);
+	SharedBig* p = new SharedBig();
+	p->m_big.FromInt64(v);
 	StoreHeap(p);
 }
 
@@ -540,11 +558,11 @@ void ibNumber::FromUnsigned64(uint64_t v) noexcept
 		m_payload = PackImmediate(static_cast<int64_t>(v), 0);
 		return;
 	}
-	BigImpl* p = new BigImpl();
-	p->limbs.push_back(static_cast<uint32_t>(v));
-	if (v >> 32) p->limbs.push_back(static_cast<uint32_t>(v >> 32));
-	p->negative = false;
-	p->exp      = 0;
+	SharedBig* p = new SharedBig();
+	p->m_big.limbs.push_back(static_cast<uint32_t>(v));
+	if (v >> 32) p->m_big.limbs.push_back(static_cast<uint32_t>(v >> 32));
+	p->m_big.negative = false;
+	p->m_big.exp      = 0;
 	StoreHeap(p);
 }
 
@@ -595,14 +613,12 @@ ibNumber::ibNumber(const wxString& s)
 	if (TryParseString(s, big)) StoreBig(big);
 }
 
-ibNumber::ibNumber(const ibNumber& o)
-	: m_payload(0)
+// A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
+ibNumber::ibNumber(const ibNumber& o) noexcept
+	: m_payload(o.m_payload)
 {
-	if (o.IsImmediate()) {
-		m_payload = o.m_payload;
-	} else {
-		StoreHeap(new BigImpl(*o.HeapPtr()));
-	}
+	if (IsHeap())
+		Shared()->m_refCount.fetch_add(1, std::memory_order_relaxed);
 }
 
 ibNumber::ibNumber(ibNumber&& o) noexcept
@@ -616,15 +632,13 @@ ibNumber::~ibNumber()
 	Clear();
 }
 
-ibNumber& ibNumber::operator=(const ibNumber& o)
+ibNumber& ibNumber::operator=(const ibNumber& o) noexcept
 {
 	if (this == &o) return *this;
+	if (o.IsHeap())
+		o.Shared()->m_refCount.fetch_add(1, std::memory_order_relaxed);   // first — `o` may share ours
 	Clear();
-	if (o.IsImmediate()) {
-		m_payload = o.m_payload;
-	} else {
-		StoreHeap(new BigImpl(*o.HeapPtr()));
-	}
+	m_payload = o.m_payload;
 	return *this;
 }
 
@@ -640,7 +654,9 @@ ibNumber& ibNumber::operator=(ibNumber&& o) noexcept
 void ibNumber::Clear() noexcept
 {
 	if (IsHeap()) {
-		delete HeapPtr();
+		SharedBig* const shared = Shared();
+		if (shared->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+			delete shared;   // the last owner
 	}
 	m_payload = PackImmediate(0, 0);
 }
@@ -664,14 +680,16 @@ void ibNumber::StoreBig(const BigImpl& src)
 	//   - If heap: keep allocation, just zero the limbs in place. Saves
 	//     delete + new on accumulator patterns that flap to/from zero
 	//     (e.g. running sum that hits zero between additions).
+	//   A BigImpl is written in place only when this number owns it ALONE; a shared one
+	//   is let go and the result gets its own (copy on write).
 	if (src.IsZero()) {
-		if (IsHeap()) {
+		if (IsHeap() && Shared()->Alone()) {
 			BigImpl* hp = HeapPtr();
 			hp->limbs.clear();
 			hp->negative = false;
 			hp->exp      = 0;
 		} else {
-			m_payload = PackImmediate(0, 0);
+			Clear();
 		}
 		return;
 	}
@@ -682,11 +700,12 @@ void ibNumber::StoreBig(const BigImpl& src)
 		StoreImmediate(m64, src.exp);
 		return;
 	}
-	if (IsHeap()) {
+	if (IsHeap() && Shared()->Alone()) {
 		*HeapPtr() = src;
 		return;
 	}
-	StoreHeap(new BigImpl(src));
+	Clear();
+	StoreHeap(new SharedBig(src));
 }
 
 // ---- arithmetic ----------------------------------------------------------------------

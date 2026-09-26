@@ -18,7 +18,9 @@ class ibWriterMemory; // backend/fileSystem/fs.h
 //
 // Storage is a single 64-bit word with pointer tagging:
 //
-//   bit  0       : tag (1 = immediate, 0 = heap pointer to BigImpl)
+//   bit  0       : tag (0 = immediate, 1 = heap pointer to the shared BigImpl, tag set)
+//                  — so ALL-ZERO BITS ARE THE NUMBER 0: a zeroed word is a valid ibNumber,
+//                  which is what lets ibValue keep one in its union beside the pointers.
 //   bits 16:1    : exp10 (16 bits signed, ±32767)
 //   bits 63:17   : mantissa (47 bits signed, ±70 trillion, ~14 decimal digits)
 //
@@ -29,7 +31,8 @@ class ibWriterMemory; // backend/fileSystem/fs.h
 // arithmetic that overflows the inline range) live on the heap as a BigImpl
 // — a sign-magnitude bignum with a std::vector<uint32_t> magnitude that grows
 // by demand and a 32-bit exp10. Promotion happens automatically on assignment
-// / arithmetic.
+// / arithmetic. The heap tier is SHARED: a copy is one more owner of the same
+// BigImpl (an atomic count), and a write gets a BigImpl of its own first.
 //
 // Examples:
 //   "0"                         — immediate (0, 0)
@@ -44,7 +47,8 @@ class ibWriterMemory; // backend/fileSystem/fs.h
 // Thread safety:
 //   - Distinct ibNumber instances are fully independent — operations on
 //     different objects from different threads are always safe (no shared
-//     global / static state, no hidden cache).
+//     global / static state, no hidden cache; two numbers sharing a heap-tier
+//     BigImpl count their owners atomically and never write to a shared one).
 //   - Concurrent **const-only** access to the same instance from multiple
 //     threads is safe: every const method (ToString, Compare, IsZero, ToInt,
 //     Serialize, etc.) reads `m_payload`, materialises a local BigImpl copy
@@ -77,11 +81,11 @@ public:
 	ibNumber(unsigned long long v) noexcept;
 	ibNumber(double v);
 	explicit ibNumber(const wxString& s);
-	ibNumber(const ibNumber& o);
+	ibNumber(const ibNumber& o) noexcept;   // a heap-tier number is shared, not copied
 	ibNumber(ibNumber&& o) noexcept;
 	~ibNumber();
 
-	ibNumber& operator=(const ibNumber& o);
+	ibNumber& operator=(const ibNumber& o) noexcept;
 	ibNumber& operator=(ibNumber&& o) noexcept;
 
 	// Hot/cold split, same shape as Compare below. The immediate-integer path is
@@ -162,7 +166,7 @@ public:
 	bool operator>=(const ibNumber& r) const { return Compare(r) >= 0; }
 
 	bool         IsZero()    const;
-	bool         IsHeap()    const { return (m_payload & 1ULL) == 0; }
+	bool         IsHeap()    const { return (m_payload & 1ULL) != 0; }
 	bool         IsNan()     const { return false; } // exact decimal — no NaN state
 	bool         IsSign()    const; // true if value is negative
 	void         ChangeSign();      // flip sign in place
@@ -305,7 +309,7 @@ public:
 	struct BigImpl;
 
 private:
-	// Bit packing of m_payload when bit 0 == 1 (immediate):
+	// Bit packing of m_payload when bit 0 == 0 (immediate):
 	//   mantissa: signed 47-bit value in bits [63:17]
 	//   exp10   : signed 16-bit value in bits [16:1]
 	static constexpr int     kImmMantBits = 47;
@@ -319,7 +323,7 @@ private:
 
 	void Clear() noexcept;
 
-	bool     IsImmediate() const { return (m_payload & 1ULL) != 0; }
+	bool     IsImmediate() const { return (m_payload & 1ULL) == 0; }
 	// Inline, NOT out-of-line: TryImmInts below calls ImmExp() twice and
 	// ImmMantissa() twice, and TryImmInts is the gate of every arithmetic and
 	// comparison fast path — so a body left in the .cpp costs four cross-module
@@ -340,6 +344,12 @@ private:
 	}
 
 	BigImpl* HeapPtr()     const;   // cold — reached through LoadBig, not the fast path
+
+	// THE HEAP TIER IS SHARED — ibString's scheme (fstring.h): a copy of a heap-tier number is one
+	// more owner of its BigImpl, the last owner frees it, and a write in place goes only to a BigImpl
+	// this number owns alone (StoreBig). The count is atomic. Defined in fnumber.cpp.
+	struct SharedBig;
+	SharedBig* Shared() const;
 
 	// Both operands inline integers (exp10 == 0)? Returns their mantissas in
 	// (a, b). Shared gate for the immediate-integer fast paths in the
@@ -405,7 +415,7 @@ private:
 	static uint64_t PackImmediate(int64_t mant, int32_t exp10) noexcept {
 		const uint64_t mantU = static_cast<uint64_t>(mant) & ((1ULL << kImmMantBits) - 1);
 		const uint64_t expU  = static_cast<uint64_t>(exp10) & ((1ULL << kImmExpBits) - 1);
-		return (mantU << kImmMantShift) | (expU << kImmExpShift) | 1ULL;
+		return (mantU << kImmMantShift) | (expU << kImmExpShift);   // tag 0 — immediate(0, 0) is all zeros
 	}
 
 	void StoreImmediate(int64_t mant, int32_t exp10) noexcept {
@@ -419,7 +429,7 @@ private:
 	ibNumber& AddBig(const ibNumber& rhs);
 	ibNumber& SubBig(const ibNumber& rhs);
 	ibNumber& MulBig(const ibNumber& rhs);
-	void StoreHeap(BigImpl* p) noexcept;
+	void StoreHeap(SharedBig* p) noexcept;
 
 	// One body per signedness, shared by the long / long long constructor pair above.
 	void FromSigned64(int64_t v) noexcept;

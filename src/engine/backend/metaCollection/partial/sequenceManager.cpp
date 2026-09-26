@@ -66,7 +66,7 @@ static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* se
 		ibValue value;
 		if (given)
 			for (long at = 0; at < structure->GetNProps(); ++at)
-				if (stringUtils::CompareString(structure->GetPropName(at), dimension->GetName())) {
+				if (structure->GetPropName(at).IsSameAs(dimension->GetName(), false)) {
 					structure->GetPropVal(at, value);
 					break;
 				}

@@ -109,6 +109,12 @@ public:
 
 	virtual void MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ibValueMetaObject* object);
 
+	// THE ROWS OF A GROUP IN THE METADATA'S ORDER. Each tree's control answers OnCompareItems with the
+	// first, so `Moved` puts the rows back in that order with SortChildren; the second is the sort
+	// button — by name, through the door, and the rows follow.
+	int CompareItemsByPosition(const wxTreeItemId& item1, const wxTreeItemId& item2) const;
+	void SortItemsByName(const wxTreeItemId& parentItem);
+
 protected:
 
 	// ⭐⭐ WHAT EVERY TREE HAS, HELD ONCE. All three kept these word for word: the row their contents
@@ -555,28 +561,10 @@ private:
 		// this function is called to compare 2 items and should return -1, 0
 		// or +1 if the first item is less than, equal to or greater than the
 		// second one. The base class version performs alphabetic comparison
-		// of item labels (GetText)
-		// ⚠ ASK THE MIXIN, not the concrete node class. `ibTreeItemObject` is the payload of a
-		// PLAIN row; a row that is also a group (a tabular section, a section) carries
-		// `ibTreeItemClsidObject` instead, and a cast to the concrete class missed it — so
-		// sorting the Tables group did nothing here while the external trees, which have always
-		// asked the mixin, reordered the tabular sections. Sorting a group's contents is what the
-		// button means, so all three now agree on the external trees' behaviour.
+		// of item labels (GetText). Here: the metadata's order (ibMetaTreeBase::CompareItemsByPosition).
 		virtual int OnCompareItems(const wxTreeItemId& item1,
 			const wxTreeItemId& item2) {
-			int ret = wxStrcmp(GetItemText(item1), GetItemText(item2));
-			ibTreeDataObject* data1 = dynamic_cast<ibTreeDataObject*>(GetItemData(item1));
-			ibTreeDataObject* data2 = dynamic_cast<ibTreeDataObject*>(GetItemData(item2));
-			if (data1 != nullptr && data2 != nullptr && ret > 0) {
-				ibValueMetaObject* metaObject1 = data1->m_metaObject;
-				ibValueMetaObject* metaObject2 = data2->m_metaObject;
-				ibValueMetaObject* parent = metaObject1->GetParent();
-				wxASSERT(parent);
-				return parent->ChangeChildPosition(metaObject2,
-					parent->GetChildPosition(metaObject1)
-				) ? ret : wxNOT_FOUND;
-			}
-			return ret;
+			return m_ownerTree->CompareItemsByPosition(item1, item2);
 		}
 
 		//events:

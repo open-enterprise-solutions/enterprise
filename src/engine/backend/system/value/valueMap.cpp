@@ -25,21 +25,24 @@ inline wchar_t FoldChar(const wchar_t c)
 }
 }
 
-// TWO KINDS OF KEY, TWO RULES — and both are the value's own, with nothing rendered on the way.
+// WHICH RULE A KEY FOLLOWS — decided by what the key is, with nothing rendered to text on the way.
 //
-//   a STRING key folds case, because a script reaches a field by name and does not care how it was
-//   typed (`Structure.Name` and `structure.name` are one field). The fold happens ONCE, here, and the
-//   result is kept beside the entry (m_fold); a comparison is then a plain string compare.
+//   a STRING key in a STRUCTURE is a field NAME and folds case, because a script reaches a field
+//   through a dot and does not care how it was typed (`s.Name` and `s.name` are one field). The fold
+//   runs over the text ONCE per lookup, here, and not once per candidate.
+//
+//   a STRING key in a CONTAINER is a value, and hashes as the value it is: "fr" and "FR" are two keys,
+//   as `"fr" = "FR"` is False. Until 2026-09-23 it folded like a field name, which made a Container
+//   answer a question about its keys differently from the language's own `=`.
 //
 //   anything else compares AS A VALUE — ibValue's own ordering, so a reference matches by its guid
 //   and a number by its magnitude. This is what replaced GetHashKey(): the container used to render
 //   every non-string key to text and compare the text, which made `1` and "1" the same key. They are
 //   different keys now, and deliberately: the language's own comparison says so everywhere else.
-size_t ibValueContainer::HashOf(const ibValue& key)
+size_t ibValueContainer::HashOf(const ibValue& key) const
 {
-	if (key.GetType() == ibValueTypes::TYPE_STRING) {
-		ibString scratch;
-		const ibString& text = key.GetString(scratch);       // zero-copy for a string key
+	if (m_keyKind == ibKeyKind::Name && key.GetType() == ibValueTypes::TYPE_STRING) {
+		const ibString text = key.GetString();        // the key's text shared, not copied
 		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
 			h = ibHashCombine(h, FoldChar(*p));
@@ -48,7 +51,7 @@ size_t ibValueContainer::HashOf(const ibValue& key)
 	return key.GetValueHash();                               // the value's own hash, agreeing with its order
 }
 
-// THE BUCKET WALK, with the two shortcuts the string comparison in stringUtils earned:
+// A STRUCTURE'S BUCKET WALK, with the two shortcuts the string comparison in stringUtils earned:
 // LENGTH FIRST (two names of different length are never the same field, and that decides most
 // candidates without reading a character), then FOLD ONLY WHAT DIFFERS (characters that already
 // match need no case conversion — and in a structure the field being looked up usually matches
@@ -69,12 +72,13 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 }
 
 // Entries in one bucket share a hash, not a key, so each candidate is settled against the entry
-// itself — folded text against folded text for a string, value against value otherwise.
+// itself — a field name against a field name folded (Structure), text against text exactly
+// (Container), value against value otherwise. Text is kept apart from every other kind in both:
+// the value ordering puts an enumeration beside the text of its presentation, and a key is not that.
 long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 {
 	const bool isText = (key.GetType() == ibValueTypes::TYPE_STRING);
-	ibString keyScratch;
-	const ibString& keyText = isText ? key.GetString(keyScratch) : keyScratch;
+	const ibString keyText = isText ? key.GetString() : ibString();
 
 	const auto range = m_index.equal_range(hash);
 	for (auto it = range.first; it != range.second; ++it) {
@@ -83,8 +87,8 @@ long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 		if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
 			continue;                                        // text never matches a non-text key
 		if (isText) {
-			ibString candScratch;
-			if (FoldedEquals(candidate.GetString(candScratch), keyText))
+			const ibString candText = candidate.GetString();   // shared, not copied
+			if (m_keyKind == ibKeyKind::Name ? FoldedEquals(candText, keyText) : candText == keyText)
 				return (long)at;
 		}
 		else if (candidate.CompareValueLS(key) == 0) {
@@ -202,19 +206,23 @@ bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, i
 //*                            ibValueContainer                         *
 //**********************************************************************
 
-ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE) {
+ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
 	m_members.Bind(&BindContainerNames, this);
 }
 
-ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
+ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
 	m_members.Bind(&BindContainerNames, this);
-	// SetAt, not Insert: the source map may hold keys this container folds together
-	// (its keys are case-insensitive), and a build should keep the last, not throw.
+	// SetAt, not Insert: should the source map hold two keys this store calls one, a
+	// build keeps the last rather than throwing.
 	for (const auto& cntVal : containerValues)
 		ibValueContainer::SetAt(cntVal.first, cntVal.second);
 }
 
-ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly) {
+ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
+	m_members.Bind(&BindContainerNames, this);
+}
+
+ibValueContainer::ibValueContainer(bool readOnly, ibKeyKind keyKind) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
 	m_members.Bind(&BindContainerNames, this);
 }
 
@@ -230,6 +238,13 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
+	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
+	// back through its second argument; [key] answers the value and raises when the key is not
+	// there. Get is the third question, the one the reference system's Map answers: the value,
+	// or Undefined -- which is what "nothing is bound to this key" looks like everywhere else
+	// in the language. A Structure gets it too: the member table is one table, a position in it
+	// is a method number, and a field that is not there is the same question.
+	helper.AppendFunc(wxT("Get"), 1, wxT("Get(key : any)"));
 
 	if (!self->m_bReadOnly) {
 		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
@@ -243,16 +258,20 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 // scan. GetNProps / GetPropName / Get / SetPropVal are the index side of the
 // same store, used by the interpreter after FindProp and by introspection.
 
-long ibValueContainer::FindProp(const wxString& strPropName) const
+long ibValueContainer::FindProp(const ibString& strPropName) const
 {
 	return IndexOf(ibValue(strPropName));
 }
 
-wxString ibValueContainer::GetPropName(const long lPropNum) const
+const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 {
+	static const ibString s_absent;
 	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
-		return wxEmptyString;
-	return m_entries[lPropNum].first.GetString();
+		return s_absent;
+	// Only a stored name can be lent: a string key's own text. A key of another kind has no name to
+	// lend (and FindProp cannot reach it by name either).
+	const ibValue& key = m_entries[lPropNum].first;
+	return key.m_typeClass == ibValueTypes::TYPE_STRING ? key.m_sData : s_absent;
 }
 
 bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -291,6 +310,22 @@ bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 	{
 		ibValue defaultVal;
 		pvarRetValue = Property(*paParams[0], lSizeArray > 1 ? *paParams[1] : defaultVal);
+	}
+		return true;
+	case enGet:
+	{
+		// A FORGOTTEN ARGUMENT IS REFUSED BY NAME. The arity check catches only a call with TOO
+		// MANY arguments; a slot the method could have read is made empty and handed over, so
+		// `c.Get()` would answer Undefined - which is this method's word for "the key is not
+		// there" and would say it about a key nobody asked about.
+		if (lSizeArray < 1 || paParams == nullptr)
+			ibBackendCoreException::Error(_("Get: the key to look for is not given"));
+		// Through Property, which is the lookup that does not raise -- and which a Structure
+		// overrides to refuse a key that is not a field name, so Get refuses it there too.
+		// A key that is not there leaves the value untouched, and it starts empty: Undefined.
+		ibValue valueFound;
+		Property(*paParams[0], valueFound);
+		pvarRetValue = valueFound;
 	}
 		return true;
 	}

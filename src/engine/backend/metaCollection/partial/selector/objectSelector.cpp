@@ -37,7 +37,7 @@ wxString ibValueSelectorDataObject::GetClassName() const
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueSelectorDataObject::GetString() const
+ibString ibValueSelectorDataObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);

@@ -57,7 +57,7 @@ public:
 	// always meant, so wrapping a value without saying more changes nothing.
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 	virtual bool IsEmpty() const { return m_value.IsEmpty(); }
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);

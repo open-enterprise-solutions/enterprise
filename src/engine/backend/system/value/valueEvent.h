@@ -14,7 +14,7 @@ class BACKEND_API ibValueEvent : public ibValue, public ibEventDispatcher {
 	virtual bool IsEmpty() const override { return m_eventName.IsEmpty(); }   // serves both ibValue and ibEventDispatcher
 
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
-	virtual wxString GetString() const{ return m_eventName; }
+	virtual ibString GetString() const{ return m_eventName; }
 
 	// ibEventDispatcher — run the named form procedure through the form's runtime (trailing cancel by ref).
 	virtual bool Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibValue& outCancel) override;

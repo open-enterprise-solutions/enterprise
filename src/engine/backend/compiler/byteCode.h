@@ -403,14 +403,14 @@ struct ibByteCode {
 
 public:
 
-	long FindMethod(const wxString& strMethodName) const;
-	long FindExportMethod(const wxString& strMethodName) const;
+	long FindMethod(const ibString& strMethodName) const;
+	long FindExportMethod(const ibString& strMethodName) const;
 
-	long FindFunction(const wxString& funcName) const;
-	long FindExportFunction(const wxString& funcName) const;
+	long FindFunction(const ibString& funcName) const;
+	long FindExportFunction(const ibString& funcName) const;
 
-	long FindProcedure(const wxString& procName) const;
-	long FindExportProcedure(const wxString& procName) const;
+	long FindProcedure(const ibString& procName) const;
+	long FindExportProcedure(const ibString& procName) const;
 
 	// Bytecode-driven cross-module symbol resolution.
 	//

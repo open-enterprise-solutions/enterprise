@@ -122,7 +122,7 @@ public:
 	virtual void ExecuteMenu(ibFrontendVisualEditorNotebook* editor, int menuId) override;
 
 	// ibValue / ibPropertyObject concrete requirements specific to the item.
-	virtual wxString GetString() const override { return GetCaption(); }
+	virtual ibString GetString() const override { return GetCaption(); }
 	virtual wxString GetClassName() const override { return wxT("CommandBarItem"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("CommandBarItem"); }
 	virtual bool IsEditable() const override { return true; }
@@ -260,7 +260,7 @@ public:
 	bool ReadData(const ibDataNode& node);
 
 	// ibValue / ibPropertyObject concrete requirements specific to the bar.
-	virtual wxString GetString() const override { return _("Command bar"); }
+	virtual ibString GetString() const override { return _("Command bar"); }
 	virtual wxString GetClassName() const override { return wxT("CommandBar"); }
 	virtual wxString GetObjectTypeName() const override { return wxT("CommandBar"); }
 	virtual bool IsEditable() const override { return true; }

@@ -662,9 +662,8 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
-	/**
-	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
-	*/
+	// THE DOOR FOR THE ORDER OF THE CHILDREN — `pos` is where `obj` ends up. Refused on a read-only
+	// configuration; a move that happened marks the configuration modified and is announced as `Moved`.
 	bool ChangeChildPosition(ibValueMetaObject* obj, unsigned int pos);
 
 	// ⭐⭐ COPY & PASTE ARE NOT HERE ANY MORE — they are ibMetaData::CopyMetaObject and

@@ -34,7 +34,7 @@ class ibValueGlobalContextStructureManager : public ibValueStructure {
 		return ibValueStructure::GetClassName();
 	}
 
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		ibCtorAbstractType* so = m_metaData->GetAvailableCtor(m_clsid);
 		if (so != nullptr)
 			return so->GetClassName() + wxT("Manager");
@@ -81,7 +81,7 @@ public:
 	}
 
 	virtual wxString GetClassName() const { return wxT("ScheduledJobsManager"); }
-	virtual wxString GetString() const { return wxT("ScheduledJobsManager"); }
+	virtual ibString GetString() const { return wxT("ScheduledJobsManager"); }
 };
 
 enum

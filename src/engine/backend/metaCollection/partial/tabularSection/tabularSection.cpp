@@ -85,7 +85,7 @@ wxString ibValueTabularSectionDataObjectBase::GetClassName() const
 	return _("<deleted metaobject>");
 }
 
-wxString ibValueTabularSectionDataObjectBase::GetString() const
+ibString ibValueTabularSectionDataObjectBase::GetString() const
 {
 	if (m_metaTable->IsAllowed()) {
 		const ibMetaData* metaData = m_metaTable->GetMetaData();
@@ -417,7 +417,7 @@ wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 	return clsFactory->GetClassName();
 }
 
-wxString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetString() const
+ibString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectReturnLine::GetString() const
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();

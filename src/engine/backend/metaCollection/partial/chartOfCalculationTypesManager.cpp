@@ -70,19 +70,19 @@ bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMet
 		return true;
 	case eGetForm: {
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : wxString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+		pvarRetValue = m_metaObject->GetGenericForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : ibString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetListForm: {
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetListForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : wxString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+		pvarRetValue = m_metaObject->GetListForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : ibString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}
 	case eGetSelectForm: {
 		ibValueGuid* guidVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr;
-		pvarRetValue = m_metaObject->GetSelectForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : wxString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
+		pvarRetValue = m_metaObject->GetSelectForm(ibFormRequest(lSizeArray > 0 ? paParams[0]->GetString() : ibString(), guidVal ? ((ibGuid)*guidVal) : ibGuid()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}

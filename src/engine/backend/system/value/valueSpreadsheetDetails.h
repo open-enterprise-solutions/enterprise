@@ -119,8 +119,7 @@ public:
 	// OUTSIDE, IT IS THE VALUE IT WRAPS — see the header note.
 	//////////////////////////////////////////////////////////////////////////
 
-	virtual wxString GetString() const override { return m_value.GetString(); }
-	virtual const ibString& GetString(ibString& scratch) const override { return m_value.GetString(scratch); }
+	virtual ibString GetString() const override { return m_value.GetString(); }
 	virtual ibNumber GetNumber() const override { return m_value.GetNumber(); }
 	virtual wxLongLong_t GetDate() const override { return m_value.GetDate(); }
 	virtual bool GetBoolean() const override { return m_value.GetBoolean(); }

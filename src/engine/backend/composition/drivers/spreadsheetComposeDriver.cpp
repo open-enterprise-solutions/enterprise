@@ -170,9 +170,13 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_formats.clear();
 	m_formats.resize(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i) {
-		ibFormatString format;
-		if (ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format))
-			m_formats[i] = std::move(format);
+		ibFormatString& format = m_formats[i];
+		ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
+		if (!format.m_number.m_zero)
+			format.m_number.m_zero = wxString();
+		if (!format.m_date.m_empty)
+			format.m_date.m_empty = wxString();
 	}
 	// …AND WHICH OF THEM ARE SHOWN, taken here for the same reason as the two above: the layout is
 	// decided later and the info does not outlive this call.

@@ -872,6 +872,101 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolFormRemove);
 
 //---------------------------------------------------------------------------
+// form_move — the order of a control among its siblings
+//---------------------------------------------------------------------------
+//
+// The same question metadata_move answers for a configuration's objects, asked of a form: which
+// control comes first in its group, which column stands left in a table, which page opens first.
+// The editor does it with a drag; this is the drag.
+//
+class ibMcpToolFormMove : public ibMcpTool {
+
+	static const ibArg& ArgPosition()
+	{
+		static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
+			ibMcpText("Where the control goes among the controls of its group, counted from 0."),
+			/*required*/ true);
+		return s_a;
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("form_move"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("moving a control on '%s'"),
+			ibMcpNameOf(params, ArgForm().Name()));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("Change the place of a control among the controls of its group - the order of the "
+			"fields in a group, of the columns in a table, of the pages. `position` is its place there, "
+			"from 0. Answers whether it moved; form_get shows the order.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPosition() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectFormBase* creator = nullptr;
+		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		if (form == nullptr)
+			return false;
+
+		const s32 wanted = (s32)ArgControl().Whole(params);
+		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
+		if (control == nullptr) {
+			refusal = wxString::Format(ibMcpText("This form has no control with id %i."), (int)wanted);
+			form->DecrRef();
+			return false;
+		}
+
+		// A control placed in a group sits in its own sizer item, and the item is what stands among the
+		// group's children — so a sizer item for a parent means one level up.
+		ibValueFrame* item = control;
+		if (item->GetParent() != nullptr && item->GetParent()->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+			item = item->GetParent();
+		ibValueFrame* const group = item->GetParent();
+
+		const s32 position = (s32)ArgPosition().Whole(params);
+		if (group == nullptr || position < 0 || position >= (s32)group->GetChildCount()) {
+			refusal = wxString::Format(
+				ibMcpText("Position %i is past the controls of this group. Nothing was moved."), (int)position);
+			form->DecrRef();
+			return false;
+		}
+
+		const bool moved = group->GetChildPosition(item) != (unsigned int)position;
+		group->ChangeChildPosition(item, (unsigned int)position);
+
+		if (moved) {
+			if (creator == nullptr || !creator->SaveFormData(form)) {
+				refusal = ibMcpText("The control was moved but the form could not be stored.");
+				form->DecrRef();
+				return false;
+			}
+			// The configuration the form BELONGS to — asked of its creator, not of whichever is active.
+			if (ibMetaData* const metaData = creator->GetMetaData())
+				metaData->Modify(true);
+		}
+
+		result.SetValue(wxT("name"), control->GetControlName());
+		result.AddField(wxT("moved"), ibDataValue::Bool(moved));
+
+		form->DecrRef();
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolFormMove);
+
+//---------------------------------------------------------------------------
 // form_attribute
 //---------------------------------------------------------------------------
 //

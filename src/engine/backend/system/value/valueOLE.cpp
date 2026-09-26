@@ -708,7 +708,7 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 #endif 
 }
 
-long ibValueOLE::FindMethod(const wxString& strMethodName) const
+long ibValueOLE::FindMethod(const ibString& strMethodName) const
 {
 #ifdef __WXMSW__
 	if (m_currentDispatch == nullptr)
@@ -733,7 +733,7 @@ long ibValueOLE::FindMethod(const wxString& strMethodName) const
 #endif 
 }
 
-long ibValueOLE::FindProp(const wxString& strPropName) const
+long ibValueOLE::FindProp(const ibString& strPropName) const
 {
 #ifdef __WXMSW__
 	if (m_currentDispatch == nullptr)

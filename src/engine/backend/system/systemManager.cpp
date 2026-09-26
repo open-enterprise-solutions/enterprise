@@ -373,7 +373,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
-				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
@@ -481,7 +481,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
-				lSizeArray > 2 ? paParams[2]->GetString() : wxString(),
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;

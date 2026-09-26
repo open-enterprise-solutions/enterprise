@@ -11,6 +11,7 @@
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
 
 #include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
+#include "backend/query/querySelector.h"         // ibSelector::Snapshot — ToTable's rows as the fast table
 #include "backend/diagnostics/journal.h"         // says which step fell to the RAM floor, and why
 #include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
@@ -316,7 +317,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
 	return std::make_shared<ibSubqueryQueryable>(inner, m_take);
 }
 
-wxString ibValueQueryable::GetString() const
+ibString ibValueQueryable::GetString() const
 {
 	if (m_ops.empty())
 		return wxString::Format(wxT("Queryable(%s)"), m_sourceName);
@@ -642,35 +643,19 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 
 	case M::ToTable: {
 		// Materialise into the BUILT-IN value table (ibValueModelTable): every column of
-		// the source becomes a typed table column, rows fill by model id — the result is
-		// UI-bindable and round-trips straight back through Data.From.
-		ibValueModelTable* table = new ibValueModelTable();
-		// 🛑⭐⭐ HOLD THE TABLE WHILE ITS ROWS ARE MADE. Since 7090aa6f (2026-09-09) a return line HOLDS its
-		// model (tabularModel.h, HoldOwnerModel) — the right fix for a row outliving a temporary table. Its
-		// other face is this loop: a table fresh from `new` has refcount 0, the first GetRowAt takes it to
-		// 1, and `wxDELETE(line)` brings it back to 0 — which DELETES THE TABLE, so the second row is
-		// written into freed memory. MEASURED 2026-09-10: `Data.Catalogs.Goods.ToTable()` on a nine-row
-		// catalog took the whole application down; the same rows iterated by foreach came back fine.
-		// Every "new table + GetRowAt + wxDELETE" builder has the same shape — see the other sites that
-		// cite this note. A reference held here keeps the count off zero between rows.
-		const ibValue keep(table);
-		ibValueModelTable::ibValueModelColumnCollection* tcols = table->GetColumnCollection();
-		const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetColumns();
-		for (const ibBackendQueryColumn* c : cols) {
-			if (c == nullptr) continue;
-			ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* tc =
-				tcols->AddColumn(c->GetName(), c->GetTypeDesc(), c->GetName());
-			tc->SetColumnID(c->GetColumnId());
-		}
+		// the source becomes a typed table column — the result is UI-bindable and
+		// round-trips straight back through Data.From.
+		//
+		// 🛑⭐⭐ THE TABLE IS HELD WHILE ITS ROWS ARE MADE (ibQueryRamTable::ToValueTable). Since 7090aa6f
+		// (2026-09-09) a return line HOLDS its model (tabularModel.h, HoldOwnerModel) — the right fix for a row
+		// outliving a temporary table. Its other face was the loop that stood here: a table fresh from `new` has
+		// refcount 0, the first GetRowAt takes it to 1, and `wxDELETE(line)` brings it back to 0 — which DELETES
+		// THE TABLE, so the second row is written into freed memory. MEASURED 2026-09-10:
+		// `Data.Catalogs.Goods.ToTable()` on a nine-row catalog took the whole application down; the same rows
+		// iterated by foreach came back fine.
 		ibDataQueryResult sel = ExecuteAccumulated();
-		std::vector<std::pair<ibMetaID, ibValue>> row;
-		while (sel.Next()) {
-			row.clear();
-			for (const ibBackendQueryColumn* c : cols)
-				if (c != nullptr) row.emplace_back(c->GetColumnId(), sel.GetValue(c));
-			table->AppendRow(row);
-		}
-		ret = table;
+		sel.SetMaterialiseColumns(m_queryable->GetColumns());
+		ret = sel.Select().Snapshot().ToValueTable();
 		return;
 	}
 
@@ -870,7 +855,7 @@ ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const i
 	// Join/Where in here and running it does NOT re-enter the policy — no recursion.
 }
 
-wxString ibValueQueryDecorator::GetString() const
+ibString ibValueQueryDecorator::GetString() const
 {
 	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
 }

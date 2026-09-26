@@ -195,7 +195,7 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 
 } // namespace
 
-#define curCode	m_pByteCode->m_listCode[lCodeLine]
+#define curCode	codeBase[lCodeLine]   // codeBase: the running tape's instructions, taken once per function
 
 #define index1	curCode.m_param1.m_numIndex
 #define index2	curCode.m_param2.m_numIndex
@@ -451,8 +451,8 @@ struct ibProcStackGuard {
 			//
 			// Consecutive identical frames only: a cycle through several functions still shows
 			// every one of them, because there the repetition IS the shape worth reading.
-			wxString strError;
-			wxString previous;
+			ibString strError;
+			ibString previous;
 			long repeats = 0;
 
 			// Closes the run of identical frames that has just ended — writes the frame once, and
@@ -462,7 +462,7 @@ struct ibProcStackGuard {
 					return;
 				strError += wxT("\n") + previous;
 				if (repeats > 1)
-					strError += wxString::Format(wxT(" x %ld"), repeats);
+					strError += ibString::Format(wxT(" x %ld"), repeats);
 			};
 
 			for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
@@ -471,7 +471,7 @@ struct ibProcStackGuard {
 				const ibByteCode* stackByteCode = stackContext->GetByteCode();
 				wxASSERT(stackByteCode);
 
-				const wxString frame = wxString::Format(wxT("%s (#line %d)"),
+				const ibString frame = ibString::Format(wxT("%s (#line %d)"),
 					stackByteCode->m_strModuleName,
 					stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
 				);
@@ -600,17 +600,12 @@ if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER\
 
 // Append a value's text onto `out`.
 //
-// A STRING NEEDS NOTHING PASSED IN, because it is already holding the buffer:
-// `m_pStr` is a pointer to a live ibString. That is the whole reason
-// `GetString(ibString&)` takes a scratch — not for the string, which never
-// touches it, but for a value that has no text yet and must build some. Handing
-// every caller a buffer to carry, on a path where it is used by the rare operand
-// and not the common one, is the cost being removed here: the rare one now builds
-// its text straight into the destination instead of into a scratch that is then
-// copied out of.
+// A STRING IS APPENDED FROM WHERE IT LIES: `m_sData` is the text itself, and
+// appending it to an empty `out` merely shares it. Only a value that has no text yet (number, date,
+// object) builds one, through GetString().
 //
 // A reference to a string IS a string, so the chain is followed rather than
-// coerced — the same hop `GetString(ibString&)` makes for the same reason.
+// coerced — the same hop GetString() makes for the same reason.
 inline void AddStringValue(ibString& out, const ibValue& value)
 {
 	const ibValue* held = &value;
@@ -618,41 +613,28 @@ inline void AddStringValue(ibString& out, const ibValue& value)
 		held = held->m_pRef;
 
 	if (held->m_typeClass == ibValueTypes::TYPE_STRING) {
-		if (held->m_pStr != nullptr) out += *held->m_pStr;   // null = the empty string
+		out += held->m_sData;
 	}
 	else {
-		out += ibString(held->GetString());                  // number / date / object: build it
+		out += held->GetString();                            // number / date / object: build it
 	}
 }
 
-// Make `dest` a string holding a LIVE, EMPTY buffer, to be filled in place.
+// Make `dest` a string holding `text` — taken over whole, a handle and no characters copied.
 //
-// The destination is going to own an ibString whatever happens — SetString() makes
-// one on the heap and moves the caller's local into it — so it is made HERE and
-// written through directly: one object instead of two, nothing to move out of, and
-// no way for an lvalue ibString to slide into SetString(const wxString&) through
-// ibString's implicit conversion and pay for a wxString on the way in.
-//
-// The buffer dest ALREADY holds is reused rather than freed and remade, so a loop
-// assigning into the same slot allocates once instead of once per iteration.
-//
-// 🛑 The caller must have established that dest is neither an operand — clearing it
-// would wipe text that is about to be read — nor read-only, which SetString handles
-// by redirecting the write into the referenced value.
-static inline ibString& MakeStringValue(ibValue& dest)
+// 🛑 The caller must have established that dest is not read-only, which SetString handles by
+// redirecting the write into the referenced value. `text` is finished before dest is touched, so
+// dest may well be one of the operands it was built from.
+static inline void MakeStringValue(ibValue& dest, ibString&& text)
 {
-	if (dest.m_typeClass == ibValueTypes::TYPE_STRING && dest.m_pStr != nullptr) {
-		dest.m_pStr->Clear();          // keep the allocation, drop the text
-		return *dest.m_pStr;
+	if (dest.m_typeClass != ibValueTypes::TYPE_STRING) {
+		if (dest.m_typeClass != ibValueTypes::TYPE_EMPTY) dest.Reset();   // an empty value's word is zero already
+		dest.m_typeClass = ibValueTypes::TYPE_STRING;
 	}
-
-	dest.Reset();
-	dest.m_typeClass = ibValueTypes::TYPE_STRING;
-	dest.m_pStr = new ibString();
-	return *dest.m_pStr;
+	dest.m_sData = std::move(text);
 }
 
-// …and the number twin: `dest` made a number, its figure written through the reference.
+// …and the number twin: `dest` made a number holding `number`.
 //
 // 🛑 THE TYPED NUMBER OPERATIONS WROTE THE FIGURE AND NEVER THE TYPE. A variable declared `Number y` starts
 // as an empty value — the declaration checks what arrives, it does not change it (OPER_SET_TYPE) — so
@@ -660,14 +642,57 @@ static inline ibString& MakeStringValue(ibValue& dest)
 // Undefined; a typed parameter did the same the moment it was computed with (measured 2026-09-17: `F(Number x)
 // { return x + 1; }` returned Undefined, `F(x)` returned 8). The string operations always made their result a
 // string (MakeStringValue); these now make theirs a number.
-static inline ibNumber& MakeNumberValue(ibValue& dest)
+static inline void MakeNumberValue(ibValue& dest, const ibNumber& number)
 {
 	if (dest.m_typeClass != ibValueTypes::TYPE_NUMBER) {
-		dest.Reset();
+		if (dest.m_typeClass != ibValueTypes::TYPE_EMPTY) dest.Reset();   // an empty value's word is zero already
 		dest.m_typeClass = ibValueTypes::TYPE_NUMBER;
 	}
-	return dest.m_fData;
+	dest.m_fData = number;
 }
+
+// …and the date one. 🛑 A RESULT IS NEVER STAMPED OVER WHAT THE DESTINATION HELD: a string's text and
+// a heap-tier number share the union with the date and the number, so the old value is Reset() —
+// its text let go — before the new kind is written. Stamping the tag and writing the field (as the
+// arithmetic below used to) leaked the text, and a number written over a boolean read its byte as a
+// heap pointer.
+static inline void MakeDateValue(ibValue& dest, wxLongLong_t date)
+{
+	if (dest.m_typeClass != ibValueTypes::TYPE_DATE) {
+		if (dest.m_typeClass != ibValueTypes::TYPE_EMPTY) dest.Reset();   // an empty value's word is zero already
+		dest.m_typeClass = ibValueTypes::TYPE_DATE;
+	}
+	dest.m_dData = date;
+}
+
+static inline void MakeBooleanValue(ibValue& dest, bool flag)
+{
+	if (dest.m_typeClass != ibValueTypes::TYPE_BOOLEAN) {
+		if (dest.m_typeClass != ibValueTypes::TYPE_EMPTY) dest.Reset();   // an empty value's word is zero already
+		dest.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
+	}
+	dest.m_bData = flag;
+}
+
+// ⭐ TWO NUMBERS ARE TAKEN WHERE THEY LIE — the commonest case of every arithmetic and comparison
+// helper below, read straight off the fields: no GetType dispatch, no virtual GetNumber() copies. The
+// result is made before the destination is touched (it may be an operand), and a number is never
+// NULL, so the three-valued question of a comparison does not arise. `make` says what the result is:
+// MakeNumberValue for arithmetic, MakeBooleanValue for a comparison.
+#define NUMBERS_IN_PLACE(make, op)                                                                     \
+	if (cValue2.m_typeClass == ibValueTypes::TYPE_NUMBER && cValue3.m_typeClass == ibValueTypes::TYPE_NUMBER) { \
+		make(cValue1, cValue2.m_fData op cValue3.m_fData);                                                  \
+		return;                                                                                            \
+	}
+
+// …and the same for a division, which asks its divisor first.
+#define NUMBERS_IN_PLACE_DIVISOR(op)                                                                   \
+	if (cValue2.m_typeClass == ibValueTypes::TYPE_NUMBER && cValue3.m_typeClass == ibValueTypes::TYPE_NUMBER) { \
+		if (cValue3.m_fData.IsZero())                                                                      \
+			Raise(ERROR_DIVIDE_BY_ZERO);                                                                   \
+		MakeNumberValue(cValue1, cValue2.m_fData op cValue3.m_fData);                                      \
+		return;                                                                                            \
+	}
 
 //Functions for quickly working with the ibValue type
 inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
@@ -677,7 +702,7 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	// The string branch goes through SetString(), which Reset()s cValue1 on
 	// its CURRENT type and frees the correct union member. Pre-stamping
 	// TYPE_STRING (the old code) made Reset() treat a stale NON-string union
-	// value (m_pStr aliases m_pRef) as an ibString* and delete it -> AV.
+	// value (the string aliases m_pRef) as a string and free it -> AV.
 	// It only bit when the result slot already held a non-string value (a
 	// reused temp inside a loop), so a single `s = s + "x"` was fine but the
 	// same line in a While loop access-violated.
@@ -685,11 +710,11 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	// tag written onto it first is a tag the read then believes: `x = 1 + x` with
 	// a string `x` would stamp TYPE_NUMBER and GetNumber() would hand back the
 	// stale union bytes instead of converting the string.
+	NUMBERS_IN_PLACE(MakeNumberValue, +);
 	const ibValueTypes resultType = cValue2.GetType();
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber numResult = cValue2.GetNumber() + cValue3.GetNumber();
-		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-		cValue1.m_fData = numResult;
+		MakeNumberValue(cValue1, numResult);
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date + date -> number
@@ -698,14 +723,12 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 			// spells both __int64 and picks it; GCC finds every ctor equally far away and
 			// calls the conversion ambiguous. Naming the target type settles it everywhere.
 			const ibNumber numResult = cValue2.GetDate() + cValue3.GetDate();
-			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-			cValue1.m_fData = numResult;
+			MakeNumberValue(cValue1, numResult);
 		}
 		else {
 			// On the calendar, not the clock — see ibValue::ShiftDate.
 			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, cValue3.GetDate());
-			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
-			cValue1.m_dData = dateResult;
+			MakeDateValue(cValue1, dateResult);
 		}
 	}
 	else {
@@ -713,32 +736,21 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 		// the LHS slot, so cValue1 (dest) and cValue2 (left) resolve to the SAME
 		// ibValue. Append onto s in place instead of building `s + expr` into a
 		// fresh string and copying it back — turns accumulate-in-a-loop from
-		// O(n^2) into O(n). Fast path only when the slot holds a LIVE (non-null)
-		// string buffer we own: a reused / moved-out slot can read TYPE_STRING
-		// with m_pStr == null (see note above), which SetString() rebuilds safely
-		// (GetString() is null-safe, so `"" + expr` is the correct result).
+		// O(n^2) into O(n). A text the slot shares with another value is made its
+		// own on the first append (copy on write), and appended in place after that.
 		if (&cValue1 == &cValue2 && &cValue1 != &cValue3 &&
-			cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr) {
-			AddStringValue(*cValue1.m_pStr, cValue3);
-		}
-		else if (&cValue1 != &cValue2 && &cValue1 != &cValue3) {
-			// THE DESTINATION'S OWN BUFFER IS THE ONLY BUFFER. It is going to hold an
-			// ibString either way, so it is opened here and both operands append
-			// straight into it — no local to build and move out of, and the buffer
-			// survives from one execution of this instruction to the next.
-			ibString& out = MakeStringValue(cValue1);
-			AddStringValue(out, cValue2);
-			AddStringValue(out, cValue3);
+			cValue1.m_typeClass == ibValueTypes::TYPE_STRING) {
+			AddStringValue(cValue1.m_sData, cValue3);
 		}
 		else {
-			// The destination IS one of the operands and is not the in-place case
-			// above, so its buffer cannot be opened — clearing it would wipe text
-			// still to be read. Build beside it and hand the buffer over: the result
-			// is complete before SetString()'s Reset() runs.
+			// Built beside the destination and handed over whole: the result is complete
+			// before the destination is touched, so it may well be one of the operands. The
+			// first operand is shared rather than copied (appending to nothing takes the
+			// text), and the second makes it a text of its own.
 			ibString result;
 			AddStringValue(result, cValue2);
 			AddStringValue(result, cValue3);
-			cValue1.SetString(std::move(result));
+			MakeStringValue(cValue1, std::move(result));
 		}
 	}
 }
@@ -748,11 +760,11 @@ inline void SubValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	CHECK_READONLY(SubValue);
 	// The type is read into a LOCAL and the tag written only once the result
 	// exists — the destination may be one of the operands (see AddValue).
+	NUMBERS_IN_PLACE(MakeNumberValue, -);
 	const ibValueTypes resultType = cValue2.GetType();
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber numResult = cValue2.GetNumber() - cValue3.GetNumber();
-		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-		cValue1.m_fData = numResult;
+		MakeNumberValue(cValue1, numResult);
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date - date -> seconds
@@ -763,13 +775,11 @@ inline void SubValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 			// two-week vacation (the payroll demo, 2026-09-10).
 			// …and counted on the calendar, where every day is 86400 seconds (ibValue::DateSpan).
 			const ibNumber numResult = ibNumber((long long)ibValue::DateSpan(cValue2.GetDate(), cValue3.GetDate())) / ibNumber(1000LL);
-			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-			cValue1.m_fData = numResult;
+			MakeNumberValue(cValue1, numResult);
 		}
 		else {
 			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, -cValue3.GetDate());
-			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
-			cValue1.m_dData = dateResult;
+			MakeDateValue(cValue1, dateResult);
 		}
 	}
 	else {
@@ -780,22 +790,20 @@ inline void SubValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 inline void MultValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(MultValue);
+	NUMBERS_IN_PLACE(MakeNumberValue, *);
 	const ibValueTypes resultType = cValue2.GetType();
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber numResult = cValue2.GetNumber() * cValue3.GetNumber();
-		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-		cValue1.m_fData = numResult;
+		MakeNumberValue(cValue1, numResult);
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date * date -> number
 			const ibNumber numResult = cValue2.GetDate() * cValue3.GetDate();
-			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-			cValue1.m_fData = numResult;
+			MakeNumberValue(cValue1, numResult);
 		}
 		else {
 			const wxLongLong_t dateResult = cValue2.m_dData * cValue3.GetDate();
-			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
-			cValue1.m_dData = dateResult;
+			MakeDateValue(cValue1, dateResult);
 		}
 	}
 	else {
@@ -809,14 +817,14 @@ inline void DivValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	// The divisor is read BEFORE the tag is written, which is also what keeps the
 	// zero guard honest: with the tag stamped first, `x = y / x` on a string `x`
 	// read a stale number, IsZero() was false, and the division went through.
+	NUMBERS_IN_PLACE_DIVISOR(/);
 	const ibValueTypes resultType = cValue2.GetType();
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber flNumber3 = cValue3.GetNumber();
 		if (flNumber3.IsZero())
 			Raise(ERROR_DIVIDE_BY_ZERO);
 		const ibNumber numResult = cValue2.GetNumber() / flNumber3;
-		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-		cValue1.m_fData = numResult;
+		MakeNumberValue(cValue1, numResult);
 	}
 	else {
 		ibBackendCoreException::Error(_("Division operation cannot be applied for this type (%s)"), cValue2.GetClassName());
@@ -826,14 +834,14 @@ inline void DivValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(ModValue);
+	NUMBERS_IN_PLACE_DIVISOR(%);
 	const ibValueTypes resultType = cValue2.GetType();
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber num3 = cValue3.GetNumber();
 		if (num3.IsZero())
 			Raise(ERROR_DIVIDE_BY_ZERO);
 		const ibNumber num2 = cValue2.GetNumber();
-		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
-		cValue1.m_fData = num2 % num3;
+		MakeNumberValue(cValue1, num2 % num3);
 	}
 	else {
 		ibBackendCoreException::Error(_("Modulo operation cannot be applied for this type (%s)"), cValue2.GetClassName());
@@ -853,7 +861,10 @@ inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& 
 {
 	if (!threeValued) return false;
 	if (!IsNullOperand(a) && !IsNullOperand(b)) return false;
-	out.m_typeClass = ibValueTypes::TYPE_NULL;
+	if (out.m_typeClass != ibValueTypes::TYPE_NULL) {
+		if (out.m_typeClass != ibValueTypes::TYPE_EMPTY) out.Reset();   // a string's text or a heap-tier number is let go
+		out.m_typeClass = ibValueTypes::TYPE_NULL;
+	}
 	return true;
 }
 
@@ -861,55 +872,55 @@ inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& 
 inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueGT);
+	NUMBERS_IN_PLACE(MakeBooleanValue, >);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueGT(cValue3) > 0;   // three-way int -> boolean '>'
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueGE);
+	NUMBERS_IN_PLACE(MakeBooleanValue, >=);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueGE(cValue3);
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueLS);
+	NUMBERS_IN_PLACE(MakeBooleanValue, <);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueLS(cValue3) < 0;   // three-way int -> boolean '<'
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueLE);
+	NUMBERS_IN_PLACE(MakeBooleanValue, <=);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueLE(cValue3);
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 inline void CompareValueEQ(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueEQ);
+	NUMBERS_IN_PLACE(MakeBooleanValue, ==);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueEQ(cValue3);
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3, const bool threeValued)
 {
 	CHECK_READONLY_COMPARE(CompareValueNE);
+	NUMBERS_IN_PLACE(MakeBooleanValue, !=);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3, threeValued)) return;
 	const bool bResult = cValue2.CompareValueNE(cValue3);
-	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = bResult;
+	MakeBooleanValue(cValue1, bResult);
 }
 
 // CopyValue / MoveValue / IsEmptyValue / IsHasValue / SetTypeBoolean /
@@ -921,7 +932,7 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 // six formatted-message blocks inside the interpreting loop. The message choice
 // is a property of the failure, not of the opcode, so it belongs in one
 // out-of-line place — see the raise-helper note above.
-IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const wxString& name)
+IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const ibString& name)
 {
 	// A GLOBAL FUNCTION asked of a value is the commonest shape of this failure and the
 	// one a plain "no such member" explains worst. `x.ValueIsFilled()` reads like a method
@@ -1032,6 +1043,11 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	// inside the loop. Local snapshot keeps each Execute invocation
 	// pinned to the bc it started with.
 	const ibByteCode* m_pByteCode = this->m_pByteCode;
+	// …and its instructions by a plain pointer, taken once: `curCode` — which every operand macro
+	// reads, several times per instruction — indexes this, not the vector. No reload of the vector
+	// through the bytecode after every call, and in Debug no checked `operator[]` per operand. The
+	// tape does not change while it runs (only the compiler appends to it).
+	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();
 
 	long lCodeLine = pContext->m_lStart;
 	// Loop walks to the bytecode tail; explicit termination is on
@@ -1085,10 +1101,9 @@ start_label:
 	// amortising over a long loop is a tax on every short one (Max, 2026-09-09).
 	//
 	// The only place a saving was real is where wxString leaves the path
-	// ENTIRELY — the string opcodes below, which carry `ibString` end to end. Their
-	// scratches are locals in the case, and cost nothing: `GetString(scratch)`
-	// hands back the LIVE buffer for a string value and never touches the scratch,
-	// so an empty one never allocates.
+	// ENTIRELY — the string opcodes below, which carry `ibString` end to end.
+	// GetString() now hands a string value's text out SHARED (one more owner, no
+	// characters copied), so there is no buffer left to hoist at all.
 	try { //slower by 2-3% for each nested module
 		while (lCodeLine < lFinish) {
 
@@ -1231,10 +1246,14 @@ start_label:
 			case OPER_GE + TYPE_DELTA2: CompareValueGE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
 			case OPER_LE:
 			case OPER_LE + TYPE_DELTA2: CompareValueLE(variable1, cvariable2, cvariable3, IS_THREE_VALUED_NULL(curCode)); break;
-			case OPER_IF:
-				if (IsEmptyValue(cvariable1))
+			case OPER_IF: {
+				// A boolean condition — what a comparison leaves — is read where it lies; anything else
+				// asks its own emptiness.
+				const ibValue& condition = cvariable1;
+				if (condition.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? !condition.m_bData : IsEmptyValue(condition))
 					lCodeLine = index2 - 1;
 				break;
+			}
 			case OPER_FOR:
 				if (cvariable1.m_typeClass != ibValueTypes::TYPE_NUMBER)
 					ibBackendCoreException::Error(_("Only variables with type can be used to organize the loop \"number\""));
@@ -1256,8 +1275,13 @@ start_label:
 				//
 				// One comparison answers both, because "have we gone past the end" is
 				// the question the loop was always asking.
-				if (cvariable1.m_fData > cvariable2.m_fData)
-					lCodeLine = index3 - 1;
+				{
+					// The bound is read as a number whatever it holds: a number's own field, anything
+					// else through GetNumber — its word may be a string's text or a boolean's byte.
+					const ibValue& bound = cvariable2;
+					if (cvariable1.m_fData > (bound.m_typeClass == ibValueTypes::TYPE_NUMBER ? bound.m_fData : bound.GetNumber()))
+						lCodeLine = index3 - 1;
+				}
 				break;
 			case OPER_FOREACH:
 			{
@@ -1374,7 +1398,9 @@ start_label:
 			case OPER_SET_A:
 			case OPER_SET_SCOPE://writable member of a scope binding — identical parent+prop write
 			{//setting attribute
-				const wxString& strPropName = m_pByteCode->m_listConst[index2].GetString();
+				// A member's name lies in the constant pool as a STRING value (the compiler writes it so),
+				// and its text is read where it lies — no copy, nothing converted on the way to FindProp.
+				const ibString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) Raise(ERROR_PROP_NOT_WRITABLE, strPropName);
@@ -1384,7 +1410,7 @@ start_label:
 			case OPER_GET_SCOPE://bare member of a scope binding — identical parent+prop resolve
 			{
 				ibValue* pRetValue = &variable1;
-				const wxString& strPropName = m_pByteCode->m_listConst[index3].GetString();
+				const ibString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
 				if (!variable2.IsPropReadable(lPropNum)) Raise(ERROR_PROP_NOT_READABLE, strPropName);
@@ -1428,7 +1454,7 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
 
-				const wxString& funcName = m_pByteCode->m_listConst[index3].GetString();
+				const ibString& funcName = m_pByteCode->m_listConst[index3].m_sData;
 				// Resolve method number on every call. Bytecode is a const
 				// template at runtime — no opcode-level cache patching.
 				// (The previous "cache" path stored resolved method # /
@@ -1643,14 +1669,13 @@ start_label:
 
 			// The projection. The names are read from the const pool only while the shape is being
 			// made — once per query; the field stores that follow carry positions, not names.
-			// ⚠ THE NAMES ARE READ PER ROW EVEN THOUGH THE SHAPE IS BUILT ONCE — `ibLinqRow`
-			// splits them for the FIRST row only, but the argument is evaluated on every one.
-			// Reading them through the native buffer instead does NOT help: the callee takes
-			// a wxString, so one is built either way (measured 2026-09-09 — it read WORSE).
-			// The saving is in `ibLinqRow` taking the const-pool value itself, not here.
+			// THE NAMES ARE HANDED OVER PER ROW EVEN THOUGH THE SHAPE IS BUILT ONCE — `ibLinqRow`
+			// splits them for the FIRST row only. So they are lent where they lie (m_sData): the
+			// callee takes the engine's own string, and nothing is built per row. (With a wxString
+			// parameter one was built on every row either way — measured 2026-09-09.)
 			case OPER_LINQ_ROW:
 				ibLinqRow(variable1, variable2,
-					m_pByteCode->m_listConst[index3].GetString(), (long)array3);
+					m_pByteCode->m_listConst[index3].m_sData, (long)array3);
 				break;
 
 			case OPER_LINQ_FIELD:
@@ -1846,7 +1871,7 @@ start_label:
 			//
 			// Read like every other operand in this switch — through ResolveRead, which knows the
 			// difference between a frame slot and a constant because the operand says which it is.
-			case OPER_RAISE_T: ibBackendCoreException::Error(cvariable1.GetString()); break;
+			case OPER_RAISE_T: ibBackendCoreException::Error(wxT("%s"), cvariable1.GetString()); break;   // the script's text is DATA, not a format
 			case OPER_RET:
 				if (index1 != DEF_VAR_NORET) {
 					if (pvarRetValue == nullptr)
@@ -2212,13 +2237,13 @@ start_label:
 				//NUMBER
 			// The figure is computed first and then stored: the destination may be one of the operands, and
 			// making it a number (MakeNumberValue) resets a value that did not say so yet.
-			case OPER_ADD + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData + cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_SUB + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData - cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_DIV + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData / cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1) = r; break; }
-			case OPER_MULT + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData * cvariable3.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_LET + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
-			case OPER_INVERT + TYPE_DELTA1: { const ibNumber r = -cvariable2.m_fData; MakeNumberValue(variable1) = r; break; }
+			case OPER_ADD + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData + cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_SUB + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData - cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_DIV + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData / cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1, r); break; }
+			case OPER_MULT + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData * cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_LET + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_INVERT + TYPE_DELTA1: { const ibNumber r = -cvariable2.m_fData; MakeNumberValue(variable1, r); break; }
 			// ⭐ A COMPARISON ANSWERS A VALUE, not a payload - the rule the boolean NOT below already
 			// follows, and the same reason it gives: "a declared type is a GATE (it permits a write, it
 			// does not convert), so nothing types the slot beforehand". These wrote the raw field and
@@ -2244,8 +2269,8 @@ start_label:
 			// native. `ibString` has its own `operator+` and `SetString(ibString&&)` STEALS
 			// the buffer. Verified in the /FAsc listing: not one `__imp_wxString` left here.
 			//
-			// AND NO SCRATCH IS PASSED IN, because a string value is already holding the
-			// buffer — `m_pStr` IS the pointer. The destination is holding one too, so it
+			// AND NO SCRATCH IS PASSED IN, because a string value is already holding its
+			// text — `m_sData`. The destination is holding one too, so it
 			// is opened and written through directly: no local built to be moved out of,
 			// and no lvalue ibString that could slide into SetString(const wxString&) via
 			// the implicit conversion. An operand with no text yet builds it straight into
@@ -2260,19 +2285,15 @@ start_label:
 				const ibValue& left = cvariable2;
 				const ibValue& right = cvariable3;
 				if (&dest == &left && &dest != &right &&
-					dest.m_typeClass == ibValueTypes::TYPE_STRING && dest.m_pStr != nullptr) {
-					AddStringValue(*dest.m_pStr, right);          // fused `s = s + expr`, in place
-				}
-				else if (&dest != &left && &dest != &right && !dest.m_bReadOnly) {
-					ibString& out = MakeStringValue(dest);
-					AddStringValue(out, left);
-					AddStringValue(out, right);
+					dest.m_typeClass == ibValueTypes::TYPE_STRING) {
+					AddStringValue(dest.m_sData, right);          // fused `s = s + expr`, in place
 				}
 				else {
-					ibString result;                              // dest aliases an operand, or is read-only
+					ibString result;                              // complete before dest — maybe an operand — is touched
 					AddStringValue(result, left);
 					AddStringValue(result, right);
-					dest.SetString(std::move(result));
+					if (!dest.m_bReadOnly) MakeStringValue(dest, std::move(result));
+					else dest.SetString(std::move(result));       // read-only: SetString redirects the write
 				}
 				break;
 			}
@@ -2280,14 +2301,10 @@ start_label:
 				ibValue& dest = variable1;
 				const ibValue& src = cvariable2;
 				if (&dest == &src) break;                         // `a = a` — nothing to do
-				if (!dest.m_bReadOnly) {
-					AddStringValue(MakeStringValue(dest), src);
-				}
-				else {
-					ibString text;                                // read-only: SetString redirects the write
-					AddStringValue(text, src);
-					dest.SetString(std::move(text));
-				}
+				ibString text;
+				AddStringValue(text, src);                        // a string shares its text; anything else builds one
+				if (!dest.m_bReadOnly) MakeStringValue(dest, std::move(text));
+				else dest.SetString(std::move(text));             // read-only: SetString redirects the write
 				break;
 			}
 			case OPER_IF + TYPE_DELTA2: if (cvariable1.IsEmpty()) lCodeLine = index2 - 1; break;
@@ -2580,7 +2597,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 //bExportOnly=0-search for any functions in the current module + exported ones in parent modules
 //bExportOnly=1-search for exported functions in the current and parent modules
 //bExportOnly=2-search for exported functions in the current module only
-long ibProcUnit::FindMethod(const wxString& strMethodName, bool bError, int bExportOnly) const
+long ibProcUnit::FindMethod(const ibString& strMethodName, bool bError, int bExportOnly) const
 {
 	if (m_pByteCode == nullptr ||
 		!m_pByteCode->m_bCompile) {
@@ -2608,7 +2625,7 @@ long ibProcUnit::FindMethod(const wxString& strMethodName, bool bError, int bExp
 	return wxNOT_FOUND;
 }
 
-long ibProcUnit::FindFunction(const wxString& strMethodName, bool bError, int bExportOnly) const
+long ibProcUnit::FindFunction(const ibString& strMethodName, bool bError, int bExportOnly) const
 {
 	if (m_pByteCode == nullptr ||
 		!m_pByteCode->m_bCompile) {
@@ -2636,7 +2653,7 @@ long ibProcUnit::FindFunction(const wxString& strMethodName, bool bError, int bE
 	return wxNOT_FOUND;
 }
 
-long ibProcUnit::FindProcedure(const wxString& strMethodName, bool bError, int bExportOnly) const
+long ibProcUnit::FindProcedure(const ibString& strMethodName, bool bError, int bExportOnly) const
 {
 	if (m_pByteCode == nullptr ||
 		!m_pByteCode->m_bCompile) {
@@ -2666,7 +2683,7 @@ long ibProcUnit::FindProcedure(const wxString& strMethodName, bool bError, int b
 
 //Calling a procedure by name
 //The call is made only in the current module
-bool ibProcUnit::CallAsProc(const wxString& funcName, ibValue** ppParams, const long lSizeArray)
+bool ibProcUnit::CallAsProc(const ibString& funcName, ibValue** ppParams, const long lSizeArray)
 {
 	if (m_pByteCode != nullptr) {
 		const long lCodeLine = m_pByteCode->FindMethod(funcName);
@@ -2680,7 +2697,7 @@ bool ibProcUnit::CallAsProc(const wxString& funcName, ibValue** ppParams, const 
 
 //Calling a function by name
 //The call is made only in the current module
-bool ibProcUnit::CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray)
+bool ibProcUnit::CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibValue** ppParams, const long lSizeArray)
 {
 	if (m_pByteCode != nullptr) {
 		const long lCodeLine = m_pByteCode->FindMethod(funcName);
@@ -2714,6 +2731,7 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 	// this one lives exactly as long as the Execute below it. No session (a sandbox
 	// run with none bound) means no stack to lease from, and the frame falls back to
 	// the heap on its own.
+	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
 	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
@@ -2745,6 +2763,7 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 		return;
 	}
 
+	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
 	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
@@ -2760,7 +2779,7 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 	Execute(&cRunContext, &pvarRetValue, false);
 }
 
-long ibProcUnit::FindProp(const wxString& strPropName) const
+long ibProcUnit::FindProp(const ibString& strPropName) const
 {
 	// Module-level exports are user-declared frame vars with kind=Export.
 	// Skip Local (private), External / Context (ambient bindings — not
@@ -2769,7 +2788,7 @@ long ibProcUnit::FindProp(const wxString& strPropName) const
 	auto iterator = std::find_if(m_pByteCode->m_listVar.begin(), m_pByteCode->m_listVar.end(),
 		[&strPropName](const auto& v) {
 			if (!v.IsExport()) return false;
-			return stringUtils::CompareString(strPropName, v.m_strRealName);
+			return strPropName.IsSameAs(v.m_strRealName, false);   // wx names against the engine's own, buffer to buffer
 		});
 	if (iterator != m_pByteCode->m_listVar.end())
 		return (long)*iterator;
@@ -2782,7 +2801,7 @@ bool ibProcUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)//set
 	return true;
 }
 
-bool ibProcUnit::SetPropVal(const wxString& strPropName, const ibValue& varPropVal)//setting attribute
+bool ibProcUnit::SetPropVal(const ibString& strPropName, const ibValue& varPropVal)//setting attribute
 {
 	long lPropNum = FindProp(strPropName);
 	if (lPropNum != wxNOT_FOUND) {
@@ -2811,7 +2830,7 @@ bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal) //attribu
 	return true;
 }
 
-bool ibProcUnit::GetPropVal(const wxString& strPropName, ibValue& pvarPropVal) //setting attribute
+bool ibProcUnit::GetPropVal(const ibString& strPropName, ibValue& pvarPropVal) //setting attribute
 {
 	const long lPropNum = FindProp(strPropName);
 	if (lPropNum != wxNOT_FOUND) {
@@ -2866,7 +2885,7 @@ private:
 	const ibByteCode::ibByteFunction* m_evalHostFunction;
 };
 
-bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
+bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunContext, ibValue& pvarRetValue,
 	bool compileBlock, ibEvalMode evalMode)
 {
 	if (pRunContext == nullptr) {
@@ -2887,8 +2906,8 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 	// row + silent `false` return. Watch handler in the designer prints
 	// the result via ibValue::ToString; a string-typed ibValue with
 	// "<error: msg>" reads naturally.
-	auto reportFailure = [&pvarRetValue](const wxString& msg) {
-		pvarRetValue = ibValue(wxString(wxT("<error: ")) + msg + wxT(">"));
+	auto reportFailure = [&pvarRetValue](const ibString& msg) {
+		pvarRetValue = ibValue(ibString(wxT("<error: ")) + msg + wxT(">"));
 	};
 
 	// A SANDBOX IS NOT AN EXPRESSION, so it is neither looked up here nor kept below: the text is a
@@ -2939,7 +2958,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 			return false;
 		}
 		catch (const std::exception& e) {
-			reportFailure(wxString::FromUTF8(e.what()));
+			reportFailure(ibString::FromUTF8(e.what()));
 			return false;
 		}
 	}
@@ -3002,7 +3021,7 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 		return false;
 	}
 	catch (const std::exception& e) {
-		reportFailure(wxString::FromUTF8(e.what()));
+		reportFailure(ibString::FromUTF8(e.what()));
 		return false;
 	}
 

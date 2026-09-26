@@ -20,16 +20,6 @@ ibValue ibValueManagerDataObjectCalculationRegister::Get(const ibValue& cFilter)
 {
 	ibRequireOpenBase();
 
-	ibValueModelTable* retTable = new ibValueModelTable();
-	// Held while its rows are made, as every builder of a table holds it (valueQueryable.cpp, M::ToTable).
-	const ibValue keep(retTable);
-	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
-	wxASSERT(colCollection);
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->AddColumn(object->GetName(), object->GetTypeDesc(), object->GetSynonym());
-		colInfo->SetColumnID(object->GetMetaID());
-	}
-
 	// The Structure a script passes becomes the condition here — the SAME converter the query door
 	// uses, so a script's filter and a query's condition are one thing from this point on.
 	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
@@ -40,45 +30,19 @@ ibValue ibValueManagerDataObjectCalculationRegister::Get(const ibValue& cFilter)
 	//
 	// 🛑 NO `catch (...) {}` AROUND THE READS OF THIS FILE ANY MORE. Every one of them turned a failed
 	// read — a missing column, a refused statement — into an empty table, which a payroll calculation
-	// then reads as "nothing was accrued". The block stays so the cursor closes before the rows are
-	// worked on; the error goes to whoever asked.
-	{
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		q.Where(filter);
-		ibReadPageRequest page;
-		page.m_count = 0;   // every matching record
-		ibDataQueryResult selection = q.Execute(page);
-		const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
-		std::vector<std::pair<ibMetaID, ibValue>> row;
-		while (selection.Next()) {
-			row.clear();
-			for (const auto object : attributes)
-				row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-			retTable->AppendRow(row);
-		}
-	}
-
-	return retTable;
+	// then reads as "nothing was accrued". The error goes to whoever asked.
+	ibDataQueryBuilder q;
+	q.From(m_metaObject->GetQueryable());
+	q.Where(filter);
+	ibReadPageRequest page;
+	page.m_count = 0;   // every matching record
+	ibDataQueryResult selection = q.Execute(page);
+	return ibRegSelectionToTable(selection, m_metaObject->GetQueryable());
 }
 
 ibValue ibValueManagerDataObjectCalculationRegister::Get(const ibValue& cPeriod, const ibValue& cFilter)
 {
 	ibRequireOpenBase();
-
-	ibValueModelTable* retTable = new ibValueModelTable();
-	const ibValue keep(retTable);   // held while its rows are made — see Get(filter) above
-	ibValueModelTable::ibValueModelColumnCollection* colCollection = retTable->GetColumnCollection();
-	wxASSERT(colCollection);
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		ibValueModelTable::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo =
-			colCollection->AddColumn(
-				object->GetName(),
-				object->GetTypeDesc(),
-				object->GetSynonym()
-			);
-		colInfo->SetColumnID(object->GetMetaID());
-	}
 
 	// A calculation register is always dated — by its REGISTRATION period, the one period it has.
 	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
@@ -87,25 +51,14 @@ ibValue ibValueManagerDataObjectCalculationRegister::Get(const ibValue& cPeriod,
 	// condition like any selected dimension; L3 decomposes each across its physical
 	// fields and binds them. Rows come from the L3 selection (GetValue) — no raw
 	// statement, no per-DBMS SQL here.
-	{
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		q.Where(m_metaObject->GetRegistrationPeriod()->GetQueryColumn(), ibQueryFilterOp::Equal, cPeriod);
-		q.Where(filter);
-		ibReadPageRequest page;
-		page.m_count = 0;   // every matching record
-		ibDataQueryResult selection = q.Execute(page);
-		const auto attributes = m_metaObject->GetGenericAttributeArrayObject();   // once, not once a record
-		std::vector<std::pair<ibMetaID, ibValue>> row;
-		while (selection.Next()) {
-			row.clear();
-			for (const auto object : attributes)
-				row.emplace_back(object->GetMetaID(), selection.GetValue(object->GetQueryColumn()));
-			retTable->AppendRow(row);
-		}
-	}
-
-	return retTable;
+	ibDataQueryBuilder q;
+	q.From(m_metaObject->GetQueryable());
+	q.Where(m_metaObject->GetRegistrationPeriod()->GetQueryColumn(), ibQueryFilterOp::Equal, cPeriod);
+	q.Where(filter);
+	ibReadPageRequest page;
+	page.m_count = 0;   // every matching record
+	ibDataQueryResult selection = q.Execute(page);
+	return ibRegSelectionToTable(selection, m_metaObject->GetQueryable());
 }
 
 // GetBase(Filter, Resources, Dimensions, Sections) — the base of the records the filter chooses: the recorder at

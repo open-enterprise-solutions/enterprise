@@ -396,11 +396,11 @@ bool ibValueTextWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 			lSizeArray > 2 && paParams[2]->GetBoolean());
 		return true;
 	case enWrite:
-		Write(lSizeArray > 0 ? paParams[0]->GetString() : wxString());
+		Write(lSizeArray > 0 ? paParams[0]->GetString() : ibString());
 		return true;
 	case enWriteLine:
 		// One line ending, the same on every platform: a file written here reads the same there.
-		Write((lSizeArray > 0 ? paParams[0]->GetString() : wxString()) + wxT("\n"));
+		Write((lSizeArray > 0 ? paParams[0]->GetString() : ibString()) + wxT("\n"));
 		return true;
 	case enClose:
 		Close();
