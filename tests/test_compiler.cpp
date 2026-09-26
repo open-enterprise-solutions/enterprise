@@ -1203,6 +1203,70 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 }
 
 // ===========================================================================
+// A column's TYPED EMPTY value is made by the configuration that owns the type
+// ===========================================================================
+//
+// ibValueTypeDescription::AdjustValue answers "what does an empty cell of this
+// column look like". For a reference of a catalog that answer is the catalog's
+// empty reference, and the class that makes it is registered in the
+// CONFIGURATION'S image - never in the value registry, which knows the built-in
+// types only.
+//
+// 🛑 The question "is this class registered?" was put to the value registry
+// (2026-09-24), so every reference type of a configuration came back as the
+// untyped empty value. A ledger balance split one item into two rows: a currency
+// never written read as Undefined, one written empty read as the empty
+// reference, and the key a server read groups by (KeyFieldsAsRead) could no
+// longer say they are the same. Measured 2026-09-26 on account 28 of a ledger
+// whose currency was added after its first postings.
+
+#include "backend/system/value/valueType.h"
+
+namespace {
+
+// Makes ONE class of its own, the way a configuration makes the empty reference of
+// its catalog: a class id the value registry has never heard of.
+class MakingStandIn : public StandInMetaData {
+public:
+	explicit MakingStandIn(const ibClassID& own) : m_own(own) {}
+
+	bool IsRegisterCtor(const ibClassID& clsid) const override {
+		return clsid == m_own || StandInMetaData::IsRegisterCtor(clsid);
+	}
+	ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const override {
+		if (clsid == m_own)
+			return ibValue(wxT("the catalog's empty reference"));
+		return StandInMetaData::CreateObject(clsid, paParams, lSizeArray);
+	}
+
+private:
+	ibClassID m_own;
+};
+
+} // namespace
+
+TEST(TypedEmpty, AReferenceOfTheConfigurationIsMadeByTheConfiguration) {
+	const ibClassID catalogRef = reference_to_clsid(987654);
+	ASSERT_FALSE(ibValue::IsRegisterCtor(catalogRef)) << "the value registry must not know it - that is the case";
+
+	MakingStandIn metaData(catalogRef);
+	const ibValue empty = ibValueTypeDescription::AdjustValue(ibTypeDescription(catalogRef), &metaData);
+
+	EXPECT_EQ(empty.GetString(), wxString(wxT("the catalog's empty reference")));
+}
+
+TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
+	// The other half, kept: a type described but registered NOWHERE (a configuration built without its
+	// runtime objects) still answers with the untyped empty value rather than a raise.
+	const ibClassID catalogRef = reference_to_clsid(987655);
+	StandInMetaData metaData;
+
+	ibValue empty(ibNumber(7));
+	ASSERT_NO_THROW(empty = ibValueTypeDescription::AdjustValue(ibTypeDescription(catalogRef), &metaData));
+	EXPECT_EQ(empty.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
+// ===========================================================================
 // CompositionField — a field of a source, as a value
 //
 // The LEFT side of a condition. It used to be three unrelated members on a

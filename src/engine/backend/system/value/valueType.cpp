@@ -81,10 +81,17 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		// only wanted to know what an empty cell of this column looks like: a configuration whose metaobjects
 		// were built without runtime objects has the type DESCRIBED and not REGISTERED, and the IN-set fold
 		// met exactly that (ComputedServerFix.In_AnEmptyReferenceAmongTheValuesGoesPairByPair, 2026-09-24).
-		if (!ibValue::IsRegisterCtor(clsid))
+		//
+		// 🛑 …ASKED OF THE ONE THAT WILL MAKE IT, as the overload below already asks. A configuration's own
+		// types - a catalog's reference, an enumeration's member - are registered in ITS image, and the value
+		// registry has never heard of them: asked there, every reference column's typed empty came back
+		// untyped, and a ledger balance split one item into two rows over a currency stored empty in two ways
+		// (TypedEmpty tests, 2026-09-26). The metadata answers for its own image and falls through to the
+		// value registry itself.
+		const ibMetaData* const owner = (metaData != nullptr) ? metaData : activeMetaData;
+		if (!(owner != nullptr ? owner->IsRegisterCtor(clsid) : ibValue::IsRegisterCtor(clsid)))
 			return ibValue();
 
-		const ibMetaData* const owner = (metaData != nullptr) ? metaData : activeMetaData;
 		return (owner != nullptr) ? owner->CreateObject(clsid) : ibValue::CreateObject(clsid);
 	}
 
