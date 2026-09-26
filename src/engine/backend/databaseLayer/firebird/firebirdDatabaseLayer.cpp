@@ -36,6 +36,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		d.m_localTimestamp = wxEmptyString;   // the server reads its clock in the session's zone, and the base's zone is the next commit
 		// 🛑 THE BOUND IS ON THE PATH, NOT ON ONE ALIAS. A relation inside nested derived tables is named in the BLR by
 		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters
 		// the request is refused as "invalid request BLR … expected record selection expression clause", the offending

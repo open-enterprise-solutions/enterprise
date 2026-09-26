@@ -888,6 +888,9 @@
     <ClInclude Include="session\session.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\serverClock.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="session\sessionHolder.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -2294,6 +2297,9 @@
       <Filter>plugin</Filter>
     </ClCompile>
     <ClCompile Include="session\session.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\serverClock.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\sessionParameters.cpp">

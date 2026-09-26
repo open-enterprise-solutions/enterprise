@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "systemManager.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - CurrentDate() is the server's clock
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
@@ -374,8 +375,8 @@ wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 //--- Date and time:
 ibValue ibValueSystemFunction::CurrentDate()
 {
-	// The machine's clock, read as what it shows - the local parts - through the bridge (fdate.h).
-	return ibValue(wxDateTime::Now());
+	// The BASE's clock - the server's local time, as measured against this machine's (serverClock.h).
+	return ibValue(ibServerClock::Now());
 }
 
 ibValue ibValueSystemFunction::WorkingDate() {

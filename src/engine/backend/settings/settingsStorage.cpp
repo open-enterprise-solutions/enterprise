@@ -1,4 +1,5 @@
 #include "settingsStorage.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - `changed` is the server's "now"
 
 #include "backend/appData.h"                              // settings_table
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DML + typed row reads
@@ -67,7 +68,7 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 			{ wxT("objectKey"),  ibConst(Text(key.m_objectKey))  },
 			{ wxT("settingKey"), ibConst(Text(key.m_settingKey)) },
 			{ wxT("userKey"),    ibConst(Text(key.m_userKey))    },
-			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("changed"),    ibConst(ibValue(ibServerClock::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			// Opaque bytes bound as a blob constant — L2 never interprets them,
 			// which is right for a payload whose format belongs to the value.

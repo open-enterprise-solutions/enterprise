@@ -1,4 +1,5 @@
 #include "session.h"
+#include "serverClock.h"   // ibServerClock::Now - a session's working date starts from the server's clock
 #include "sessionRegistry.h"
 #include "sessionException.h"   // the session's own refusals — exclusive held / others active
 
@@ -488,7 +489,7 @@ std::unordered_map<std::thread::id, std::weak_ptr<ibSession>> s_currentByThread;
 ibSession::ibSession(wxString id, ibSessionKind kind)
 	: m_id(std::move(id))
 	, m_kind(kind)
-	, m_workDate(wxDateTime::Now())
+	, m_workDate(ibDateTimeOfWall(ibServerClock::Now()))
 {
 }
 

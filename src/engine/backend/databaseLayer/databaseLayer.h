@@ -400,6 +400,11 @@ struct ibDialectDictionary
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
 	wxString m_selectFromDual = wxEmptyString;
 
+	// THE SERVER'S OWN CLOCK, as a wall-clock reading in the session's zone - what ibServerClock asks
+	// for to keep every client's "now" the base's (LOCALTIMESTAMP on Firebird and PostgreSQL). Empty
+	// = the dialect has no word for it, and the machine's clock stands.
+	wxString m_localTimestamp = wxEmptyString;
+
 	// HOW A PLACEHOLDER STATES ITS TYPE inside the UNION-ALL spelling of a batched INSERT.
 	// Placeholders: {value} — the rendered value (a bind marker); {table} / {column} — where it is
 	// going. EMPTY = this engine needs nothing, emit {value} bare.

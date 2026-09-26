@@ -6,6 +6,7 @@
 
 #include "backend/appData.h"          // ibApplicationData::GetJobManager
 #include "backend/job/jobManager.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - "now" for a schedule is the base's clock
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaScheduledJobCLSID
 
@@ -69,12 +70,12 @@ bool ibValueSchedule::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 		// The CALENDAR half only — "has enough time passed" belongs to whoever holds the last run,
 		// which is the manager for a predefined job and the row for a parameterized one.
 		pvarRetValue = ibJobScheduleRules::IsAllowed(m_schedule,
-			lSizeArray > 0 ? paParams[0]->GetDateTime() : wxDateTime::Now());
+			lSizeArray > 0 ? paParams[0]->GetDateTime() : ibDateTimeOfWall(ibServerClock::Now()));
 		return true;
 	case enNextRun:
 	{
 		const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule,
-			lSizeArray > 0 ? paParams[0]->GetDateTime() : wxDateTime::Now());
+			lSizeArray > 0 ? paParams[0]->GetDateTime() : ibDateTimeOfWall(ibServerClock::Now()));
 		// An invalid answer means the calendar names no moment within a year (February 31st). It
 		// travels as an empty date rather than as an exception: the card shows it, and a job whose
 		// next run cannot be computed is a thing to SEE, not a thing to crash on.
@@ -346,7 +347,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 		// after a restart or a clock change.
 		const wxDateTime countFrom = m_lastRun.IsValid()
 			? m_lastRun + wxTimeSpan::Seconds(m_schedule.m_intervalSeconds > 0 ? m_schedule.m_intervalSeconds : 0)
-			: wxDateTime::Now();
+			: ibDateTimeOfWall(ibServerClock::Now());
 
 		const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule, countFrom);
 		pvarPropVal = next.IsValid() ? ibValue(next) : ibValue(ibValueTypes::TYPE_DATE);

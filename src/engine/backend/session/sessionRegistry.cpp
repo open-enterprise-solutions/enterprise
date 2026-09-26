@@ -1,4 +1,5 @@
 #include "sessionRegistry.h"
+#include "serverClock.h"   // ibServerClock - every stamp the registry writes or compares is the server's "now"
 #include "sessionPolicy.h"
 #include "designerExclusivePolicy.h"
 
@@ -72,6 +73,7 @@ void LogSession(const std::string& msg)
 // designer is open (audit 2026-09-12). A live peer still costs the question one beat: it stops watching a row
 // the moment it moves.
 constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
+constexpr unsigned kBeatsPerClockRefresh = 60;   // the server's clock is measured again this often (serverClock.h)
 constexpr int  kSilentBeats       = 10;
 // …the same silence in the seconds lastActive is compared in.
 constexpr int  kSilentSeconds     = static_cast<int>(
@@ -539,7 +541,7 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	identity.m_computer          = req.m_computer;
 	identity.m_address           = req.m_address;
 	identity.m_appMode           = req.m_appMode;
-	identity.m_started           = wxDateTime::Now();
+	identity.m_started           = ibDateTimeOfWall(ibServerClock::Now());
 	identity.m_pid               = CurrentPid();
 	identity.m_expectsAnonPhase  = req.m_userName.IsEmpty();
 
@@ -1594,7 +1596,7 @@ void ibSessionRegistry::JobSweepStale()
 	// from Active Users within ~10 s of their last heartbeat.
 	constexpr int kStaleCutoffSec = kSilentSeconds;
 
-	wxDateTime cutoff = wxDateTime::Now();
+	wxDateTime cutoff = ibDateTimeOfWall(ibServerClock::Now());
 	(void)cutoff.Subtract(wxTimeSpan(0, 0, kStaleCutoffSec));
 
 	std::vector<wxString> zombies;
@@ -1670,7 +1672,13 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
-		const wxDateTime now = wxDateTime::Now();
+		// Once a minute the clock is measured again, on the registry's own connection: the beat is
+		// the one thing this process is sure to do while the base is open.
+		if (++m_beatsSinceClockRefresh >= kBeatsPerClockRefresh) {
+			m_beatsSinceClockRefresh = 0;
+			ibServerClock::Refresh(*m_writeConn);
+		}
+		const wxDateTime now = ibDateTimeOfWall(ibServerClock::Now());
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
@@ -1733,7 +1741,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 	std::set<wxString> silent;   // stood still until its last beat was older than the silence
 	for (;;) {
 		// Settled by age where the age already says it — the sweep's own rule, asked now.
-		const wxDateTime at = wxDateTime::Now();
+		const wxDateTime at = ibDateTimeOfWall(ibServerClock::Now());
 		for (auto it = still.begin(); it != still.end(); ) {
 			const wxDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
 			if (beat.IsValid() && at - beat >= silence) {

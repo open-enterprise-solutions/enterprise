@@ -17,6 +17,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 	static const ibDialectDictionary s_dialect = [] {
 		ibDialectDictionary d;
 		d.m_paramStyle = ibParamStyle::QuestionMark;
+		d.m_localTimestamp = wxT("datetime('now','localtime')");   // no server: the process's own clock, spelled the ISO way
 		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
