@@ -39,7 +39,6 @@
 
 #include <deque>    // the cross rows — see m_crossRows
 #include <map>      // the column total's cells — see m_columnTotalCells
-#include <optional> // a column's format — see m_formats
 #include <vector>
 
 class BACKEND_API ibSpreadsheetComposeDriver : public ibCompositionDriver
@@ -139,12 +138,16 @@ private:
 
 	// ⭐ HOW EACH COLUMN WRITES ITS FIGURES — the format its TYPE gives (GetFormatFromTypeDesc), taken beside
 	// the titles: as many digits after the point as the column keeps, so a sum of kopecks reads `1500.00`
-	// and not `1500`. Empty where the type states nothing — an average, a product — and the value's own text
-	// is written. Nothing is cut before this: the figure travels whole to here.
-	std::vector<std::optional<ibFormatString>> m_formats;
+	// and not `1500`. No codes where the type states nothing — an average, a product — and the value's own
+	// text is written. Nothing is cut before this: the figure travels whole to here.
+	//
+	// ⭐ …AND A REPORT WRITES NOTHING WHERE THERE IS NOTHING: a zero and an empty date are an empty cell
+	// unless the format says how to write them (NZ, DE). A column of amounts reads as the rows that HAVE an
+	// amount, not as a wall of zeros (Max, 2026-09-26). Set once per column in OnOutputBegin.
+	std::vector<ibFormatString> m_formats;
 	wxString ColumnText(size_t column, const ibValue& value) const {
-		if (column < m_formats.size() && m_formats[column].has_value())
-			return m_formats[column]->Apply(value);
+		if (column < m_formats.size())
+			return m_formats[column].Apply(value);
 		return value.GetString();
 	}
 
