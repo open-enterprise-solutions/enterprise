@@ -5,6 +5,7 @@
 
 #include "backend/appData.h"
 #include "backend/session/serverClock.h"   // ibServerClock - measured at connection, cleared at close
+#include "backend/session/regionalSettings.h"   // ibRegionalSettings - the base's zone on its connections
 
 #include <thread>
 #include <algorithm>
@@ -613,9 +614,9 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			ibApplicationData::MigrateTableJob();
 			// sys_settings — what people saved on their forms and their lists.
 			ibApplicationData::CreateTableSettings();
-			// "Now" is the server's clock from here on (serverClock.h) - measured once the base is up.
-			if (const std::shared_ptr<ibDatabaseLayer> layer = ibApplicationData::GetDatabaseLayer())
-				ibServerClock::Refresh(*layer);
+			// The base's zone on its connections, and "now" as the server's clock measured in it
+			// (regionalSettings.h, serverClock.h) - once the base is up.
+			ibRegionalSettings::ApplyFromBase();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
@@ -720,9 +721,9 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			ibApplicationData::MigrateTableJob();
 			// sys_settings — what people saved on their forms and their lists.
 			ibApplicationData::CreateTableSettings();
-			// "Now" is the server's clock from here on (serverClock.h) - measured once the base is up.
-			if (const std::shared_ptr<ibDatabaseLayer> layer = ibApplicationData::GetDatabaseLayer())
-				ibServerClock::Refresh(*layer);
+			// The base's zone on its connections, and "now" as the server's clock measured in it
+			// (regionalSettings.h, serverClock.h) - once the base is up.
+			ibRegionalSettings::ApplyFromBase();
 
 			// LAST IN THE TABLE BLOCK, for the reason spelled out in the file branch: declaring a
 			// job READS sys_job, so nothing may declare one before every table it touches exists.
@@ -762,6 +763,7 @@ bool ibApplicationData::DestroyAppDataEnv()
 		// drain pending Removes when s_instance is destroyed below.
 		s_instance->m_connected_to_db = false;
 		ibServerClock::Reset();   // no base, no server: "now" is the machine's clock again
+		ibRegionalSettings::Reset();
 
 		s_instance->m_strServer = wxEmptyString;
 		s_instance->m_strPort = wxEmptyString;

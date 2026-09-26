@@ -51,6 +51,7 @@
     <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\serverClock.h" />
+    <ClInclude Include="session\regionalSettings.h" />
     <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
     <ClInclude Include="session\sessionRegistry.h" />
@@ -470,6 +471,7 @@
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
     <ClCompile Include="session\serverClock.cpp" />
+    <ClCompile Include="session\regionalSettings.cpp" />
     <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />

@@ -50,14 +50,15 @@ ibDialectDictionary WordlessBase::s_dialect = [] {
 
 } // namespace
 
-// SQLite has no server, so its clock is the process's own: measured through the dialect's word, the
-// difference is within seconds of nothing, and Now() is the machine's clock.
+// SQLite has no server, so its clock is the process's own: measured through the dialect's word (with
+// no zone named - SQLite has no session zone to need one), the difference is within seconds of
+// nothing, and Now() is the machine's clock.
 TEST(ServerClock, TheBaseClockIsReadThroughTheDialect)
 {
 	ClockScope scope;
 	ibDatabaseLayerSQLite base;
 	ASSERT_TRUE(base.Open(wxT(":memory:")));
-	ASSERT_TRUE(ibServerClock::Refresh(base));
+	ASSERT_TRUE(ibServerClock::Refresh(base, wxEmptyString));
 	EXPECT_LT(Apart(ibServerClock::Offset(), 0), 5000);
 	EXPECT_LT(Apart(ibServerClock::Now(), MachineNow()), 5000);
 	ibServerClock::Reset();
@@ -71,7 +72,7 @@ TEST(ServerClock, NowFollowsTheBaseClockAndSoDoesCurrentDate)
 	ClockScope scope;
 	FrozenClockBase base;
 	ASSERT_TRUE(base.Open(wxT(":memory:")));
-	ASSERT_TRUE(ibServerClock::Refresh(base));
+	ASSERT_TRUE(ibServerClock::Refresh(base, wxEmptyString));
 	const wxLongLong_t frozen = ibWallFromParts(2030, 1, 1, 12);
 	EXPECT_LT(Apart(ibServerClock::Now(), frozen), 5000);
 	EXPECT_LT(Apart(ibValueSystemFunction::CurrentDate().GetDate(), frozen), 5000);
@@ -87,13 +88,13 @@ TEST(ServerClock, ADialectWithoutAWordForItsClockLeavesTheDifferenceAlone)
 	ClockScope scope;
 	FrozenClockBase frozen;
 	ASSERT_TRUE(frozen.Open(wxT(":memory:")));
-	ASSERT_TRUE(ibServerClock::Refresh(frozen));
+	ASSERT_TRUE(ibServerClock::Refresh(frozen, wxEmptyString));
 	const wxLongLong_t measured = ibServerClock::Offset();
 	ASSERT_NE(0, measured);
 
 	WordlessBase wordless;
 	ASSERT_TRUE(wordless.Open(wxT(":memory:")));
-	EXPECT_FALSE(ibServerClock::Refresh(wordless));
+	EXPECT_FALSE(ibServerClock::Refresh(wordless, wxEmptyString));
 	EXPECT_EQ(measured, ibServerClock::Offset());
 	ibServerClock::Reset();
 	EXPECT_EQ(0, ibServerClock::Offset());

@@ -1,5 +1,6 @@
 #include "sessionRegistry.h"
 #include "serverClock.h"   // ibServerClock - every stamp the registry writes or compares is the server's "now"
+#include "regionalSettings.h"   // ibRegionalSettings::ApplyFromBase - the base's zone, read again once a minute on this thread
 #include "sessionPolicy.h"
 #include "designerExclusivePolicy.h"
 
@@ -73,7 +74,7 @@ void LogSession(const std::string& msg)
 // designer is open (audit 2026-09-12). A live peer still costs the question one beat: it stops watching a row
 // the moment it moves.
 constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
-constexpr unsigned kBeatsPerClockRefresh = 60;   // the server's clock is measured again this often (serverClock.h)
+constexpr unsigned kBeatsPerClockRefresh = 60;   // the base's regional settings are read again, and the clock measured, this often (regionalSettings.h)
 constexpr int  kSilentBeats       = 10;
 // …the same silence in the seconds lastActive is compared in.
 constexpr int  kSilentSeconds     = static_cast<int>(
@@ -1672,12 +1673,6 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
-		// Once a minute the clock is measured again, on the registry's own connection: the beat is
-		// the one thing this process is sure to do while the base is open.
-		if (++m_beatsSinceClockRefresh >= kBeatsPerClockRefresh) {
-			m_beatsSinceClockRefresh = 0;
-			ibServerClock::Refresh(*m_writeConn);
-		}
 		const wxDateTime now = ibDateTimeOfWall(ibServerClock::Now());
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
@@ -1720,8 +1715,9 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 			ibDatabaseQueryBuilder q(&m_writeHolder);
 			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
 				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("lastActive")), wxEmptyString } })));
-			while (rs.Next())
-				beats[rs.GetResultString(wxT("session"))] = ibDateTimeOfWall(rs.GetResultDate(wxT("lastActive")));
+			while (rs.Next())   // a NULL beat is no beat - an invalid date, which the watch below knows to wait on
+				beats[rs.GetResultString(wxT("session"))] = rs.IsResultNull(wxT("lastActive"))
+					? wxDateTime() : ibDateTimeOfWall(rs.GetResultDate(wxT("lastActive")));
 			return true;
 		}
 		catch (...) { return false; }
@@ -2179,6 +2175,16 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// frame of each other instead of waiting a full sweep.
 			const auto now = clock::now();
 			if (now >= nextRefresh) {
+				// Once a minute the base's regional settings are read again and the clock measured
+				// in its zone, on this thread's OWN connection (m_writeConn, through its holder - no
+				// wait on the pool, whose checkout could hold the heart still for the 30 s a peer
+				// needs to sweep us): a zone saved by one client reaches the others here, within the
+				// minute (regionalSettings.h).
+				if (m_writeConn && ++m_beatsSinceClockRefresh >= kBeatsPerClockRefresh) {
+					m_beatsSinceClockRefresh = 0;
+					try { ibRegionalSettings::ApplyFromBase(&m_writeHolder); }
+					catch (...) { /* swallowed: a base going away - the next minute asks again; not this thread's to stop on */ }
+				}
 				JobHeartbeatOwn();       // bump lastActive for every own row
 				JobRefreshSnapshot();
 				nextRefresh = now + kRefreshInterval;

@@ -38,6 +38,8 @@ add_executable(oes_tests
     test_fdate.cpp
     test_driverDates.cpp
     test_serverClock.cpp
+    test_regionalSettings.cpp
+    test_firebirdSessionZone.cpp
     test_formatString.cpp
     test_blockSyntaxLINQ.cpp
     test_byteCodeAOT.cpp

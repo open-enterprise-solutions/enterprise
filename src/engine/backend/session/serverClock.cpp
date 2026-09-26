@@ -15,9 +15,9 @@ namespace {
 
 std::atomic<wxLongLong_t> s_offsetMs{ 0 };
 
-// The machine's clock as a reading - the local parts of this instant, which a real instant always
-// has (the bridge is exact here: no instant sits in a skipped hour).
-wxLongLong_t MachineNow() { return ibWallOfDateTime(wxDateTime::Now()); }
+// The machine's clock as a reading, to the millisecond - the local parts of this instant, which a
+// real instant always has (the bridge is exact here: no instant sits in a skipped hour).
+wxLongLong_t MachineNow() { return ibWallOfDateTime(wxDateTime::UNow()); }
 
 } // namespace
 
@@ -31,11 +31,24 @@ wxLongLong_t ibServerClock::Offset()
 	return s_offsetMs.load(std::memory_order_relaxed);
 }
 
-bool ibServerClock::Refresh(ibDatabaseLayer& layer)
+bool ibServerClock::Refresh(ibDatabaseLayer& layer, const wxString& zone)
 {
 	const ibDialectDictionary& dialect = layer.GetDialect();
 	if (dialect.m_localTimestamp.IsEmpty())
 		return false;   // the dialect has no word for its server's clock - the machine's stands
+
+	// In the base's zone, or not at all (the header): a server that reads its clock in the
+	// session's zone is asked only in a zone the base named, through a connection standing in it.
+	// This connection is the caller's own, so it is put into the zone here - which is also how a
+	// connection bound before the zone was saved comes to stand in it. With no zone to measure in,
+	// or a zone the server refuses, "now" is the machine's clock again: a difference measured in a
+	// zone the base no longer names is a difference of nothing.
+	if (layer.HasSessionTimeZone()) {
+		if (zone.IsEmpty() || (layer.GetSessionTimeZone() != zone && !layer.SetSessionTimeZone(zone))) {
+			Reset();
+			return false;
+		}
+	}
 
 	wxString sql = wxT("SELECT ") + dialect.m_localTimestamp + wxT(" AS server_now");
 	if (!dialect.m_selectFromDual.IsEmpty())
@@ -51,7 +64,12 @@ bool ibServerClock::Refresh(ibDatabaseLayer& layer)
 	if (server == emptyDate)
 		return false;
 
-	const wxLongLong_t measured = server - MachineNow();
+	// The two readings compared at the resolution the server answered in: a server that says its
+	// clock to the second (Firebird's reading through struct tm, SQLite's datetime()) is set against
+	// this machine's clock to the second, or every measurement would run up to a second behind.
+	const wxLongLong_t machine = MachineNow();
+	const wxLongLong_t compared = server % 1000 == 0 ? machine - machine % 1000 : machine;
+	const wxLongLong_t measured = server - compared;
 	const wxLongLong_t before = s_offsetMs.exchange(measured, std::memory_order_relaxed);
 	// Said once, when it matters: a base whose clock stands an hour from this machine's is worth a
 	// line in the journal; the drift of a second between two measurements is not.

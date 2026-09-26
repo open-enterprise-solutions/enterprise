@@ -56,6 +56,12 @@ public:
 	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerFirebird(*this); }
 
+	// The session's zone (the base): SET TIME ZONE on the attachment, which stays at UTC underneath
+	// so that a name the server refuses refuses a statement and not the base. A clone starts in the
+	// attach's own zone (the copy carries no session state); the pool puts it into the base's.
+	virtual bool HasSessionTimeZone() const override { return true; }
+	virtual bool SetSessionTimeZone(const wxString& zone) override;
+
 	// IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 	// Driver transaction primitives (DoBeginTransaction / DoCommit /
 	// DoRollBack) are protected — see below.

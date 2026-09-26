@@ -404,6 +404,9 @@ struct ibDialectDictionary
 	// for to keep every client's "now" the base's (LOCALTIMESTAMP on Firebird and PostgreSQL). Empty
 	// = the dialect has no word for it, and the machine's clock stands.
 	wxString m_localTimestamp = wxEmptyString;
+	// THE ZONES THE SERVER KNOWS BY NAME, one per row of this statement (Firebird: RDB$TIME_ZONES,
+	// PostgreSQL: pg_timezone_names) - what the designer's regional page lists. Empty = it cannot say.
+	wxString m_timeZoneNames = wxEmptyString;
 
 	// HOW A PLACEHOLDER STATES ITS TYPE inside the UNION-ALL spelling of a batched INSERT.
 	// Placeholders: {value} — the rendered value (a bind marker); {table} / {column} — where it is
@@ -1154,6 +1157,16 @@ public:
 	/// Close all prepared statement objects that have been generated but not yet closed
 	void CloseStatements();
 
+	// ⭐ THE SESSION'S ZONE - the one the base names (session/regionalSettings.h). A driver whose
+	// engine has a session zone puts the connection into it (Firebird, PostgreSQL: SET TIME ZONE) and
+	// answers true; a name the engine refuses answers false and leaves the zone in force alone. A
+	// driver without one (SQLite, the ODBC baseline) answers false to everything and keeps no name.
+	// Empty = the engine's own default (UTC on a Firebird attach, the server's setting on PostgreSQL).
+	// Close forgets the name: the zone goes with the session it was put on.
+	virtual bool HasSessionTimeZone() const { return false; }
+	virtual bool SetSessionTimeZone(const wxString& WXUNUSED(zone)) { return false; }
+	const wxString& GetSessionTimeZone() const { return m_sessionTimeZone; }
+
 protected:
 
 	// query database
@@ -1189,6 +1202,7 @@ protected:
 	/// that last mutated it. Access is still logically serial per session;
 	/// atomicity buys memory visibility, not contention handling.
 	std::atomic<int> m_txDepth{0};
+	wxString m_sessionTimeZone;   // the zone the session was put into (SetSessionTimeZone); empty = the engine's default
 
 	/// "Aborted" flag — set by any RollBack while a transaction is
 	/// still open, cleared when the outermost level finally resolves.

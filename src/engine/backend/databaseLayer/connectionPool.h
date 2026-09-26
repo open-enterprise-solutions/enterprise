@@ -78,6 +78,13 @@ public:
 	// captured master ref in their deleter.
 	void Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_t maxSize, std::size_t minIdle = 2);
 
+	// ⭐ THE BASE'S ZONE ON EVERY CONNECTION (session/regionalSettings.h): recorded here, and put on
+	// each connection whose own zone differs the moment it is next handed out - a connection somebody
+	// is working on is not touched from here. False when the driver has no session zone at all; the
+	// name itself is checked by the server on the caller's own connection (ibRegionalSettings::Save,
+	// ApplyFromBase), not here.
+	bool SetSessionTimeZone(const wxString& zone);
+
 	// Close and drop every connection the pool holds. Idle and
 	// outstanding checkouts are both invalidated — callers must be
 	// stopped before this is called. Idempotent.
@@ -274,6 +281,10 @@ private:
 		bool                                  noWait  = false;
 	};
 	std::vector<ibConnectionEntry>  m_entries;
+	// The base's zone, as SetSessionTimeZone last recorded it; a connection whose own zone differs is
+	// put into it as it is handed out (Checkout). The refusal of a name is said once, and remembered here.
+	wxString                        m_sessionTimeZone;
+	wxString                        m_zoneRefusalSaid;
 	static constexpr std::chrono::seconds kIdleTimeout { 60 };
 
 	std::size_t                     m_maxSize   = 0;

@@ -723,7 +723,7 @@ private:
 	// m_ownsSysSession is true; nullptr otherwise. Liveness is heartbeat-based (see "HoldRowLocks
 	// self-deadlock" memory note).
 	std::shared_ptr<ibDatabaseLayer>                             m_writeConn;
-	unsigned                                                     m_beatsSinceClockRefresh = 0;   // JobHeartbeatOwn re-measures the server's clock
+	unsigned                                                     m_beatsSinceClockRefresh = 0;   // ThreadBody re-reads the regional settings and re-measures the clock
 
 	// --- submit queue + thread plumbing ---
 	std::thread                                  m_thread;

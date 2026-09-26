@@ -12,6 +12,7 @@ class ibDialogKeyBinder;
 class ibPanelFontColorSettings;
 class ibPanelEditorSettings;
 class ibPanelMcpSettings;
+class ibPanelRegionalSettings;
 
 #include "frontend/frontend.h"
 
@@ -59,6 +60,11 @@ public:
      */
     ibPanelMcpSettings* GetMcpSettingsPanel() const;
 
+    /**
+     * The base's regional settings page - the zone its clock stands in and its locale.
+     */
+    ibPanelRegionalSettings* GetRegionalSettingsPanel() const;
+
     wxDECLARE_EVENT_TABLE();
 
 private:
@@ -67,6 +73,7 @@ private:
     ibPanelFontColorSettings*     m_fontColorSettingsPanel;
     ibPanelEditorSettings*        m_editorSettingsPanel;
     ibPanelMcpSettings*           m_mcpSettingsPanel;
+    ibPanelRegionalSettings*      m_regionalSettingsPanel;
 
 };
 

@@ -439,9 +439,17 @@ void ibConnectionPool::Shutdown()
 
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::milliseconds wait)
 {
+	// The connection leased to this caller, and whether it stands in the base's zone - decided under
+	// the lock, the zone put on after it is released (below). A connection's OWN zone is the truth:
+	// no entry is marked, so one that lost its zone (a reconnect, a name the server refused) is put
+	// into it again at its next hand-out, and one already in it costs nothing.
+	std::shared_ptr<ibDatabaseLayer> leased;
+	bool intoZone = false;
+	wxString zone;
+
 	std::unique_lock<std::mutex> lock(m_mutex);
 	const auto deadline = std::chrono::steady_clock::now() + wait;
-	while (true) {
+	while (!leased) {
 		if (m_shutdown || !m_source)
 			return nullptr;
 
@@ -474,9 +482,13 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 			    && !it->conn->IsActiveTransaction()) {
 				it->inUse    = true;
 				it->lastUsed = std::chrono::steady_clock::now();
-				return WrapHandout(it->conn);
+				leased   = it->conn;
+				intoZone = it->conn->GetSessionTimeZone() != m_sessionTimeZone;
+				break;
 			}
 		}
+		if (leased)
+			break;
 
 		if (m_entries.size() < m_maxSize) {
 			ibDatabaseLayer* raw = m_source->Clone();
@@ -491,7 +503,9 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 			e.inUse    = true;
 			e.lastUsed = std::chrono::steady_clock::now();
 			m_entries.push_back(std::move(e));
-			return WrapHandout(std::move(sp));
+			intoZone = sp->GetSessionTimeZone() != m_sessionTimeZone;   // a clone is born in the engine's own zone
+			leased   = std::move(sp);
+			break;
 		}
 		// Saturated — every connection is busy and the pool is at m_maxSize.
 		// Wait BOUNDED for a Return / ReleaseTx / Unbind / Shutdown. If the
@@ -507,6 +521,30 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 		}
 		m_cv.wait_until(lock, deadline);
 	}
+	if (intoZone)
+		zone = m_sessionTimeZone;
+	lock.unlock();
+
+	// ⭐ THE HAND-OUT FIRST, THE ZONE SECOND, AND OUTSIDE THE LOCK. The guard that returns the entry
+	// exists before any statement runs, so a throw on the way out (a bad_alloc in the driver) cannot
+	// leave the entry leased forever. The statement itself (SET TIME ZONE; on Firebird the version
+	// of the zone rules, and a reconnect if the leader moved) runs with m_mutex released - a driver
+	// call never runs under it, or every other checkout in the process would stand behind it - and
+	// on a connection leased to this caller already, so nobody else touches it meanwhile. A name the
+	// server refuses is said once in the journal; the connection goes out in the zone it has, and is
+	// asked again at its next hand-out.
+	std::shared_ptr<ibDatabaseLayer> handout = WrapHandout(leased);
+	if (intoZone && !leased->SetSessionTimeZone(zone)) {
+		bool say = false;
+		{
+			std::lock_guard<std::mutex> again(m_mutex);
+			say = m_zoneRefusalSaid != zone;
+			m_zoneRefusalSaid = zone;
+		}
+		if (say)
+			ibJournalError(wxT("session.clock"), wxT("a connection could not be put into the zone '%s'; it works in the engine's own zone until its next hand-out"), zone);
+	}
+	return handout;
 }
 
 void ibConnectionPool::ReapStaleLocked()
@@ -538,6 +576,18 @@ void ibConnectionPool::Return(std::shared_ptr<ibDatabaseLayer> conn)
 	// reference has the same effect via the hand-out's deleter. Reset
 	// here so the caller doesn't have to assign nullptr separately.
 	conn.reset();
+}
+
+bool ibConnectionPool::SetSessionTimeZone(const wxString& zone)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	if (!m_source || !m_source->HasSessionTimeZone())
+		return false;
+	// Recorded, and every connection takes it the next time it is handed out - never from here, on a
+	// connection some other thread is working on. The caller puts its OWN connection into the zone
+	// itself (ibRegionalSettings::Save), which is also where the server's refusal is heard.
+	m_sessionTimeZone = zone;
+	return true;
 }
 
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::WrapHandout(
