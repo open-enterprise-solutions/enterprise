@@ -42,3 +42,4 @@ Add a row to the table below when you add a document, so this folder can be read
 |---|---|
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
+| [date-model.md](date-model.md) | The date model: a date is a wall-clock reading, "now" is the base's clock, the zone is the base's; the doors and where it stops |
