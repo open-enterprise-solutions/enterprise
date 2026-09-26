@@ -8,9 +8,9 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include <cwctype>   // towupper — the non-ASCII folding probe below
 #include <map>
 #include "backend/system/value/valueMap.h"
+#include "backend/backend_exception.h"   // a door that refuses does it by raising
 
 namespace {
 ibValue Key(const wxChar* k) { return ibValue(wxString(k)); }
@@ -91,13 +91,11 @@ TEST(ValueContainer, ConstructFromMap) {
 // Key IDENTITY — what counts as the same key.
 //
 // A CONTAINER takes any value as a key (its Structure subclass is the one that
-// requires a string, and it raises on anything else — so none of this applies
-// there). TWO RULES, by the kind of key:
-//
-//   a STRING key folds case — `Name` and `name` are one field, which is how a
-//   script reaches a structure's members.
-//   anything else is compared AS A VALUE: a number by its magnitude, a
-//   reference by its guid.
+// requires a string, and it raises on anything else). Every key, a string
+// included, is compared AS A VALUE: a number by its magnitude, a reference by
+// its guid, a string as the string it is — "ab" and "AB" are two keys, as
+// `"ab" = "AB"` is False. (A Structure folds case, because its keys are field
+// NAMES reached through a dot; test_valueStructure.cpp states that half.)
 //
 // ⚠ CHANGED 2026-08-15. The container used to render every non-string key to
 // text (ibValue::GetHashKey, now removed), so `1` and "1" were ONE key. They are
@@ -191,43 +189,125 @@ TEST(ValueContainer, FractionDoesNotCollideWithItsTruncation) {
     EXPECT_EQ(out.GetString(), wxString(wxT("fraction")));
 }
 
-// String keys fold case — the ASCII fast path must not change that.
-TEST(ValueContainer, StringKeysFoldCase) {
+// ⚠ CHANGED 2026-09-23. A Container used to fold the case of a string key, as a
+// Structure does, so "ab" and "AB" were one key and the second Insert raised
+// "already using". A Container binds a runtime VALUE to a value, and two strings
+// that differ in case are two values — the rule is the language's own `=`.
+//
+// SetAt for the second key and Property for the reads, because both stay off
+// appData, which this binary does not bring up: a duplicate Insert or a missed
+// GetAt reaches for it to decide whether to raise. The Insert road is the same
+// lookup, and tests/scripts/test_container_keys_suite.txt drives it for real.
+TEST(ValueContainer, StringKeysThatDifferOnlyInCaseAreTwoKeys) {
     ibValueContainer c;
-    c.Insert(Key(wxT("Key")), ibValue(ibNumber(1)));
+    c.Insert(Key(wxT("ab")), ibValue(ibNumber(1)));
+    c.SetAt (Key(wxT("AB")), ibValue(ibNumber(2)));
+    EXPECT_EQ(c.Count(), 2u);
     ibValue out;
-    EXPECT_TRUE(c.Property(Key(wxT("kEY")), out));
-    EXPECT_TRUE(c.Property(Key(wxT("KEY")), out));
+    ASSERT_TRUE(c.Property(Key(wxT("ab")), out));
+    EXPECT_EQ(out.GetInteger(), 1);
+    ASSERT_TRUE(c.Property(Key(wxT("AB")), out));
+    EXPECT_EQ(out.GetInteger(), 2);
+    EXPECT_FALSE(c.Property(Key(wxT("Ab")), out)) << "a third spelling is a third key, and it is not there";
+    EXPECT_FALSE(c.Property(Key(wxT("aB")), out));
 }
 
-// ...and past ASCII the fold is the C library's, which is where it stops being
-// the container's business: std::towupper folds a non-ASCII letter only when the
-// process locale says how, and a gtest binary runs in "C", where it does not.
-//
-// ⚠ WORTH KNOWING, because it is not a property of this code: the same script
-// sees case-SENSITIVE Cyrillic keys in a headless run (daemon, codeRunner, this
-// suite) and case-INSENSITIVE ones under a UI locale. For a Russian-language
-// platform where `Structure.Kluch` is ordinary, that is a real difference in
-// meaning between two ways of running the same configuration — deciding it is a
-// language question, not a folding one, so this test states the rule and skips
-// where the platform will not honour it rather than asserting either answer.
-// Escapes, not literal Cyrillic: every other file under tests/ is pure ASCII,
-// and none carries a BOM — so a literal here is decoded by MSVC in the system
-// code page and comes out as something else entirely (warning C4066 caught it,
-// after the guard below had silently been comparing rubbish). U+041A/U+043A are
-// CAPITAL/SMALL KA, U+041B/U+043B EL, U+042E/U+044E YU, U+0427/U+0447 CHE.
-TEST(ValueContainer, NonAsciiKeysFoldCase) {
-    // Universal-character escapes, never literal Cyrillic: this file has no BOM,
-    // so MSVC decodes a literal in the system code page and it arrives as
-    // something else (warning C4066 caught exactly that, after the guard below
-    // had spent a build comparing rubbish). U+041A/U+043A KA, U+041B/U+043B EL,
-    // U+042E/U+044E YU, U+0427/U+0447 CHE -- "Kluch" in three cases.
-    if (std::towupper((wint_t)L'\u043A') != (wint_t)L'\u041A')
-        GTEST_SKIP() << "process locale does not fold non-ASCII (C locale) - see the note above";
-
+// The same past ASCII, and with NO dependence on the process locale any more: a
+// Container does not fold at all, so what towupper would say is not asked.
+// Escapes, not literal Cyrillic (this file has no BOM, and MSVC would decode a
+// literal in the system code page): U+0431 U+043E U+0440 U+0449 is "borshch" in
+// small letters, U+0411 U+041E U+0420 U+0429 the same in capitals.
+TEST(ValueContainer, NonAsciiKeysThatDifferOnlyInCaseAreTwoKeys) {
     ibValueContainer c;
-    c.Insert(Key(wxT("\u041A\u043B\u044E\u0447")), ibValue(ibNumber(1)));   // mixed case
+    c.Insert(Key(wxT("\u0431\u043E\u0440\u0449")), ibValue(ibNumber(1)));
+    c.SetAt (Key(wxT("\u0411\u041E\u0420\u0429")), ibValue(ibNumber(2)));
+    EXPECT_EQ(c.Count(), 2u);
     ibValue out;
-    EXPECT_TRUE(c.Property(Key(wxT("\u041A\u041B\u042E\u0427")), out));     // all upper
-    EXPECT_TRUE(c.Property(Key(wxT("\u043A\u043B\u044E\u0447")), out));     // all lower
+    ASSERT_TRUE(c.Property(Key(wxT("\u0431\u043E\u0440\u0449")), out));
+    EXPECT_EQ(out.GetInteger(), 1);
+    ASSERT_TRUE(c.Property(Key(wxT("\u0411\u041E\u0420\u0429")), out));
+    EXPECT_EQ(out.GetInteger(), 2);
+}
+
+// THE DOT READS A KEY AS WRITTEN. `c.Name` asks FindProp, which is the same lookup as `[key]`: the
+// key "Name" is there, and "name" is another key that is not.
+TEST(ValueContainer, TheDotFindsAKeyAsWritten) {
+    ibValueContainer c;
+    c.Insert(Key(wxT("Name")), ibValue(ibNumber(1)));
+    EXPECT_EQ(c.FindProp(wxT("Name")), 0);
+    EXPECT_EQ(c.FindProp(wxT("name")), wxNOT_FOUND);
+    ibValue out;
+    EXPECT_TRUE(c.Property(Key(wxT("Name")), out));
+}
+
+// WHAT AN ENTRY IS NAMED is its key's text, and a caller that wants a name wants exactly that: a
+// LINQ projection over containers names the columns of its answer with GetPropName. The walk hands
+// back every key, of any kind, as itself and in the order it was inserted.
+TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
+    ibValueContainer c;
+    ibValue date; date.SetType(ibValueTypes::TYPE_DATE);
+    ibValue yes;  yes.SetBoolean(wxT("True"));
+    c.Insert(Key(wxT("Name")), Num(1));
+    c.Insert(Num(42), Num(2));
+    c.Insert(date, Num(3));
+    c.Insert(yes, Num(4));
+
+    EXPECT_EQ(c.GetPropName(0), wxString(wxT("Name")));
+    EXPECT_EQ(c.GetPropName(1), wxString(wxT("42")));
+    EXPECT_EQ(c.FindProp(c.GetPropName(0)), 0) << "a string key is found again by its name";
+
+    const std::shared_ptr<ibValueIteratorState> iterator = c.CreateIterator();
+    ASSERT_NE(iterator, nullptr);
+    ibValue pair, key, value;
+    for (int at = 0; at < 4; at++) {
+        ASSERT_TRUE(iterator->MoveNext(pair)) << "element " << at;
+        ASSERT_TRUE(pair.GetPropVal(pair.FindProp(wxT("Key")), key));
+        ASSERT_TRUE(pair.GetPropVal(pair.FindProp(wxT("Value")), value));
+        EXPECT_EQ(value.GetInteger(), at + 1) << "element " << at << " is the one inserted " << at;
+    }
+    EXPECT_EQ(key.GetType(), ibValueTypes::TYPE_BOOLEAN) << "a key of any kind comes back as itself";
+    EXPECT_FALSE(iterator->MoveNext(pair));
+}
+
+// GET IS THE THIRD QUESTION. Property answers whether a key is there, and hands the value back
+// through its second argument; [key] answers the value and raises when the key is not there. Get
+// answers the value, or Undefined -- what "nothing is bound to this key" looks like everywhere
+// else in the language, and what the reference system's Map answers.
+//
+// Called the way the runtime calls it, FindMethod then CallAsFunc with that number, because a
+// method number IS a position in the member table: an entry added in the wrong place would still
+// compile and would run some other method.
+TEST(ValueContainer, GetAnswersTheValueOrUndefined) {
+    ibValueContainer c;
+    c.Insert(Key(wxT("k")), Num(7));
+
+    const long at = c.FindMethod(wxT("Get"));
+    ASSERT_NE(at, wxNOT_FOUND) << "Get is not on the member table";
+
+    ibValue key = Key(wxT("k"));
+    ibValue* args[1] = { &key };
+    ibValue out = Num(1);                       // not empty to begin with: Get has to write its answer
+    ASSERT_TRUE(c.CallAsFunc(at, out, args, 1));
+    EXPECT_EQ(out.GetInteger(), 7);
+
+    ibValue absent = Key(wxT("nope"));
+    ibValue* argsAbsent[1] = { &absent };
+    out = Num(1);
+    ASSERT_TRUE(c.CallAsFunc(at, out, argsAbsent, 1));
+    EXPECT_EQ(out.GetType(), ibValueTypes::TYPE_EMPTY) << "a key that is not there answers Undefined";
+}
+
+// ...and a call that forgot the key is refused by name rather than answered. The arity check
+// catches only a call with too many arguments; the slot this one would have read is made empty and
+// handed over, so without this Get would say "the key is not there" about a key nobody wrote.
+TEST(ValueContainer, GetWithoutAKeyIsRefused) {
+    ibValueContainer c;
+    c.Insert(Key(wxT("k")), Num(7));
+    const long at = c.FindMethod(wxT("Get"));
+    ASSERT_NE(at, wxNOT_FOUND);
+
+    ibValue out;
+    ibValue empty;
+    ibValue* args[1] = { &empty };
+    EXPECT_THROW((void)c.CallAsFunc(at, out, args, 0), ibBackendException);
 }
