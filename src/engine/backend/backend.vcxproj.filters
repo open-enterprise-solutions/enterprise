@@ -316,6 +316,7 @@
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fdate.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="fileSystem\fs.h">
       <Filter>fileSystem</Filter>
@@ -1990,6 +1991,7 @@
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fdate.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
       <Filter>compiler</Filter>
     </ClCompile>

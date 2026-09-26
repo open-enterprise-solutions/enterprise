@@ -324,6 +324,7 @@
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
     <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fdate.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="picturePredefined.h" />
@@ -883,6 +884,7 @@
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fdate.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
     <ClCompile Include="moduleManager\moduleManagerExt.cpp" />

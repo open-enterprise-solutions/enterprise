@@ -212,6 +212,19 @@ BACKEND_API long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, i
 // m_datePart expression, and it must agree with it to the digit.
 BACKEND_API long ibReadDatePart(const wxDateTime& moment, ibDatePart part);
 
+// ⭐⭐ THE SAME CALENDAR OVER A WALL-CLOCK READING (fdate.h) - milliseconds with no zone in them, the
+// number a date value is. A TIMESTAMP is a wall-clock reading and the engines fold it as one; these
+// count the same way, so a period folded in memory is the period the server folds on any machine,
+// including one whose clock goes forward an hour in March: an hour added here is an hour on the wall,
+// not an hour of real time. The wxDateTime forms above read the machine's clock through wx and are
+// what the callers still take; a caller that holds the reading itself takes these.
+BACKEND_API wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
+BACKEND_API wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit);
+BACKEND_API wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
+BACKEND_API wxLongLong_t ibDateAddUnits(wxLongLong_t wall, ibTotalsPeriod unit, long count);
+BACKEND_API long ibDateDiffUnits(wxLongLong_t from, wxLongLong_t to, ibTotalsPeriod unit);
+BACKEND_API long ibReadDatePart(wxLongLong_t wall, ibDatePart part);
+
 struct ibDialectDictionary
 {
 	// --- declarative facts (close the large majority of divergence) -------

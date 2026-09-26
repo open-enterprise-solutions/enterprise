@@ -11,6 +11,8 @@
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
 
+#include "backend/fdate.h"          // the calendar without a clock — what the wall-clock twins count over
+
 #include <algorithm>   // std::find — the columns both halves of a cut carry, each named once
 
 // The RAM twin of the dialect truncation expressions. Every branch mirrors what the SQL does, and
@@ -256,6 +258,224 @@ long ibReadDatePart(const wxDateTime& moment, ibDatePart part)
 		case ibDatePart::Hour:      return moment.GetHour();
 		case ibDatePart::Minute:    return moment.GetMinute();
 		case ibDatePart::Second:    return moment.GetSecond();
+	}
+	return 0;
+}
+
+// ===========================================================================================================
+// ⭐⭐ THE SAME SIX, OVER A WALL-CLOCK READING (fdate.h). Every rule above is restated over milliseconds
+// that carry no zone: an hour is 3 600 000 of them on the wall, a day is 86 400 000, a week seven days, and
+// the calendar units go through the parts. Nothing here asks the machine's clock, so the answer is the one
+// the server's TIMESTAMP arithmetic gives, on every machine - which is the requirement the comment at the
+// top of this file states for the wxDateTime forms and which those forms cannot meet across a clock change
+// (`+ wxTimeSpan::Hours(1)` is an hour of real time: 02:30 + 1 on the morning the clocks go forward reads
+// 04:30 on the wall, where the server says 03:30).
+// ===========================================================================================================
+
+namespace {
+
+// The calendar day of a reading, and the reading of a calendar day at midnight.
+wxLongLong_t WallDay(wxLongLong_t wall)
+{
+	wxLongLong_t days = wall / ibWallMsPerDay;
+	if (wall % ibWallMsPerDay < 0) --days;
+	return days;
+}
+
+wxLongLong_t WallMidnight(wxLongLong_t wall) { return WallDay(wall) * ibWallMsPerDay; }
+
+// ISO weekday of a reading: Monday = 1 ... Sunday = 7. Day 0 (1970-01-01) was a Thursday.
+long WallWeekDay(wxLongLong_t wall)
+{
+	const wxLongLong_t days = WallDay(wall);
+	return static_cast<long>(((days % 7 + 7) % 7 + 3) % 7) + 1;
+}
+
+// The first day of the period a reading falls in, for the calendar units - as parts.
+void FirstOfPeriod(ibDateParts& parts, ibTotalsPeriod unit)
+{
+	parts.m_hour = parts.m_minute = parts.m_second = parts.m_millisecond = 0;
+	switch (unit) {
+		case ibTotalsPeriod::TenDays:  parts.m_day = 1 + 10 * wxMin((parts.m_day - 1) / 10, 2u); break;
+		case ibTotalsPeriod::Month:    parts.m_day = 1; break;
+		case ibTotalsPeriod::Quarter:  parts.m_day = 1; parts.m_month = ((parts.m_month - 1) / 3) * 3 + 1; break;
+		case ibTotalsPeriod::HalfYear: parts.m_day = 1; parts.m_month = parts.m_month < 7 ? 1 : 7; break;
+		case ibTotalsPeriod::Year:     parts.m_day = 1; parts.m_month = 1; break;
+		default: break;
+	}
+}
+
+wxLongLong_t OfParts(const ibDateParts& p)
+{
+	return ibWallFromParts(p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second, p.m_millisecond);
+}
+
+unsigned DaysInMonth(int year, unsigned month)
+{
+	const wxLongLong_t first = ibDaysFromCivil(year, month, 1);
+	const wxLongLong_t next = month == 12 ? ibDaysFromCivil(year + 1, 1, 1) : ibDaysFromCivil(year, month + 1, 1);
+	return static_cast<unsigned>(next - first);
+}
+
+// Months added to a reading, the day clamped to the month it lands in - Jan 31 + 1 is Feb 28 (29), as
+// wxDateSpan::Months and every engine's DATEADD have it.
+wxLongLong_t AddMonths(wxLongLong_t wall, long months)
+{
+	ibDateParts p;
+	ibWallToParts(wall, p);
+	const long long total = static_cast<long long>(p.m_year) * 12 + static_cast<long long>(p.m_month) - 1 + months;
+	const long long year = (total >= 0 ? total : total - 11) / 12;
+	p.m_year = static_cast<int>(year);
+	p.m_month = static_cast<unsigned>(total - year * 12) + 1;
+	p.m_day = wxMin(p.m_day, DaysInMonth(p.m_year, p.m_month));
+	return OfParts(p);
+}
+
+} // namespace
+
+wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit)
+{
+	switch (unit) {
+		case ibTotalsPeriod::Second: return wall - ((wall % 1000) + 1000) % 1000;
+		case ibTotalsPeriod::Minute: return wall - ((wall % 60000ll) + 60000ll) % 60000ll;
+		case ibTotalsPeriod::Hour:   return wall - ((wall % 3600000ll) + 3600000ll) % 3600000ll;
+		case ibTotalsPeriod::Day:    return WallMidnight(wall);
+		case ibTotalsPeriod::Week:   return WallMidnight(wall) - (WallWeekDay(wall) - 1) * ibWallMsPerDay;
+		case ibTotalsPeriod::TenDays:
+		case ibTotalsPeriod::Month:
+		case ibTotalsPeriod::Quarter:
+		case ibTotalsPeriod::HalfYear:
+		case ibTotalsPeriod::Year: {
+			ibDateParts p;
+			ibWallToParts(wall, p);
+			FirstOfPeriod(p, unit);
+			return OfParts(p);
+		}
+	}
+	return wall;
+}
+
+wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit)
+{
+	const wxLongLong_t start = ibTruncateToPeriod(wall, unit);
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return start + 1000;
+		case ibTotalsPeriod::Minute:   return start + 60000ll;
+		case ibTotalsPeriod::Hour:     return start + 3600000ll;
+		case ibTotalsPeriod::Day:      return start + ibWallMsPerDay;
+		case ibTotalsPeriod::Week:     return start + 7 * ibWallMsPerDay;
+		case ibTotalsPeriod::TenDays: {
+			// The third bucket runs to the END of the month: what follows it is the 1st of the next.
+			ibDateParts p;
+			ibWallToParts(start, p);
+			if (p.m_day >= 21) { p.m_day = 1; return AddMonths(OfParts(p), 1); }
+			return start + 10 * ibWallMsPerDay;
+		}
+		case ibTotalsPeriod::Month:    return AddMonths(start, 1);
+		case ibTotalsPeriod::Quarter:  return AddMonths(start, 3);
+		case ibTotalsPeriod::HalfYear: return AddMonths(start, 6);
+		case ibTotalsPeriod::Year:     return AddMonths(start, 12);
+	}
+	return start;
+}
+
+wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit)
+{
+	return ibNextPeriodStart(wall, unit) - 1000;
+}
+
+wxLongLong_t ibDateAddUnits(wxLongLong_t wall, ibTotalsPeriod unit, long count)
+{
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return wall + static_cast<wxLongLong_t>(count) * 1000;
+		case ibTotalsPeriod::Minute:   return wall + static_cast<wxLongLong_t>(count) * 60000ll;
+		case ibTotalsPeriod::Hour:     return wall + static_cast<wxLongLong_t>(count) * 3600000ll;
+		case ibTotalsPeriod::Day:      return wall + static_cast<wxLongLong_t>(count) * ibWallMsPerDay;
+		case ibTotalsPeriod::Week:     return wall + static_cast<wxLongLong_t>(count) * 7 * ibWallMsPerDay;
+		case ibTotalsPeriod::TenDays: {
+			wxLongLong_t d = wall;
+			for (long i = 0; i < count; ++i) d = ibNextPeriodStart(d, unit);
+			for (long i = 0; i > count; --i) d = ibTruncateToPeriod(d, unit) - 1000;
+			return d;
+		}
+		case ibTotalsPeriod::Month:    return AddMonths(wall, count);
+		case ibTotalsPeriod::Quarter:  return AddMonths(wall, count * 3);
+		case ibTotalsPeriod::HalfYear: return AddMonths(wall, count * 6);
+		case ibTotalsPeriod::Year:     return AddMonths(wall, count * 12);
+	}
+	return wall;
+}
+
+long ibDateDiffUnits(wxLongLong_t from, wxLongLong_t to, ibTotalsPeriod unit)
+{
+	// Every sub-day unit is one wall-clock difference, so none can disagree with Day about a boundary;
+	// the calendar units count the boundaries between the periods the two readings fall in.
+	const wxLongLong_t dayDelta = WallDay(to) - WallDay(from);
+	const wxLongLong_t secDelta = (to - WallMidnight(to)) / 1000 - (from - WallMidnight(from)) / 1000 + dayDelta * 86400;
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return static_cast<long>(secDelta);
+		case ibTotalsPeriod::Minute:   return static_cast<long>(secDelta / 60);
+		case ibTotalsPeriod::Hour:     return static_cast<long>(secDelta / 3600);
+		case ibTotalsPeriod::Day:      return static_cast<long>(dayDelta);
+		case ibTotalsPeriod::Week:     return static_cast<long>((WallDay(ibTruncateToPeriod(to, unit))
+		                                                       - WallDay(ibTruncateToPeriod(from, unit))) / 7);
+		case ibTotalsPeriod::TenDays: {
+			wxLongLong_t cur = ibTruncateToPeriod(from, unit);
+			const wxLongLong_t end = ibTruncateToPeriod(to, unit);
+			long steps = 0;
+			while (cur < end) { cur = ibNextPeriodStart(cur, unit); ++steps; }
+			while (cur > end) { cur = ibTruncateToPeriod(cur - 1000, unit); --steps; }
+			return steps;
+		}
+		case ibTotalsPeriod::Month:
+		case ibTotalsPeriod::Quarter:
+		case ibTotalsPeriod::HalfYear:
+		case ibTotalsPeriod::Year: {
+			ibDateParts a, b;
+			ibWallToParts(ibTruncateToPeriod(from, unit), a);
+			ibWallToParts(ibTruncateToPeriod(to, unit), b);
+			const long months = (b.m_year - a.m_year) * 12 + (static_cast<long>(b.m_month) - static_cast<long>(a.m_month));
+			switch (unit) {
+				case ibTotalsPeriod::Month:    return months;
+				case ibTotalsPeriod::Quarter:  return months / 3;
+				case ibTotalsPeriod::HalfYear: return months / 6;
+				default:                       return months / 12;
+			}
+		}
+	}
+	return 0;
+}
+
+long ibReadDatePart(wxLongLong_t wall, ibDatePart part)
+{
+	ibDateParts p;
+	ibWallToParts(wall, p);
+	switch (part) {
+		case ibDatePart::Year:      return p.m_year;
+		case ibDatePart::Quarter:   return static_cast<long>((p.m_month - 1) / 3 + 1);
+		case ibDatePart::Month:     return static_cast<long>(p.m_month);
+		case ibDatePart::DayOfYear: return static_cast<long>(WallDay(wall) - ibDaysFromCivil(p.m_year, 1, 1) + 1);
+		case ibDatePart::Day:       return static_cast<long>(p.m_day);
+		// ISO 8601: week 1 is the week with the year's first Thursday; the days before it belong to the
+		// last week (52 or 53) of the year before, and a week 53 exists only when the year ends on a
+		// Thursday or later. Pinned here so every engine's own numbering is irrelevant.
+		case ibDatePart::Week: {
+			const long weekDay = WallWeekDay(wall);                                                     // 1..7
+			const long dayOfYear = static_cast<long>(WallDay(wall) - ibDaysFromCivil(p.m_year, 1, 1)) + 1;   // 1..366
+			long week = (dayOfYear - weekDay + 10) / 7;
+			const auto weeksIn = [](int year) {
+				const long jan1 = WallWeekDay(ibDaysFromCivil(year, 1, 1) * ibWallMsPerDay);
+				const bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+				return (jan1 == 4 || (leap && jan1 == 3)) ? 53L : 52L;
+			};
+			if (week < 1) return weeksIn(p.m_year - 1);
+			if (week == 53 && weeksIn(p.m_year) == 52) return 1;
+			return week;
+		}
+		case ibDatePart::WeekDay:   return WallWeekDay(wall);
+		case ibDatePart::Hour:      return static_cast<long>(p.m_hour);
+		case ibDatePart::Minute:    return static_cast<long>(p.m_minute);
+		case ibDatePart::Second:    return static_cast<long>(p.m_second);
 	}
 	return 0;
 }
