@@ -5,6 +5,42 @@
 
 #include "queryRamTable.h"
 
+#include "backend/system/value/valueTable.h"   // ibValueModelTable — ToValueTable
+#include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
+
+ibValue ibQueryRamTable::ToValueTable() const
+{
+	ibValueModelTable* const table = new ibValueModelTable();
+	// 🛑 Held while its rows are made: a table fresh from `new` has a count of zero, a row that takes the
+	// model and lets go drives it through zero, and that deletes the table under the loop (valueQueryable.cpp,
+	// M::ToTable, measured 2026-09-10).
+	const ibValue keep(table);
+
+	ibValueModelTable::ibValueModelColumnCollection* const columns = table->GetColumnCollection();
+	std::vector<ibMetaID> ids;   // each table column's id, in step with m_columns
+	ids.reserve(m_columns.size());
+	for (const ibQueryRamColumn& column : m_columns) {
+		const auto* const added = columns->AddColumn(column.m_name, column.m_type,
+			column.m_caption.IsEmpty() ? column.m_name : column.m_caption);
+		ids.push_back(added != nullptr ? static_cast<ibMetaID>(added->GetColumnID()) : ibMetaID());
+	}
+
+	// 🛑 THE ROWS GO IN WITHOUT A NOTIFY. AppendRow is the door a PERSON adds a row through: it notifies the
+	// model, and the notify makes the view's order stale, which is recomputed over every row there is — once
+	// per row, O(n²): 50 000 rows took seventy seconds (measured on the LINQ answer). A table being built has
+	// nobody watching it. A row starts as the model's own empty row (NewRow — every column its type's empty
+	// value), and a cell this table holds is adjusted to its column's type on the way in.
+	for (const Row& from : m_rows) {
+		ibComposerNode* const row = table->NewRow();
+		for (size_t i = 0; i < ids.size(); ++i)
+			if (const ibValue* const cell = from.find_value(m_columns[i].m_id))
+				row->AppendTableValue(ids[i], ibValueTypeDescription::AdjustValue(m_columns[i].m_type, *cell));
+		table->Append(row, /*notify*/ false);
+	}
+
+	return keep;
+}
+
 void FoldBalancesForward(ibQueryRamTable& table,
                          const std::vector<ibMetaID>& keyColumns,
                          ibMetaID periodColumn,

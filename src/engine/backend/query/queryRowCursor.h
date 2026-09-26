@@ -105,7 +105,7 @@ inline ibQueryRamTable ibDrainToRamTable(ibQueryRowCursor& rows)
 {
 	ibQueryRamTable table;
 	for (const ibQueryRamColumn& c : rows.Columns())
-		table.AddColumn(c.m_id, c.m_name, c.m_type);
+		table.AddColumn(c.m_id, c.m_name, c.m_type, c.m_caption);
 	while (rows.Next()) {
 		const long r = table.AppendRow();
 		for (const ibQueryRamColumn& c : rows.Columns())

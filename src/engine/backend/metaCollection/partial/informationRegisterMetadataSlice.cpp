@@ -126,7 +126,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 	ibRequireOpenBase();
 
 	// L3's own table (no runtime ibValueModelTable) — keyed by metaID; the script egress
-	// (SelectionToTable) rebuilds the runtime table from the selection + metadata.
+	// (ibRegSelectionToTable) rebuilds the runtime table from the selection + the slice's columns.
 	ibQueryRamTable retTable;
 	for (const auto object : meta->GetGenericAttributeArrayObject())
 		retTable.AddColumn(object->GetMetaID(), object->GetName(), object->GetTypeDesc());
