@@ -31,7 +31,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "procUnitLambda.h"   // ibValueFunction full def + AsFunction / AsIterator
+
 #include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
+#include "backend/query/queryRamTable.h"   // ibQueryRamTable — …filled first, then loaded into it (TableOfRows)
 
 #include "system/value/valueTable.h"  // ibValueModelTable — what a query ANSWERS with: columns and rows
 #include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
@@ -2097,79 +2099,51 @@ ibRowColumns ColumnsOfRowItself(const ibValueLinqRows& kept)
 // here, at the same single place every other shape of query becomes a value the language holds.
 //
 // No name is used to build it: the columns come from the shape and every cell is written by the
-// column's ID.
+// column's ID — its ordinal, from 1. The rows go into the fast table every read that hands a script a
+// table fills (ibQueryRamTable::ToValueTable), and that loads them.
 ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<ibString>& columns,
 	bool rowIsTheCell)
 {
-	ibValueModelTable* const table = new ibValueModelTable();
-	auto* const cols = table->GetColumnCollection();
-	if (cols == nullptr)
-		return ibValue(table);
-
-	std::vector<unsigned int> columnIds;
-	columnIds.reserve(columns.size());
-	for (const ibString& name : columns) {
+	ibQueryRamTable rows;
+	for (size_t i = 0; i < columns.size(); ++i)
 		// ⚠ AN UNDECLARED COLUMN IS A STRING COLUMN — the value table says so itself (valueTable.cpp,
 		// enAddColumn), and everything then compares as text: `5` sorts after `100`. A projected
 		// column holds whatever its expression produced, so it must DECLARE that: an empty type
 		// description admits anything, because AdjustValue hands the value back untouched when the
 		// description says nothing (valueType.cpp).
-		auto* const col = cols->AddColumn(name, ibTypeDescription(), name);
-		columnIds.push_back(col != nullptr ? col->GetColumnID() : 0);
-	}
-
-	// 🛑 THE ROWS GO IN WITHOUT TELLING ANYBODY, and that is the difference between an answer and a
-	// standstill. `AppendRow` is the door a PERSON adds a row through: it fills the new row from the
-	// filter in force, asks the composer about groups, and NOTIFIES the model — and the notify makes
-	// the view's order stale, which is recomputed over every row there is. Once per row that is
-	// O(n²): measured on this base, a 50 000-row answer took SEVENTY SECONDS to hand back.
-	//
-	// Nothing here is a person adding a row. The table is being BUILT, nobody is watching it yet,
-	// there is no filter and no grouping to obey, and every cell is written explicitly — so the row
-	// is made and put in, and the notify is not sent. Same door (the storage's own Append), one
-	// argument different.
-	//
-	// ⭐ AND EVERY ROW IS A COPY OF ONE BLANK. The row's cells are laid down once, here, and each row
-	// is made by copying them: its storage is ONE allocation of exactly the row's width, and every
-	// cell written below lands on a place that is already there. Made empty and filled cell by cell,
-	// a row grew its storage a step at a time — a reallocation, and a move of what was already in it,
-	// at every step.
-	ibComposerNode blank;
-	for (const unsigned int id : columnIds)
-		blank.AppendTableValue(id);
+		rows.AddColumn(static_cast<ibMetaID>(i + 1), columns[i], ibTypeDescription());
 
 	for (const ibValue& row : kept.Rows()) {
 		ibValue* const source = row.GetRef();
 		if (source == nullptr)
 			continue;
 
-		ibComposerNode* const node = new ibComposerNode(blank);
+		const long at = rows.AppendRow();
 
 		// WHICH READ THIS IS WAS DECIDED WHERE THE COLUMNS WERE — see ibRowColumns. A row with a
 		// surface hands over its properties by ordinal; a row that IS the value goes in whole.
 		if (rowIsTheCell) {
-			node->AppendTableValue(columnIds[0], row);
+			rows.SetCell(at, 1, row);
 		}
 		// ⭐ A PROJECTED ROW HANDS ITS CELLS OVER, it does not have them asked for. Every row of
 		// every `select { … }` is one of these, and going through the general surface cost a
-		// temporary plus a copy INTO it before the copy into the node — three touches of a
+		// temporary plus a copy INTO it before the copy into the table — three touches of a
 		// refcounted value to move it one place. The general path below stays for a row that is
 		// not ours (an object lending its own properties).
 		else if (const ibValueLinqRecord* const projected =
 					LinqCast<ibValueLinqRecord>(source, g_valueLinqRecord)) {
 			for (size_t i = 0; i < columns.size(); ++i)
-				node->AppendTableValue(columnIds[i], projected->ValueAt((long)i));
+				rows.SetCell(at, static_cast<ibMetaID>(i + 1), projected->ValueAt((long)i));
 		}
 		else {
 			for (size_t i = 0; i < columns.size(); ++i) {
 				ibValue cell;
-				source->GetPropVal((long)i, cell);                        // by ordinal on both sides
-				node->AppendTableValue(columnIds[i], std::move(cell));    // absent reads land as an empty cell
+				source->GetPropVal((long)i, cell);                                // by ordinal on both sides
+				rows.SetCell(at, static_cast<ibMetaID>(i + 1), std::move(cell));  // absent reads land as an empty cell
 			}
 		}
-		table->Append(node, /*notify*/ false);
 	}
-	return ibValue(table);
+	return rows.ToValueTable();
 }
 
 } // namespace

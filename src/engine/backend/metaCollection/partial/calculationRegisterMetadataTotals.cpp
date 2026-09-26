@@ -20,7 +20,7 @@
 #include "backend/query/dbTableProvider.h"                           // the base: a field's value off a row (GetValueAttribute)
 #include "backend/system/value/valueArray.h"                         // the base: GetBase's arguments
 #include "backend/system/value/valueMap.h"
-#include "backend/system/value/valueTable.h"                         // the base: the table GetBase answers
+#include "backend/query/queryRamTable.h"                             // the base: the table GetBase answers, filled fast
 #include "backend/metaData.h"                                        // the schedule data: the schedule register, by its id
 #include "backend/diagnostics/journal.h"                             // the schedule data: what each read brought, and how long
 
@@ -845,18 +845,23 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
 	const std::vector<ibCalcBaseRecord>& records)
 {
-	ibValueModelTable* table = new ibValueModelTable();
-	const ibValue keep(table);   // held while its rows are made, as every builder of a table holds it
-	ibValueModelTable::ibValueModelColumnCollection* columns = table->GetColumnCollection();
-	const ibMetaID lineColumn = columns->AddColumn(wxT("LineNumber"), reg->GetRegisterLineNumber()->GetTypeDesc(),
-		reg->GetRegisterLineNumber()->GetSynonym())->GetColumnID();
+	// The fast table the answer is filled into (ibQueryRamTable::ToValueTable loads it), its columns numbered in the
+	// order they stand: the line, a figure each, a section each.
+	ibQueryRamTable table;
+	const ibMetaID lineColumn = 1;
+	table.AddColumn(lineColumn, wxT("LineNumber"), reg->GetRegisterLineNumber()->GetTypeDesc(),
+		reg->GetRegisterLineNumber()->GetSynonym());
 	std::vector<ibMetaID> figureColumns, sectionColumns;
-	for (const ibCalcBaseAsked::ibFigure& figure : asked.m_figures)
-		figureColumns.push_back(columns->AddColumn(figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
-			figure.m_resources.front().second->GetSynonym())->GetColumnID());
-	for (const auto& section : asked.m_sections)
-		sectionColumns.push_back(columns->AddColumn(section.second->GetName(), section.second->GetTypeDesc(),
-			section.second->GetSynonym())->GetColumnID());
+	for (const ibCalcBaseAsked::ibFigure& figure : asked.m_figures) {
+		figureColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
+		table.AddColumn(figureColumns.back(), figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
+			figure.m_resources.front().second->GetSynonym());
+	}
+	for (const auto& section : asked.m_sections) {
+		sectionColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
+		table.AddColumn(sectionColumns.back(), section.second->GetName(), section.second->GetTypeDesc(),
+			section.second->GetSynonym());
+	}
 
 	// What each record gathers: its breakdowns (the section values, in the order first met) and a sum a figure each.
 	struct ibGathered {
@@ -1111,21 +1116,19 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 	}
 
 	// ---- one row a record — or a record and a section — in the records' order ---------------------------------------
-	std::vector<std::pair<ibMetaID, ibValue>> row;
 	for (size_t i = 0; i < records.size(); ++i) {
 		if (gathered[i].m_rows.empty())
 			gathered[i].Row(std::vector<ibValue>(asked.m_sections.size()), asked.m_figures.size());
 		for (const auto& breakdown : gathered[i].m_rows) {
-			row.clear();
-			row.emplace_back(lineColumn, records[i].m_line);
+			const long at = table.AppendRow();
+			table.SetCell(at, lineColumn, records[i].m_line);
 			for (size_t c = 0; c < asked.m_figures.size(); ++c)
-				row.emplace_back(figureColumns[c], asked.m_figures[c].m_resources.front().second->AdjustValue(ibValue(breakdown.second[c])));
+				table.SetCell(at, figureColumns[c], ibValue(breakdown.second[c]));   // to the figure's type as it is loaded
 			for (size_t s = 0; s < asked.m_sections.size(); ++s)
-				row.emplace_back(sectionColumns[s], breakdown.first[s]);
-			table->AppendRow(row);
+				table.SetCell(at, sectionColumns[s], breakdown.first[s]);
 		}
 	}
-	return table;
+	return table.ToValueTable();
 }
 
 // ============================================================================

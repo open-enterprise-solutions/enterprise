@@ -233,7 +233,7 @@ public:
 	                ibValue** paParams, const long lSizeArray) override;                              // Next/Reset/HasChildren/Select/Total/Level
 	// ⭐ THE ROWS FROM HERE ON, AS A VALUE TABLE - what QueryResult.Unload() returns. Walks the selection to its end
 	// (a forward cursor is spent by it) and copies every row out: one table column per output column, typed as the
-	// query types it. See queryUnload.h for what the shape is and why an unknown type stays untyped.
+	// query types it (ibQueryRamTable::ToValueTable says why an unknown type stays untyped).
 	ibValue ToTable();
 
 	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;                              // s.ColumnName (direct attribute)

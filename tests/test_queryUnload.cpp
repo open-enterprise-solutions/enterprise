@@ -3,19 +3,19 @@
 //
 // A script that runs a query usually wants the rows, not a cursor: to count them, index one, sort or
 // search them, hand them on. `Table = Query.Execute().Unload()` gives the platform's value table.
-// (Card MIG-61 of the migration board: the 1C code all over the configuration does
-// `Запрос.Выполнить().Выгрузить()` and then works with the table.)
 //
-// WHAT IS TESTED HERE is the rule that shapes the table - ibQueryUnload::BuildTable - with a fake row
-// source, so no database, session or configuration is needed:
+// Every read that hands a script its rows as a table ends at ONE place - ibQueryRamTable::ToValueTable:
+// Unload(), a queryable's ToTable(), a register's slices and figures, a LINQ answer each fill the fast
+// table and have it loaded. WHAT IS TESTED HERE is that loading, over a fast table filled by hand, so no
+// database, session or configuration is needed:
 //
-//   1. one table column per query column, in the query's order, named as the query names them;
-//   2. every row, in the cursor's order, each cell the value the query read for it;
-//   3. no rows still gives the table its columns (an empty answer is not an answer without a shape);
-//   4. an UNTYPED column keeps what arrives - a number stays a number - where a String column
+//   1. one table column per column of the fast table, in its order, named as it names them;
+//   2. a column's caption is the one it carries, and its name where it carries none;
+//   3. every row, in the fast table's order, each cell the value that was put there;
+//   4. no rows still gives the table its columns (an empty answer is not an answer without a shape);
+//   5. an UNTYPED column keeps what arrives - a number stays a number - where a String column
 //      would turn it into text: "the query does not know the type" is not "it is a string";
-//   5. the table outlives the loop that made it (it is held while its rows are made, and handed on
-//      held: a row that takes the model and lets go must not delete it).
+//   6. the table outlives the fast table it was loaded from.
 //
 // And the surface on the script side: QueryResult answers `Unload`, and asking a result that was
 // already read says so instead of answering an empty table that looks like "found nothing".
@@ -24,28 +24,26 @@
 #include <gtest/gtest.h>
 
 #include "backend/backend_exception.h"
-#include "backend/system/value/queryUnload.h"
+#include "backend/query/queryRamTable.h"
+#include "backend/system/value/valueTable.h"
 #include "backend/system/value/valueQuery.h"
 
 #include <vector>
 
 namespace {
 
-// A row source that stands in for a cursor: Next() moves on, Read(i) is column i of the current row.
-struct FakeRows {
-	std::vector<std::vector<ibValue>> m_rows;
-	size_t m_next = 0;
-	int    m_reads = 0;
-
-	bool    Next() { return m_next++ < m_rows.size(); }
-	ibValue Read(size_t column) { ++m_reads; return m_rows[m_next - 1][column]; }
-};
-
-ibValue Unload(const std::vector<ibQueryUnloadColumn>& columns, FakeRows& rows)
+// A fast table of untyped columns, filled row by row the way a read fills it.
+ibQueryRamTable Rows(const std::vector<wxString>& names, const std::vector<std::vector<ibValue>>& rows)
 {
-	return ibQueryUnload::BuildTable(columns,
-		[&rows]() { return rows.Next(); },
-		[&rows](size_t column) { return rows.Read(column); });
+	ibQueryRamTable table;
+	for (size_t i = 0; i < names.size(); ++i)
+		table.AddColumn(static_cast<ibMetaID>(i + 1), names[i], ibTypeDescription());
+	for (const std::vector<ibValue>& cells : rows) {
+		const long at = table.AppendRow();
+		for (size_t i = 0; i < cells.size(); ++i)
+			table.SetCell(at, static_cast<ibMetaID>(i + 1), cells[i]);
+	}
+	return table;
 }
 
 ibValueModelTable* TableOf(const ibValue& value)
@@ -77,15 +75,12 @@ std::vector<std::vector<ibValue>> ReadRows(ibValueModelTable* table, const std::
 
 ibValue Str(const wxString& text) { return ibValue(text); }
 
-ibQueryUnloadColumn Untyped(const wxString& name) { return { name, ibTypeDescription() }; }
-
 } // namespace
 
-// 1 - the table's columns are the query's, in the query's order and under the query's names.
-TEST(QueryUnload, Columns_FollowTheQuery_InOrderAndByName)
+// 1 - the table's columns are the fast table's, in its order and under its names.
+TEST(QueryUnload, Columns_FollowTheFastTable_InOrderAndByName)
 {
-	FakeRows rows;
-	const ibValue result = Unload({ Untyped(wxT("Code")), Untyped(wxT("Name")), Untyped(wxT("Price")) }, rows);
+	const ibValue result = Rows({ wxT("Code"), wxT("Name"), wxT("Price") }, {}).ToValueTable();
 
 	ibValueModelTable* table = TableOf(result);
 	ASSERT_NE(table, nullptr);
@@ -96,16 +91,29 @@ TEST(QueryUnload, Columns_FollowTheQuery_InOrderAndByName)
 	EXPECT_EQ(columns->GetColumnInfo(2)->GetColumnName(), wxT("Price"));
 }
 
-// 2 - every row, in the cursor's order, each cell the value that was read for it.
-TEST(QueryUnload, Rows_AreCopiedInCursorOrder)
+// 2 - a register's figure is shown by the caption its column carries (`<resource> Balance`), not by its name.
+TEST(QueryUnload, Caption_IsTheColumns_OrItsName)
 {
-	FakeRows rows;
-	rows.m_rows = {
+	ibQueryRamTable rows;
+	rows.AddColumn(1, wxT("AmountBalance"), ibTypeDescription(), wxT("Amount Balance"));
+	rows.AddColumn(2, wxT("Code"), ibTypeDescription());
+
+	ibValueModelTable* table = TableOf(rows.ToValueTable());
+	ASSERT_NE(table, nullptr);
+	ibValueModelTable::ibValueModelColumnCollection* columns = table->GetColumnCollection();
+	ASSERT_EQ(columns->GetColumnCount(), 2u);
+	EXPECT_EQ(columns->GetColumnInfo(0)->GetColumnCaption(), wxT("Amount Balance"));
+	EXPECT_EQ(columns->GetColumnInfo(1)->GetColumnCaption(), wxT("Code"));
+}
+
+// 3 - every row, in the fast table's order, each cell the value that was put there.
+TEST(QueryUnload, Rows_AreLoadedInOrder)
+{
+	const ibValue result = Rows({ wxT("Code"), wxT("Name") }, {
 		{ Str(wxT("A-1")), Str(wxT("Bolt")) },
 		{ Str(wxT("A-2")), Str(wxT("Nut")) },
 		{ Str(wxT("A-3")), Str(wxT("Washer")) },
-	};
-	const ibValue result = Unload({ Untyped(wxT("Code")), Untyped(wxT("Name")) }, rows);
+	}).ToValueTable();
 
 	ibValueModelTable* table = TableOf(result);
 	ASSERT_NE(table, nullptr);
@@ -117,30 +125,23 @@ TEST(QueryUnload, Rows_AreCopiedInCursorOrder)
 	EXPECT_EQ(read[0][1].GetString(), wxT("Bolt"));
 	EXPECT_EQ(read[1][0].GetString(), wxT("A-2"));
 	EXPECT_EQ(read[2][1].GetString(), wxT("Washer"));
-	EXPECT_EQ(rows.m_reads, 6) << "each cell is read once, no more";
 }
 
-// 3 - a query that found nothing still answers with its shape.
+// 4 - a query that found nothing still answers with its shape.
 TEST(QueryUnload, NoRows_StillHasTheColumns)
 {
-	FakeRows rows;
-	const ibValue result = Unload({ Untyped(wxT("Code")), Untyped(wxT("Name")) }, rows);
-
-	ibValueModelTable* table = TableOf(result);
+	ibValueModelTable* table = TableOf(Rows({ wxT("Code"), wxT("Name") }, {}).ToValueTable());
 	ASSERT_NE(table, nullptr);
 	EXPECT_EQ(table->Count(), 0u);
 	EXPECT_EQ(table->GetColumnCollection()->GetColumnCount(), 2u);
-	EXPECT_EQ(rows.m_reads, 0);
 }
 
-// 4 - an untyped column keeps a number a number. (A DECLARED column type converts what it is given - that is
+// 5 - an untyped column keeps a number a number. (A DECLARED column type converts what it is given - that is
 // what a type is for - which is exactly why "the query does not know the type" must not be given one; creating a
 // typed column needs the configuration's metadata, which a headless test does not have.)
 TEST(QueryUnload, UntypedColumn_KeepsTheValueItReceives)
 {
-	FakeRows rows;
-	rows.m_rows = { { ibValue(12.5) }, { Str(wxT("text")) } };
-	const ibValue result = Unload({ Untyped(wxT("Sum")) }, rows);
+	const ibValue result = Rows({ wxT("Sum") }, { { ibValue(12.5) }, { Str(wxT("text")) } }).ToValueTable();
 
 	const auto read = ReadRows(TableOf(result), { wxT("Sum") });
 	ASSERT_EQ(read.size(), 2u);
@@ -151,16 +152,16 @@ TEST(QueryUnload, UntypedColumn_KeepsTheValueItReceives)
 	EXPECT_EQ(read[1][0].GetString(), wxT("text"));
 }
 
-// 5 - the returned table is alive and complete after the loop that made it is gone.
-TEST(QueryUnload, TheTable_OutlivesTheLoopThatMadeIt)
+// 6 - the returned table is alive and complete after the fast table it came from is gone.
+TEST(QueryUnload, TheTable_OutlivesTheFastTable)
 {
 	ibValue kept;
 	{
-		FakeRows rows;
+		std::vector<std::vector<ibValue>> cells;
 		for (int i = 0; i < 200; ++i)
-			rows.m_rows.push_back({ ibValue(static_cast<double>(i)) });
-		kept = Unload({ Untyped(wxT("N")) }, rows);
-	}   // the fake rows are gone; only the table's own copy remains
+			cells.push_back({ ibValue(static_cast<double>(i)) });
+		kept = Rows({ wxT("N") }, cells).ToValueTable();
+	}   // the fast table is gone; only the value table remains
 
 	ibValueModelTable* table = TableOf(kept);
 	ASSERT_NE(table, nullptr);

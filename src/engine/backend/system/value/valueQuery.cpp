@@ -7,7 +7,6 @@
 #include "backend/query/queryParser.h"
 #include "backend/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
-#include "queryUnload.h"                 // ibQueryUnload — the value table Unload() hands back
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
 #include "backend/appData.h"             // appData->DesignerMode()
@@ -408,15 +407,19 @@ ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::OutputColumn& oc) 
 
 ibValue ibValueQuerySelect::ToTable()
 {
-	std::vector<ibQueryUnloadColumn> columns;
-	columns.reserve(m_schema.size());
-	for (const ibQueryLowering::OutputColumn& oc : m_schema)
-		columns.push_back({ oc.m_name, oc.m_type });
+	// Column i is the output column i, keyed by its ordinal from 1 — a projection may read one source column
+	// under two names, so the source's own id would not tell them apart (DrainIntoSnapshot, queryLowering.cpp).
+	ibQueryRamTable rows;
+	for (size_t i = 0; i < m_schema.size(); ++i)
+		rows.AddColumn(static_cast<ibMetaID>(i + 1), m_schema[i].m_name, m_schema[i].GetTypeDesc());
 
 	// The same two reads a script does with `Next()` and `s.Column` - so the table holds exactly what a walk would show.
-	return ibQueryUnload::BuildTable(columns,
-		[this]() { return m_flat != nullptr ? m_flat->Next() : (m_tree != nullptr && m_tree->Next()); },
-		[this](size_t index) { return ReadColumn(m_schema[index]); });
+	while (m_flat != nullptr ? m_flat->Next() : (m_tree != nullptr && m_tree->Next())) {
+		const long at = rows.AppendRow();
+		for (size_t i = 0; i < m_schema.size(); ++i)
+			rows.SetCell(at, static_cast<ibMetaID>(i + 1), ReadColumn(m_schema[i]));
+	}
+	return rows.ToValueTable();
 }
 
 void ibValueQuerySelect::FillMembers(ibMemberTable& helper) const

@@ -7,7 +7,8 @@
 // Selector's job (ibSelector over this snapshot), and the product is a SEPARATE ibSelectorTree
 // (querySelectorTree.h). L3 names no runtime type but ibValue: cells are ibValue, columns are
 // id/name/type. Turning the snapshot (or the folded tree) into a runtime model is the RUNTIME's
-// job. (docs/private/query-language-arc.md §22.1, §22.1b)
+// job — all but the plainest one, the value table a script is handed its rows in (ToValueTable).
+// (docs/private/query-language-arc.md §22.1, §22.1b)
 
 #include "queryColumn.h"                 // ibBackendQueryColumn / ibTypeDescription / ibMetaID
 #include "backend/compiler/value.h"      // ibValue
@@ -24,6 +25,7 @@ struct ibQueryRamColumn
 	ibMetaID          m_id;
 	wxString          m_name;
 	ibTypeDescription m_type;
+	wxString          m_caption;   // what the column is shown as (a register's figure: `<resource> Balance`); empty = its name
 };
 
 class BACKEND_API ibQueryRamTable
@@ -43,7 +45,8 @@ public:
 	ibQueryRamTable(const ibQueryRamTable&) = delete;
 	ibQueryRamTable& operator=(const ibQueryRamTable&) = delete;
 
-	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type) { m_columns.push_back({ id, name, type }); }
+	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type,
+	               const wxString& caption = wxString())      { m_columns.push_back({ id, name, type, caption }); }
 	const std::vector<ibQueryRamColumn>& Columns() const { return m_columns; }
 
 	// Room for a cell per declared column, made once — the cells then land without growing the row.
@@ -138,6 +141,14 @@ public:
 	// twice the cost.
 	void    EraseRow(long row)                                { if (row >= 0 && row < RowCount())
 	                                                                m_rows.erase(m_rows.begin() + static_cast<size_t>(row)); }
+
+	// ⭐ THE ROWS AS THE VALUE TABLE A SCRIPT HOLDS — where every read that hands a script its rows as a table
+	// ends: a register's slices and figures, a queryable's ToTable(), a query result's Unload(), a LINQ answer.
+	// Each fills this table, made for being filled, and this loads it: a column per column, by its name, type
+	// and caption, the rows in this order. There were nine copies of that loop; all but the LINQ one added their
+	// rows the slow way. A column with no type stays UNTYPED — it keeps whatever arrives, where a String one would
+	// turn every number into text.
+	ibValue ToValueTable() const;
 
 private:
 	// One row's cells re-labelled — see AppendRowsRekeyed. Built anew beside the old one rather than edited
