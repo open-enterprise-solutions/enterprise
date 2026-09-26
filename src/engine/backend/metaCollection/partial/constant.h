@@ -385,7 +385,7 @@ public:
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 protected:
 

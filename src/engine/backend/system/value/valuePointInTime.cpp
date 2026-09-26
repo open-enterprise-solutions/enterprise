@@ -35,7 +35,7 @@ bool ibValuePointInTime::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-wxString ibValuePointInTime::GetString() const
+ibString ibValuePointInTime::GetString() const
 {
 	if (!m_date.IsValid())
 		return wxEmptyString;

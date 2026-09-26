@@ -51,7 +51,7 @@ ibValueBackgroundJob::~ibValueBackgroundJob()
 	// is what makes "start and forget" work.
 }
 
-wxString ibValueBackgroundJob::GetString() const
+ibString ibValueBackgroundJob::GetString() const
 {
 	if (m_run == nullptr)
 		return wxT("BackgroundJob");

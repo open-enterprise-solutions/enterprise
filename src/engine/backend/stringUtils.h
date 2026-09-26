@@ -4,6 +4,8 @@
 #include <wx/wx.h>
 #include <wx/string.h>
 
+#include "backend/fstring.h"   // ibString — the engine's own names compare here too
+
 class wxInputStream;
 class wxString;
 class wxArrayString;
@@ -195,6 +197,17 @@ namespace stringUtils
 		return true;
 	}
 
+	// …AND THE SAME QUESTION OF THE ENGINE'S OWN STRING — a member table's names. Asked of the string
+	// itself, in ONE call: the text lives behind the facade (fstring.cpp), and reading it here would be
+	// a call per buffer and per length on every comparison (measured 2026-09-26: method resolve +16%).
+	//
+	// ⚠ NO MIXED PAIR (wxString, ibString): the two convert into each other AND a literal converts into
+	// both, so a mixed overload makes every `CompareString(name, wxT("x"))` ambiguous. A wx name meeting
+	// an engine name is the engine string's own question: `name.IsSameAs(wxName, false)`.
+	inline bool CompareString(const ibString& lhs, const ibString& rhs, bool case_sensitive = false) {
+		return lhs.IsSameAs(rhs, case_sensitive);
+	}
+
 	/**
 	* Returns true if the character is a white space character. This properly handles
 	* extended ASCII characters.
@@ -316,6 +329,16 @@ struct ibCaseFoldLess {
 
 private:
 	static bool IsLatinLetter(wchar_t c) noexcept { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); }
+};
+
+// …and the same order for the ENGINE'S OWN STRING — the index of a member table. A separate order
+// rather than a transparent one, so a lookup never converts a key on every comparison; and one call
+// into the string per comparison (CmpNoCase), whose folding is the one IsSameAs has — so the names
+// this order calls one key are exactly those CompareString calls equal.
+struct ibStringCaseFoldLess {
+	bool operator()(const ibString& lhs, const ibString& rhs) const {
+		return lhs.CmpNoCase(rhs) < 0;
+	}
 };
 
 #endif

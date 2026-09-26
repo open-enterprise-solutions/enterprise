@@ -579,7 +579,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPr
 	return false;
 }
 
-long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const wxString& strName) const
+long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const ibString& strName) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
@@ -653,7 +653,7 @@ bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, 
 	return false;
 }
 
-long ibValueModuleRuntimeManagerExternalReport::FindProp(const wxString& strName) const
+long ibValueModuleRuntimeManagerExternalReport::FindProp(const ibString& strName) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(strName) != wxNOT_FOUND) {

@@ -89,7 +89,7 @@ public:
 		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
-		virtual wxString GetString() const override {
+		virtual ibString GetString() const override {
 			return m_moduleObject->GetName();
 		}
 
@@ -247,7 +247,7 @@ public:
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-	virtual long FindProp(const wxString& strName) const;
+	virtual long FindProp(const ibString& strName) const override;
 
 	//check is empty
 	virtual bool IsEmpty() const { return false; }

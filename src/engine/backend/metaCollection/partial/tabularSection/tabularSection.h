@@ -148,7 +148,7 @@ public:
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
-		virtual wxString GetString() const;
+		virtual ibString GetString() const;
 
 		friend class ibValueTabularSectionDataObjectBase;
 	private:
@@ -290,7 +290,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 	// Iterator runtime path lives on ibValueModel (cursor over Get*Fetch
 	// → BuildVisibleView for filter+sort consistency with the GUI).

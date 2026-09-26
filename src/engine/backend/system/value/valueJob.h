@@ -92,7 +92,7 @@ public:
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
 	// The sentence — the same one the manager's journal and the designer's property row show.
-	virtual wxString GetString() const { return ibJobScheduleRules::Describe(m_schedule); }
+	virtual ibString GetString() const { return ibJobScheduleRules::Describe(m_schedule); }
 
 	// A schedule is never "empty": it always answers when its job is due. Saying otherwise would
 	// make an untouched schedule read as an absent one, and an absent schedule is a job that
@@ -183,7 +183,7 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 
 		bool ReadSettings();
 
-		virtual wxString GetString() const { return m_jobName; }
+		virtual ibString GetString() const { return m_jobName; }
 		virtual bool IsEmpty() const { return !m_jobKey.isValid(); }
 
 		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);

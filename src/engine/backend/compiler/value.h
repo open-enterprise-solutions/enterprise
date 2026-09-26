@@ -104,6 +104,16 @@ public:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
 	bool m_bReadOnly;          // 1 byte
 public:
+	// ⭐ ONE WORD FOR EVERY KIND. A string and a number live IN the union beside the pointers:
+	// each is one handle whose heap part (the text, a heap-tier BigImpl) counts its owners, so a
+	// copy of a value is a count and not a copy — and the number no longer takes 8 bytes of its own.
+	//
+	// 🛑 THE UNION'S EMPTY STATE IS ALL-ZERO BITS, and it is a valid value of EVERY member: a null
+	// pointer, a false, date 0, the empty string (no text) and the number 0 (fnumber.h: tag 0 =
+	// immediate). The constructors zero the whole word (m_dData(0) — 8 bytes on x86 as well, where
+	// a pointer is 4); Reset() ends the life of a string or a number — letting go of its text — and
+	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
+	// a string or a number member over a non-zero word of another kind: its old text would be kept.
 	union {
 		bool          m_bData;  //TYPE_BOOLEAN
 		wxLongLong_t  m_dData;  //TYPE_DATE
@@ -113,20 +123,9 @@ public:
 		// (same 8 bytes), but the const type documents intent and Reset()/dtor
 		// must NEVER ref-count or delete through it — the tree owns the object.
 		const ibValue* m_pConstRef;
-		// TYPE_STRING — pooled heap ibString, nullptr = empty. A pointer (8)
-		// instead of an inline ~40-byte ibString, so a Number/Bool value no
-		// longer drags a string buffer (billions of values → big RAM win).
-		// SHARES the union (a value is one type at a time): valid ONLY when
-		// m_typeClass == TYPE_STRING. All access via GetString()/SetString();
-		// the lifetime lives in value.cpp. NEVER delete m_pStr unless
-		// STRING — otherwise it aliases m_pRef and you get the random-delete bug.
-		ibString*     m_pStr;
+		ibString      m_sData;  //TYPE_STRING — a handle on a shared text; empty = no text
+		ibNumber      m_fData;  //TYPE_NUMBER — one tagged word; a heap tier is shared
 	};
-	// TYPE_NUMBER — separate by-value. ibNumber is a conditional BigImpl*
-	// heap-owner, so its bytes must NEVER share union storage (sharing
-	// reinstates the random-delete bug). A pointer would save nothing (ibNumber
-	// is already 8 bytes) and only cost a heap alloc per number — stays inline.
-	ibNumber m_fData;
 public:
 
 	class BACKEND_API ibMemberTable {
@@ -134,12 +133,12 @@ public:
 		//List of keywords that cannot be variable and function names
 		struct ibMemberTableConstructor {
 
-			ibMemberTableConstructor(const wxString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableConstructor(const ibString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_strHelper(strHelper), m_paramCount(paramCount), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
 
-			wxString m_strHelper;
+			ibString m_strHelper;
 			long m_paramCount = 0;
 			long m_lAlias, m_lData;
 		};
@@ -168,7 +167,7 @@ public:
 			// Flag-based ctor — primary entry point. Use for new
 			// callsites and any prop that needs eProp_Scoped or other
 			// non-readable/writable bits.
-			ibMemberTableProperty(const wxString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_flags((uint8_t)flags)
 			{
 			}
@@ -177,7 +176,7 @@ public:
 			// into the flags word so existing AppendProp(bool, bool,
 			// ...) overloads keep working without touching every
 			// callsite. Old props default to non-scoped.
-			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
 				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)))
@@ -187,7 +186,7 @@ public:
 			// 3-bool ctor — same as legacy plus an explicit `scoped`
 			// argument. Readable for callsites that prefer bool args
 			// over OR'd flag literals (ThisObject / ThisForm / etc).
-			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
 				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)))
@@ -211,7 +210,7 @@ public:
 			// earlier: the saving vanished into the field beside it. Ordered wide to
 			// narrow, the whole tail now fits the pointer's own alignment slack —
 			// 8 + 4 + 2 + 1 = 15, so the record is 16 bytes where it was 24.
-			wxString m_fieldName;
+			ibString m_fieldName;
 			long     m_lData;
 			int16_t  m_lAlias;
 			uint8_t  m_flags = eProp_Readable | eProp_Writable;
@@ -226,13 +225,13 @@ public:
 
 		struct ibMemberTableMethod {
 
-			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags)
 			{
 			}
 
 			// Legacy ctor — convert hasRet bool into the flags word.
-			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData),
 				  m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount),
 				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u))
@@ -248,8 +247,8 @@ public:
 			// magnitude of headroom. Wide to narrow: 8 + 8 + 4 + 2 + 1 + 1 = 24,
 			// exactly two pointers plus a full 8-byte tail, no padding — where the
 			// record used to be 32.
-			wxString m_fieldName;
-			wxString m_strHelper;
+			ibString m_fieldName;
+			ibString m_strHelper;
 			long     m_lData  = wxNOT_FOUND;
 			int16_t  m_lAlias = wxNOT_FOUND;
 			int8_t   m_paramCount = 0;
@@ -365,7 +364,7 @@ public:
 
 		// Lazy name->index acceleration for FindProp / FindMethod (the runtime
 		// hot path — every Obj.Attr / obj.Method() resolves a name). Keyed on
-		// the name as declared, ordered by ibCaseFoldLess — the folding of
+		// the name as declared, ordered by ibStringCaseFoldLess — the folding of
 		// CompareString, so a lookup is case-insensitive and reads the two buffers
 		// in place: no upper-cased copy of the asked name on every call (a posting
 		// that resolves a few million names spent a minute there, stack samples
@@ -382,8 +381,8 @@ public:
 		// linear "first wins" scan. The atomic state beside it serializes cold
 		// construction without a mutex per value.
 		struct FindIndex {
-			std::map<wxString, long, ibCaseFoldLess> prop;
-			std::map<wxString, long, ibCaseFoldLess> method;
+			std::map<ibString, long, ibStringCaseFoldLess> prop;
+			std::map<ibString, long, ibStringCaseFoldLess> method;
 		};
 		mutable std::shared_ptr<const FindIndex> m_findIndex;
 		enum FindIndexState : uint8_t { kFindStale = 0, kFindBuilding = 1, kFindBuilt = 2 };
@@ -634,12 +633,12 @@ public:
 			return &h;
 		}
 
-		inline long AppendConstructor(const wxString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendConstructor(const wxString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendConstructor(const ibString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendConstructor(const ibString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, wxNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
 
-		inline long AppendConstructor(const long paramCount, const wxString& strHelper, const long lCtorNum, const long lCtorAlias) {
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum, const long lCtorAlias) {
 			if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
 			m_ctors->emplace_back(strHelper, paramCount, lCtorAlias, lCtorNum);
 			return m_ctors->size();
@@ -652,9 +651,10 @@ public:
 			}
 		}
 
-		wxString GetConstructorHelper(const long lCtorNum) const {
+		const ibString& GetConstructorHelper(const long lCtorNum) const {
+			static const ibString s_absent;   // the empty string holds no text: nothing shared, safe from any thread
 			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
-				return wxEmptyString;
+				return s_absent;
 			return (*m_ctors)[lCtorNum].m_strHelper;
 		}
 
@@ -676,13 +676,13 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProp(const wxString& strPropName) { return AppendProp(strPropName, true, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProp(const wxString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, wxNOT_FOUND); }
-		inline long AppendProp(const wxString& strPropName, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, true, true, lPropNum, lPropAlias); }
-		inline long AppendProp(const wxString& strPropName, bool readable, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, readable, true, lPropNum, lPropAlias); }
-		inline long AppendProp(const wxString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName) { return AppendProp(strPropName, true, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, true, true, lPropNum, lPropAlias); }
+		inline long AppendProp(const ibString& strPropName, bool readable, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, readable, true, lPropNum, lPropAlias); }
+		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, wxNOT_FOUND); }
 
-		inline long AppendProp(const wxString& strPropName, bool readable, bool writable, const long lPropNum, const long lPropAlias) {
+		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum, const long lPropAlias) {
 			const unsigned int flags = (readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u);
 			return AppendProp(strPropName, flags, lPropNum, lPropAlias);
 		}
@@ -692,11 +692,11 @@ public:
 		// backend.dll for wfrontend / other consumers (otherwise MSVC
 		// in Debug emits __imp_ stubs that the inline body can't
 		// satisfy across the DLL boundary).
-		long AppendProp(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias);
+		long AppendProp(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias);
 
 		// Flag-based variant. Use eProp_Readable | eProp_Writable
 		// (or | eProp_Scoped for bc-local entries like ThisObject).
-		inline long AppendProp(const wxString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
+		inline long AppendProp(const ibString& strPropName, unsigned int flags, const long lPropNum, const long lPropAlias) {
 
 			//auto iterator = std::find_if(m_props.begin(), m_props.end(),
 			//	[strPropName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strPropName); });
@@ -715,14 +715,14 @@ public:
 			}
 		}
 
-		void RemoveProp(const wxString& strPropName) {
+		void RemoveProp(const ibString& strPropName) {
 			m_props.erase(
 				std::remove_if(m_props.begin(), m_props.end(), [&strPropName](const auto& f) {
 					return stringUtils::CompareString(f.m_fieldName, strPropName); }), m_props.end());
 			MarkPropDirty();
 		}
 
-		long FindProp(const wxString& strPropName) const {
+		long FindProp(const ibString& strPropName) const {
 			if (m_props.size() >= kFindIndexMin) {
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->prop;
@@ -737,9 +737,11 @@ public:
 			return wxNOT_FOUND;
 		}
 
-		wxString GetPropName(const long lPropNum) const {
+		// The name WHERE IT LIES — by reference, so asking for a member's name copies nothing.
+		const ibString& GetPropName(const long lPropNum) const {
+			static const ibString s_absent;
 			if (lPropNum < 0 || lPropNum >= GetNProps())
-				return wxEmptyString;
+				return s_absent;
 			return m_props[lPropNum].m_fieldName;
 		}
 
@@ -780,25 +782,25 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProc(const wxString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const wxString& strMethodName, const wxString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
-		inline long AppendProc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
 
-		inline long AppendFunc(const wxString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const wxString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
-		inline long AppendFunc(const wxString& strMethodName, const long paramCount, const wxString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, wxEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
 
-		inline long AppendMethod(const wxString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, wxEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
+		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, wxEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
 
-		inline long AppendMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
+		inline long AppendMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) {
 
 			//auto iterator = std::find_if(m_methods.begin(), m_methods.end(),
 			//	[strMethodName](const auto& f) { return stringUtils::CompareString(f.m_fieldName, strMethodName); });
@@ -817,14 +819,14 @@ public:
 			}
 		}
 
-		void RemoveMethod(const wxString& strMethodName) {
+		void RemoveMethod(const ibString& strMethodName) {
 			m_methods.erase(
 				std::remove_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
 					return stringUtils::CompareString(f.m_fieldName, strMethodName); }), m_methods.end());
 			MarkMethodDirty();
 		}
 
-		long FindMethod(const wxString& strMethodName) const {
+		long FindMethod(const ibString& strMethodName) const {
 			if (m_methods.size() >= kFindIndexMin) {
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->method;
@@ -839,15 +841,18 @@ public:
 			return wxNOT_FOUND;
 		}
 
-		wxString GetMethodName(const long lMethodNum) const {
+		// The name WHERE IT LIES — by reference, like GetPropName.
+		const ibString& GetMethodName(const long lMethodNum) const {
+			static const ibString s_absent;
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
-				return wxEmptyString;
+				return s_absent;
 			return m_methods[lMethodNum].m_fieldName;
 		}
 
-		wxString GetMethodHelper(const long lMethodNum) const {
+		const ibString& GetMethodHelper(const long lMethodNum) const {
+			static const ibString s_absent;
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
-				return wxEmptyString;
+				return s_absent;
 			return m_methods[lMethodNum].m_strHelper;
 		}
 
@@ -999,7 +1004,7 @@ public:
 	// pointer-to-bool wins the resolution.
 	void operator = (const char* cParam);
 	void operator = (const wchar_t* cParam);
-	void operator = (ibString&& cParam);   // native string assign — moves into m_pStr, no wxString round-trip
+	void operator = (ibString&& cParam);   // native string assign — the text taken over, no wxString round-trip
 
 	void operator = (ibValueTypes cParam);
 	void operator = (ibBackendValue* pParam);
@@ -1358,7 +1363,9 @@ public:
 	virtual wxDateTime GetDateTime() const { return wxLongLong(GetDate()); }
 
 	virtual ibNumber GetNumber() const;
-	virtual wxString GetString() const;
+	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one
+	// more owner of it, no characters copied (fstring.h) — so a caller has no buffer to pass in.
+	virtual ibString GetString() const;
 
 	// ============================ IDENTITY ==================================
 	// ONE OF THEM. There used to be a second — `GetHashKey()`, a wxString the
@@ -1386,12 +1393,6 @@ public:
 	// counts as equal and leaves this behind puts equal values in different
 	// buckets, which no test of the comparator alone would catch.
 	virtual size_t GetValueHash() const;
-	// Native-ibString overload for the runtime string functions. Zero-copy
-	// when the value is already TYPE_STRING (returns the stored buffer by
-	// const ref); otherwise coerces number/bool/date/ref via GetString()
-	// into `scratch` and returns that. The returned ref is valid for the
-	// value's lifetime (string case) or `scratch`'s (coerced case).
-	virtual const ibString& GetString(ibString& scratch) const;
 	virtual wxLongLong_t GetDate() const;
 
 	/////////////////////////////////////////////////////////////////////////
@@ -1458,14 +1459,14 @@ public:
 	 *  @param wsPropName - property name
 	 *  @return property index or -1, if iterator is not found
 	 */
-	virtual long FindProp(const wxString& strPropName) const;
+	virtual long FindProp(const ibString& strPropName) const;
 
 	/// Returns property name
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return proeprty name or 0 if iterator is not found
 	 */
-	virtual wxString GetPropName(const long lPropNum) const;
+	virtual const ibString& GetPropName(const long lPropNum) const;
 
 	/// Returns property value
 	/**
@@ -1511,21 +1512,21 @@ public:
 	 *  @param wsMethodName - method name
 	 *  @return - method index
 	 */
-	virtual long FindMethod(const wxString& strMethodName) const;
+	virtual long FindMethod(const ibString& strMethodName) const;
 
 	/// Returns method name
 	/**
 	 *  @param lMethodNum - method index(starting with 0)
 	 *  @return method name or 0 if method is not found
 	 */
-	virtual wxString GetMethodName(const long lMethodNum) const;
+	virtual const ibString& GetMethodName(const long lMethodNum) const;
 
 	/// Returns method helper
 	/**
 	*  @param lMethodNum - method index(starting with 0)
 	*  @return method name or 0 if method is not found
 	*/
-	virtual wxString GetMethodHelper(const long lMethodNum) const;
+	virtual const ibString& GetMethodHelper(const long lMethodNum) const;
 
 	/// Returns number of method parameters
 	/**
@@ -1640,7 +1641,7 @@ public:
 	// (compileCode.cpp) to decide OPER_CALL_METHOD (per-class) vs
 	// OPER_CALL_LINQ (universal pipeline op). Case-insensitive match
 	// per OES convention. Implemented in terms of GetLinqMethodTable().
-	static long FindLinqMethodByName(const wxString& strMethodName);
+	static long FindLinqMethodByName(const ibString& strMethodName);
 
 	// LINQ dispatch entry point — virtual so subclasses can override
 	// kind-specific behavior (e.g. ibValueQuery extending an existing

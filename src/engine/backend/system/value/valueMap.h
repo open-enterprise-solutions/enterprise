@@ -135,9 +135,9 @@ public:
 	// Get/SetPropVal read / write that entry. GetNProps / GetPropName expose the
 	// keys to introspection (debugger, inspectors) without maintaining a live
 	// surface: they read the store on demand.
-	virtual long FindProp(const wxString& strPropName) const override;
+	virtual long FindProp(const ibString& strPropName) const override;
 	virtual long GetNProps() const override { return (long)m_entries.size(); }
-	virtual wxString GetPropName(const long lPropNum) const override;
+	virtual const ibString& GetPropName(const long lPropNum) const override;
 	virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 

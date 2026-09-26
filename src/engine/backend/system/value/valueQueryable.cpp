@@ -316,7 +316,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
 	return std::make_shared<ibSubqueryQueryable>(inner, m_take);
 }
 
-wxString ibValueQueryable::GetString() const
+ibString ibValueQueryable::GetString() const
 {
 	if (m_ops.empty())
 		return wxString::Format(wxT("Queryable(%s)"), m_sourceName);
@@ -870,7 +870,7 @@ ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const i
 	// Join/Where in here and running it does NOT re-enter the policy — no recursion.
 }
 
-wxString ibValueQueryDecorator::GetString() const
+ibString ibValueQueryDecorator::GetString() const
 {
 	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
 }

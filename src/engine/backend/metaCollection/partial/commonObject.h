@@ -2046,7 +2046,7 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 protected:
 
@@ -2259,7 +2259,7 @@ public:
 	virtual ibClassID GetClassType() const override;
 
 	virtual wxString GetClassName() const override;
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	//Working with iterators — walks named properties via GetPropVal
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
@@ -2370,7 +2370,7 @@ public:
 	virtual ibClassID GetClassType() const;
 
 	virtual wxString GetClassName() const;
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 	//is new object?
 	virtual bool IsNewObject() const { return m_newObject; }
@@ -2861,7 +2861,7 @@ class BACKEND_API ibValueRecordKeyObject : public ibValueDynamicMembers {
 	virtual ibClassID GetClassType() const override;
 
 	virtual wxString GetClassName() const override;
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	//Working with iterators — walks named properties via GetPropVal
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
@@ -3016,7 +3016,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		virtual ibClassID GetClassType() const;
 
 		virtual wxString GetClassName() const;
-		virtual wxString GetString() const;
+		virtual ibString GetString() const;
 
 		friend class ibValueRecordSetObject;
 	private:
@@ -3183,7 +3183,7 @@ public:
 	virtual ibClassID GetClassType() const override;
 
 	virtual wxString GetClassName() const override;
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	// Iterator runtime path lives on ibValueModel (the paged Get*Fetch cursor over RunComposerPage).
 	// GetEmptyRow yields the typed skeleton that the iterator state surfaces as IntelliSense type hint.
@@ -3388,7 +3388,7 @@ public:
 	virtual ibClassID GetClassType() const override;
 
 	virtual wxString GetClassName() const override;
-	virtual wxString GetString() const override;
+	virtual ibString GetString() const override;
 
 	//Working with iterators — walks named properties via GetPropVal
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {

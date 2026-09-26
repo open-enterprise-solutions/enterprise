@@ -58,7 +58,7 @@ public:
 	static void ReadWholeFile(const wxString& fileName, const wxString& who, wxMemoryBuffer& bytes);
 
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
-	virtual wxString GetString() const;
+	virtual ibString GetString() const;
 
 	//check is empty
 	virtual bool IsEmpty() const {

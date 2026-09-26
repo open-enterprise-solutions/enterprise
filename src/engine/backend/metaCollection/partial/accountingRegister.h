@@ -1439,15 +1439,15 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		//
 		// ⚠ The account has to be filled in FIRST — the names come from it. That is not an ordering
 		// quirk to hide: until the row names an account, there is no such thing as "its analytics".
-		virtual long     FindProp(const wxString& strPropName) const override;
+		virtual long     FindProp(const ibString& strPropName) const override;
 		virtual long     GetNProps() const override;
-		virtual wxString GetPropName(const long lPropNum) const override;
+		virtual const ibString& GetPropName(const long lPropNum) const override;
 		virtual bool     IsPropReadable(const long lPropNum) const override { return true; }
 		virtual bool     IsPropWritable(const long lPropNum) const override { return true; }
 		virtual bool     SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 		virtual bool     GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
-		virtual wxString GetString() const;
+		virtual ibString GetString() const;
 
 		// Empty the whole side — every kind and every value of it. Reached as `Clear()` from a script,
 		// and as the meaning of assigning nothing to the collection.
@@ -1461,7 +1461,7 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 		// The kinds THIS ROW'S ACCOUNT declares, in its own order, each with the name a script writes.
 		// The names are data, and until the row names an account there is no such thing as "its
 		// analytics"; the set reads each account's table once (AccountKinds).
-		std::vector<std::pair<wxString, ibValue>> DeclaredKinds() const;
+		std::vector<std::pair<ibString, ibValue>> DeclaredKinds() const;
 
 		ibValueRecordSetObjectAccountingRegister* m_recordSet;
 		ibDataViewItem                            m_line;
@@ -1510,7 +1510,7 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	// life of the set. A posting names few accounts and writes many lines, and every dimension written
 	// asks which slot its kind goes to; reading the account for each would be a read per line per side
 	// (the off-balance check caches for the same reason, CheckDoubleEntry).
-	const std::vector<std::pair<wxString, ibValue>>& AccountKinds(const ibValue& account) const;
+	const std::vector<std::pair<ibString, ibValue>>& AccountKinds(const ibValue& account) const;
 
 	// What its lines are called: a register line's names and the dimension collections.
 	virtual void DescribeReturnLine(ibMemberTable& helper) const override;
@@ -1548,7 +1548,7 @@ private:
 
 	// AccountKinds' memory: account -> its kinds, in order. Keyed by the account VALUE (a reference
 	// compares by guid there, ibValueHash).
-	mutable std::unordered_map<ibValue, std::vector<std::pair<wxString, ibValue>>, ibValueHash, ibValueEqual> m_accountKinds;
+	mutable std::unordered_map<ibValue, std::vector<std::pair<ibString, ibValue>>, ibValueHash, ibValueEqual> m_accountKinds;
 };
 
 #endif

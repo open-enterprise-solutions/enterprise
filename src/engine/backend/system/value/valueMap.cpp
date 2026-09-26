@@ -38,8 +38,7 @@ inline wchar_t FoldChar(const wchar_t c)
 size_t ibValueContainer::HashOf(const ibValue& key)
 {
 	if (key.GetType() == ibValueTypes::TYPE_STRING) {
-		ibString scratch;
-		const ibString& text = key.GetString(scratch);       // zero-copy for a string key
+		const ibString text = key.GetString();        // the key's text shared, not copied
 		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
 			h = ibHashCombine(h, FoldChar(*p));
@@ -73,8 +72,7 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 {
 	const bool isText = (key.GetType() == ibValueTypes::TYPE_STRING);
-	ibString keyScratch;
-	const ibString& keyText = isText ? key.GetString(keyScratch) : keyScratch;
+	const ibString keyText = isText ? key.GetString() : ibString();
 
 	const auto range = m_index.equal_range(hash);
 	for (auto it = range.first; it != range.second; ++it) {
@@ -83,8 +81,7 @@ long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 		if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
 			continue;                                        // text never matches a non-text key
 		if (isText) {
-			ibString candScratch;
-			if (FoldedEquals(candidate.GetString(candScratch), keyText))
+			if (FoldedEquals(candidate.GetString(), keyText))
 				return (long)at;
 		}
 		else if (candidate.CompareValueLS(key) == 0) {
@@ -243,16 +240,20 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 // scan. GetNProps / GetPropName / Get / SetPropVal are the index side of the
 // same store, used by the interpreter after FindProp and by introspection.
 
-long ibValueContainer::FindProp(const wxString& strPropName) const
+long ibValueContainer::FindProp(const ibString& strPropName) const
 {
 	return IndexOf(ibValue(strPropName));
 }
 
-wxString ibValueContainer::GetPropName(const long lPropNum) const
+const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 {
+	static const ibString s_absent;
 	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
-		return wxEmptyString;
-	return m_entries[lPropNum].first.GetString();
+		return s_absent;
+	// Only a stored name can be lent: a string key's own text. A key of another kind has no name to
+	// lend (and FindProp cannot reach it by name either).
+	const ibValue& key = m_entries[lPropNum].first;
+	return key.m_typeClass == ibValueTypes::TYPE_STRING ? key.m_sData : s_absent;
 }
 
 bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

@@ -18,7 +18,7 @@ public:
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return typeConv::FontToString(m_font);
 	}
 

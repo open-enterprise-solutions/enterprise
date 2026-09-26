@@ -37,14 +37,14 @@ ibValueType::ibValueType(const ibValueType& cType) :
 	m_clsid = cType.m_clsid;
 }
 
-wxString ibValueType::GetString() const
+ibString ibValueType::GetString() const
 {
 	return activeMetaData->GetNameObjectFromID(m_clsid);
 }
 
 // The same naming door a single type uses, once per admitted type. Asked of the METADATA, so a
 // configuration-specific reference reads as "CatalogRef.Goods" rather than a number.
-wxString ibValueTypeDescription::GetString() const
+ibString ibValueTypeDescription::GetString() const
 {
 	wxString presentation;
 	for (const ibClassID& clsid : m_typeDesc.GetClsidList()) {

@@ -347,14 +347,11 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 	if (&cValue1 == &cValue2)
 		return;
 
-	// STRING ONTO STRING KEEPS THE BUFFER, and the check has to come BEFORE Reset()
-	// because Reset() is exactly what throws the buffer away. Overwriting the text
-	// reuses the allocation, so a loop assigning into the same slot pays for one.
+	// STRING ONTO STRING SHARES THE TEXT — one more owner, no characters copied.
 	if (!cValue1.m_bReadOnly &&
-		cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr != nullptr &&
+		cValue1.m_typeClass == ibValueTypes::TYPE_STRING &&
 		cValue2.m_typeClass == ibValueTypes::TYPE_STRING) {
-		if (cValue2.m_pStr != nullptr) *cValue1.m_pStr = *cValue2.m_pStr;
-		else cValue1.m_pStr->Clear();                 // null source = the empty string
+		cValue1.m_sData = cValue2.m_sData;
 		return;
 	}
 
@@ -385,12 +382,9 @@ inline void CopyValue(ibValue& cValue1, ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// Buffer copy, exactly like ibValue::Copy. SetString(GetString()) went
-		// ibString -> wxString -> ibString: two conversions and two allocations
-		// per copied string, on the interpreter's per-instruction path. The
-		// destination was Reset() above, so its m_pStr is already null — no
-		// second Reset needed either.
-		cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
+		// The text shared, exactly like ibValue::Copy. The destination was Reset()
+		// above, so its word is the empty string already.
+		cValue1.m_sData = cValue2.m_sData;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -440,22 +434,9 @@ struct ibReleaseRef {
 inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 {
 	// 🛑 THE DESTINATION'S PREVIOUS TAG, read before it is overwritten. It is the only
-	// thing that says whether m_pStr is a buffer WE own — to be reused or released —
-	// or a stale alias of m_pRef that must never be touched. Without it this function
-	// either leaks the old buffer or deletes a pointer that was never an ibString;
-	// SetString() used to supply the answer by Reset()ing, at the price of the buffer.
+	// thing that says what the word holds — a string's text or a number's heap tier WE
+	// own, to be let go, or a stale alias of m_pRef that must never be touched.
 	const ibValueTypes destWas = cValue1.m_typeClass;
-	ibString* const destBuffer =
-		(destWas == ibValueTypes::TYPE_STRING) ? cValue1.m_pStr : nullptr;
-
-	// A destination that HELD a string and is about to become something else releases
-	// it here — once the tag has moved on, nothing downstream knows the pointer was a
-	// buffer. (The old SetString() road freed it only when the new value was a string
-	// too, so a string overwritten by a number was simply lost.)
-	if (destBuffer != nullptr && cValue2.m_typeClass != ibValueTypes::TYPE_STRING) {
-		delete cValue1.m_pStr;
-		cValue1.m_pStr = nullptr;
-	}
 
 	// 🛑⭐⭐ AND A DESTINATION THAT HELD AN OBJECT LETS IT GO — this overload never did. It is the LET road
 	// (`r = …` in a script: procUnit's OPER_LET reads its source const), and it overwrote an object
@@ -473,6 +454,18 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 	// 2026-09-10: 1M × 3 assignments, 110 → 136 ms).
 	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);
 
+	// A destination that held ANOTHER KIND lets go of its text or its number here (its object
+	// went to the guard above), and its word is zeroed — the empty state of every kind (value.h,
+	// the union) — so the member written below writes over a valid empty one. The same kind
+	// simply assigns over itself (a string then shares the source's text).
+	if (destWas != cValue2.m_typeClass) {
+		if (destWas == ibValueTypes::TYPE_STRING)
+			cValue1.m_sData.~ibString();
+		else if (destWas == ibValueTypes::TYPE_NUMBER)
+			cValue1.m_fData.~ibNumber();
+		cValue1.m_dData = 0;
+	}
+
 	cValue1.m_typeClass = cValue2.m_typeClass;
 	switch (cValue2.m_typeClass)
 	{
@@ -485,16 +478,8 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 		cValue1.m_fData = cValue2.m_fData;
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// STRING ONTO STRING KEEPS THE BUFFER. This is the LET road — `b = a` — so a
-		// loop assigning into the same slot would otherwise free and remake the buffer
-		// on every iteration; overwriting the text reuses the allocation instead.
-		if (destBuffer != nullptr) {
-			if (cValue2.m_pStr != nullptr) *destBuffer = *cValue2.m_pStr;
-			else destBuffer->Clear();                    // null source = the empty string
-		}
-		else {
-			cValue1.m_pStr = cValue2.m_pStr ? new ibString(*cValue2.m_pStr) : nullptr;
-		}
+		// The LET road — `b = a` — shares the text: one more owner, no characters copied.
+		cValue1.m_sData = cValue2.m_sData;
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = cValue2.m_dData;
@@ -531,8 +516,14 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		return;
 
 	const ibValueTypes destWas = cValue1.m_typeClass;
-	const std::unique_ptr<ibString> destBuffer(destWas == ibValueTypes::TYPE_STRING ? cValue1.m_pStr : nullptr);
 	const std::unique_ptr<ibValue, ibReleaseRef> destHeld(destWas == ibValueTypes::TYPE_REFFER ? cValue1.m_pRef : nullptr);   // adopts the destination's reference
+
+	// The destination's own text or number goes now, and its word is zeroed (value.h, the union).
+	if (destWas == ibValueTypes::TYPE_STRING)
+		cValue1.m_sData.~ibString();
+	else if (destWas == ibValueTypes::TYPE_NUMBER)
+		cValue1.m_fData.~ibNumber();
+	cValue1.m_dData = 0;
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
 
@@ -547,10 +538,9 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_fData = std::move(cValue2.m_fData);
 		break;
 	case ibValueTypes::TYPE_STRING:
-		// A move MOVES the buffer — same as ibValue::Move. The source is an
-		// expiring value (Reset() at the tail of this function), so nulling
-		// m_pStr here is what keeps that Reset from freeing what we took.
-		cValue1.m_pStr = cValue2.m_pStr; cValue2.m_pStr = nullptr;
+		// A move MOVES the text — same as ibValue::Move. The source is an expiring
+		// value (Reset() at the tail of this function), left holding no text.
+		cValue1.m_sData = std::move(cValue2.m_sData);
 		break;
 	case ibValueTypes::TYPE_DATE:
 		cValue1.m_dData = std::move(cValue2.m_dData);

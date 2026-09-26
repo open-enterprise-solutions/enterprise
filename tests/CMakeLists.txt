@@ -215,10 +215,11 @@ oes_discover_tests(oes_tests)
 # ---------------------------------------------------------------------------
 # Lightweight string-layer tests — ibString/fstring only.
 #
-# fstring.h + fstringPool.h are header-only and depend on nothing but wxBase,
-# so this target does NOT link (or recompile) backend.dll. Use it for fast
-# iteration on the string type — it builds in seconds even after touching core
-# backend headers:
+# fstring.h is the facade and fstring.cpp the module behind it; both depend on
+# nothing but wxBase, so this target compiles the module IN (as if it were
+# backend, BACKEND_EXPORTS) and does NOT link (or recompile) backend.dll. Use it
+# for fast iteration on the string type — it builds in seconds even after
+# touching core backend headers:
 #
 #   cmake --build build --target oes_string_tests
 #   ./bin/oes_string_tests                                    # functional tests
@@ -228,7 +229,9 @@ oes_discover_tests(oes_tests)
 add_executable(oes_string_tests
     test_string.cpp
     bench_string.cpp
+    "${CMAKE_SOURCE_DIR}/src/engine/backend/fstring.cpp"
 )
+target_compile_definitions(oes_string_tests PRIVATE BACKEND_EXPORTS)
 
 target_link_libraries(oes_string_tests
     PRIVATE

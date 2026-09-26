@@ -788,11 +788,11 @@ private:
 			// 🛑 IT IS THE EXPORTED RULE (`ibLinqNamedColumns`, procUnit.h) and not a second copy of
 			// it here. Two readings of "does it have columns" would eventually disagree, and the one
 			// that drifts is this one — it would go on describing an Array as a table.
-			std::vector<wxString> named;
+			std::vector<ibString> named;
 			if (haveRow && ibLinqNamedColumns(row, named)) {
 				ibValueModelTable* const table = new ibValueModelTable();
 				if (auto* const columns = table->GetColumnCollection())
-					for (const wxString& name : named)
+					for (const ibString& name : named)
 						columns->AddColumn(name, ibTypeDescription(), name);
 				out = table;
 			}

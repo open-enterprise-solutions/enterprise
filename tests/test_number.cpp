@@ -26,6 +26,38 @@ TEST(NumberLayout, AlignofIs8) {
     EXPECT_EQ(alignof(ibNumber), 8u);
 }
 
+// All-zero bits are the number 0 — what lets ibValue keep a number in its union.
+TEST(NumberLayout, ZeroBitsAreZero) {
+    alignas(ibNumber) unsigned char word[sizeof(ibNumber)] = {};
+    const ibNumber& zero = *reinterpret_cast<const ibNumber*>(word);
+    EXPECT_TRUE(zero.IsZero());
+    EXPECT_EQ(zero.ToString(), wxT("0"));
+}
+
+// ===========================================================================
+// The heap tier is shared — a copy is one more owner, a write gets its own
+// ===========================================================================
+
+TEST(NumberShared, WriteToACopyLeavesTheOriginal) {
+    const ibNumber original(wxString(wxT("765.3456754567765443343")));   // 22 digits → heap
+    ibNumber copy(original);
+    copy += ibNumber(1);
+    EXPECT_EQ(original.ToString(), wxT("765.3456754567765443343"));
+    EXPECT_EQ(copy.ToString(), wxT("766.3456754567765443343"));
+
+    ibNumber assigned;
+    assigned = original;
+    assigned = ibNumber(0);                                              // back to immediate
+    EXPECT_EQ(original.ToString(), wxT("765.3456754567765443343"));
+}
+
+TEST(NumberShared, ItselfOnBothSides) {
+    ibNumber n(wxString(wxT("765.3456754567765443343")));
+    n = n;
+    n += n;
+    EXPECT_EQ(n.ToString(), wxT("1530.6913509135530886686"));
+}
+
 // ===========================================================================
 // Constructors and immediate/heap split
 // ===========================================================================

@@ -16,7 +16,7 @@ class BACKEND_API ibValueGuid : public ibValue {
 	virtual bool Init();
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
 
-	virtual wxString GetString() const {
+	virtual ibString GetString() const {
 		return m_guid;
 	}
 
