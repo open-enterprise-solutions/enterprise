@@ -132,9 +132,6 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	bool ContainType(const ibValueTypes& valType) const;
 	bool ContainType(const ibClassID& clsid) const;
 
-	//contain meta type
-	bool ContainMetaType(ibCtorObjectMetaType type) const;
-
 	//equal type 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const;
 

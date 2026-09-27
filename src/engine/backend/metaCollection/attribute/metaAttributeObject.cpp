@@ -94,17 +94,6 @@ bool ibValueMetaObjectAttributeBase::EqualType(const ibClassID& clsid, const ibT
 	return GetTypeDesc().EqualType(clsid, rhs);
 }
 
-bool ibValueMetaObjectAttributeBase::ContainMetaType(ibCtorObjectMetaType type) const
-{
-	for (auto& clsid : GetTypeDesc().GetClsidList()) {
-		const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(clsid);
-		if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == type)
-			return true;
-	}
-
-	return false;
-}
-
 /////////////////////////////////////////////////////////////////////////
 
 ibItemMode ibValueMetaObjectAttribute::GetItemMode() const {
