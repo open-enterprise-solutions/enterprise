@@ -32,6 +32,10 @@ Procedure BeforeWrite(Source, Cancel, WriteMode, PostingMode)
 
 Trailing arguments the procedure does not read may be left off: `BeforeWrite(Source, Cancel)` works too.
 
+A record set (a register's, a sequence's) raises `BeforeWrite` and `OnWrite` with `(Cancel, Replacing)`, and
+`BeforeDelete` and `OnDelete` with `(Cancel)`. `Replacing` says whether the write replaces what the set's filter
+holds.
+
 From an assistant over MCP: `metadata_create` with `kind: "EventHandler"`, `Source` through
 `metadata_set_type` (one type, or several through `description`), `Event` through `metadata_set`, then
 `module_write` into the module named by `HandlerModule`.
