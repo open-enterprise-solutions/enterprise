@@ -59,13 +59,10 @@ ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibClassID& clsid) const
 
 ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	// (metaValue, refType) key — metadata-specific, kept linear.
-	ibCtorMetaValueType* result = nullptr;
-	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* typeCtor) {
-		if (result == nullptr && refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
-			result = typeCtor;
-	});
-	if (result != nullptr) return result;
+	// The id the pair spells, in the report's own image first (ibMetaImage::FindCtor — one probe; this was a copy
+	// of the walk that stood there), then the configuration's.
+	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(metaValue, refType) : nullptr))
+		return typeCtor;
 	return activeMetaData->GetTypeCtor(metaValue, refType);
 }
 

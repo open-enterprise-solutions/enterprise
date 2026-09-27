@@ -75,7 +75,7 @@ struct TotalsFoldFix : ::testing::Test {
 		ASSERT_NE(reg, nullptr);
 		auto* dimension = dynamic_cast<ibValueMetaObjectDimension*>(cfg.CreateMetaObject(g_metaDimensionCLSID, reg, false));
 		ASSERT_NE(dimension, nullptr);
-		dimension->GetTypeDesc().SetDefaultMetaType(reference_to_clsid(catalog->GetMetaID()));
+		dimension->GetTypeDesc().SetDefaultMetaType(reference_to_clsid(catalog->GetMetaID(), clsid_metaclass(catalog->GetClassType())));
 		cfg.CreateMetaObject(g_metaResourceCLSID, reg, false);
 
 		reg->ContributeTables(snapshot);
@@ -128,7 +128,7 @@ struct TotalsFoldFix : ::testing::Test {
 		row.push_back({ Field(ibColumnRole::Discriminator),
 			ibConst(ibValue(static_cast<int>(typed ? ibFieldTypes_Reference : ibFieldTypes_Empty))) });
 		row.push_back({ Field(ibColumnRole::ReferenceType),
-			typed ? ibConst(ibValue(ibNumber(static_cast<long long>(reference_to_clsid(catalog->GetMetaID()))))) : ibConst(ibValue()) });
+			typed ? ibConst(ibValue(ibNumber(static_cast<long long>(reference_to_clsid(catalog->GetMetaID(), clsid_metaclass(catalog->GetClassType())))))) : ibConst(ibValue()) });
 		row.push_back({ Field(ibColumnRole::ReferenceId), typed ? ibConstBlob(zeroKey, sizeof(zeroKey)) : ibConst(ibValue()) });
 		row.push_back({ ShardColumnName(), ibConst(ibValue(ibNumber(shard))) });
 		for (size_t n = 0; n < totals.m_materialize.m_deltas.size(); n++)

@@ -58,7 +58,7 @@ bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member
 bool ibValueMetaObjectGenericData::AdjustOutValue(const ibValueDataObject& /*element*/, const ibValue& varValue,
 	ibValue& out) const
 {
-	const ibTypeDescription mine(reference_to_clsid(GetMetaID()));
+	const ibTypeDescription mine(reference_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())));
 	if (mine.ContainType(varValue.GetClassType())) {
 		out = varValue;
 		return true;

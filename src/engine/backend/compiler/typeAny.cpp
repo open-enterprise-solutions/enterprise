@@ -95,12 +95,13 @@ static const wxChar s_anyRef_16_png[] = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAY
 //**********************************************************************
 
 GENERATE_REGISTER(wxT("Any"), s_cs_reg_any_all, new ibCtorAnyUnrestricted());
-// `AnyRef` is a REFERENCE by its own id as well, as `CatalogRef` is (metaCtor.h): a field declared with it is
-// stored as one, the `_RTRef` / `_RRRef` pair, whichever reference it is given. The others stay system ids —
+// `AnyRef`, `AnyObject`, `AnyManager` are spelled in the bits of what they admit, as `CatalogRef` is
+// (metaCtor.h): their kind, no metaclass, any metaID (clsid.h) — so `AnyRef` is stored as a reference, the
+// `_RTRef` / `_RRRef` pair, and a type test against it is the range of its kind. The others stay system ids —
 // none of them is a type a field is stored as.
-GENERATE_REGISTER(wxT("AnyRef"), s_cs_reg_any_ref, new ibCtorAnyKind(wxT("AnyRef"), ibClassKind_Reference, make_clsid("AnyRef", ibClassKind_Reference), s_anyRef_16_png));
-GENERATE_REGISTER(wxT("AnyObject"), s_cs_reg_any_obj, new ibCtorAnyKind(wxT("AnyObject"), ibClassKind_Object, system_to_clsid("AnyObject")));
-GENERATE_REGISTER(wxT("AnyManager"), s_cs_reg_any_mgr, new ibCtorAnyKind(wxT("AnyManager"), ibClassKind_Manager, system_to_clsid("AnyManager")));
+GENERATE_REGISTER(wxT("AnyRef"), s_cs_reg_any_ref, new ibCtorAnyKind(wxT("AnyRef"), ibClassKind_Reference, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Reference), s_anyRef_16_png));
+GENERATE_REGISTER(wxT("AnyObject"), s_cs_reg_any_obj, new ibCtorAnyKind(wxT("AnyObject"), ibClassKind_Object, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Object)));
+GENERATE_REGISTER(wxT("AnyManager"), s_cs_reg_any_mgr, new ibCtorAnyKind(wxT("AnyManager"), ibClassKind_Manager, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Manager)));
 GENERATE_REGISTER(wxT("AnyControl"), s_cs_reg_any_ctl, new ibCtorAnyKind(wxT("AnyControl"), ibClassKind_Control, system_to_clsid("AnyControl")));
 GENERATE_REGISTER(wxT("AnyValue"), s_cs_reg_any_val, new ibCtorAnyKind(wxT("AnyValue"), ibClassKind_Value, system_to_clsid("AnyValue")));
 GENERATE_REGISTER(wxT("AnyEnum"), s_cs_reg_any_enm, new ibCtorAnyKind(wxT("AnyEnum"), ibClassKind_Enum, system_to_clsid("AnyEnum")));

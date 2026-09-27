@@ -6,7 +6,6 @@
 #include "typeSelector.h"
 
 #include "backend/metaData.h"
-#include "backend/objCtor.h"          // ibCtorMetaValueType — the ctor a reference clsid resolves to
 #include "backend/compiler/value.h"
 #include "backend/system/value/valueTable.h"           // g_valueTableCLSID — the container kinds an attribute may be
 #include "backend/system/value/valueDynamicList.h"     // g_valueDynamicListCLSID
@@ -217,9 +216,10 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	//
 	// ⭐ A FAMILY IS A TYPE AND A HEADING: `CatalogRef` is chosen as itself — a reference to any catalog, the
 	// ones added later included — and holds each catalog's reference below it. The families come first in
-	// what is offered, and each member finds its own by the name it is made of (ibCtorMetaAnyKind::NameOf).
-	// A reference whose family is not on offer (a table's shape) goes under a plain heading of that name.
-	std::map<wxString, wxTreeItemId> headings;
+	// what is offered, and each member finds its own by its id: the member's with the metaID left ANY
+	// (clsid_any_of). A reference whose family is not on offer (a table's shape) goes under a plain heading
+	// of the family's name.
+	std::map<ibClassID, wxTreeItemId> headings;
 
 	for (const ibClassID& clsid : allowed) {
 		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
@@ -228,19 +228,19 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 
 		wxTreeItemId parentItem = tc->GetRootItem();
 
-		const ibCtorMetaValueType* metaCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-		const ibValueMetaObject* owner = metaCtor != nullptr ? metaCtor->GetMetaObject() : nullptr;
-		if (owner == nullptr) {
-			headings[so->GetClassName()] = AppendType(tc, parentItem, so, inOut, allowEdit);
+		// A type of no metaobject — a primitive, a family itself — stands at the root, a heading to its members.
+		if (!IsMetaValue(clsid) || clsid_is_any(clsid)) {
+			headings[clsid] = AppendType(tc, parentItem, so, inOut, allowEdit);
 			continue;
 		}
 
-		const wxString familyName = ibCtorMetaAnyKind::NameOf(owner->GetClassName(), metaCtor->GetMetaTypeCtor());
-		auto heading = headings.find(familyName);
+		const ibClassID family = clsid_any_of(clsid);
+		auto heading = headings.find(family);
 		if (heading == headings.end() && IsReference(clsid)) {
 			wxImageList* imageList = tc->GetImageList();
 			const int groupIcon = imageList->Add(so->GetClassIcon());
-			heading = headings.emplace(familyName, tc->AppendItem(tc->GetRootItem(), familyName, groupIcon, groupIcon)).first;
+			const wxString familyName = ibValue::GetNameObjectFromID(family);
+			heading = headings.emplace(family, tc->AppendItem(tc->GetRootItem(), familyName, groupIcon, groupIcon)).first;
 		}
 		if (heading != headings.end() && heading->second.IsOk())
 			parentItem = heading->second;

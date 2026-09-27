@@ -33,7 +33,6 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"            // how a field is chosen — and what each part of THAT may be
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"     // …and the two values that carry it
 #include "backend/choiceLinkResolver.h"               // choice_preview asks the resolver a control asks
-#include "backend/metaCollection/partial/reference/reference.h"   // ConvertToMetaIds — a family's lists, its facade
 #include "backend/metaCollection/partial/commonObject.h"   // …of a record made new: an object, a register's record
 #include "backend/metaCollection/table/metaTableObject.h"  // …or a row of a tabular section
 #include "backend/system/value/valueDynamicList.h"    // …and opens the list a choice form opens
@@ -2615,7 +2614,7 @@ public:
 				wxString offered;
 				std::vector<ibClassID> named;
 				for (unsigned int idx = 0; idx < types.GetCount(); idx++) {
-					const ibClassID clsid = reference_to_clsid((ibMetaID)types.GetId(idx));
+					const ibClassID clsid = metaData->GetIDObjectFromMetaID((ibMetaID)types.GetId(idx), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 					const wxString typeName = metaData->GetNameObjectFromID(clsid);
 					offered << (offered.IsEmpty() ? wxT("") : wxT(", ")) << typeName;
 					if (typeName.IsSameAs(governed, false) || types.GetName(idx).IsSameAs(governed, false))
@@ -2673,7 +2672,7 @@ public:
 				wxString offeredParameters;
 				for (unsigned int type = 0; type < targets.GetCount() && row.m_parameter == 0; type++) {
 					ibPropertyChoiceList fields;
-					paramsProperty->GetParameterList(reference_to_clsid((ibMetaID)targets.GetId(type)), fields);
+					paramsProperty->GetParameterList(metaData->GetIDObjectFromMetaID((ibMetaID)targets.GetId(type), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference), fields);
 					wxString ofThisType;
 					row.m_parameter = Named(fields, parameter, ofThisType);
 					if (!ofThisType.IsEmpty())
@@ -3005,16 +3004,25 @@ public:
 
 		std::vector<ibDataValue> types;
 		std::vector<ibClassID> lists;
+		const auto offer = [&lists](const ibClassID& list) {
+			if (std::find(lists.begin(), lists.end(), list) == lists.end())
+				lists.push_back(list);
+		};
 		for (const ibClassID& clsid : field->GetTypeValueDesc().GetClsidList()) {
 			if (settled != 0 && clsid != settled)
 				continue;   // the link has decided this field's type; the rest is not on offer
 			types.push_back(ibDataValue::String(metaData->GetNameObjectFromID(clsid)));
-			// A reference opens its list; an "any" — CatalogRef, AnyRef — any list of its facade, as the
-			// picker offers them (ibValueReferenceDataObject::ConvertToMetaIds): nothing opens "a CatalogRef".
-			if (IsReference(clsid))
-				for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds({ clsid }, metaData))
-					if (std::find(lists.begin(), lists.end(), reference_to_clsid(id)) == lists.end())
-						lists.push_back(reference_to_clsid(id));
+			// A reference opens its list; an "any" — CatalogRef, AnyRef — any list of its facade, every reference
+			// its bits admit (clsid_admits), as the picker offers them: nothing opens "a CatalogRef".
+			if (!IsReference(clsid))
+				continue;
+			if (!clsid_is_any(clsid)) {
+				offer(clsid);
+				continue;
+			}
+			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+				if (clsid_admits(clsid, member->GetClassType()))
+					offer(member->GetClassType());
 		}
 		result.AddField(wxT("types"), ibDataValue::Array(types));
 		result.SetValue(wxT("settled_by_link"), settled != 0);
@@ -3184,8 +3192,8 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataProperties);
 // register get filled from*. Nothing answered it, so the honest options were to read every object
 // or to guess (measured on this server, 2026-09-02, building a warehouse application blind).
 //
-// ⭐ AND IT IS EXACT WHERE IT MATTERS, because a dynamic type carries the metaID as the BODY of its
-// clsid (clsid.h — `metaID_from_clsid`). A reference to a catalogue is not a NAME stored somewhere:
+// ⭐ AND IT IS EXACT WHERE IT MATTERS, because a dynamic type carries the metaID in the low bits of its
+// clsid (clsid.h — `clsid_metaID`). A reference to a catalogue is not a NAME stored somewhere:
 // it is a number, so the type half of this answer is not a search at all. That is what makes the
 // difference between "these mention the word" and "these would stop compiling".
 //
@@ -3291,7 +3299,7 @@ public:
 					if (clsid_kind(clsid) < ibClassKind_Reference)
 						continue;
 
-					if (metaID_from_clsid(clsid) != target)
+					if (clsid_metaID(clsid) != target)
 						continue;
 
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();

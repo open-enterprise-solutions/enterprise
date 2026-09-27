@@ -34,6 +34,10 @@ bool ibCtorMetaValueTypeCharacteristic::AllowValue(const ibClassID& clsid) const
 	if (clsid == g_valueUndefinedCLSID)
 		return true;
 
+	// A chart may list a FAMILY — `AnyRef`, `CatalogRef`: "any reference" is the usual type of an analytics
+	// kind. It admits each of its members, read off the two ids as everywhere (clsid_admits); a single type
+	// is a range of one. Looked up as it stood, a family let no real value through.
 	const std::vector<ibClassID>& allowed = m_metaObject->GetTypesOfCharacteristics().GetClsidList();
-	return std::find(allowed.begin(), allowed.end(), clsid) != allowed.end();
+	return std::any_of(allowed.begin(), allowed.end(),
+		[&clsid](const ibClassID& type) { return clsid_admits(type, clsid); });
 }

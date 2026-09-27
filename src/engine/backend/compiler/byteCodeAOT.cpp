@@ -234,7 +234,11 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    read the operand's field. Cached bytecode written by the old compiler holds that If; the new
 //    interpreter writes the comparison's answer with its tag, into another field, and the old If
 //    would read the one nobody wrote. And / Or answer a boolean by the same rule and move with it.
-constexpr uint16_t kAOTFormatVersion = 33;
+// 🛑 33 -> 34 (2026-09-27): A DYNAMIC CLASS ID CARRIES ITS METACLASS (clsid.h: kind | metaclass | metaID), and
+//    `AnyRef` / `CatalogRef` are spelled in those bits (any metaID) instead of a name hash. A blob keeps the
+//    class ids its code was compiled against — a declared type, a `New` — and a v33 one names classes that
+//    are registered under other ids now.
+constexpr uint16_t kAOTFormatVersion = 34;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against

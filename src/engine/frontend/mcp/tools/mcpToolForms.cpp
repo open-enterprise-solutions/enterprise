@@ -33,6 +33,7 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/objCtor.h"   // ibCtorMetaValueType — what a reference type points at, by its id
 #include "backend/backend_command.h"                            // WalkCommand — the receiver judges a binding
 #include "backend/commandDescription.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
@@ -313,6 +314,14 @@ ibValueFrame* FindControl(ibValueFrame* from, ibFormID wanted)
 	return nullptr;
 }
 
+// ⭐ WHAT A REFERENCE TYPE POINTS AT — the type's own ctor holds its metaobject: one probe by the id, where the
+// whole tree was walked for the metaID the id carries. Null for a barrier (`AnyRef`, `CatalogRef`), which points
+// at no one object, and for a type the configuration does not register.
+const ibValueMetaObject* PointedAt(const ibMetaData* metaData, const ibClassID& clsid)
+{
+	const ibCtorMetaValueType* type = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	return type != nullptr ? type->GetMetaObject() : nullptr;
+}
 
 } // namespace
 
@@ -1167,17 +1176,13 @@ public:
 				// not — the target is another object entirely, and materialising it
 				// eagerly is what makes the tree infinite.
 				//
-				// So the hop is resolved the way the platform states identity: a
-				// reference's class id is CONSTRUCTIVE, its body being the metaID of
-				// the object it points at. Read the id, find the object, answer with
-				// ITS fields. No lookup table, and true for a metatype added tomorrow.
+				// So the hop is resolved by the TYPE: a reference's class id names the
+				// type whose own ctor holds the object it points at (PointedAt) — one
+				// probe, and true for a metaclass added tomorrow. Answer with ITS fields.
 				if (next != nullptr && next->GetHelperCount() == 0
 					&& IsReference(next->GetTypeDesc().GetFirstClsid())) {
 
-					const ibMetaID target =
-						(ibMetaID)(next->GetTypeDesc().GetFirstClsid() & kIbClsidBodyMask);
-
-					if (ibValueMetaObject* pointed = ibFindMetaObjectById(activeMetaData, target)) {
+					if (const ibValueMetaObject* pointed = PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid())) {
 
 						walked = walked.IsEmpty() ? segment : walked + wxT(".") + segment;
 
@@ -1236,7 +1241,7 @@ private:
 	// metaobject, because that is where the answer lives once the hop has left the
 	// form's own source behind — and asked one level deep, for the same reason the
 	// rest of this is lazy.
-	static ibDataValue Referenced(ibValueMetaObject* object)
+	static ibDataValue Referenced(const ibValueMetaObject* object)
 	{
 		std::vector<ibDataValue> out;
 
@@ -1562,7 +1567,7 @@ public:
 		//
 		// One path, two halves, and the hop ids are the same kind of thing on both
 		// sides — which is why a binding can express `Warehouse.Code` at all.
-		ibValueMetaObject* through = nullptr;
+		const ibValueMetaObject* through = nullptr;
 
 		wxStringTokenizer segments(ArgPath().Text(params), wxT("."));
 		while (segments.HasMoreTokens()) {
@@ -1635,12 +1640,10 @@ public:
 				explorer = next;            // a section — its columns are nodes
 			}
 			else if (IsReference(next->GetTypeDesc().GetFirstClsid())) {
-				// The border. The body of a reference's class id IS the metaID of
-				// what it points at — constructive, so no lookup table and true for
-				// a metatype added tomorrow.
+				// The border. What a reference points at is its type's own metaobject
+				// (PointedAt) — one probe by the id, true for a metaclass added tomorrow.
 				explorer = nullptr;
-				through = ibFindMetaObjectById(activeMetaData,
-					(ibMetaID)(next->GetTypeDesc().GetFirstClsid() & kIbClsidBodyMask));
+				through = PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid());
 			}
 			else {
 				explorer = nullptr;         // a leaf; a further segment will refuse

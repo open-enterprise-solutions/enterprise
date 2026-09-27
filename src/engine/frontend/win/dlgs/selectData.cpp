@@ -46,9 +46,7 @@ ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const
 	);
 
 	for (const auto clsid : array) {
-		if (metaData->IsRegisterCtor(clsid)) {
-			const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);
-			wxASSERT(typeCtor);
+		if (const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid)) {
 			wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
 			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetClassName(), imageList->Add(typeCtor->GetClassIcon()));
 			m_listTypeClass.insert_or_assign(lSelectedItem, clsid);

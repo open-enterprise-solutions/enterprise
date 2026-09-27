@@ -235,8 +235,16 @@ ibQueryExprPtr TypeTagTest(const ibBackendQueryColumn* col, ibClassID target, co
 	if (IsReference(target)) {
 		if (!IsReferenceValued(col))
 			return nullptr;   // this column holds no reference at all — no row of it is of that type
-		return ibBinOp(ibQueryBinOp::Eq,
-			ibColQ(qual, base + ibFieldSuffix(ibColumnRole::ReferenceType)),
+		const ibQueryExprPtr referenceType = ibColQ(qual, base + ibFieldSuffix(ibColumnRole::ReferenceType));
+		// ⭐ THE IDS A TYPE ADMITS ARE ONE RANGE (clsid.h), and the server compares it here. A barrier —
+		// `TYPE(CatalogRef)`, `TYPE(AnyRef)` — runs from its own id, which no row carries, to the last its members
+		// can have; a single type is a range of one, an equality. The RAM road asks the same bounds (clsid_admits).
+		const ibClassID last = clsid_admitted_max(target);
+		if (last != target)
+			return ibBinOp(ibQueryBinOp::And,
+				ibBinOp(ibQueryBinOp::Ge, referenceType, ibConst(ibValue(ibNumber(static_cast<unsigned long long>(target))))),
+				ibBinOp(ibQueryBinOp::Le, referenceType, ibConst(ibValue(ibNumber(static_cast<unsigned long long>(last))))));
+		return ibBinOp(ibQueryBinOp::Eq, referenceType,
 			ibConst(ibValue(ibNumber(static_cast<unsigned long long>(target)))));
 	}
 	// A PRIMITIVE is answered by the stored tag. The vocabulary is the PERSISTED one (ibFieldTypes),
@@ -5482,22 +5490,20 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTarget
 	for (const ibClassID& clsid : refColumn->GetTypeValueDesc().GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
-		const ibCtorAbstractType* type = metaData->GetAvailableCtor(clsid);   // ONE lookup, whatever reference it is
-		if (type == nullptr)
-			continue;
-		// …and the pointer already in hand read as what it is: a configuration's reference has its own table.
-		if (const ibCtorMetaValueType* ctor = dynamic_cast<const ibCtorMetaValueType*>(type)) {
-			if (const ibBackendQueryable* q = ctor->GetQueryable())
-				targets.push_back(q);
+		// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the
+		// composite of them all. Its bits say which (clsid_admits), as they do when a value is stored.
+		if (clsid_is_any(clsid)) {
+			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+				if (clsid_admits(clsid, member->GetClassType()))
+					if (const ibBackendQueryable* q = member->GetQueryable())
+						if (std::find(targets.begin(), targets.end(), q) == targets.end())
+							targets.push_back(q);
 			continue;
 		}
-		// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the
-		// composite of them all. Its gate answers, as it does when a value is stored.
-		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-			if (type->AllowValue(member->GetClassType()))
-				if (const ibBackendQueryable* q = member->GetQueryable())
-					if (std::find(targets.begin(), targets.end(), q) == targets.end())
-						targets.push_back(q);
+		// A configuration's reference has its own table.
+		if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid))
+			if (const ibBackendQueryable* q = ctor->GetQueryable())
+				targets.push_back(q);
 	}
 	return targets;
 }

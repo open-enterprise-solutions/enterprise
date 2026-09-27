@@ -59,16 +59,16 @@ TEST(EventHandler, AFamilyAdmitsItsMembersOnly)
 	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Object);
 	ASSERT_NE(family, nullptr);
 
-	const ibClassID member   = make_clsid("EventHandlerTestMember",   ibClassKind_Object);
-	const ibClassID stranger = make_clsid("EventHandlerTestStranger", ibClassKind_Object);
+	// The metaclass is in the id (clsid.h) — the metaclass's own id: a document's object and a catalog's, and a
+	// document's reference.
+	const ibClassID member    = object_to_clsid(4242, clsid_metaclass(g_metaDocumentCLSID));
+	const ibClassID stranger  = object_to_clsid(4243, clsid_metaclass(g_metaCatalogCLSID));
+	const ibClassID reference = reference_to_clsid(4242, clsid_metaclass(g_metaDocumentCLSID));
 	const ibTypeDescription source(std::vector<ibClassID>{ family->GetClassType() });
 
-	family->AddMember(member);
 	EXPECT_TRUE(ibValueTypeDescription::AllowValue(source, member)) << "every document's object is a document's object";
-	EXPECT_FALSE(ibValueTypeDescription::AllowValue(source, stranger)) << "an object nobody registered is not";
-
-	family->RemoveMember(member);
-	EXPECT_FALSE(ibValueTypeDescription::AllowValue(source, member)) << "a member that went is forgotten";
+	EXPECT_FALSE(ibValueTypeDescription::AllowValue(source, stranger)) << "a catalog's object is not";
+	EXPECT_FALSE(ibValueTypeDescription::AllowValue(source, reference)) << "nor a document's reference";
 }
 
 // 4 - the event source filter asks the configuration

@@ -277,11 +277,12 @@ wxString ibDescribeTypes(const ibTypeDescription& typeDesc, const ibMetaData* me
 
 	wxString described;
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
-		if (!metaData->IsRegisterCtor(clsid))
+		const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);   // one look-up: known, and its name
+		if (typeCtor == nullptr)
 			continue;
 		if (!described.IsEmpty())
 			described += wxT(", ");
-		described += metaData->GetNameObjectFromID(clsid);
+		described += typeCtor->GetClassName();
 	}
 	return described.IsEmpty() ? _("<any>") : described;
 }

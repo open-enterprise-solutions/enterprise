@@ -20,9 +20,12 @@
 // A COMPOSITE reference names several, so there is no ONE target — this stays the answer to "what
 // does it refer to", and it is zero for a composite. Whether the field can be WALKED is a different
 // question, asked below.
+//
+// A barrier (`AnyRef`, `CatalogRef`) is no target either: it names no table. A field declared with one holds
+// its members (FieldOfExplorer), and one with none to hold is a leaf.
 static ibClassID SingleReferenceOf(const std::vector<ibClassID>& clsids)
 {
-	return clsids.size() == 1 && IsReference(clsids.front()) ? clsids.front() : 0;
+	return clsids.size() == 1 && IsReference(clsids.front()) && !clsid_is_any(clsids.front()) ? clsids.front() : 0;
 }
 
 // ⭐ CAN IT BE WALKED — and the honest test is "is there ANY reference here", not "is there exactly
@@ -33,7 +36,7 @@ static ibClassID SingleReferenceOf(const std::vector<ibClassID>& clsids)
 static bool HasReference(const std::vector<ibClassID>& clsids)
 {
 	for (const ibClassID& clsid : clsids)
-		if (IsReference(clsid))
+		if (IsReference(clsid) && !clsid_is_any(clsid))
 			return true;
 	return false;
 }
@@ -52,11 +55,15 @@ static ibQueryConstructorField FieldOfExplorer(const ibSourceDataObject::ibSourc
 	ibQueryConstructorField field;
 	field.m_name           = node.GetSourceName();
 	field.m_presentation   = node.GetSourceName();
+	// ⭐ WHAT IT HOLDS (GetTypeValueDesc), the types the query walks it by (ResolveReferenceTargets): a field
+	// declared `AnyRef` unfolds into every reference of the configuration, a characteristic into its chart's.
+	// Read by the declaration, both were offered as a leaf, or as a [+] with nothing behind it.
+	const ibTypeDescription& held = node.GetTypeValueDesc();
 	// A reference field can be dot-walked further (Supplier.Region.Country) — the shell shows it with
 	// a [+] and asks again with the leaf's own source.
-	field.m_referenceClsid = SingleReferenceOf(node.GetClsidList());
-	field.m_reference      = HasReference(node.GetClsidList());
-	field.m_type           = node.GetTypeDesc();
+	field.m_referenceClsid = SingleReferenceOf(held.GetClsidList());
+	field.m_reference      = HasReference(held.GetClsidList());
+	field.m_type           = held;
 	field.m_icon           = node.GetSourceIcon();   // the column's own picture, asked not deduced
 	return field;
 }
@@ -416,15 +423,15 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceFields
                                                                                 const wxString& sourceLabel) const
 {
 	std::vector<ibQueryConstructorField> out;
-	if (clsid == 0 || !IsReference(clsid))
-		return out;   // not a reference: nothing is behind it
+	if (clsid == 0 || !IsReference(clsid) || clsid_is_any(clsid))
+		return out;   // not a reference, or a barrier (`AnyRef`, `CatalogRef`): no one table is behind it
 
 	ibQueryableFactory* factory = Factory();
 	if (factory == nullptr)
 		return out;
 
 	ibQueryableSourceDescriptor* descriptor =
-		factory->ResolveDescriptorById(static_cast<ibMetaID>(clsid & kIbClsidBodyMask));
+		factory->ResolveDescriptorById(static_cast<ibMetaID>(clsid_metaID(clsid)));
 	if (descriptor == nullptr)
 		return out;   // a type with no queryable (a report, a data processor) — not a table
 
@@ -455,11 +462,11 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceBranch
 		return out;
 
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
-		if (!IsReference(clsid))
-			continue;
+		if (!IsReference(clsid) || clsid_is_any(clsid))
+			continue;   // a barrier names no table; its metaID, 0, is what a source with no metaobject answers
 
 		ibQueryableSourceDescriptor* descriptor =
-			factory->ResolveDescriptorById(static_cast<ibMetaID>(clsid & kIbClsidBodyMask));
+			factory->ResolveDescriptorById(static_cast<ibMetaID>(clsid_metaID(clsid)));
 		if (descriptor == nullptr)
 			continue;   // a type with no queryable (a report, a data processor) — not a table
 

@@ -9,7 +9,7 @@ class ibCtorMetaValueTypeCharacteristic :
 public:
 
 	ibCtorMetaValueTypeCharacteristic(ibValueMetaObjectChartOfCharacteristicTypes* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = characteristic_to_clsid(GetMetaObject()->GetMetaID());
+		m_classType = characteristic_to_clsid(GetMetaObject()->GetMetaID(), clsid_metaclass(GetMetaObject()->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -40,6 +40,6 @@ protected:
 #define registerCharacteristic()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeCharacteristic(this))
 #define unregisterCharacteristic()\
-	m_metaData->UnRegisterCtor(characteristic_to_clsid(GetMetaID()))
+	m_metaData->UnRegisterCtor(characteristic_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 #endif // !__CHAR_CTOR_H__

@@ -23,6 +23,7 @@
 #include "backend/backend_type.h"              // GetTypesByFilter — what the reference shape offers
 #include "backend/compiler/value.h"
 #include "backend/metaCtor.h"                  // ib_find_meta_any_kind / ibCtorMetaAnyKind
+#include "backend/metaCollection/metaObject.h" // g_metaDocumentCLSID / g_metaCatalogCLSID — the metaclasses the ids carry
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
 #include "backend/typeDescription.h"           // ibTypeDescription
 
@@ -48,8 +49,10 @@ ibTypeDescription Declares(const ibClassID& clsid) {
 	return ibTypeDescription(std::vector<ibClassID>{ clsid });
 }
 
-const ibClassID kMember   = make_clsid("FamilyTestMember",   ibClassKind_Reference);
-const ibClassID kStranger = make_clsid("FamilyTestStranger", ibClassKind_Reference);
+// A document's reference and a catalog's — the metaclass is in the id (clsid.h), which is all a family's gate
+// reads: the metaclass's own id, as the platform registers it.
+const ibClassID kMember   = reference_to_clsid(4242, clsid_metaclass(g_metaDocumentCLSID));
+const ibClassID kStranger = reference_to_clsid(4243, clsid_metaclass(g_metaCatalogCLSID));
 
 } // namespace
 
@@ -83,8 +86,6 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr) << "the DocumentRef family is registered with the Document metatype";
 
-	family->AddMember(kMember);   // what registering a document's reference does
-
 	const ibTypeDescription declared = Declares(family->GetClassType());
 
 	const ibValue member = ibValueTypeDescription::AdjustValue(declared, ReferenceTo(kMember), nullptr);
@@ -92,8 +93,6 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 
 	const ibValue stranger = ibValueTypeDescription::AdjustValue(declared, ReferenceTo(kStranger), nullptr);
 	EXPECT_TRUE(stranger.IsEmpty()) << "a reference to something that is not a document is not kept";
-
-	family->RemoveMember(kMember);
 }
 
 // …and says it fit: AdjustOutValue answers by the same gate AdjustValue passed the value by, or a caller
@@ -103,8 +102,6 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_IsReportedAsFitting)
 	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr);
 
-	family->AddMember(kMember);
-
 	ibValueTypeDescription declared(Declares(family->GetClassType()));
 	ibValue out;
 	EXPECT_TRUE(declared.AdjustOutValue(ReferenceTo(kMember), out));
@@ -112,8 +109,6 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_IsReportedAsFitting)
 
 	EXPECT_FALSE(declared.AdjustOutValue(ReferenceTo(kStranger), out));
 	EXPECT_TRUE(out.IsEmpty());
-
-	family->RemoveMember(kMember);
 }
 
 TEST(TypeFamilyAdjust, DocumentRef_EmptyValue_StaysEmpty)

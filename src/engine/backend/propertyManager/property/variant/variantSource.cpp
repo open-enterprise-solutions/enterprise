@@ -42,8 +42,10 @@ void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 		std::set<ibClassID> clear_list;
 		if (gateMeta != nullptr) {
 			for (auto clsid : m_typeDesc.GetClsidList()) {
+				if (!::IsTabularSection(clsid))
+					continue;   // the kind off the id first: only a tabular section is looked up
 				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-				if (typeCtor != nullptr && ::IsTabularSection(clsid)) {
+				if (typeCtor != nullptr) {
 					const ibValueMetaObject* metaTable = typeCtor->GetMetaObject();
 					if (metaTable == nullptr || metaTable->GetParent() != gateMeta)
 						clear_list.insert(clsid);

@@ -69,12 +69,8 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic);
 			}
-			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_List);
-			}
 			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-				// Attributes (filter = any) accept EVERY kind, including list / collection types.
-				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_List);
+				// Attributes (filter = any) accept EVERY kind.
 				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
 				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
@@ -161,13 +157,6 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 		FillByClsid(selectorDataType, g_metaDataProcessorCLSID);
 		FillByClsid(selectorDataType, g_metaReportCLSID);
-	}
-
-	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-		FillByClsid(selectorDataType, g_metaInformationRegisterCLSID);
-		FillByClsid(selectorDataType, g_metaAccumulationRegisterCLSID);
-		FillByClsid(selectorDataType, g_metaAccountingRegisterCLSID);
-		FillByClsid(selectorDataType, g_metaCalculationRegisterCLSID);
 	}
 
 	// …and `AnyRef` — a reference to anything at all — after every reference, as the picker has it.
@@ -358,250 +347,11 @@ void ibPGTypeProperty::RefreshChildren()
 	ibPGTypeProperty::SetExpanded(true);
 }
 
-#include <wx/spinctrl.h>
-
-#include "frontend/win/ctrls/checktree.h"
 #include "frontend/win/dlgs/typeSelector.h"   // the shared picker — this editor is one of its two callers
 
 wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 {
 	class ibPGEditorTypeDialogAdapter : public wxPGEditorDialogAdapter {
-
-		class ibTreeItemPropertyData : public wxTreeItemData {
-			const ibCtorAbstractType* m_typeCtor;
-		public:
-			ibTreeItemPropertyData(const ibCtorAbstractType* typeCtor) : wxTreeItemData(), m_typeCtor(typeCtor) {}
-			ibClassID GetClassType() const { return m_typeCtor->GetClassType(); }
-			const ibCtorAbstractType* GetTypeCtor() const { return m_typeCtor; }
-		};
-
-		void FillByClsid(const ibClassID& clsid,
-			ibCheckTree* tc, ibVariantDataAttribute* data, bool allowEdit) {
-
-			wxImageList* imageList = tc->GetImageList();
-			wxASSERT(imageList);
-			const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-			const int groupIcon = imageList->Add(so->GetClassIcon());
-
-			ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-			wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
-				groupIcon, groupIcon,
-				itemData);
-
-			if (data != nullptr) {
-				const ibTypeDescription& td = data->GetTypeDesc();
-				tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-				tc->Check(newItem, td.ContainType(so->GetClassType()));
-			}
-			else {
-				tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-				tc->Check(newItem, false);
-			}
-		}
-
-		void FillByClsid(const ibMetaData* metaData, const ibClassID& clsid,
-			ibCheckTree* tc, ibVariantDataAttribute* data, bool allowEdit) {
-
-			wxImageList* imageList = tc->GetImageList();
-			wxASSERT(imageList);
-			if (metaData != nullptr && metaData->IsRegisterCtor(clsid)) {
-				const ibCtorAbstractType* so = metaData ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
-				const int groupIcon = imageList->Add(so->GetClassIcon());
-
-				ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-				wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
-					groupIcon, groupIcon,
-					itemData);
-
-				if (data != nullptr) {
-					const ibTypeDescription& td = data->GetTypeDesc();
-					tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-					tc->Check(newItem, td.ContainType(so->GetClassType()));
-				}
-				else {
-					tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-					tc->Check(newItem, false);
-				}
-			}
-		}
-
-		void FillByClsid(ibSelectorDataType selectorDataType, const ibMetaData* metaData, const ibClassID& clsid,
-			ibCheckTree* tc, ibVariantDataAttribute* data, bool allowEdit) {
-
-			wxImageList* imageList = tc->GetImageList();
-			wxASSERT(imageList);
-			if (metaData != nullptr && metaData->IsRegisterCtor(clsid)) {
-				const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-				if (selectorDataType == ibSelectorDataType::ibSelectorDataType_reference) {
-
-					const int groupIcon = imageList->Add(so->GetClassIcon());
-					const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Ref"),
-						groupIcon, groupIcon);
-
-					for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)) {
-						const ibValueMetaObjectRecordDataRef* registerData = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-						{
-							int icon = imageList->Add(registerData->GetIcon());
-							ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-							wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-								icon, icon,
-								itemData);
-
-							if (data != nullptr) {
-								const ibTypeDescription& td = data->GetTypeDesc();
-								tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-								tc->Check(newItem, td.ContainType(so->GetClassType()));
-							}
-							else {
-								tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-								tc->Check(newItem, false);
-							}
-						}
-					}
-
-					if (so->GetClassType() == g_metaChartOfCharacteristicTypesCLSID) {
-
-						const int groupIcon = imageList->Add(so->GetClassIcon());
-						const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), wxT("Characteristic"),
-							groupIcon, groupIcon);
-
-						for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic)) {
-							const ibValueMetaObjectRecordDataRef* registerData = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-							{
-								int icon = imageList->Add(registerData->GetIcon());
-								ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-									icon, icon,
-									itemData);
-
-								if (data != nullptr) {
-									const ibTypeDescription& td = data->GetTypeDesc();
-									tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, td.ContainType(so->GetClassType()));
-								}
-								else {
-									tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, false);
-								}
-							}
-						}
-					}
-				}
-				else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-
-					const int groupIcon = imageList->Add(so->GetClassIcon());
-					const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("List"),
-						groupIcon, groupIcon);
-
-					for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_List)) {
-						const ibValueMetaObjectGenericData* registerData = dynamic_cast<const ibValueMetaObjectGenericData*>(so->GetMetaObject());
-						{
-							int icon = imageList->Add(registerData->GetIcon());
-							ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-							wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-								icon, icon,
-								itemData);
-
-							if (data != nullptr) {
-								const ibTypeDescription& td = data->GetTypeDesc();
-								tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-								tc->Check(newItem, td.ContainType(so->GetClassType()));
-							}
-							else {
-								tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-								tc->Check(newItem, false);
-							}
-						}
-					}
-				}
-				else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-
-					// List / collection group (e.g. CatalogList) — attributes (filter = any) accept
-					// list types too, not only the table filter. Mirrors the _table branch above.
-					{
-						const auto listCtors = metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_List);
-						if (!listCtors.empty()) {
-							int groupIcon = imageList->Add(so->GetClassIcon());
-							const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("List"),
-								groupIcon, groupIcon);
-
-							for (auto so : listCtors) {
-								const ibValueMetaObjectGenericData* registerData = dynamic_cast<const ibValueMetaObjectGenericData*>(so->GetMetaObject());
-								int icon = imageList->Add(registerData->GetIcon());
-								ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(), icon, icon, itemData);
-								if (data != nullptr) {
-									const ibTypeDescription& td = data->GetTypeDesc();
-									tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, td.ContainType(so->GetClassType()));
-								}
-								else {
-									tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, false);
-								}
-							}
-						}
-					}
-
-					if (so->GetClassType() != g_metaEnumerationCLSID) {
-
-						int groupIcon = imageList->Add(so->GetClassIcon());
-						const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Object"),
-							groupIcon, groupIcon);
-
-						for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Object)) {
-							const ibValueMetaObjectRecordData* registerData = dynamic_cast<const ibValueMetaObjectRecordData*>(so->GetMetaObject());
-							{
-								int icon = imageList->Add(registerData->GetIcon());
-								ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-									icon, icon,
-									itemData);
-
-								if (data != nullptr) {
-									const ibTypeDescription& td = data->GetTypeDesc();
-									tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, td.ContainType(so->GetClassType()));
-								}
-								else {
-									tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, false);
-								}
-							}
-						}
-					}
-					
-					if (so->GetClassType() != g_metaDataProcessorCLSID && so->GetClassType() != g_metaReportCLSID)
-					{
-						int groupIcon = imageList->Add(so->GetClassIcon());
-						const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("Ref"),
-							groupIcon, groupIcon);
-
-						for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)) {
-							const ibValueMetaObjectRecordDataRef* registerData = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-							{
-								int icon = imageList->Add(registerData->GetIcon());
-								ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
-								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
-									icon, icon,
-									itemData);
-
-								if (data != nullptr) {
-									const ibTypeDescription& td = data->GetTypeDesc();
-									tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, td.ContainType(so->GetClassType()));
-								}
-								else {
-									tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-									tc->Check(newItem, false);
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
 	public:
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE

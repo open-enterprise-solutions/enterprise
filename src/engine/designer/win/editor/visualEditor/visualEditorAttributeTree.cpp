@@ -457,7 +457,7 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 			// PIN this reference hop to the branch we descend into — the child fields carry it, so the DRAG /
 			// serialized path coerces the composite reference to THIS target (else it read back <not selected>).
 			if (const ibSourceExplorer* explorer = refSource->GetSourceExplorer())
-				AppendComposition(m_tcAttributes, event.GetItem(), data->ChildPrefix(reference_to_clsid(target)), *explorer, metaData,
+				AppendComposition(m_tcAttributes, event.GetItem(), data->ChildPrefix(refValue.GetClassType()), *explorer, metaData,
 					multi ? refSource->GetSourceCaption() : wxString(wxEmptyString), data->IsUnderList());
 		}
 	}

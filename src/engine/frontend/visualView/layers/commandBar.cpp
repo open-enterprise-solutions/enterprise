@@ -99,7 +99,7 @@ static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 	// The form's PRIMARY object type from metadata — always available, incl. the designer (where the runtime
 	// source object below may not be populated yet).
 	if (const ibValueMetaObjectGenericData* obj = form->GetMetaObject())
-		types.insert(reference_to_clsid(obj->GetMetaID()));
+		types.insert(reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())));
 	// Plus every reference type in the form's source data (primary + explorer nodes, recursively).
 	if (ibSourceDataObject* src = form->GetSourceObject()) {
 		if (IsReference(src->GetSourceClassType()))
@@ -107,6 +107,16 @@ static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 		CollectExplorerRefTypes(src->GetSourceExplorer(), types);
 	}
 	return types;
+}
+
+// ⭐ A PARAMETER TYPE TAKES A FORM'S TYPE when it is that type or a barrier over it — a print command for
+// `DocumentRef` stands on every document's form, one for `AnyRef` on every form with a reference. Compared as
+// equal, a barrier matched no form at all. What a type admits is one range of ids (clsid_admitted_max), and
+// the form's types are an ordered set: one lookup.
+static bool AdmitsFormType(const ibClassID& parameterType, const std::set<ibClassID>& formTypes)
+{
+	const auto first = formTypes.lower_bound(parameterType);
+	return first != formTypes.end() && *first <= clsid_admitted_max(parameterType);
 }
 
 // A "parameterizable" command (its Parameter type names >= 1 REFERENCE type) is available ONLY where the form
@@ -118,7 +128,7 @@ static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std
 	for (const ibClassID& t : cmd->GetParameterType().GetClsidList())
 		if (IsReference(t)) {
 			parameterized = true;
-			if (formTypes.count(t) > 0)
+			if (AdmitsFormType(t, formTypes))
 				return false;   // matches a form data type -> keep
 		}
 	return parameterized;   // typed but no form type matches -> exclude; untyped -> keep
@@ -129,7 +139,7 @@ static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std
 static bool CommandIsTypedFor(const ibValueMetaObjectCommand* cmd, const std::set<ibClassID>& formTypes)
 {
 	for (const ibClassID& t : cmd->GetParameterType().GetClsidList())
-		if (IsReference(t) && formTypes.count(t) > 0)
+		if (IsReference(t) && AdmitsFormType(t, formTypes))
 			return true;
 	return false;
 }
@@ -462,7 +472,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			// for the goods catalog into the Print group of every invoice with a goods column — to run on the
 			// invoice with a parameter of the wrong kind (found by the audit, 2026-09-22).
 			if (const ibMetaData* metaData = obj->GetMetaData()) {
-				const std::set<ibClassID> formTypes = { reference_to_clsid(obj->GetMetaID()) };
+				const std::set<ibClassID> formTypes = { reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())) };
 				for (ibValueMetaObjectCommand* cmd : metaData->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaCommonCommandCLSID }, /*use_child_filter*/ true)) {
 					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes))
 						continue;

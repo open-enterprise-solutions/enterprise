@@ -961,8 +961,6 @@ bool ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 					m_ac.Append(ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
 				for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
 					m_ac.Append(ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
-				for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_List))
-					m_ac.Append(ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
 				for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager))
 					m_ac.Append(ibContentType::eVariable, class_obj->GetClassName(), wxEmptyString);
 				for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection))

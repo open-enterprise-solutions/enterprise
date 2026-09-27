@@ -271,17 +271,10 @@ public:
 	bool InvalidateCompileModule(const ibValueMetaObject* moduleObject);
 
 	ibValue* FindCompileModuleRef(const ibValueMetaObject* moduleObject) const;
-	ibValue* FindParentCompileModuleRef(const ibValueMetaObject* moduleObject) const;
 
 	template <class T>
 	bool FindCompileModule(const ibValueMetaObject* moduleObject, T*& objValue) const {
 		objValue = dynamic_cast<T*>(FindCompileModuleRef(moduleObject));
-		return objValue != nullptr;
-	}
-
-	template <class T>
-	bool FindParentCompileModule(const ibValueMetaObject* moduleObject, T*& objValue) const {
-		objValue = dynamic_cast<T*>(FindParentCompileModuleRef(moduleObject));
 		return objValue != nullptr;
 	}
 
@@ -584,8 +577,7 @@ public:
 	virtual ibClassID GetIDObjectFromString(const wxString& className) const;
 	virtual wxString GetNameObjectFromID(const ibClassID& clsid, bool upper = false) const;
 
-	inline ibMetaID GetVTByID(const ibClassID& clsid) const;
-	inline ibClassID GetIDByVT(const ibMetaID& valueType, enum ibCtorObjectMetaType refType) const;
+	ibClassID GetIDObjectFromMetaID(const ibMetaID& metaID, enum ibCtorObjectMetaType refType) const;
 
 	virtual ibCtorMetaValueType* GetTypeCtor(const wxString& className) const;
 	virtual ibCtorMetaValueType* GetTypeCtor(const ibClassID& clsid) const;

@@ -995,16 +995,16 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 	// ⭐ `<expr> [NOT] REFS <Kind>.<Name>` — the type TEST. Written where LIKE and IN are written,
 	// because it is the same sort of thing: a predicate over one operand and a fixed right-hand
 	// side. The right side is a TYPE NAME rather than a value, so it is read as a dotted name — the
-	// same way CAST reads the type it narrows to, and refused here if it is a bare word (a type is
-	// `Catalog.Goods`, and `Goods` alone would name a table nobody declared).
+	// same way CAST reads the type it narrows to. One word is a FAMILY of them (`CatalogRef`,
+	// `AnyRef`); whether it is one is the lowering's question, which knows the types.
 	if (AcceptKw(ibQueryKeyword::Refs)) {
 		const ibQueryToken at = Cur();
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Refs);
 		n->m_negated = negated; n->m_lhs = lhs;
 		n->m_line = at.m_line; n->m_col = at.m_col;
 		n->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
-		if (n->m_path.size() < 2)
-			ThrowQueryException(at, _("REFS takes a type: <Kind>.<Name>, as CAST does"));
+		if (n->m_path.empty())
+			ThrowQueryException(at, _("REFS takes a type: <Kind>.<Name>, as CAST does, or a family of them (CatalogRef, AnyRef)"));
 		return n;
 	}
 	if (AcceptKw(ibQueryKeyword::In)) {

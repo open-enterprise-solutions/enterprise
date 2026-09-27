@@ -12,8 +12,7 @@ ibValue ibBackendTypeFactory::CreateValue() const
 	const ibTypeDescription& typeDesc = GetTypeDesc();
 	if (typeDesc.GetClsidCount() == 1) {
 		const ibClassID& clsid = typeDesc.GetFirstClsid();
-		if (ibValue::IsRegisterCtor(clsid)) {
-			const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
+		if (const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid)) {
 			if (so->GetObjectTypeCtor() == ibCtorObjectType::ibCtorObjectType_object_enum) {
 				try {
 					// ⚠⚠ THE VALUE BELONGS TO THE ENUMERATION, AND THE ENUMERATION DIES HERE.
@@ -171,7 +170,7 @@ ibTypeDescription& ibBackendTypeConfigFactory::GetTypeValueDesc() const
 	}
 	if (chart == nullptr)
 		chart = metaData->FindAnyObjectByFilter<ibValueMetaObjectChartOfCharacteristicTypes>(
-			static_cast<ibMetaID>(metaID_from_clsid(clsid)));
+			static_cast<ibMetaID>(clsid_metaID(clsid)));
 	if (chart == nullptr)
 		return declared;
 
@@ -238,9 +237,10 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 				if (module == nullptr || module->GetDefaultProcedureCount() == 0)
 					continue;
 				members.push_back(so->GetClassType());
-				const ibCtorMetaAnyKind* const family = ib_find_meta_any_kind(so->GetMetaObject()->GetClassName(), kind);
-				if (family != nullptr && std::find(out.begin(), out.end(), family->GetClassType()) == out.end())
-					out.push_back(family->GetClassType());
+				// …and its family, the member's own id with the metaID left ANY — where its metaclass keeps one.
+				const ibClassID family = clsid_any_of(so->GetClassType());
+				if (ibValue::IsRegisterCtor(family) && std::find(out.begin(), out.end(), family) == out.end())
+					out.push_back(family);
 			}
 		}
 		out.insert(out.end(), members.begin(), members.end());

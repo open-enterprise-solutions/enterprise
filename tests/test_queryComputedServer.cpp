@@ -617,7 +617,7 @@ TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
 	ReferenceSetFix f;
 	ASSERT_TRUE(f.Ready());
 
-	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
 	const std::vector<wxString> fields = ColumnFieldNames(&item);
 	ASSERT_EQ(fields.size(), 3u) << "a single-target reference is expected to spread as _TYPE + _RTRef + _RRRef";
 
@@ -642,8 +642,8 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesFoldPairByPair)
 	ReferenceSetFix f;
 	ASSERT_TRUE(f.Ready());
 
-	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID()));
-	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID()));
+	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType())));
+	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID(), clsid_metaclass(f.units->GetClassType())));
 	TypedCol subject(wxT("subject"), 341, both);
 
 	std::vector<ibValue> values;
@@ -665,7 +665,7 @@ TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
 	ReferenceSetFix f;
 	ASSERT_TRUE(f.Ready());
 
-	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID())));
+	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
 	const std::vector<ibValue> values{ f.RefTo(f.items), f.RefTo(f.items), ibValue(), f.RefTo(f.items) };
 
 	const wxString sql = f.SqlOfSet(&item, 345, values);

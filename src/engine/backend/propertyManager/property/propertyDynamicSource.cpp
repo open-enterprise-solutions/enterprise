@@ -45,7 +45,7 @@ bool ibPropertyDynamicSource::GetDataValue(ibValue& pvarPropVal) const
 }
 
 // SAVE / LOAD — the source's table id VERBATIM (an Int; metadata-agnostic, stable within a config). On COPY the
-// source already follows the main attribute's TYPE (list_to_clsid(metaID)), which the standard metaobject copy
+// source already follows the main attribute's TYPE, which the standard metaobject copy
 // remaps to the copy's id — the list is re-materialised from that type, so its queryable points at the copy with
 // no remap here. A normal reopen resolves the stored id directly. (Deep dot-walk column bindings — the "leaves" —
 // are handled by the source-description path, not this scalar source id.)

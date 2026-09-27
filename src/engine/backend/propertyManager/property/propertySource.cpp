@@ -135,8 +135,12 @@ bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
 		const ibGuid guid = (idx > 0) ? variant->GetGuidByID((ibMetaID)hop.m_id) : wxNullGuid;   // head is form-local -> raw
 		if (guid.isValid()) { writer.w_u8(kHopGuid); writer.w_stringZ(guid.str()); }
 		else                { writer.w_u8(kHopRaw);  writer.w_u32((unsigned int)hop.m_id); }
-		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)(hop.m_type & kIbClsidBodyMask)) : wxNullGuid;
-		if (typeGuid.isValid()) { writer.w_u8(kTypeMeta); writer.w_u8((unsigned char)clsid_kind(hop.m_type)); writer.w_stringZ(typeGuid.str()); }
+		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)clsid_metaID(hop.m_type)) : wxNullGuid;
+		if (typeGuid.isValid()) {
+			writer.w_u8(kTypeMeta);
+			writer.w_u64((unsigned wxLongLong_t)clsid_any_of(hop.m_type));   // its kind and metaclass: the type less its metaID
+			writer.w_stringZ(typeGuid.str());
+		}
 		else                    { writer.w_u8(kTypeRaw);  writer.w_u64((unsigned wxLongLong_t)hop.m_type); }
 		idx++;
 	}
@@ -177,9 +181,9 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 			break;
 		}
 		if (reader.r_u8() == kTypeMeta) {
-			const ibClassKind kind = (ibClassKind)reader.r_u8();
+			const ibClassID any = (ibClassID)reader.r_u64();   // the type less its metaID — the pasted object's goes in
 			const ibGuid typeGuid(reader.r_stringZ());
-			type = make_clsid_dynamic((ibClassID)variant->GetIdByGuid(typeGuid), kind);
+			type = make_clsid_dynamic((ibClassID)variant->GetIdByGuid(typeGuid), clsid_kind(any), clsid_metaclass(any));
 		}
 		else {
 			type = (ibClassID)reader.r_u64();

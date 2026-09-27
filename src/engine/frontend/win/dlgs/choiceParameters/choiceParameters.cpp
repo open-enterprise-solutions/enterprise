@@ -3,6 +3,7 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"   // ibChoiceHolderName — what the fields belong to
 #include "backend/metaData.h"
+#include "backend/objCtorDefs.h"   // ibCtorObjectMetaType_Reference — the kind a type row's reference is registered as
 
 #include "frontend/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 #include "frontend/win/ctrls/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
@@ -95,13 +96,17 @@ void ibDialogChoiceParameters::BuildCatalogue()
 	// to more than one thing and they do not have the same fields. With one target type the prefix would
 	// be noise. These are offered in the NAME cell, as `Filter.<field>`.
 	ibPropertyChoiceList targets;
-	ibFieldReferenceTypes(m_property->GetPropertyObject(), targets);
+	const ibPropertyObject* owner = m_property->GetPropertyObject();
+	ibFieldReferenceTypes(owner, targets);
+	const ibMetaData* metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 
 	for (unsigned int type = 0; type < targets.GetCount(); type++) {
 		m_targets += (m_targets.IsEmpty() ? wxT("") : wxT(", ")) + targets.GetName(type);
+		if (metaData == nullptr)
+			continue;   // no configuration to say which class the type is registered under: its name is all there is
 
 		ibPropertyChoiceList fields;
-		m_property->GetParameterList(reference_to_clsid((ibMetaID)targets.GetId(type)), fields);
+		m_property->GetParameterList(metaData->GetIDObjectFromMetaID((ibMetaID)targets.GetId(type), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference), fields);
 		for (unsigned int idx = 0; idx < fields.GetCount(); idx++) {
 			keep(m_parameters, fields, idx, ibSourceDescription());
 			if (targets.GetCount() > 1)

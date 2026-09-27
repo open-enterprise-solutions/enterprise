@@ -26,7 +26,7 @@
 #include "backend/compiler/valueSerialization.h"    // ibReadNodeType — whose value is in this node
 #include "backend/system/value/composition/valueComposerField.h"   // the declared value this tier vends
 
-#include <algorithm>                               // std::find — is this value one the field admits?
+#include <algorithm>                               // std::none_of — is this value one the field admits?
 
 // ===========================================================================
 
@@ -1078,8 +1078,12 @@ void ibValidateFilterNodes(const std::vector<ibFilterNodeDescription>& nodes)
 		const ibValue& right = item.m_right.m_value;
 		const ibTypeDescription& expected = item.m_left.m_type;
 		if (!item.m_right.IsField() && !right.IsEmpty() && expected.GetClsidCount() > 0) {
+			// Each type of the field as a range (clsid_admits): a family - a subconto of "any reference" -
+			// takes its members, and a single type is a range of one. Looked up as it stood, a value the
+			// family admits was refused.
 			const std::vector<ibClassID>& allowed = expected.GetClsidList();
-			if (std::find(allowed.begin(), allowed.end(), right.GetClassType()) == allowed.end())
+			const ibClassID held = right.GetClassType();
+			if (std::none_of(allowed.begin(), allowed.end(), [held](const ibClassID& type) { return clsid_admits(type, held); }))
 				ibBackendCoreException::Error(
 					_("The value of condition '%s' does not fit the field's type"), item.m_left.m_path);
 		}

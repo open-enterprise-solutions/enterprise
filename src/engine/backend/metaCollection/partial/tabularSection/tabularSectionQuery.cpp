@@ -45,7 +45,7 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
 
 		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
-			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0,
+			owner != nullptr ? reference_to_clsid(owner->GetMetaID(), clsid_metaclass(owner->GetClassType())) : 0,
 			ownerReference != nullptr ? ownerReference->GetName() : wxString(), identity)));
 	}
 	return m_ownerRef.get();

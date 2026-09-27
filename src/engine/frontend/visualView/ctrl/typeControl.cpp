@@ -25,7 +25,6 @@
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the CONTOUR that narrows the picker
-#include "backend/metaCollection/partial/reference/reference.h"          // a reference built on a predefined guid
 #include "frontend/win/dlgs/selectPredefined.h"      // the designer's declared-value window — one call, no widgets here
 
 #include "backend/appData.h"                                             // DesignerMode — the two roads part here
@@ -960,19 +959,20 @@ ibClassID ibTypeControlFactory::GetDataType() const
 ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)
 {
 	// WHAT CAN BE CHOSEN: an "any" among the types — `CatalogRef`, `AnyRef` — offers its facade, every reference
-	// it admits (ibValueReferenceDataObject::ConvertToMetaIds): nothing is ever "a CatalogRef".
+	// its bits admit (clsid_admits): nothing is ever "a CatalogRef".
 	std::vector<ibClassID> offered;
 	const auto offer = [&offered](const ibClassID& clsid) {
 		if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
 			offered.push_back(clsid);
 	};
 	for (const ibClassID& clsid : typeDescription.GetClsidList()) {
-		if (!::IsReference(clsid) || metaData == nullptr || metaData->GetTypeCtor(clsid) != nullptr) {
+		if (!::IsReference(clsid) || !clsid_is_any(clsid) || metaData == nullptr) {
 			offer(clsid);
 			continue;
 		}
-		for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds({ clsid }, metaData))
-			offer(reference_to_clsid(id));
+		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+			if (clsid_admits(clsid, member->GetClassType()))
+				offer(member->GetClassType());
 	}
 	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
 

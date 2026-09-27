@@ -221,12 +221,6 @@ ibValue* ibCompileValueCache::FindCompileModuleRef(const ibValueMetaObject* modu
 	return &(*it->second.m_value);
 }
 
-ibValue* ibCompileValueCache::FindParentCompileModuleRef(const ibValueMetaObject* moduleObject) const
-{
-	ibValueMetaObject* parent = moduleObject ? moduleObject->GetParent() : nullptr;
-	return parent ? FindCompileModuleRef(parent) : nullptr;
-}
-
 //**************************************************************************************************
 //*                                          ibMetaData											   *
 //**************************************************************************************************

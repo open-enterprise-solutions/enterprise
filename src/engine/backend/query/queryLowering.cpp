@@ -1933,6 +1933,17 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 	case ibQueryAstExprKind::Refs: {
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *e.m_lhs, allowDotWalk);
 
+		// ⭐ A FAMILY NAMES NO TABLE — `x REFS CatalogRef`, `x REFS AnyRef` — and is the type test as it stands:
+		// its id, which the provider writes as the range of the ids it admits (TypeTagTest), on the server. Made
+		// through the door `TYPE(CatalogRef)` is made through (ibTypeValueByName), so the two spellings are one.
+		if (e.m_path.size() == 1) {
+			ibClassID family = 0;
+			if (ibTypeValueClsid(ibTypeValueByName(e.m_path.front()), family) && IsReference(family) && clsid_is_any(family))
+				return ibQueryPredicate::RefType(cols.back(), family, e.m_negated, cols);
+			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+				_("REFS takes a type: <Kind>.<Name>, or a family of them (CatalogRef, AnyRef); '%s' is neither"), e.m_path.front()));
+		}
+
 		ibQuerySource target;
 		target.m_name = e.m_path;
 		const ibBackendQueryable* q = ResolveSource(target, std::map<wxString, ibValue>());
@@ -1946,7 +1957,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			for (const wxString& segment : e.m_path)
 				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
 			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
-				_("REFS takes a table a reference can point at; '%s' is not one"), named));
+				_("REFS takes a table a reference can point at, or a family of them (CatalogRef, AnyRef); '%s' is neither"), named));
 		}
 
 		return ibQueryPredicate::RefType(cols.back(), emptyRef.GetClassType(), e.m_negated, cols);

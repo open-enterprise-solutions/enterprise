@@ -310,7 +310,7 @@ struct ArmCutFix {
         reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
             cfg.CreateMetaObject(g_metaAccumulationRegisterCLSID, root, /*runObject*/ false));
         if (document == nullptr || reg == nullptr || reg->GetRegisterRecorder() == nullptr) { reg = nullptr; return; }
-        reg->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID()));
+        reg->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
     }
 
     ibMaterializeReadSpec CutAt(const wxDateTime& upTo, bool excluding) const {

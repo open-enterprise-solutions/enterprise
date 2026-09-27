@@ -1595,10 +1595,11 @@ RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRow& row)
 		//
 		// DEFINITE like IS NULL: an empty cell simply is not of that type, which is FALSE (or TRUE
 		// under NOT) rather than UNKNOWN — "it does not point there" is a complete answer.
+		// A barrier (`CatalogRef`, `AnyRef`) is answered off the two ids, as the SQL road answers it with a range.
 		case ibQueryPredicateKind::RefType: {
 			if (p->m_col == nullptr) return RamTri::False;
 			const ibValue cell = row.Get(p->m_col);
-			const bool same = !RamIsNullValue(cell) && cell.GetClassType() == p->m_refTypeClsid;
+			const bool same = !RamIsNullValue(cell) && clsid_admits(p->m_refTypeClsid, cell.GetClassType());
 			return (p->m_negated ? !same : same) ? RamTri::True : RamTri::False;
 		}
 	}

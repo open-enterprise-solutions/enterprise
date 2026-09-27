@@ -9,7 +9,7 @@ class ibCtorMetaValueTypeConstantObject :
 public:
 
 	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = object_to_clsid(m_metaObject->GetMetaID());
+		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	wxString GetClassName() const {
@@ -32,7 +32,7 @@ protected:
 #define registerConstObject()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantObject(this))
 #define unregisterConstObject()\
-	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID()))
+	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //const-manager class 
 class ibCtorMetaValueTypeConstantManager :
@@ -40,7 +40,7 @@ class ibCtorMetaValueTypeConstantManager :
 public:
 
 	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = manager_to_clsid(m_metaObject->GetMetaID());
+		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -60,6 +60,6 @@ protected:
 #define registerConstManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantManager(this))
 #define unregisterConstManager()\
-	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID()))
+	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 #endif 

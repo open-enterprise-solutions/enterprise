@@ -2,6 +2,7 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"   // ibFieldReferenceTypes, ibChoiceOwnerRow — declared there
 #include "backend/choiceLinkResolver.h"                    // CanGovern — the reading this offer must agree with
 #include "backend/metaData.h"                              // …and the counter a configuration moves when something is removed
+#include "backend/objCtor.h"                               // ibCtorMetaValueType — what a reference type names, by its id
 #include "backend/metaCollection/partial/commonObject.h"   // the objects and their fields
 #include "backend/metaCollection/partial/catalog.h"        // ListOwner and the Owner attribute it declares
 
@@ -88,14 +89,19 @@ wxString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAtt
 }
 
 // ⭐⭐ WHAT A REFERENCE TYPE NAMES — the metaobject of the kind asked, or none. One look-up, so "what counts
-// as a reference" and "what counts as gone" are said once for every question below.
+// as a reference" and "what counts as gone" are said once for every question below. The type's own ctor holds
+// its metaobject: one probe by the id, where the tree was walked for the metaID the id carries.
 template <typename T>
 const T* ReferencedObject(const ibMetaData* metaData, const ibClassID& clsid)
 {
 	if (metaData == nullptr || !IsReference(clsid))
 		return nullptr;
-	const T* target = metaData->FindAnyObjectByFilter<T>((ibMetaID)metaID_from_clsid(clsid), true);
-	return target != nullptr && !target->IsDeleted() ? target : nullptr;
+	const ibCtorMetaValueType* type = metaData->GetTypeCtor(clsid);
+	const ibValueMetaObject* metaObject = type != nullptr ? type->GetMetaObject() : nullptr;
+	const T* target = nullptr;
+	if (metaObject == nullptr || !metaObject->ConvertToValue(target))
+		return nullptr;
+	return !target->IsDeleted() ? target : nullptr;
 }
 
 // …and everything THIS field refers to. A composite field refers to more than one thing.
