@@ -12,6 +12,7 @@ class BACKEND_API ibPropertyType : public ibProperty {
 public:
 
 	ibTypeDescription& GetValueAsTypeDesc() const;
+	ibTypeDescription& GetValueAsTypeValueDesc() const;
 	void SetValue(const ibTypeDescription& val);
 
 	ibPropertyType(ibPropertyCategory* cat, const wxString& name, const ibValueTypes type) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type)) {}

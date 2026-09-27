@@ -1,5 +1,6 @@
 #include "variantType.h"
 #include "backend/metaData.h"
+#include "backend/objCtor.h"   // ibCtorMetaValueType — the configuration's references a barrier stands for
 
 wxString ibVariantDataAttribute::MakeString() const
 {
@@ -54,6 +55,7 @@ void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
 void ibVariantDataAttribute::DoSetFromTypeId(const ibTypeDescription& td)
 {
 	m_typeDesc = td;
+	m_object_version = 0;   // a new declaration is refreshed as a new value is — its barriers derived again
 	RefreshTypeDesc();
 }
 
@@ -77,14 +79,37 @@ void ibVariantDataAttribute::DoRefreshTypeDesc()
 		const unsigned int object_version = metaData->GetFactoryCountChanges();
 		if (object_version != m_object_version) {
 
-			for (const auto clsid : m_typeDesc.GetClsidList()) {
+			// ONE WALK, over a copy — the declaration loses a type no longer registered as it goes. What a value may
+			// be is built beside it: a barrier stands for its members — `AnyRef` for every reference of the
+			// configuration, `DocumentRef` for every document's, the ones its gate lets through — and one with none
+			// to stand for (no document yet, a configuration only loaded) stands for itself. Left empty when no
+			// barrier was replaced: the declaration answers then.
+			const std::vector<ibClassID> declared = m_typeDesc.GetClsidList();
+			m_typeValueDesc = ibTypeDescription();
+			bool replaced = false;
+			for (const auto clsid : declared) {
 
-				if (!metaData->IsRegisterCtor(clsid))
+				if (!metaData->IsRegisterCtor(clsid)) {
 					m_typeDesc.ClearMetaType(clsid);
+					continue;
+				}
 
-				if (m_typeDesc.GetClsidCount() == 0)
-					break;
+				std::vector<ibClassID> members;
+				if (IsReference(clsid) && metaData->GetTypeCtor(clsid) == nullptr) {   // a reference, not the configuration's own
+					if (const ibCtorAbstractType* barrier = metaData->GetAvailableCtor(clsid))
+						for (const ibCtorMetaValueType* reference : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+							if (barrier->AllowValue(reference->GetClassType()))
+								members.push_back(reference->GetClassType());
+				}
+
+				if (members.empty())
+					m_typeValueDesc.AppendMetaType(clsid, m_typeDesc.GetTypeData());
+				for (const ibClassID& member : members)
+					m_typeValueDesc.AppendMetaType(member, m_typeDesc.GetTypeData());
+				replaced = replaced || !members.empty();
 			}
+			if (!replaced)
+				m_typeValueDesc = ibTypeDescription();
 
 			m_object_version = object_version;
 		}

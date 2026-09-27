@@ -264,6 +264,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
 
 	/**
 	* Property events

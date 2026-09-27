@@ -69,6 +69,16 @@ ibTypeDescription& ibValueMetaObjectAttributeBase::GetTypeValueDesc() const
 	return ibBackendTypeConfigFactory::GetTypeValueDesc();
 }
 
+// …and through the type property, which stands a barrier (`AnyRef`, `CatalogRef`) for its members as it
+// refreshes. A characteristic stays the factory's answer — its chart's list.
+ibTypeDescription& ibValueMetaObjectAttribute::GetTypeValueDesc() const
+{
+	const ibTypeDescription& declared = GetTypeDesc();
+	if (declared.GetClsidCount() == 1 && IsCharacteristic(declared.GetFirstClsid()))
+		return ibValueMetaObjectAttributeBase::GetTypeValueDesc();
+	return m_propertyType->GetValueAsTypeValueDesc();
+}
+
 bool ibValueMetaObjectAttributeBase::ContainType(const ibValueTypes& valType) const
 {
 	return GetTypeDesc().ContainType(valType);

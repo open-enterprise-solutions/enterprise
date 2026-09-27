@@ -23,6 +23,11 @@ public:
 		return m_typeDesc;
 	}
 
+	ibTypeDescription& GetTypeValueDesc() {
+		GetTypeDesc();
+		return m_typeValueDesc.IsOk() ? m_typeValueDesc : m_typeDesc;
+	}
+
 	/////////////////////////////////////////////////////////////////////////////////////////
 
 	void SetDefaultMetaType() { DoSetDefaultMetaType(); }
@@ -79,6 +84,7 @@ protected:
 	const ibBackendTypeConfigFactory* m_ownerProperty = nullptr;
 	unsigned int m_object_version = 0;
 	ibTypeDescription m_typeDesc;
+	ibTypeDescription m_typeValueDesc;   // m_typeDesc with each barrier replaced by its members — empty when none was
 };
 
 #endif // !__TYPE_VARIANT_H__
