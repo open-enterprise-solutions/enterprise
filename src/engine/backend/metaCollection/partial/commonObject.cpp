@@ -3929,9 +3929,12 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 	if (!BeginRecordSetWriteScope(scope)) return true;
 
+	// Replacing — whether the set replaces what its filter holds — is the second argument of both write events,
+	// as every record set's module declares it (a sequence's declared it alone, and was handed Cancel only).
+	ibValue replacing = replace;
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(wxT("BeforeWrite"), cancel, replacing);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the BeforeWrite handler"),
@@ -3951,7 +3954,7 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 
 	{
 		ibValue cancel = false;
-		ExecAsEvent(wxT("OnWrite"), cancel);
+		ExecAsEvent(wxT("OnWrite"), cancel, replacing);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the OnWrite handler"),
