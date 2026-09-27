@@ -189,11 +189,6 @@ public:
 
 	ibFormPtr(const ibFormPtr& to_copy) { Bind(to_copy.m_ptr); }
 
-	// …out of a holder of another form type: the desktop form out of the interface one, or none when it is not
-	// one — the same reference, read as what it is.
-	template <typename U>
-	explicit ibFormPtr(const ibFormPtr<U>& other) { Bind(dynamic_cast<T*>(other.operator->())); }
-
 	~ibFormPtr() { Reset(); }
 
 	ibFormPtr& operator = (const ibFormPtr& other) {

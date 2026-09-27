@@ -147,7 +147,7 @@ public:
 	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibFormPtr<ibBackendValueForm>()> build) noexcept
 		: m_form(form), m_build(std::move(build)) {}
 
-	// Runs `build()` and answers with the form's OWNER — the value the compile cache keeps (out-of-line). If the
+	// Runs `build()` and answers with the form as a value — what the compile cache keeps (out-of-line). If the
 	// form's metaobject is marked as a paste at build time, the built controls re-home (PasteNode) and the stored
 	// blob is normalized to raw. The paste completion (ibValueMetaObject::PasteObject) forces this build while the
 	// mark is still live, so there is no captured flag — the live mark is the signal.
