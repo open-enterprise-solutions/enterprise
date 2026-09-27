@@ -53,6 +53,13 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 			// Every branch adds the metaobject ctors of a kind identically (name + icon → choice,
 			// value→clsid map); only the SET of kinds differs by selector.
 			auto addKind = [&](ibCtorObjectMetaType kind) {
+				// The references come after their FAMILY — `CatalogRef`, a reference to any catalog — as in
+				// the type picker (ibShowTypeSelector).
+				if (kind == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+					if (const ibCtorMetaAnyKind* family = ib_find_meta_any_kind(so->GetClassName(), kind)) {
+						auto choice = m_choices.Add(family->GetClassName(), family->GetClassIcon());
+						m_valChoices.insert_or_assign(choice.GetValue(), family->GetClassType());
+					}
 				for (auto ctor : metaData->GetListCtorsByType(clsid, kind)) {
 					auto choice = m_choices.Add(ctor->GetClassName(), ctor->GetMetaObject()->GetIcon());
 					m_valChoices.insert_or_assign(choice.GetValue(), ctor->GetClassType());
@@ -161,6 +168,31 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 		FillByClsid(selectorDataType, g_metaAccumulationRegisterCLSID);
 		FillByClsid(selectorDataType, g_metaAccountingRegisterCLSID);
 		FillByClsid(selectorDataType, g_metaCalculationRegisterCLSID);
+	}
+
+	// …and `AnyRef` — a reference to anything at all — after every reference, as the picker has it.
+	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_reference ||
+		selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
+		if (const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef"))) {
+			auto choice = m_choices.Add(anyRef->GetClassName(), anyRef->GetClassIcon());
+			m_valChoices.insert_or_assign(choice.GetValue(), anyRef->GetClassType());
+		}
+	}
+
+	// AN EVENT SOURCE offers what the backend says raises events — the very list the picker shows
+	// (ibBackendTypeConfigFactory::GetTypesByFilter), families first.
+	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_eventSource) {
+		const ibBackendTypeConfigFactory* const factory = dynamic_cast<const ibBackendTypeConfigFactory*>(m_ownerProperty);
+		const ibMetaData* const metaData = factory != nullptr ? factory->GetMetaData() : nullptr;
+		std::vector<ibClassID> offered;
+		ibBackendTypeConfigFactory::GetTypesByFilter(selectorDataType, metaData, offered);
+		for (const ibClassID& clsid : offered) {
+			const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
+			if (so == nullptr)
+				continue;
+			auto choice = m_choices.Add(so->GetClassName(), so->GetClassIcon());
+			m_valChoices.insert_or_assign(choice.GetValue(), clsid);
+		}
 	}
 
 	SetValue(value);
@@ -295,6 +327,22 @@ void ibPGTypeProperty::RefreshChildren()
 				m_length->SetValue(td.GetLength());
 			}
 		}
+
+		// THE VALUE'S PICTURE — the one the chosen type's own choice carries (a metaobject's, a family's metatype's,
+		// AnyRef's); none for several types at once. The grid never drew one: this property answers no choice
+		// selection (GetChoiceSelection), so it is set here, as the value changes.
+		wxBitmapBundle picture;
+		if (td.GetClsidCount() == 1) {
+			for (const std::pair<const int, ibClassID>& choice : m_valChoices) {
+				if (choice.second != td.GetFirstClsid())
+					continue;
+				const int idx = m_choices.Index(choice.first);
+				if (idx != wxNOT_FOUND)
+					picture = m_choices.Item(idx).GetBitmap();
+				break;
+			}
+		}
+		SetValueImage(picture);
 	}
 	else {
 		m_precision->Hide(true);

@@ -3,6 +3,8 @@
 #include "backend/objCtor.h"
 #include "backend/metaData.h"
 
+#include <algorithm>   // std::find — a type offered once, whichever "any" named it
+
 ////////////////////////////////////////////////////////////////////////////
 
 #include <wx/calctrl.h>
@@ -957,9 +959,24 @@ ibClassID ibTypeControlFactory::GetDataType() const
 
 ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)
 {
-	if (typeDescription.GetClsidCount() < 2) return typeDescription.GetFirstClsid();
-	
-	ibDialogSelectDataType *selectDataType = new ibDialogSelectDataType(metaData, typeDescription.GetClsidList());
+	// WHAT CAN BE CHOSEN: an "any" among the types — `CatalogRef`, `AnyRef` — offers its facade, every reference
+	// it admits (ibValueReferenceDataObject::ConvertToMetaIds): nothing is ever "a CatalogRef".
+	std::vector<ibClassID> offered;
+	const auto offer = [&offered](const ibClassID& clsid) {
+		if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
+			offered.push_back(clsid);
+	};
+	for (const ibClassID& clsid : typeDescription.GetClsidList()) {
+		if (!::IsReference(clsid) || metaData == nullptr || metaData->GetTypeCtor(clsid) != nullptr) {
+			offer(clsid);
+			continue;
+		}
+		for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds({ clsid }, metaData))
+			offer(reference_to_clsid(id));
+	}
+	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
+
+	ibDialogSelectDataType *selectDataType = new ibDialogSelectDataType(metaData, offered);
 
 	ibClassID clsid = 0;	
 	if (selectDataType->ShowModal(clsid)) {

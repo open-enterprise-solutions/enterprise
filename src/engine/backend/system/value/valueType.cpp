@@ -62,7 +62,7 @@ ibString ibValueTypeDescription::GetString() const
 // A DESCRIPTION ALLOWS WHAT ONE OF ITS TYPES ALLOWS — each asked by its own gate
 // (ibCtorAbstractType::AllowValue), so a family answers for its members and a characteristic for the
 // types of its chart.
-static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
+bool ibValueTypeDescription::AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
 {
 	for (const ibClassID& declared : typeDescription.GetClsidList()) {
 		const ibCtorAbstractType* gate = source != nullptr

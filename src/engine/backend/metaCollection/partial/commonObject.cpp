@@ -37,13 +37,13 @@
 //***********************************************************************
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectGenericData::GetGenericForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::GetGenericForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, defaultFormType, ownerControl, nullptr);
 }
 #pragma endregion
 #pragma region _form_creator_h_
-ibBackendValueForm* ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const
 {
 	// ⭐⭐ ONE PLACE MAKES A FORM'S SOURCE, and it is asked by the KIND of form — which is what it
 	// switched on all along (`metaObject->GetTypeForm()`), so handing it the metaform was handing it a
@@ -66,7 +66,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectGenericData::CreateSourceObject
 	return nullptr;
 }
 
-ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id, ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id, ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject) const
 {
 	const ibSourcePtr<ibSourceDataObject> sourceGuard(srcObject);   // held across the build
 
@@ -87,19 +87,16 @@ ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const ibFor
 		return nullptr;
 	}
 
-	ibBackendValueForm* result = ibBackendValueForm::FindFormByUniqueKey(ownerControl, srcObject, request.m_formGuid);
+	// The one already open under this key — its window holds it, this is one more reference — or a new one.
+	if (ibBackendValueForm* const opened = ibBackendValueForm::FindFormByUniqueKey(ownerControl, srcObject, request.m_formGuid))
+		return ibFormPtr<ibBackendValueForm>(opened);
 
-	if (result == nullptr) {
-
-		result = ibValueMetaObjectFormBase::CreateAndBuildForm(
-			request,
-			creator != nullptr ? creator : GetDefaultFormByID(form_id),
-			form_id,
-			ownerControl, srcObject
-		);
-	}
-
-	return result;
+	return ibValueMetaObjectFormBase::CreateAndBuildForm(
+		request,
+		creator != nullptr ? creator : GetDefaultFormByID(form_id),
+		form_id,
+		ownerControl, srcObject
+	);
 }
 
 #pragma endregion
@@ -418,8 +415,8 @@ bool ibValueMetaObjectRecordDataRef::ProcessChoice(ibBackendControlFrame* ownerV
 	//
 	// A flat list has one select form, so the mode says nothing here — what may be picked is a question
 	// its hierarchical sibling below answers, because only there is there more than one kind of row.
-	ibBackendValueForm* const selectChoiceForm = GetSelectForm(request, ownerValue);
-	if (selectChoiceForm == nullptr)
+	const ibFormPtr<ibBackendValueForm> selectChoiceForm = GetSelectForm(request, ownerValue);
+	if (!selectChoiceForm)
 		return false;
 
 	selectChoiceForm->ShowForm();
@@ -1400,7 +1397,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendCont
 	if (ownerValue == nullptr)
 		return false;
 
-	ibBackendValueForm* selectChoiceForm = nullptr;
+	ibFormPtr<ibBackendValueForm> selectChoiceForm;
 
 	// The `selectChoiceForm == nullptr` guards are gone: the variable is initialised to
 	// nullptr on the line above and nothing touches it in between, so both were always true.
@@ -1417,7 +1414,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendCont
 		selectChoiceForm = GetFolderSelectForm(request, ownerValue);
 	}
 
-	if (selectChoiceForm == nullptr)
+	if (!selectChoiceForm)
 		return false;
 
 	selectChoiceForm->ShowForm();
@@ -1955,24 +1952,24 @@ void ibValueRecordDataObject::ShowFormValue(const ibFormRequest& request, ibBack
 		return;
 	}
 
-	ibBackendValueForm* const valueForm = GetFormValue(request, ownerControl);
-	if (valueForm != nullptr) {
+	const ibFormPtr<ibBackendValueForm> valueForm = GetFormValue(request, ownerControl);
+	if (valueForm) {
 		valueForm->Modify(IsModified());
 		valueForm->ShowForm();
 	}
 }
 
-ibBackendValueForm* ibValueRecordDataObject::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
+ibFormPtr<ibBackendValueForm> ibValueRecordDataObject::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 	if (foundedForm != nullptr)
-		return foundedForm;
+		return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it
 
 	// An object's window is keyed by the object: one window per object.
 	ibFormRequest objectRequest = request;
 	objectRequest.m_formGuid = m_objGuid;
 
-	ibBackendValueForm* createdForm = GetMetaObject()->CreateAndBuildForm(
+	const ibFormPtr<ibBackendValueForm> createdForm = GetMetaObject()->CreateAndBuildForm(
 		objectRequest,
 		GetCurrentObjectFormID(),
 		ownerControl,
@@ -1982,7 +1979,7 @@ ibBackendValueForm* ibValueRecordDataObject::GetFormValue(const ibFormRequest& r
 	// Ext (DataProcessor / Report) didn't. The flag is harmless when
 	// the form has no owner-close interplay — set unconditionally to
 	// keep the universal path simple.
-	if (createdForm != nullptr)
+	if (createdForm)
 		createdForm->CloseOnOwnerClose(false);
 	return createdForm;
 }
@@ -2533,7 +2530,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		// thing. Watches still skip, which is what this guard was written for.
 		if (!ibBackendException::IsEvalMode() || ibBackendException::IsEvalSandbox()) {
 			if (m_newObject && source != nullptr && !generate) {
-				ExecAsProc(wxT("OnCopy"), source->GetValue());
+				ExecAsEvent(wxT("OnCopy"), source->GetValue());
 			}
 			else if (m_newObject && source == nullptr) {
 				succes = Filling();
@@ -2632,7 +2629,7 @@ bool ibValueRecordDataObjectRef::Generate()
 bool ibValueRecordDataObjectRef::Filling(ibValue cValue) const
 {
 	ibValue standartProcessing = true;
-	ExecAsProc(wxT("Filling"), cValue, standartProcessing);
+	ExecAsEvent(wxT("Filling"), cValue, standartProcessing);
 	return standartProcessing.GetBoolean();
 }
 
@@ -2961,14 +2958,14 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the BeforeWrite handler"));
 	}
 
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
-		ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
+		ExecAsEvent(wxT("SetNewCode"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
@@ -2978,7 +2975,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnWrite"), cancel);
+		ExecAsEvent(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
@@ -3012,7 +3009,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
@@ -3029,7 +3026,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnDelete"), cancel);
+		ExecAsEvent(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
@@ -3322,7 +3319,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeWrite"), cancel,
+		ExecAsEvent(wxT("BeforeWrite"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentWriteMode>(writeMode),
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode)
 		);
@@ -3335,7 +3332,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
-		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
+		ExecAsEvent(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
@@ -3377,7 +3374,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			return refuse(_("%s: failed to clear the registrations of the previous posting"));
 
 		ibValue cancel = false;
-		ExecAsProc(wxT("Posting"), cancel,
+		ExecAsEvent(wxT("Posting"), cancel,
 			ibValue::CreateEnumObject<ibValueEnumDocumentPostingMode>(postingMode));
 		if (cancel.GetBoolean())
 			return refuse(_("%s: posting cancelled by the Posting handler"));
@@ -3393,7 +3390,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	}
 	else if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting) {
 		ibValue cancel = false;
-		ExecAsProc(wxT("UndoPosting"), cancel);
+		ExecAsEvent(wxT("UndoPosting"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: undo posting cancelled by the UndoPosting handler"));
 		if (!m_registerRecords->DeleteRecordSet(writeMode))
@@ -3404,7 +3401,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnWrite"), cancel);
+		ExecAsEvent(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean())
 			return refuse(_("%s: writing cancelled by the OnWrite handler"));
 	}
@@ -3470,7 +3467,7 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 	// Stage-named failures, as on the write path: a delete that stops has a reason and a place.
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
@@ -3496,7 +3493,7 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnDelete"), cancel);
+		ExecAsEvent(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
@@ -3934,7 +3931,7 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the BeforeWrite handler"),
@@ -3954,7 +3951,7 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnWrite"), cancel);
+		ExecAsEvent(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the OnWrite handler"),
@@ -3974,7 +3971,7 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeDelete"), cancel);
+		ExecAsEvent(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the BeforeDelete handler"),
@@ -3992,7 +3989,7 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnDelete"), cancel);
+		ExecAsEvent(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
 			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the OnDelete handler"),

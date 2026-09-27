@@ -205,6 +205,7 @@
     <ClInclude Include="metaCollection\metaCommandObject.h" />
     <ClInclude Include="metaCollection\metaCommandGroupObject.h" />
     <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
+    <ClInclude Include="metaCollection\metaEventHandlerObject.h" />
     <ClInclude Include="metaCollection\metaSessionParameterObject.h" />
     <ClInclude Include="metaCollection\metaCommonAttributeObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
@@ -668,6 +669,9 @@
     <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObject.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaEventHandlerObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject_res.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject.cpp" />

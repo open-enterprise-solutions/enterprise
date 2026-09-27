@@ -6267,3 +6267,31 @@ msgstr "Здесь нечего печатать. Если в форме нес�
 #: src/engine/frontend/docView/docView.cpp:1272
 msgid "Print"
 msgstr "Печать"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:33
+msgid "Event handlers"
+msgstr "Обработчики событий"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
+msgid "Event handler"
+msgstr "Обработчик события"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:119
+msgid "What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."
+msgstr "Что вызывает событие: объекты, менеджеры или наборы записей одного объекта метаданных либо всех объектов метаданных одного вида (DocumentObject - объект любого документа). Можно указать несколько; тогда событие - то, которое вызывает каждый из них."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:121
+msgid "Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."
+msgstr "Какое из событий источника обрабатывается - в списке то, что источник вызывает. В модуле обработчика готовится процедура с именем события, первым параметром она принимает Source."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "Handler module"
+msgstr "Модуль обработчика"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."
+msgstr "Код обработчика: процедура с именем события; первым параметром она принимает Source - значение, вызвавшее событие, - а затем параметры самого события. Вызывается после того, как событие обработал собственный модуль источника, с теми же параметрами."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
+msgid "Open handler module"
+msgstr "Открыть модуль обработчика"

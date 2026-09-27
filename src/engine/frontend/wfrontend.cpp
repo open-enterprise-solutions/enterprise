@@ -1166,9 +1166,9 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	// subsection maps to a command type (FormList / FormSelect / etc.).
 	// The web sidebar opens a specific form by metaID — closer to
 	// designer's metadata-tree "open form" click.
-	ibBackendValueForm* form = metaForm->CreateAndBuildForm(
+	const ibFormPtr<ibBackendValueForm> form = metaForm->CreateAndBuildForm(
 		ibFormRequest(), metaForm, nullptr, nullptr);
-	if (form == nullptr)
+	if (!form)
 		return "{}";
 	form->ShowForm();
 

@@ -34,17 +34,20 @@ public:
 	ibClassID GetClassType() const { return m_typeCtor->GetClassType(); }
 };
 
-// A LEAF — one type offered directly.
-void AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCtorAbstractType* so,
+// A LEAF — one type offered directly. Returns its node (an event source's family is the heading of its
+// members as well).
+wxTreeItemId AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCtorAbstractType* so,
 	const ibTypeDescription& current, bool allowEdit)
 {
 	if (so == nullptr)
-		return;
+		return wxTreeItemId();
 
 	wxImageList* imageList = tc->GetImageList();
 	wxASSERT(imageList);
 
-	const int icon = imageList->Add(so->GetClassIcon());
+	// A type may have no picture (the base answers wxNullIcon) — the image list refuses one aloud.
+	const wxIcon picture = so->GetClassIcon();
+	const int icon = picture.IsOk() ? imageList->Add(picture) : -1;
 	const wxTreeItemId item = tc->AppendItem(parent, so->GetClassName(), icon, icon, new ibTypeItemData(so));
 
 	const bool held = current.ContainType(so->GetClassType());
@@ -52,6 +55,7 @@ void AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCtorAbstrac
 		? (allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED)
 		: (allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED));
 	tc->Check(item, held);
+	return item;
 }
 
 } // namespace
@@ -207,9 +211,15 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 		event.Skip();
 	});
 
-	// SORTED INTO CATEGORIES HERE, by the id itself: a reference goes under the group of the kind it
-	// points at ("CatalogRef"), a plain type stands at the root. Nobody outside decides this.
-	std::map<wxString, wxTreeItemId> groups;
+	// SORTED INTO CATEGORIES HERE, by the id itself: a type of a metaobject goes under the FAMILY of its kind
+	// — `CatalogRef.Goods` under `CatalogRef`, `DocumentObject.Invoice` under `DocumentObject` — and a type
+	// of none stands at the root. Nobody outside decides this.
+	//
+	// ⭐ A FAMILY IS A TYPE AND A HEADING: `CatalogRef` is chosen as itself — a reference to any catalog, the
+	// ones added later included — and holds each catalog's reference below it. The families come first in
+	// what is offered, and each member finds its own by the name it is made of (ibCtorMetaAnyKind::NameOf).
+	// A reference whose family is not on offer (a table's shape) goes under a plain heading of that name.
+	std::map<wxString, wxTreeItemId> headings;
 
 	for (const ibClassID& clsid : allowed) {
 		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
@@ -218,23 +228,22 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 
 		wxTreeItemId parentItem = tc->GetRootItem();
 
-		if (IsReference(clsid)) {
-			// The group is named after the METATYPE the reference belongs to, so every catalog lands
-			// under one heading without anyone passing a list of headings in.
-			const ibCtorMetaValueType* metaCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-			const ibValueMetaObject* owner = metaCtor != nullptr ? metaCtor->GetMetaObject() : nullptr;
-			const wxString groupName = owner != nullptr
-				? ibValue::GetNameObjectFromID(owner->GetClassType()) + wxT("Ref")
-				: _("References");
-
-			auto it = groups.find(groupName);
-			if (it == groups.end()) {
-				wxImageList* imageList = tc->GetImageList();
-				const int groupIcon = imageList->Add(so->GetClassIcon());
-				it = groups.emplace(groupName, tc->AppendItem(tc->GetRootItem(), groupName, groupIcon, groupIcon)).first;
-			}
-			parentItem = it->second;
+		const ibCtorMetaValueType* metaCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+		const ibValueMetaObject* owner = metaCtor != nullptr ? metaCtor->GetMetaObject() : nullptr;
+		if (owner == nullptr) {
+			headings[so->GetClassName()] = AppendType(tc, parentItem, so, inOut, allowEdit);
+			continue;
 		}
+
+		const wxString familyName = ibCtorMetaAnyKind::NameOf(owner->GetClassName(), metaCtor->GetMetaTypeCtor());
+		auto heading = headings.find(familyName);
+		if (heading == headings.end() && IsReference(clsid)) {
+			wxImageList* imageList = tc->GetImageList();
+			const int groupIcon = imageList->Add(so->GetClassIcon());
+			heading = headings.emplace(familyName, tc->AppendItem(tc->GetRootItem(), familyName, groupIcon, groupIcon)).first;
+		}
+		if (heading != headings.end() && heading->second.IsOk())
+			parentItem = heading->second;
 
 		AppendType(tc, parentItem, so, inOut, allowEdit);
 	}

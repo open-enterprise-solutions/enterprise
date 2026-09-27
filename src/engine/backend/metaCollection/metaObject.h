@@ -40,6 +40,7 @@ constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    /
 // (Important, Normal, Create, Reports, Service). It holds nothing; a command names it (metaCommandGroupObject.h).
 constexpr ibClassID g_metaCommandGroupCLSID = metadata_to_clsid("MD_CMDGR");
 constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/private/scheduled-jobs.md)
+constexpr ibClassID g_metaEventHandlerCLSID = metadata_to_clsid("MD_EHND");   // EVENT HANDLER — one event of the types it names, handled by its own module
 // A SESSION PARAMETER — an attribute whose owner is the session rather than a table. Declared
 // here beside the jobs because that is where it sits in the tree: configuration-level, no data
 // of its own, set once per session by the session module (docs/private/access-policy-rls.md).

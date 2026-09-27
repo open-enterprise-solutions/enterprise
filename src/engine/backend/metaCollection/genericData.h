@@ -163,6 +163,12 @@ public:
 	// undefined value. Two different falses in one seam (measured 2026-09-24 on the ledger base).
 	virtual bool AdjustOutValue(const ibValueDataObject& element, const ibValue& varValue, ibValue& out) const;
 
+	// THE MODULES ITS EVENTS ARE HANDLED IN — the object's (a register's record set module) and the
+	// manager's; null where it has none. Here, on the base, because an event handler asks it of
+	// whatever its source names — a catalog's manager as readily as a register's record set.
+	virtual const class ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
+	virtual const class ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
+
 	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;
@@ -233,17 +239,17 @@ public:
 	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
 	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
 	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
-	virtual ibBackendValueForm* CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
+	virtual ibFormPtr<ibBackendValueForm> CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
 		const ibUniqueKey& formGuid = wxNullGuid) const;
 
 #pragma region _form_builder_h_
 	//support form 
-	ibBackendValueForm* GetGenericForm(const ibFormRequest& request = ibFormRequest(),
+	ibFormPtr<ibBackendValueForm> GetGenericForm(const ibFormRequest& request = ibFormRequest(),
 		ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 #pragma region _form_creator_h_
-	ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id = defaultFormType,
+	ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibFormID& form_id = defaultFormType,
 		ibBackendControlFrame* ownerControl = nullptr,
 		ibSourceDataObject* srcObject = nullptr
 	) const;

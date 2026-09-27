@@ -115,6 +115,11 @@ public:
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
 		const class ibMetaData* metaData = nullptr);
 
+	// ⭐ DOES THE DESCRIPTION ADMIT A VALUE OF THIS CLASS — the question AdjustValue asks, and an event
+	// handler asks of its source. See the definition.
+	static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid,
+		const class ibMetaData* source = nullptr);
+
 	// ⭐ WHAT A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER HOLDS: anything of that type — a number unrounded
 	// (precision 0), a date with its time, a string of any length (0). See the definition.
 	static ibTypeDescription::ibTypeData Unqualified();

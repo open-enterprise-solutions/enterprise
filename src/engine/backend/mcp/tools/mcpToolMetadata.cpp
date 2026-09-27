@@ -33,12 +33,14 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"            // how a field is chosen — and what each part of THAT may be
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"     // …and the two values that carry it
 #include "backend/choiceLinkResolver.h"               // choice_preview asks the resolver a control asks
+#include "backend/metaCollection/partial/reference/reference.h"   // ConvertToMetaIds — a family's lists, its facade
 #include "backend/metaCollection/partial/commonObject.h"   // …of a record made new: an object, a register's record
 #include "backend/metaCollection/table/metaTableObject.h"  // …or a row of a tabular section
 #include "backend/system/value/valueDynamicList.h"    // …and opens the list a choice form opens
 #include "backend/restructureInfo.h"                  // the ledger an object complains into
 #include "backend/typeDescription.h"                  // …and the description it hides
 
+#include <algorithm>    // std::find — a list offered once
 #include <functional>   // choice_preview — the one write a new record is filled through
 
 namespace {
@@ -284,7 +286,8 @@ const ibArg& ArgType()
 {
 	static const ibArg s_a(wxT("type"), ibArg::Kind::Text,
 		ibMcpText("The type's name: String, Number, Date, Boolean, or a reference type like "
-			  "CatalogRef.Goods / DocumentRef.GoodsReceipt."));
+			  "CatalogRef.Goods / DocumentRef.GoodsReceipt - or a whole kind's family, CatalogRef / "
+			  "DocumentRef (any catalog's item, any document), or AnyRef (any reference at all)."));
 	return s_a;
 }
 
@@ -940,7 +943,21 @@ public:
 			"`ListOwner`, `ListGeneration` - takes the NAME of what to bind or a list of names "
 			"(`{\"ListRegisterRecord\": [\"Stock\", \"Settlements\"]}`), and each is placed through "
 			"metadata_bind, so the other end learns it too: the register takes the document as its "
-			"recorder.");
+			"recorder.\n"
+			"A DECLARED SUBSCRIPTION TO AN EVENT - a routine that must run whenever any of many objects "
+			"raises it: before every document is written, whenever a catalog item is copied, whenever a "
+			"list form is got - is an `EventHandler`, a top-level kind. Nothing in the objects themselves "
+			"is edited, and who subscribes to what is read off the handlers, not out of the code. Its "
+			"`Source` says who raises the event: "
+			"metadata_set_type with one type - a single object's (`CatalogObject.Goods`) or a whole "
+			"kind's (`DocumentObject` is every document's object, `CatalogManager` every catalog's "
+			"manager) - or several at once through `description`, which keeps only the events every one "
+			"of them raises by the same name and with as many arguments. Its `Event` is set with "
+			"metadata_set; metadata_get lists the choices, which follow the source. Its own module - the "
+			"id in the `HandlerModule` property - is prepared with the procedure, named as the event and "
+			"taking `Source` before the event's own arguments: `Procedure BeforeWrite(Source, Cancel)`. "
+			"It runs after the source's own module, with the same arguments, so a `Cancel` set in it "
+			"cancels the write.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1936,7 +1953,25 @@ public:
 	{
 		return ibMcpText("Give an attribute, a dimension or a resource its type - in words: String with a "
 			"length, Number with precision and scale, Date, Boolean, or a reference such as "
-			"CatalogRef.Goods. type_list shows what names exist.");
+			"CatalogRef.Goods. type_list shows what names exist.\n"
+			"WHICH REFERENCE, by what the field MEANS - a reference field may be as narrow or as wide as that:\n"
+			"* ONE KIND OF THING (the customer, the warehouse) - that object's own reference, CatalogRef.Counterparties. "
+			"The default: a choice opens its list, a query joins its one table, anything else is refused.\n"
+			"* A FEW KINDS KNOWN NOW AND MEANT TO STAY CLOSED (a customer or a supplier) - a composite of those "
+			"references, through `description`. A catalog added later does not join it, which is the point.\n"
+			"* AN ITEM OF ANY OBJECT OF A METATYPE, those added later included (a basis, an analytics value, what a "
+			"note is attached to) - the family: CatalogRef, DocumentRef, ChartOfAccountsRef. Stored as a reference; "
+			"a document put into a CatalogRef leaves it empty.\n"
+			"* ANYTHING THAT CAN BE REFERRED TO (the object a change history is kept for, a file attached to any "
+			"object, a journal's subject) - AnyRef.\n"
+			"* A CHART OF CHARACTERISTIC TYPES' `TypesOfCharacteristics` - what its characteristics, and the account "
+			"analytics typed by them, may hold - is where the wide ones belong most: an analytics kind that takes "
+			"any catalog's item is CatalogRef there, and the chart stays open to catalogs added later.\n"
+			"The wider the type, the less a query and a form know: a family is read across every table of its kind, "
+			"through the dot only what all of them have, and a choice has to ask which list to open "
+			"(choice_preview takes it as `list`). So do not widen a field to avoid choosing; and where it MEANS any of "
+			"them, do not list every type there is today either - that list is the field nobody extends when the next "
+			"catalog arrives.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -2974,12 +3009,16 @@ public:
 			if (settled != 0 && clsid != settled)
 				continue;   // the link has decided this field's type; the rest is not on offer
 			types.push_back(ibDataValue::String(metaData->GetNameObjectFromID(clsid)));
+			// A reference opens its list; an "any" — CatalogRef, AnyRef — any list of its facade, as the
+			// picker offers them (ibValueReferenceDataObject::ConvertToMetaIds): nothing opens "a CatalogRef".
 			if (IsReference(clsid))
-				lists.push_back(clsid);
+				for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds({ clsid }, metaData))
+					if (std::find(lists.begin(), lists.end(), reference_to_clsid(id)) == lists.end())
+						lists.push_back(reference_to_clsid(id));
 		}
 		result.AddField(wxT("types"), ibDataValue::Array(types));
 		result.SetValue(wxT("settled_by_link"), settled != 0);
-		result.SetValue(wxT("asks_type_first"), types.size() > 1);
+		result.SetValue(wxT("asks_type_first"), types.size() > 1 || lists.size() > 1);
 
 		auto parameters = std::make_shared<ibDataNode>();
 		for (const std::pair<const wxString, ibValue>& parameter : condition.m_parameters)

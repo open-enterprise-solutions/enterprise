@@ -200,7 +200,7 @@ public:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const override { return nullptr; }
 
 	//support form
-	virtual ibBackendValueForm* GetObjectForm() const;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm() const;
 
 	//create constant table  
 	static bool CreateConstantSQLTable();
@@ -221,7 +221,7 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create) {
 			return GetObjectForm();
@@ -372,7 +372,7 @@ public:
 #pragma region _form_builder_h_
 	//support show 
 	virtual void ShowFormValue();
-	virtual ibBackendValueForm* GetFormValue();
+	virtual ibFormPtr<ibBackendValueForm> GetFormValue();
 #pragma endregion
 
 	//support actionData

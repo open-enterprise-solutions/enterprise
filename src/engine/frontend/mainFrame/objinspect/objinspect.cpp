@@ -415,6 +415,30 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 		return;
 	}
 
+	// ⭐ A LIST WHOSE CHOICES FOLLOW ANOTHER PROPERTY — an event handler's Event lists what its Source raises. A
+	// row takes its choices when it is made, so after an edit every one-of-a-list property is asked for its list
+	// again (GetValueList, the property's own answer), and where it no longer matches the row the grid is made
+	// anew — after this event, as a schedule's links are (ibPGCalcScheduleProperty::RefreshChildren).
+	//
+	// 🛑 ASKED OF THE PROPERTY, NOT OF THE ROW: a list made EMPTY — a new handler, no source yet — has no
+	// choices at all (wxPGChoices::IsOk is false), and a check that started from the row skipped exactly it.
+	for (const auto& prop : m_propMap) {
+		if (prop.first == nullptr || prop.second == nullptr)
+			continue;
+		ibPropertyChoiceList asked;
+		if (prop.second->GetValueList(asked) != ibPropertyChoiceMode::Single)
+			continue;   // not one of a list: nothing to go stale
+		const wxPGChoices& shown = prop.first->GetChoices();
+		bool same = asked.GetCount() == shown.GetCount();
+		for (unsigned int idx = 0; same && idx < asked.GetCount(); idx++)
+			same = asked.GetId(idx) == shown.GetValue(idx);
+		if (!same) {
+			Create(m_currentSel, true);
+			event.Skip();
+			return;
+		}
+	}
+
 	wxWindowUpdateLocker updateLock(m_pg);   // RAII Thaw — a throwing OnPropertyRefresh must not leave the grid frozen
 
 	{

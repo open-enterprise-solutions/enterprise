@@ -184,12 +184,12 @@ bool ibValueMetaObjectConstant::OnAfterCloseMetaObject()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibBackendValueForm* ibValueMetaObjectConstant::GetObjectForm() const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectConstant::GetObjectForm() const
 {
 	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(nullptr, nullptr, m_metaGuid);
 	if (foundedForm == nullptr)
 		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaGuid), nullptr, nullptr, CreateRecordDataObjectValue());
-	return foundedForm;
+	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it; this is one more reference
 }
 
 //***********************************************************************

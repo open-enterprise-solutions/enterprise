@@ -30,6 +30,7 @@ const ibMetaGroupRow s_groups[] = {
 	// they are declared right after it.
 	{ g_metaParameterizedJobCLSID, wxTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Common },
 	{ g_metaScheduledJobCLSID,     wxTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
+	{ g_metaEventHandlerCLSID,     wxTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
 	{ g_metaSessionParameterCLSID, wxTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
 	{ g_metaCommonAttributeCLSID,  wxTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
 	{ g_metaPictureCLSID,          wxTRANSLATE("Pictures"),           ibMetaGroupBand::Common },

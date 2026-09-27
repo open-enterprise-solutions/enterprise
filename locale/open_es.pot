@@ -5129,3 +5129,31 @@ msgstr ""
 #: src/engine/frontend/docView/docView.cpp:1272
 msgid "Print"
 msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:33
+msgid "Event handlers"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
+msgid "Event handler"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:119
+msgid "What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:121
+msgid "Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "Handler module"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
+msgid "Open handler module"
+msgstr ""

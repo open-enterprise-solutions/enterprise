@@ -35,16 +35,36 @@ public:
 	// GetProcUnit() and pins the shared_ptr against fast-F5 UAF
 	// (project_refresh_execute_crash.md).
 	template <typename... Types>
-	void ExecAsProc(const wxString& strMethodName, Types&&... args) const {
+	void ExecAsProc(const ibString& strMethodName, Types&&... args) const {
 		ibValue* paParams[] = { &args..., nullptr };
 		ExecAsProc(strMethodName, paParams, (const long)sizeof...(args));
 	}
 
 	template <typename... Types>
-	void ExecAsFunc(const wxString& strMethodName, ibValue& pvarRetValue, Types&&... args) const {
+	void ExecAsFunc(const ibString& strMethodName, ibValue& pvarRetValue, Types&&... args) const {
 		ibValue* paParams[] = { &args..., nullptr };
 		ExecAsFunc(strMethodName, pvarRetValue, paParams, (const long)sizeof...(args));
 	}
+
+	// ⭐ AN EVENT OF THE OWNER — `BeforeWrite`, `Posting`, `OnCopy`… Its own module's procedure first,
+	// then every event handler of this event of the owner's type, the owner handed over as `Source`
+	// before the event's own arguments — the same arguments, so a `Cancel` an event handler sets is the
+	// one the caller reads. EVERY place that raises an event calls this, and that is what makes an event
+	// handler run wherever the module's procedure does: there is no second call beside it to forget. A
+	// plain call into the module (ExecAsProc) raises nothing.
+	template <typename... Types>
+	void ExecAsEvent(const ibString& strEventName, Types&&... args) const {
+		ibValue* paParams[] = { &args..., nullptr };
+		ExecAsEvent(strEventName, paParams, (const long)sizeof...(args));
+	}
+
+	// ⭐ …AND AN EVENT OF A MANAGER — `FormGetProcessing`, `ChoiceDataGetProcessing`, a job's `JobProcessing`.
+	// A manager is no module descriptor, so its module is found where the manager value finds it
+	// (EditModuleManagerFor) and its procedure called here; then every event handler of it, the manager
+	// handed over as `Source`. False — and nothing called — when the manager's module is not registered
+	// where this runs; a caller that cannot go on without it (a job) says so.
+	static bool ExecAsManagerEvent(const class ibValueMetaObjectGenericData* metaObject, const ibString& strEventName,
+		ibValue** paParams, const long lSizeArray);
 
 	// Allocate the runtime slot (ProcUnit) for this descriptor on
 	// demand. No-op in Designer mode (no script execution ever) and
@@ -229,7 +249,7 @@ protected:
 	// public variadic forms above. External callers should use the
 	// variadic — this raw form stays protected because the array shape
 	// is a derived-class implementation detail.
-	bool ExecAsProc(const wxString& strMethodName,
+	bool ExecAsProc(const ibString& strMethodName,
 		ibValue** paParams, const long lSizeArray) const
 	{
 		if (auto pu = GetProcUnit())
@@ -237,13 +257,17 @@ protected:
 		return false;
 	}
 
-	bool ExecAsFunc(const wxString& strMethodName,
+	bool ExecAsFunc(const ibString& strMethodName,
 		ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
 	{
 		if (auto pu = GetProcUnit())
 			return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
 		return false;
 	}
+
+	// The event's array form — see the variadic above. Out of line: it asks the configuration for its
+	// event handlers, and this header is included nearly everywhere.
+	void ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const;
 
 	// Populate a value's method-helper from this descriptor's bytecode —
 	// every kind=Export entry in m_listFunc / m_listVar is appended as
@@ -324,6 +348,15 @@ protected:
 	// Raw ptr; safe as long as parent outlives child (enforced by
 	// owning containers).
 	const ibRuntimeModuleDataObject* m_parent = nullptr;
+
+public:
+
+	// ⭐ THE RUNTIME VALUE THIS DESCRIPTOR IS A PART OF — what an event of it hands its handlers as `Source`.
+	// Every owner builds the descriptor with itself, so by default it is read off `this`: a CROSS-cast, the
+	// descriptor being the value's sibling base and not derived from it, which is why it cannot be a static
+	// one. Null for a descriptor that is no value's part — its events then reach no handler. An owner that
+	// knows it is one may answer `this` outright. Last in the class: an optional virtual shifts no slot.
+	virtual const ibValue* GetRuntimeOwner() const { return dynamic_cast<const ibValue*>(this); }
 };
 
 #endif

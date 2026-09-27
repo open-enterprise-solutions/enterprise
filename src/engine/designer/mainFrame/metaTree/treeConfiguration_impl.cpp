@@ -1605,6 +1605,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	// cannot: where a group NESTS is this tree's own shape.
 	{ g_metaParameterizedJobCLSID, 0, ibMetaRow::Item },
 	{ g_metaScheduledJobCLSID,     g_metaParameterizedJobCLSID, ibMetaRow::Item },
+	{ g_metaEventHandlerCLSID,     0, ibMetaRow::Item },
 
 	{ g_metaSessionParameterCLSID, 0, ibMetaRow::Item },
 	{ g_metaCommonAttributeCLSID,  0, ibMetaRow::Item },

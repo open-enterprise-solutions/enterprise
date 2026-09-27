@@ -190,7 +190,7 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	// layout is generated FROM the source: no source, no fields. The mistake was
 	// not the missing argument — it was reaching past the owner for a thing only
 	// the owner knows how to make.
-	ibBackendValueForm* built = nullptr;
+	ibFormPtr<ibBackendValueForm> built;
 
 	if (const ibValueMetaObjectGenericData* owner =
 			object->GetParent() != nullptr
@@ -204,15 +204,15 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 			ibFormRequest(), creator, creator->GetTypeForm(), nullptr, nullptr);
 	}
 
-	ibValueForm* form = dynamic_cast<ibValueForm*>(built);
-	if (form == nullptr) {
+	const ibValuePtr<ibValueForm> form(built);
+	if (!form) {
 		refusal = wxString::Format(
 			ibMcpText("'%s' could not be opened. Its module may have refused - messages_read has "
 			  "what the platform said."), object->GetName());
 		return nullptr;
 	}
 
-	form->IncrRef();
+	form->IncrRef();   // the caller's reference — the holders above give theirs back on the way out
 	return form;
 }
 
@@ -234,8 +234,8 @@ ibValueForm* OpenObjectForm(const ibDataNode& params, wxString& refusal, bool& g
 	if (record == nullptr)
 		return nullptr;
 
-	ibValueForm* form = dynamic_cast<ibValueForm*>(record->GetObjectForm());
-	if (form == nullptr) {
+	const ibValuePtr<ibValueForm> form(record->GetObjectForm());
+	if (!form) {
 		refusal = wxString::Format(
 			ibMcpText("The object form of '%s' could not be opened. Its module may have refused - messages_read "
 			  "has what the platform said."), object->GetName());

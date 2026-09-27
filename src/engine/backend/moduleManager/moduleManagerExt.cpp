@@ -217,17 +217,17 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 
 	if (defFormObject != nullptr) {
 
-		ibBackendValueForm* result = nullptr;
+		ibBackendValueForm* cached = nullptr;
 		// Cache lives on the form's own metadata (external DP for .epf, main config
 		// for embedded DP) — m_metaManager->GetMetaData() is the configuration
 		// passed to base ctor and would miss for external DPs.
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 
-		if (!cc || !cc->FindCompileModule(defFormObject, result)) {
+		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
 
-			if (result != nullptr) {
+			if (result) {
 				result->ShowForm();
 			}
 			else if (!appData->DesignerMode()) {
@@ -458,15 +458,15 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	);
 
 	if (defFormObject != nullptr) {
-		ibBackendValueForm* result = nullptr;
+		ibBackendValueForm* cached = nullptr;
 		// Cache lives on the form's own metadata — see the symmetric DataProcessor
 		// path above for rationale.
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
-		if (!cc || !cc->FindCompileModule(defFormObject, result)) {
+		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
 
-			if (result != nullptr) {
+			if (result) {
 				result->ShowForm();
 			}
 			else if (!appData->DesignerMode()) {
@@ -485,14 +485,14 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	// module started and quietly died, which is the same outcome with no explanation.
 	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
 		// No key in the request — the form is generated, so it takes a fresh key of its own.
-		ibBackendValueForm* valueForm =
+		const ibFormPtr<ibBackendValueForm> valueForm =
 			ibBackendValueForm::CreateNewForm(ibFormRequest(), nullptr, nullptr, m_objectValue);
 		valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
 		try {
 			valueForm->ShowForm();
 		}
 		catch (...) {
-			wxDELETE(valueForm);
+			// A form that failed to show goes with its holder — nobody else took it.
 			if (appData->EnterpriseMode() || appData->ServiceMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();

@@ -21,6 +21,8 @@ public:
 	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Object; }
+	// A constant's write raises BeforeWrite / OnWrite in its own module — what an event handler of it offers.
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;

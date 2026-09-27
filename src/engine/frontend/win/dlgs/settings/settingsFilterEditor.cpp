@@ -216,6 +216,16 @@ public:
 						SetControlValue(found.front());
 						return false;   // written already - the model has nothing more to take from the text
 					}
+					// …and the field's FACADE: every reference it may hold, a family's and AnyRef's members
+					// included (ConvertToMetaIds) - a `CatalogRef` field is looked for in each catalog, where the
+					// value typed above is the empty family and finds nothing.
+					for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds(item->m_left.m_type.GetClsidList(), m_editor->GetMetaData())) {
+						const ibValue reference(ibValueReferenceDataObject::Create(m_editor->GetMetaData(), id));
+						if (reference.FindValue(text, found) && !found.empty()) {
+							SetControlValue(found.front());
+							return false;
+						}
+					}
 				}
 			}
 		}

@@ -229,13 +229,13 @@ wxWindow* ibHomePageView::OpenCell(wxWindow* parent, const ibHomePageItem& item,
 	pane->SetSizer(paneSizer);
 
 	const ibValueMetaObjectFormBase* const metaForm = FindItemForm(item);
-	ibValueForm* const valueForm = CreateFormValue(metaForm);
+	const ibValuePtr<ibValueForm> valueForm = CreateFormValue(metaForm);
 
 	ibHomePageCell cell;
 	cell.m_item = item;
 	cell.m_window = pane;
 
-	if (valueForm != nullptr) {
+	if (valueForm) {
 		// The form opens as a CHILD DOCUMENT of the page and asks the page where to render;
 		// the pane being filled right now (m_openingPane) is the answer. Nothing is passed
 		// down the form side — the composition is the doc parent.
@@ -360,12 +360,12 @@ const ibValueMetaObjectFormBase* ibHomePageView::FindItemForm(const ibHomePageIt
 		{ g_metaCommonFormCLSID, g_metaFormCLSID }, true);
 }
 
-ibValueForm* ibHomePageView::CreateFormValue(const ibValueMetaObjectFormBase* metaForm) const
+ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectFormBase* metaForm) const
 {
 	if (metaForm == nullptr)
 		return nullptr;
 
-	ibBackendValueForm* backendForm = nullptr;
+	ibFormPtr<ibBackendValueForm> backendForm;
 
 	// An element PLACED on the start page gets an identity of its OWN — a fresh form guid.
 	// Without it a form's identity falls back to its source, and a source is not always one per
@@ -390,7 +390,7 @@ ibValueForm* ibHomePageView::CreateFormValue(const ibValueMetaObjectFormBase* me
 		return nullptr;
 	}
 
-	return dynamic_cast<ibValueForm*>(backendForm);
+	return ibValuePtr<ibValueForm>(backendForm);
 }
 
 ibFrontendWindow* ibHomePageView::GetCellWindow(const ibDocument* childDoc) const
@@ -412,7 +412,7 @@ ibFrontendWindow* ibHomePageView::GetCellWindow(const ibDocument* childDoc) cons
 void ibHomePageView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
 {
 	for (ibHomePageCell& cell : m_cells) {
-		if (cell.m_valueForm != nullptr)
+		if (cell.m_valueForm)
 			cell.m_valueForm->UpdateForm();
 	}
 }

@@ -17,10 +17,12 @@
 
 ibValueMetaObjectReport::ibValueMetaObjectReport() : ibValueMetaObjectRecordDataExt()
 {
-	// NO DECLARED HANDLER. A report used to offer `Composing(StandartProcessing)`, back when the
-	// object itself composed; it does not — it points at the composer it declares, and the box
-	// showing that composer runs it. Declaring a handler nothing raises is worse than none: the
+	// NO HANDLER IN THE OBJECT MODULE. A report used to offer `Composing(StandartProcessing)`, back
+	// when the object itself composed; it does not — it points at the composer it declares, and the
+	// box showing that composer runs it. Declaring a handler nothing raises is worse than none: the
 	// designer would list it, an author would write into it, and it would never be called.
+
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectReport::~ibValueMetaObjectReport()
@@ -76,7 +78,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectReport::CreateSourceObject(cons
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectReport::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectReport::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,

@@ -13,6 +13,8 @@
 #include "backend/diagnostics/journal.h"  // every read is counted — how many there are is a measurement, not a guess
 #include "backend/utils/debugTrace.h"     // ibDebugTraceEnabled — the same gate as the hit line
 #include "backend/stringUtils.h"          // a typed text against a code: the whole of it, case aside
+#include "backend/system/value/valueArray.h"   // ibValueArray — ChoiceDataGetProcessing's ChoiceData
+#include "backend/system/value/valueMap.h"     // ibValueStructure — …and its Parameters
 
 #include <algorithm>    // the batch's list, sorted and halved
 #include <functional>   // std::less over the tables' addresses
@@ -181,6 +183,26 @@ void ibValueReferenceDataObject::ReadBatch()
 
 bool ibValueReferenceDataObject::FindValue(const wxString& findData, std::vector<ibValue>& listValue) const
 {
+	// ⭐ THE MANAGER IS ASKED FIRST — ChoiceDataGetProcessing(ChoiceData, Parameters, StandardProcessing), in
+	// its module and in its event handlers. Every quick choice and every choice by typed text comes through
+	// here: told StandardProcessing = False, the list is what it put into ChoiceData, and no search is run.
+	// Only for whom may read the object's data — the rights come first, as they do for its forms.
+	if (m_metaObject->AccessRight_Show()) {
+		const ibValuePtr<ibValueArray> choiceData(new ibValueArray());
+		const ibValuePtr<ibValueStructure> parameters(new ibValueStructure());
+		parameters->Insert(wxT("SearchString"), findData);
+
+		ibValue choiceDataValue(choiceData);
+		ibValue parametersValue(parameters);
+		ibValue standardProcessing = true;
+		ibValue* params[] = { &choiceDataValue, &parametersValue, &standardProcessing };
+		ibRuntimeModuleDataObject::ExecAsManagerEvent(m_metaObject, wxT("ChoiceDataGetProcessing"), params, 3);
+		if (!standardProcessing.GetBoolean()) {
+			listValue = choiceData->Values();
+			return !listValue.empty();
+		}
+	}
+
 	// ⭐⭐ THE ROW BEING JUDGED IS THE ROW ALREADY IN HAND.
 	//
 	// This used to run a QUERY PER ROW: the scan below walked the table, and for every row it built a

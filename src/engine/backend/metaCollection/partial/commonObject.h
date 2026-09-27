@@ -202,10 +202,6 @@ public:
 		return ibSelectorDataType::ibSelectorDataType_any;
 	}
 
-	//get module object in compose object 
-	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
-
 	//meta events
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags);
@@ -339,7 +335,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 protected:
@@ -350,7 +346,7 @@ protected:
 	}
 
 	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create) {
 			return GetObjectForm();
@@ -661,8 +657,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
-	virtual ibBackendValueForm* GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	// ⭐⭐ HOW A METATYPE'S OWN VALUES ARE READ, AND HOW THEY ARE ORDERED. Two questions of one kind: both
@@ -710,7 +706,7 @@ protected:
 
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
 			return GetObjectForm();
@@ -1496,8 +1492,8 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetFolderForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
-	virtual ibBackendValueForm* GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	//append predefined value
@@ -1886,10 +1882,6 @@ public:
 	// REGISTER variant — all columns (dimensions / resources / period …) visible by default. commonObjectAction.cpp.
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;
 
-	//get module object in compose object 
-	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
-
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaDimensionCLSID ||
 			clsid == g_metaResourceCLSID ||
@@ -1910,7 +1902,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
 	//special functions for DB
@@ -1922,7 +1914,7 @@ public:
 protected:
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		//if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
 		//	return GetObjectRecord();
@@ -2238,7 +2230,7 @@ public:
 	// virtual IsModified() — Ref leaves return m_objModified, Ext keeps
 	// the default `false` from ibSourceDataObject.
 	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibFormPtr<ibBackendValueForm> GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
 
 protected:
 	// Leaf-specific form-id enum value for the current object state.
@@ -3378,7 +3370,7 @@ public:
 #pragma region _form_builder_h_
 	//support show 
 	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) = 0;
-	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) = 0;
 #pragma endregion 
 
 	//default showing

@@ -154,6 +154,10 @@ public:
 
 	virtual ~ibValueForm();
 
+	// Counter reference — ibFormPtr's, and a desktop form's reference is its value's.
+	virtual void FormIncrRef() override { ibValue::IncrRef(); }
+	virtual void FormDecrRef() override { ibValue::DecrRef(); }
+
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************

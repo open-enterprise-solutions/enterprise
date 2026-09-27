@@ -95,16 +95,16 @@ void ibValueRecordManagerObjectInformationRegister::ShowFormValue(const ibFormRe
 	}
 
 	//if form is not initialized then generate  
-	ibBackendValueForm* const valueForm =
+	const ibFormPtr<ibBackendValueForm> valueForm =
 		GetFormValue(request, ownerControl);
 
-	if (valueForm != nullptr) {
+	if (valueForm) {
 		valueForm->Modify(m_recordSet->IsModified());
 		valueForm->ShowForm();
 	}
 }
 
-ibBackendValueForm* ibValueRecordManagerObjectInformationRegister::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
+ibFormPtr<ibBackendValueForm> ibValueRecordManagerObjectInformationRegister::GetFormValue(const ibFormRequest& request, ibBackendControlFrame* ownerControl)
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
@@ -114,20 +114,20 @@ ibBackendValueForm* ibValueRecordManagerObjectInformationRegister::GetFormValue(
 		ibFormRequest recordRequest = request;
 		recordRequest.m_formGuid = m_objGuid;
 
-		ibBackendValueForm* createdForm = m_metaObject->CreateAndBuildForm(
+		const ibFormPtr<ibBackendValueForm> createdForm = m_metaObject->CreateAndBuildForm(
 			recordRequest,
 			ibValueMetaObjectInformationRegister::eFormRecord,
 			ownerControl,
 			this
 		);
 
-		if (createdForm != nullptr)
+		if (createdForm)
 			createdForm->CloseOnOwnerClose(false);
 
 		return createdForm;
 	}
 
-	return foundedForm;
+	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it
 }
 #pragma endregion
 

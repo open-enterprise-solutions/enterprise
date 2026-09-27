@@ -6117,3 +6117,31 @@ msgstr "Тут нічого друкувати. Якщо у формі кіль�
 #: src/engine/frontend/docView/docView.cpp:1272
 msgid "Print"
 msgstr "Друк"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:33
+msgid "Event handlers"
+msgstr "Обробники подій"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
+msgid "Event handler"
+msgstr "Обробник події"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:119
+msgid "What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."
+msgstr "Що викликає подію: об'єкти, менеджери або набори записів одного об'єкта метаданих чи всіх об'єктів метаданих одного виду (DocumentObject - об'єкт будь-якого документа). Можна вказати кілька; тоді подія - та, яку викликає кожен із них."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:121
+msgid "Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."
+msgstr "Яку з подій джерела обробляють - у списку те, що джерело викликає. У модулі обробника готується процедура з ім'ям події, першим параметром вона приймає Source."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "Handler module"
+msgstr "Модуль обробника"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."
+msgstr "Код обробника: процедура з ім'ям події; першим параметром вона приймає Source - значення, що викликало подію, - а потім параметри самої події. Викликається після того, як подію обробив власний модуль джерела, з тими самими параметрами."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
+msgid "Open handler module"
+msgstr "Відкрити модуль обробника"

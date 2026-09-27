@@ -69,6 +69,9 @@ constexpr ibPictureID g_picGenerateCLSID = picture_to_clsid("PC_GENTE");
 constexpr ibPictureID g_picExecuteJobCLSID = picture_to_clsid("PC_JOBRN");
 constexpr ibPictureID g_picPrintCLSID = picture_to_clsid("PC_PRINT");
 constexpr ibPictureID g_picHierarchyCLSID = picture_to_clsid("PC_HRCHY");
+// AN EVENT — a lightning bolt: what an event is shown with, in an event handler's Event list and on the
+// event rows of the object inspector.
+constexpr ibPictureID g_picEventCLSID = picture_to_clsid("PC_EVENT");
 
 constexpr ibPictureID g_picUserCLSID = picture_to_clsid("PC_USER");
 constexpr ibPictureID g_picUserActiveCLSID = picture_to_clsid("PC_USRAC");

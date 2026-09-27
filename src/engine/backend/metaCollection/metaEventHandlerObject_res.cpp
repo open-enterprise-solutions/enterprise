@@ -1,0 +1,18 @@
+#include "metaEventHandlerObject.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::GetIconFromBase64
+
+/* PNG — a bell: the flat style of its neighbours, in a hue none of them uses */
+static const wxString s_eventHandler_16_png =wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACgUlEQVR42u2bMU+DQBTH+xH6EfpRGFhNurgaJmc2145OEOPUxQ5uJtgY46AmZdA4GCNDB51k6OJggt8A8xpI4HmlUO69O+gN/6Rpgbv/j7v33h1l4NnBYJ81MAAMAAPAADAADAB2WZ4dzD07SDPNs+/2AoBTMI7l9B3A0LODpAJAkh3TWwBVd1/JKOAGMCmavT55WQsBmJgR0FMAI88O3BoA3OzY3gDAKa+uWFIj9R0PdzCOFVKOCMq5nkgwX0yPTlcA+JuMXBw9pPenUfp+Fadfzz/p6u13LfgM38FvcEwFCF93AELzl8eLtcHc8DbBsXAOBwTSFHd+cJMuzpa1jWPBuXANylQpM+Al2PzydrWz+VxwDQGERFZglAUgpDC/BUKoCwALD9E2w75qOgimgqUDgDkOeLLN5xIExrlqACN8V5pE+6aCawtGwUglAAfneSrzuQR1gqMSwKzYGShkqAFAGwjATCWAkGv4V0yDUCWAUmeK5S2VoA1BHNADALX5XLoAKGWA6eEdGwBoS1YmaAOgtLtzO3llAwBtCXaR2AGwB0CKQNhmf79U+3OZzyVYGww5ATh4e5sbgGA73eEEUCqAnqYf7ACgTRkF0a4AEu78X6MeSLgAWFyrvx1WhxYHAJ967d9ij8DnABAXG/18/FYGANpGAGJqAMqqP6qqsDPVH1VV2Kr601QhFYBhB8w3rgrrmh/j4Ke54qzPUgCMO2QcaywDQNxhALEMAGnHZUaAiQEmC+jxLzG3gQGXq1+cACK8iwRrepBgdyfqI4CND1FkP+wwAMwU0BPA3gfBf6NggyLOPql4YSLaYr7XL0wUp0OEjLsq+mLeGjMADID9BvAHRdhhvzjTY0gAAAAASUVORK5CYII=");
+
+wxIcon ibValueMetaObjectEventHandler::GetIcon() const
+{
+	return GetIconGroup();
+}
+
+wxIcon ibValueMetaObjectEventHandler::GetIconGroup()
+{
+	static wxIcon icon =
+		ibBackendPicture::GetIconFromBase64(s_eventHandler_16_png, wxSize(16, 16));
+
+	return icon;
+}

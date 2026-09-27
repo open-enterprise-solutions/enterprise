@@ -8,6 +8,7 @@
 
 ///////////////////////////////////////////////////
 class BACKEND_API ibBackendValueForm;
+template <class T> class ibFormPtr;   // below — the owning reference a form is handed out by
 ///////////////////////////////////////////////////
 
 // ⭐⭐ A FORM TO TELL, RATHER THAN A FORM TO USE — and the two are different questions that happened
@@ -84,8 +85,8 @@ public:
 
 #pragma region _frontend_call_h__
 
-	// Form entry creator 
-	static ibBackendValueForm* CreateNewForm(const ibFormRequest& request = ibFormRequest(), const class ibValueMetaObjectFormBase* creator = nullptr, ibBackendControlFrame* ownerControl = nullptr,
+	// Form entry creator — born owned (ibFormPtr, below)
+	static ibFormPtr<ibBackendValueForm> CreateNewForm(const ibFormRequest& request = ibFormRequest(), const class ibValueMetaObjectFormBase* creator = nullptr, ibBackendControlFrame* ownerControl = nullptr,
 		class ibSourceDataObject* srcObject = nullptr);
 
 	static ibUniqueKey CreateFormUniqueKey(ibBackendControlFrame* ownerControl,
@@ -105,6 +106,10 @@ public:
 	///////////////////////////////////////////////////////////////////////////
 	virtual ~ibBackendValueForm() {}
 	///////////////////////////////////////////////////////////////////////////
+
+	// Counter reference — what ibFormPtr holds the form by; the form decides what a reference is.
+	virtual void FormIncrRef() = 0;
+	virtual void FormDecrRef() = 0;
 
 	virtual bool LoadForm(const wxMemoryBuffer& data) = 0;
 	virtual bool SaveForm(wxMemoryBuffer &data) const = 0;
@@ -162,12 +167,73 @@ public:
 	virtual const ibFormRequest& GetFormRequest() const = 0;
 };
 
+// ----------------------------------------------------------------------------
+// ibFormPtr<T>: an owning reference to a FORM — ibSourcePtr's twin for the form interface. A form is not an
+// ibValue, so it cannot sit in an ibValuePtr; it holds through FormIncrRef / FormDecrRef, which the form answers
+// for itself (the desktop form: its value's refcount). What MAKES a form hands out one: a new form is born
+// owned, so what happens to it while it is being made — its module run, the manager's FormGetProcessing —
+// happens to a form somebody holds, and letting go of a reference cannot delete it.
+//
+// 🛑 NO IMPLICIT T*. A raw pointer taken from a returned holder outlives the holder and dangles without a word;
+// Get() says it out loud, and a caller that must keep the form keeps the holder.
+// ----------------------------------------------------------------------------
+
+template <class T>
+class ibFormPtr {
+public:
+
+	constexpr ibFormPtr() = default;
+	constexpr ibFormPtr(nullptr_t) {}
+
+	explicit ibFormPtr(T* ptr) { Bind(ptr); }
+
+	ibFormPtr(const ibFormPtr& to_copy) { Bind(to_copy.m_ptr); }
+
+	// …out of a holder of another form type: the desktop form out of the interface one, or none when it is not
+	// one — the same reference, read as what it is.
+	template <typename U>
+	explicit ibFormPtr(const ibFormPtr<U>& other) { Bind(dynamic_cast<T*>(other.operator->())); }
+
+	~ibFormPtr() { Reset(); }
+
+	ibFormPtr& operator = (const ibFormPtr& other) {
+		if (m_ptr != other.m_ptr) { Reset(); Bind(other.m_ptr); }
+		return *this;
+	}
+
+	inline T* operator->() const { return m_ptr; }
+	inline T* Get() const { return m_ptr; }
+	inline explicit operator bool() const noexcept { return m_ptr != nullptr; }
+
+	// …and into a script value, which holds it the same way.
+	operator ibValue() const { return ibValue(static_cast<ibBackendValue*>(m_ptr)); }
+
+private:
+
+	void Bind(T* ptr) {
+		m_ptr = ptr;
+		if (m_ptr != nullptr) m_ptr->FormIncrRef();
+	}
+
+	void Reset() {
+		T* const ptr = m_ptr;
+		m_ptr = nullptr;
+		if (ptr != nullptr) ptr->FormDecrRef();
+	}
+
+	T* m_ptr = nullptr;
+};
+
 namespace formWrapper {
 	namespace inl {
 		inline ibValue* cast_value(ibBackendControlFrame* form) {
 			return dynamic_cast<ibValue*>(form);
 		}
 		inline ibValue* cast_value(ibBackendValue* form) {
+			return form ? form->GetImplValueRef() : nullptr;
+		}
+		template <class T>
+		inline ibValue* cast_value(const ibFormPtr<T>& form) {
 			return form ? form->GetImplValueRef() : nullptr;
 		}
 	}

@@ -14,6 +14,8 @@ ibValueMetaObjectSequence::ibValueMetaObjectSequence() : ibValueMetaObjectRegist
 	// The set's module opens with the handlers a set is written through, as a register's does.
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectSequence::~ibValueMetaObjectSequence()
@@ -157,7 +159,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectSequence::CreateSourceObject(co
 }
 
 // The list form of the registrations, built the way every register's list is.
-ibBackendValueForm* ibValueMetaObjectSequence::GetListForm(const ibFormRequest& request,
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectSequence::GetListForm(const ibFormRequest& request,
 	ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(

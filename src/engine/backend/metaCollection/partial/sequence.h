@@ -212,7 +212,7 @@ public:
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const override;
 
 	//support form
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(),
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(),
 		ibBackendControlFrame* ownerControl = nullptr) const override;
 
 	// ⭐ WHO TAKES THE BORDER BACK. On (the default) the platform does it itself, by the rows the

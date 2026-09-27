@@ -184,23 +184,23 @@ void ibValueRecordDataObjectConstant::ShowFormValue()
 	}
 
 	//if form is not initialized then generate  
-	ibBackendValueForm* const valueForm =
+	const ibFormPtr<ibBackendValueForm> valueForm =
 		GetFormValue();
 
-	if (valueForm != nullptr) {
+	if (valueForm) {
 		valueForm->Modify(false);
 		valueForm->ShowForm();
 	}
 }
 
-ibBackendValueForm* ibValueRecordDataObjectConstant::GetFormValue()
+ibFormPtr<ibBackendValueForm> ibValueRecordDataObjectConstant::GetFormValue()
 {
 	ibBackendValueForm* const foundedForm = GetForm();
 
 	if (foundedForm == nullptr)
 		return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(wxString(), m_metaObject->GetGuid()), nullptr, nullptr, this);
 
-	return foundedForm;
+	return ibFormPtr<ibBackendValueForm>(foundedForm);   // the open one — its window holds it
 }
 #pragma endregion
 
@@ -371,7 +371,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("BeforeWrite"), cancel);
+		ExecAsEvent(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
 			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the BeforeWrite handler"),
@@ -408,7 +408,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 
 	{
 		ibValue cancel = false;
-		ExecAsProc(wxT("OnWrite"), cancel);
+		ExecAsEvent(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
 			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the OnWrite handler"),

@@ -3,7 +3,7 @@
 
 #include "backend/compiler/typeCtor.h"
 #include "backend/objCtorDefs.h"
-#include "backend/metaCtor.h"   // ibCtorMetaAnyReference — the per-metatype family a reference joins
+#include "backend/metaCtor.h"   // ibCtorMetaAnyKind — the per-metatype family a type of each kind joins
 #include "backend/metaCollection/partial/commonObject.h"
 
 class ibCtorMetaValueType : public ibCtorAbstractType {
@@ -30,6 +30,27 @@ public:
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
 
+	// THE MODULE A VALUE OF THIS TYPE HANDLES ITS EVENTS IN — an object's in its object module, a
+	// manager's in its manager module, a record set's in its record set module; null for a type that
+	// raises none (a reference, a list, a selection). What an event handler offers as the events
+	// of its source is what this module declares.
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const { return nullptr; }
+
+	// ⭐ A TYPE BEING REGISTERED TELLS ITS "ANY" THAT IT EXISTS — `CatalogRef` learns this catalog's reference,
+	// `DocumentObject` this document's object, and each forgets it as it goes. Said HERE, in the one door every
+	// kind is registered through (ibMetaImage::RegisterCtor), not in each register*() macro: the type knows its
+	// metaobject and its kind, which is all the lookup needs. That is what lets the "any" answer "is this one
+	// of mine" with no metadata lookup — see ibCtorMetaAnyKind (metaCtor.h).
+	virtual void CallEvent(ibCtorObjectTypeEvent event) override {
+		const ibValueMetaObject* const metaObject = GetMetaObject();
+		ibCtorMetaAnyKind* const any = metaObject != nullptr ? ib_find_meta_any_kind(metaObject->GetClassName(), GetMetaTypeCtor()) : nullptr;
+		if (any == nullptr)
+			return;
+		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
+			any->AddMember(GetClassType());
+		else if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister)
+			any->RemoveMember(GetClassType());
+	}
 
 	// The dot-walk TARGET queryable of this metadata type — non-null only for a REFERENCE ctor (whose
 	// metaobject is a queryable holder). Lets the reference-target resolver reach the queryable by VIRTUAL
@@ -80,23 +101,10 @@ protected:
 	ibValueMetaObjectRecordDataRef* m_metaObject;
 };
 
-// Registering a reference also tells its FAMILY that it exists: `CatalogRef`
-// learns this catalog's reference the moment the reference itself appears, and
-// forgets it when it goes. That is what lets the family answer "is this one of
-// mine" with no metadata lookup — see ibCtorMetaAnyReference (metaCtor.h).
 #define registerReference()\
-	{\
-		ibCtorMetaValueTypeReference* refCtor = new ibCtorMetaValueTypeReference(this);\
-		m_metaData->RegisterCtor(refCtor);\
-		if (ibCtorMetaAnyReference* anyRef = ib_find_any_reference(GetClassName()))\
-			anyRef->AddMember(refCtor->GetClassType());\
-	}
+	m_metaData->RegisterCtor(new ibCtorMetaValueTypeReference(this))
 #define unregisterReference()\
-	{\
-		if (ibCtorMetaAnyReference* anyRef = ib_find_any_reference(GetClassName()))\
-			anyRef->RemoveMember(reference_to_clsid(GetMetaID()));\
-		m_metaData->UnRegisterCtor(reference_to_clsid(GetMetaID()));\
-	}
+	m_metaData->UnRegisterCtor(reference_to_clsid(GetMetaID()))
 
 //object class
 class ibCtorMetaValueTypeObject :
@@ -116,6 +124,7 @@ public:
 	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Object; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;
@@ -163,6 +172,7 @@ public:
 	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Manager; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetManagerModule(); }
 
 protected:
 	ibClassID m_classType;
@@ -366,6 +376,7 @@ public:
 	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet; }
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;

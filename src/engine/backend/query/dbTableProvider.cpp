@@ -5482,10 +5482,22 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTarget
 	for (const ibClassID& clsid : refColumn->GetTypeValueDesc().GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
-		const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
-		if (ctor != nullptr)
-			if (const ibBackendQueryable* q = ctor->GetQueryable())   // virtual dispatch to the reference ctor — no cast
+		const ibCtorAbstractType* type = metaData->GetAvailableCtor(clsid);   // ONE lookup, whatever reference it is
+		if (type == nullptr)
+			continue;
+		// …and the pointer already in hand read as what it is: a configuration's reference has its own table.
+		if (const ibCtorMetaValueType* ctor = dynamic_cast<const ibCtorMetaValueType*>(type)) {
+			if (const ibBackendQueryable* q = ctor->GetQueryable())
 				targets.push_back(q);
+			continue;
+		}
+		// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the
+		// composite of them all. Its gate answers, as it does when a value is stored.
+		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
+			if (type->AllowValue(member->GetClassType()))
+				if (const ibBackendQueryable* q = member->GetQueryable())
+					if (std::find(targets.begin(), targets.end(), q) == targets.end())
+						targets.push_back(q);
 	}
 	return targets;
 }

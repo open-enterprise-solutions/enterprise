@@ -86,41 +86,28 @@ bool RunParameterizedRowBody(ibSession* session, const ibValueMetaObjectParamete
 }
 
 } // namespace
-#include "backend/session/session.h"   // ibSession::GetManagerModule — the runtime the handler lives in
 
 bool ibValueMetaObjectParameterizedJob::RunHandler(const ibGuid& objGuid) const
 {
 	// ONE VERB, four initiators — the tick, the list command, the card's button and script. None
 	// of them brings a mechanism of its own, so this is the only place that knows how a job's
 	// handler is actually called. What differs is only WHO stamps the row afterwards; see below.
-	const ibValueMetaObjectCommonModule* jobModule = GetManagerModule();
-	if (jobModule == nullptr)
-		ibBackendCoreException::Error(_("the job module is missing"));
-
-	// THE SAME LOOKUP THE MANAGER VALUE USES (commonObject.cpp, ibValueManagerDataObject::
-	// CallAsProc): EditModuleManagerFor, not the session's runtime root.
 	//
-	// Not a nicety — the two are different managers. The root holds the configuration's COMMON
-	// modules; a manager module belongs to its metaobject and is registered where that metaobject's
-	// metadata lives, which in the Designer is a compile-cache manager and has no runtime root at
-	// all. Asking the root found nothing, so a job "ran" and did nothing at all.
-	ibValueModuleManager* const mm = ibSession::EditModuleManagerFor(GetMetaData());
-	if (mm == nullptr)
-		ibBackendCoreException::Error(_("the session has no runtime"));
-
-	ibValueModuleManager::ibValueModuleUnit* const unit = mm->FindCommonModule(jobModule);
-	if (unit == nullptr)
-		ibBackendCoreException::Error(_("the job module is not registered in this session"));
-
 	// The ONLY argument is the job itself. Everything it needs it reads off its own row, on its own
 	// side, under its own rights — which is also what the value gate requires: a loaded object does
 	// not cross a session boundary, a reference always does.
 	ibValuePtr<ibValueReferenceDataObject> reference(ibValueReferenceDataObject::Create(this, objGuid));
 	ibValue jobReference(reference);
 
+	// THE MANAGER'S EVENT, WHOLE — its module's procedure, then every event handler of it, the manager
+	// (ScheduledJobs.Parameterized.<Name>) handed over as Source. The door finds the module itself, once;
+	// not finding it — no runtime, or a module not registered where this runs — is this job's refusal.
+	//
 	// A throw travels: the worker's promise captures it, the manager journals the run as failed.
 	// Swallowing it here would make a broken job look like one that did nothing.
-	unit->ExecAsProc(wxT("JobProcessing"), jobReference);
+	ibValue* params[] = { &jobReference };
+	if (!ibRuntimeModuleDataObject::ExecAsManagerEvent(this, wxT("JobProcessing"), params, 1))
+		ibBackendCoreException::Error(_("the job module is not registered in this session"));
 	return true;
 }
 

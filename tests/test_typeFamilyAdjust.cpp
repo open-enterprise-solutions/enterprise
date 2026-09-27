@@ -17,10 +17,12 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <vector>
 
+#include "backend/backend_type.h"              // GetTypesByFilter — what the reference shape offers
 #include "backend/compiler/value.h"
-#include "backend/metaCtor.h"                  // ib_find_any_reference / ibCtorMetaAnyReference
+#include "backend/metaCtor.h"                  // ib_find_meta_any_kind / ibCtorMetaAnyKind
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
 #include "backend/typeDescription.h"           // ibTypeDescription
 
@@ -78,7 +80,7 @@ TEST(TypeFamilyAdjust, AnyRef_NotAReference_BecomesEmpty)
 
 TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 {
-	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
+	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr) << "the DocumentRef family is registered with the Document metatype";
 
 	family->AddMember(kMember);   // what registering a document's reference does
@@ -98,7 +100,7 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_PassesAsItIs_AStrangerDoesNot)
 // watching for a value going in and not coming out would report one that did.
 TEST(TypeFamilyAdjust, DocumentRef_AMember_IsReportedAsFitting)
 {
-	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
+	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr);
 
 	family->AddMember(kMember);
@@ -116,7 +118,7 @@ TEST(TypeFamilyAdjust, DocumentRef_AMember_IsReportedAsFitting)
 
 TEST(TypeFamilyAdjust, DocumentRef_EmptyValue_StaysEmpty)
 {
-	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
+	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr);
 
 	const ibValue result = ibValueTypeDescription::AdjustValue(Declares(family->GetClassType()), ibValue(), nullptr);
@@ -130,7 +132,7 @@ TEST(TypeFamilyAdjust, DocumentRef_EmptyValue_StaysEmpty)
 // have that swallowed by the caller; it is now simply empty.
 TEST(TypeFamilyAdjust, DefaultValueOfAFamily_IsEmpty_AndDoesNotThrow)
 {
-	ibCtorMetaAnyReference* family = ib_find_any_reference(wxT("Document"));
+	ibCtorMetaAnyKind* family = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
 	ASSERT_NE(family, nullptr);
 
 	ibValue result;
@@ -151,4 +153,43 @@ TEST(TypeFamilyAdjust, Number_Undefined_BecomesZero)
 
 	EXPECT_EQ(result.GetType(), ibValueTypes::TYPE_NUMBER);
 	EXPECT_TRUE(result.GetNumber().IsZero());
+}
+
+// ---- a family is declared and stored as what it admits -------------------------------------------
+
+// A field declared `CatalogRef` or `AnyRef` holds a reference, and the column layout reads that off the
+// declared type's KIND (columnSpread) — so a family is of its members' kind: the `_RTRef` / `_RRRef` pair
+// is there with no second question asked.
+TEST(TypeFamilyAdjust, AFamilyIsOfItsMembersKind)
+{
+	const ibCtorMetaAnyKind* catalogRef = ib_find_meta_any_kind(wxT("Catalog"), ibCtorObjectMetaType_Reference);
+	const ibCtorMetaAnyKind* documentObject = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Object);
+	const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef"));
+	ASSERT_NE(catalogRef, nullptr);
+	ASSERT_NE(documentObject, nullptr);
+	ASSERT_NE(anyRef, nullptr);
+
+	EXPECT_TRUE(IsReference(catalogRef->GetClassType()));
+	EXPECT_TRUE(IsObject(documentObject->GetClassType()));
+	EXPECT_TRUE(IsReference(anyRef->GetClassType()));
+}
+
+// The reference shape offers every metatype's family — a reference to any of its objects, the ones added
+// later included — and `AnyRef` closes the list.
+TEST(TypeFamilyAdjust, TheReferenceFilterOffersTheFamiliesAndAnyRef)
+{
+	std::vector<ibClassID> offered;
+	ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, nullptr, offered);
+
+	const ibCtorMetaAnyKind* catalogRef = ib_find_meta_any_kind(wxT("Catalog"), ibCtorObjectMetaType_Reference);
+	const ibCtorMetaAnyKind* documentRef = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);
+	const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef"));
+	ASSERT_NE(catalogRef, nullptr);
+	ASSERT_NE(documentRef, nullptr);
+	ASSERT_NE(anyRef, nullptr);
+
+	EXPECT_NE(std::find(offered.begin(), offered.end(), catalogRef->GetClassType()), offered.end());
+	EXPECT_NE(std::find(offered.begin(), offered.end(), documentRef->GetClassType()), offered.end());
+	ASSERT_FALSE(offered.empty());
+	EXPECT_EQ(offered.back(), anyRef->GetClassType()) << "AnyRef closes the list";
 }
