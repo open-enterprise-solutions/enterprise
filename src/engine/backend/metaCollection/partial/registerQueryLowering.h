@@ -1071,9 +1071,13 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 		const bool walks = !leaf.m_path.empty();
 		const ibBackendQueryColumn* column = find(walks ? leaf.m_path.front() : leaf.m_col);
 
-		// `IN HIERARCHY` is resolved into the subtree it stands for, read through the column the walk ends at —
-		// nothing below the lowering folds by the word, and a provider must never see it.
-		if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+		// `IN HIERARCHY` on a surface in the database goes down AS NAMED — a walked field too, which rides as the
+		// EXISTS below and reaches the provider on the table it ends at: the database provider has the server
+		// walk the subtree (BuildSubtreeIn — WITH RECURSIVE) or reads it there when the driver cannot, so the
+		// target table is no longer read whole for every reading. A surface held in memory is resolved here into
+		// the subtree it stands for, read through the column the walk ends at — a filter over rows in memory
+		// cannot walk it (RefuseNamedHierarchy).
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements && (source == nullptr || source->IsComputedInRam())) {
 			const ibBackendQueryable* owner = source;
 			const ibBackendQueryColumn* lhs = column;
 			for (size_t hop = 1; lhs != nullptr && walks && hop < leaf.m_path.size(); ++hop) {
@@ -1085,6 +1089,11 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 			leaf.m_values = ibQueryHierarchyScope(owner, lhs, leaf.m_values, leaf.m_unfold).Accepted();
 			leaf.m_unfold = ibQueryDimUnfold::Elements;
 			leaf.m_op     = ibQueryFilterOp::In;
+		}
+		else if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+			if (column == nullptr)
+				ibRegRefuseConditionColumn(leaf.m_col);
+			leaf.m_op = ibQueryFilterOp::In;   // the values as named; the provider walks them
 		}
 
 		if (walks) {

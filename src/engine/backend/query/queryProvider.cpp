@@ -25,6 +25,7 @@
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
 #include "columnLayout.h"                                             // ibSqlAliasOf — what the STATEMENT calls an output, vs what its author does
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
+#include "queryException.h"                                           // ibBackendQueryException — a named hierarchy refused over rows in memory
 
 #include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
 
@@ -460,6 +461,16 @@ private:
 	bool                      m_available;
 };
 
+// «IN HIERARCHY» AS NAMED (ibQueryCondition::m_unfold) is the database provider's to walk — the lowering sends
+// it only where every source is a database table. Reaching a cell here, its values would be compared as named
+// and every subordinate lost, a total that looks right; refused in words instead.
+void RefuseNamedHierarchy(const ibQueryCondition& c)
+{
+	if (c.m_unfold != ibQueryDimUnfold::Elements)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			_("IN HIERARCHY reached a filter over rows held in memory, which cannot walk the subtree"));
+}
+
 // One pushed-down outer condition against a materialised RAM cell — the aggregate
 // subquery's post-filter (the condition references POST-aggregation output, HAVING
 // semantics, so it cannot ride the inner WHERE). LIKE translates % / _ to wx wildcards.
@@ -481,6 +492,7 @@ bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 	// SET-valued: reads m_values, not m_value. An empty set matches nothing (same answer the SQL side
 	// renders), so the loop falling through to false is the correct empty-IN semantics, not an oversight.
 	case ibQueryFilterOp::In:
+		RefuseNamedHierarchy(c);
 		for (const ibValue& v : c.m_values)
 			if (cell == v) return true;
 		return false;
@@ -1565,6 +1577,7 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
 	// NULL and answer UNKNOWN for every row. Semantics match SQL: a NULL probe is UNKNOWN, an empty set is
 	// FALSE, otherwise membership. (m_values itself never carries NULL — the producer strips them.)
 	if (c.m_op == ibQueryFilterOp::In) {
+		RefuseNamedHierarchy(c);
 		if (RamIsNullValue(cell)) return RamTri::Unknown;
 		for (const ibValue& v : c.m_values)
 			if (cell.CompareValueEQ(v)) return RamTri::True;
@@ -4465,6 +4478,137 @@ bool LevelsUnfoldHierarchy(const std::vector<ibTotalLevel>& levels)
 	return false;
 }
 
+// ⭐⭐ …BUT IT NEEDS EVERY VALUE, NOT EVERY ROW. The unfold arranges the level's VALUES into the parent chain,
+// and a heading's figures are its rows folded — so where no line of the sheet IS a row, the rows that agree on
+// every key of every level can be folded into one first, while they are read, and the tree built over those.
+// A report of a million movements by the goods hierarchy then holds one line per item and warehouse instead of
+// the million (it drained them all until 2026-09-29).
+//
+// Exact only where each figure can be folded again from its parts, and where nothing but the keys and the
+// figures is read off a row. So not when:
+//   * a level lists the RECORDS (a level with no fields) — the rows are what is printed;
+//   * a level is keyed by the ROW'S IDENTITY — its heading carries the row's own cells (AttachDimValue);
+//   * a level is read BY PERIODS — padded from its figures by a pass of its own;
+//   * an aggregate is AVG or DISTINCT (not a fold of parts), has an AREA (OVER — folded over nodes), or
+//     shares its slot with another one or with a key (the part would overwrite what the other reads).
+bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
+	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates, const ibBackendQueryable* source)
+{
+	ibMetaID identity = 0;
+	if (source != nullptr) {
+		const std::vector<const ibBackendQueryColumn*> keys = source->GetPrimaryKeyColumns();
+		if (keys.size() == 1 && keys.front() != nullptr)
+			identity = keys.front()->GetColumnId();
+	}
+	std::vector<ibMetaID> taken;   // the key columns and the slots, each read by one thing only
+	for (const ibTotalLevel& level : levels) {
+		if (level.m_fields.empty())
+			return false;
+		for (const ibTotalField& field : level.m_fields) {
+			if (field.m_col == nullptr || field.ByPeriods() || (identity != 0 && field.m_col->GetColumnId() == identity))
+				return false;
+			taken.push_back(field.m_col->GetColumnId());
+		}
+	}
+	for (size_t i = 0; i < aggregates.size(); ++i) {
+		const ibDataQueryBuilder::AggregateItem& a = aggregates[i];
+		if (a.m_fn == ibDataQueryBuilder::AggregateFn::Avg || a.m_distinct || a.m_scopeDepth > 0)
+			return false;
+		const ibMetaID slot = AggSlotId(aggregates, i);
+		if (std::find(taken.begin(), taken.end(), slot) != taken.end())
+			return false;
+		taken.push_back(slot);
+	}
+	return true;
+}
+
+// The fold of CanFoldByKeysFirst: one row per distinct key tuple — the FIRST row read with it, so every group
+// stands where its first row stood (the fold's rule), and a level's values come in the order they were first
+// met — with each aggregate's PART in the aggregate's own slot. `rolled` folds those parts again: a count's
+// parts are ADDED, a computed input is read from its slot; the slots do not move, so the tree's figures land
+// exactly where the full fold puts them.
+ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTotalLevel>& levels,
+	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+	std::vector<ibDataQueryBuilder::AggregateItem>& rolled,
+	std::vector<std::unique_ptr<ibBackendQueryColumn>>& owned, long& read)
+{
+	ibQueryRamTable table;
+	for (const ibQueryRamColumn& c : rows.Columns())
+		table.AddColumn(c.m_id, c.m_name, c.m_type, c.m_caption);
+
+	rolled = aggregates;
+	for (size_t i = 0; i < aggregates.size(); ++i) {
+		ibDataQueryBuilder::AggregateItem& a = rolled[i];
+		if (AggNeedsOwnSlot(aggregates[i])) {
+			// A COUNT(*) or a computed input has no column to fold in place: its part gets a column under the
+			// slot's own id, so the slot is the same one whichever fold wrote it.
+			const ibMetaID slot = AggSlotId(aggregates, i);
+			owned.push_back(std::make_unique<ibSubqueryExprColumn>(aggregates[i].m_alias, slot));
+			table.AddColumn(slot, aggregates[i].m_alias, ibTypeDescription());
+			a.m_col = owned.back().get();
+		}
+		a.m_expr.reset();
+		if (a.m_fn == ibDataQueryBuilder::AggregateFn::Count)
+			a.m_fn = ibDataQueryBuilder::AggregateFn::Sum;
+	}
+
+	std::vector<ibMetaID> keyIds;
+	for (const ibTotalLevel& level : levels)
+		for (const ibTotalField& field : level.m_fields)
+			if (std::find(keyIds.begin(), keyIds.end(), field.m_col->GetColumnId()) == keyIds.end())
+				keyIds.push_back(field.m_col->GetColumnId());
+
+	struct KeyHash {
+		size_t operator()(const std::vector<ibValue>& key) const {
+			std::uint64_t h = kIbHashBasis;
+			for (const ibValue& v : key)
+				h = ibHashCombine(h, static_cast<std::uint64_t>(ibValueHash()(v)));
+			return static_cast<size_t>(h);
+		}
+	};
+	struct KeyEqual {
+		bool operator()(const std::vector<ibValue>& a, const std::vector<ibValue>& b) const {
+			if (a.size() != b.size())
+				return false;
+			for (size_t i = 0; i < a.size(); ++i)
+				if (!ibValueEqual()(a[i], b[i]))
+					return false;
+			return true;
+		}
+	};
+	struct Group { long m_row; std::vector<ibAggAcc> m_parts; };
+	std::unordered_map<std::vector<ibValue>, size_t, KeyHash, KeyEqual> index;
+	std::vector<Group> groups;
+
+	while (rows.Next()) {
+		++read;
+		std::vector<ibValue> key;
+		key.reserve(keyIds.size());
+		for (const ibMetaID id : keyIds)
+			key.push_back(rows.Get(id));
+		size_t g;
+		const auto found = index.find(key);
+		if (found == index.end()) {
+			g = groups.size();
+			index.emplace(std::move(key), g);
+			const long r = table.AppendRow();
+			for (const ibQueryRamColumn& c : rows.Columns())
+				table.SetCell(r, c.m_id, rows.Get(c.m_id));
+			groups.push_back(Group{ r, std::vector<ibAggAcc>(aggregates.size()) });
+		}
+		else {
+			g = found->second;
+		}
+		for (size_t i = 0; i < aggregates.size(); ++i)
+			groups[g].m_parts[i].Feed(aggregates[i], rows);
+	}
+
+	for (const Group& group : groups)
+		for (size_t i = 0; i < aggregates.size(); ++i)
+			table.SetCell(group.m_row, AggSlotId(aggregates, i), group.m_parts[i].Result(aggregates[i]));
+	return table;
+}
+
 } // namespace
 
 // ⭐⭐ FILL IN THE PERIODS NOBODY REPORTED — the second half of what `BY … PERIODS(unit, …)` means.
@@ -5341,6 +5485,15 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source)
 {
 	if (LevelsUnfoldHierarchy(levels)) {
+		if (CanFoldByKeysFirst(levels, aggregates, source)) {
+			std::vector<ibDataQueryBuilder::AggregateItem> rolled;
+			std::vector<std::unique_ptr<ibBackendQueryColumn>> owned;   // the parts' columns, alive through the fold
+			long read = 0;
+			ibQueryRamTable grouped = FoldByKeysFirst(rows, levels, aggregates, rolled, owned, read);
+			ibJournalInfo(wxT("query.road"), wxT("RAM: folded %ld detail rows into %ld groups by their keys - a level unfolds a reference hierarchy"),
+			              read, grouped.RowCount());
+			return BuildDimensionTree(grouped, levels, rolled, holder, source);
+		}
 		ibQueryRamTable snapshot = ibDrainToRamTable(rows);
 		ibJournalInfo(wxT("query.road"), wxT("RAM: drained %ld detail rows - a level unfolds a reference hierarchy"),
 		              snapshot.RowCount());

@@ -805,3 +805,94 @@ TEST(QueryRenderer, With_EveryProductionDialectHasIt)
 	EXPECT_TRUE(FbDialect().m_features.m_cte);        // FB 2.1+
 	EXPECT_TRUE(SqliteDialect().m_features.m_cte);    // SQLite 3.8.3+
 }
+
+// ===========================================================================
+//  WITH RECURSIVE — «in hierarchy» walked by the server (2026-09-29)
+// ===========================================================================
+
+namespace {
+
+// The shape dbTableProvider's BuildSubtreeIn builds: a recursive named query — the root, then every row whose
+// parent is already in — handed along BY THE CONDITION (ibQueryExpr::m_with), and the column tested against it.
+ibQueryExprPtr InSubtreeOf(const wxString& name, const wxString& column, const wxString& root, bool dropsRepeats)
+{
+	const ibQueryRelPtr start = ibProject(
+		ibFilter(ibScan(wxT("Reference9")), ibIn(ibCol(wxT("ref_RRRef")), { ibConst(ibValue(root)) })),
+		{ ibQueryProjItem{ ibCol(wxT("ref_RRRef")), wxT("k") } });
+	const ibQueryRelPtr step = ibProject(
+		ibJoin(ibScan(wxT("Reference9"), wxT("t")), ibScan(name, wxT("w")),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("t"), wxT("parent_RRRef")), ibCol(wxT("w"), wxT("k")))),
+		{ ibQueryProjItem{ ibCol(wxT("t"), wxT("ref_RRRef")), wxT("k") } });
+	auto walk = std::make_shared<ibQueryCte>();
+	walk->m_name      = name;
+	walk->m_query     = dropsRepeats ? ibUnion(start, step) : ibUnionAll(start, step);
+	walk->m_recursive = true;
+	ibQueryExprPtr in = ibInQuery(ibCol(column), ibProject(ibScan(name), { ibQueryProjItem{ ibCol(wxT("k")), wxEmptyString } }));
+	in->m_with = walk;
+	return in;
+}
+
+} // namespace
+
+// ⭐ THE CONDITION HANDS ITS DECLARATION ALONG and the statement declares it ahead of the select: an engine may
+// not nest WITH where it is used (Firebird does not). The root binds FIRST — the WITH is written first — and the
+// outer value after it; the tree is walked by UNION ALL on Firebird, the only form it takes there.
+TEST(QueryRenderer, WithRecursive_TheConditionsWalkIsDeclaredFirstAndBindsFirst)
+{
+	ibQueryIR ir(ibFilter(ibScan(wxT("Document5")),
+		ibBinOp(ibQueryBinOp::And,
+			InSubtreeOf(wxT("q_t1"), wxT("item_RRRef"), wxT("ROOT"), /*dropsRepeats*/ false),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("code_S")), ibConst(ibValue(wxString(wxT("OUTER"))))))));
+
+	const ibRenderedQuery out = ibQueryRenderer(FbDialect()).Render(ir);
+	const std::string sql = Sql(out);
+	EXPECT_EQ(sql.find("WITH RECURSIVE q_t1 AS (SELECT "), 0u) << sql;
+	EXPECT_NE(sql.find(" UNION ALL SELECT "), std::string::npos) << sql;
+	EXPECT_NE(sql.find("INNER JOIN q_t1"), std::string::npos) << sql;
+	EXPECT_NE(sql.find("(item_RRRef IN (SELECT k FROM q_t1))"), std::string::npos) << sql;
+	EXPECT_LT(sql.find("WITH RECURSIVE"), sql.find("FROM Document5")) << sql;
+
+	ASSERT_EQ(out.m_params.size(), 2u);
+	EXPECT_EQ(out.m_params[0].m_value.GetString(), wxT("ROOT"));
+	EXPECT_EQ(out.m_params[1].m_value.GetString(), wxT("OUTER"));
+}
+
+// Where the engine allows UNION in the recursive part it is used: a row already produced is dropped, which is
+// what ends a corrupt parent chain that loops back on itself.
+TEST(QueryRenderer, WithRecursive_UnionWhereTheEngineAllowsIt)
+{
+	ASSERT_TRUE(PgDialect().m_features.m_recursiveCteUnion);
+	ASSERT_FALSE(FbDialect().m_features.m_recursiveCteUnion);
+	ibQueryIR ir(ibFilter(ibScan(wxT("Document5")), InSubtreeOf(wxT("q_t1"), wxT("item_RRRef"), wxT("ROOT"), /*dropsRepeats*/ true)));
+	const std::string sql = Sql(ibQueryRenderer(PgDialect()).Render(ir));
+	EXPECT_NE(sql.find(" UNION SELECT "), std::string::npos) << sql;
+	EXPECT_EQ(sql.find(" UNION ALL "), std::string::npos) << sql;
+}
+
+// TWO CONDITIONS ASKING FOR THE SAME WALK share one declaration: the name says which walk it is.
+TEST(QueryRenderer, WithRecursive_OneDeclarationPerWalk)
+{
+	ibQueryIR ir(ibFilter(ibScan(wxT("Document5")),
+		ibBinOp(ibQueryBinOp::Or,
+			InSubtreeOf(wxT("q_t1"), wxT("item_RRRef"), wxT("ROOT"), false),
+			InSubtreeOf(wxT("q_t1"), wxT("other_RRRef"), wxT("ROOT"), false))));
+	const std::string sql = Sql(ibQueryRenderer(FbDialect()).Render(ir));
+	const size_t first = sql.find("q_t1 AS (");
+	ASSERT_NE(first, std::string::npos) << sql;
+	EXPECT_EQ(sql.find("q_t1 AS (", first + 1), std::string::npos) << sql;
+}
+
+// AN ENGINE THAT CANNOT WALK A TREE IS REFUSED, not handed text it would reject — the tier that builds the
+// condition asks first (ibCanWalkTree) and reads the subtree itself there.
+TEST(QueryRenderer, WithRecursive_RefusedWhereTheEngineCannotWalk)
+{
+	ibDialectDictionary plain;
+	plain.m_features.m_cte = true;
+	ASSERT_FALSE(plain.m_features.m_recursiveCte);
+	ibQueryIR ir(ibFilter(ibScan(wxT("Document5")), InSubtreeOf(wxT("q_t1"), wxT("item_RRRef"), wxT("ROOT"), false)));
+	EXPECT_THROW(ibQueryRenderer(plain).Render(ir), ibBackendQueryException);
+
+	EXPECT_TRUE(PgDialect().m_features.m_recursiveCte);
+	EXPECT_TRUE(FbDialect().m_features.m_recursiveCte);
+	EXPECT_TRUE(SqliteDialect().m_features.m_recursiveCte);
+}

@@ -192,9 +192,13 @@ struct ibQueryCondition
 	// account was named and how far down was asked. Expanded first, that question is unanswerable:
 	// twenty accounts arrive and nothing says which one they roll into.
 	//
-	// ⚠ SO A PROVIDER MUST NEVER SEE A LEAF WITH THIS SET. It is filled only for a condition the
-	// source consumes itself (ibQuerySourceParameter::m_consumedBySource); everything on the ordinary
-	// road is expanded at the lowering and arrives here as `Elements`, which is what the default says.
+	// ⚠ WHO MAY SEE A LEAF WITH THIS SET. A source that consumes the condition itself
+	// (ibQuerySourceParameter::m_consumedBySource), and — since 2026-09-29 — the DATABASE provider, which has
+	// the server walk the subtree (dbTableProvider BuildSubtreeIn, WITH RECURSIVE) or reads it there when the
+	// driver cannot. The lowering sends it on the ordinary road only for a plain field of a query whose every
+	// source is a database table; anything else is expanded at the lowering and arrives here as `Elements`.
+	// A filter over rows in memory refuses it in words (RefuseNamedHierarchy): compared as named, the values
+	// would lose every subordinate.
 	ibQueryDimUnfold            m_unfold = ibQueryDimUnfold::Elements;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference

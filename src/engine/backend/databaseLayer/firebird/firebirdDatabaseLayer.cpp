@@ -95,6 +95,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_features.m_rollup   = false;
 		d.m_features.m_grouping = false;
 		d.m_features.m_cte    = true;                 // WITH … AS (…) — FB 2.1+
+		d.m_features.m_recursiveCte = true;           // WITH RECURSIVE — FB 2.1+, recursive part by UNION ALL only
 		// m_multiRowValues stays FALSE — Firebird has no multi-row VALUES at any version. A batched
 		// INSERT is rendered as INSERT … SELECT … UNION ALL SELECT … instead (see RenderDML)…
 		// …except where the rows reach L2 as one batch: there they go as ONE one-row INSERT prepared once

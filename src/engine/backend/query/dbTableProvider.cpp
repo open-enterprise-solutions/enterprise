@@ -17,6 +17,8 @@
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
 #include "columnSpread.h"      // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
 #include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
+#include "queryHierarchy.h"    // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
+#include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — which driver is asked (ibCanWalkTree)
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
@@ -601,6 +603,159 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 	}
 	return AndFold(ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[0]), tag),
 		ibIn(ibColQ(mainQual, fields[1]), std::move(spelled)));
+}
+
+// ⭐⭐ «IN HIERARCHY» SAID TO THE SERVER. The values arrive AS NAMED (ibQueryCondition::m_unfold), and the
+// server walks the subtree under them itself — a recursive named query built here as an ordinary relation:
+//
+//   q_t… AS ( SELECT key AS k FROM T WHERE key IN (roots)                      — the roots
+//             UNION [ALL]
+//             SELECT t.key AS k FROM T AS t INNER JOIN q_t… AS w ON t.parent = w.k )   — every row under one
+//
+// («hierarchy only» starts from the rows whose PARENT is a root). The column's tag and table are compared once,
+// as DecomposeIn compares them for references of one table, and its id is tested `IN (SELECT k FROM q_t…)`;
+// the condition hands the declaration along (ibQueryExpr::m_with) and the renderer puts it in the WITH.
+//
+// It replaces reading the WHOLE target table into memory on every run and sending the subtree back as a
+// list — a group of five thousand goods went out as five thousand parameters (measured 2026-09-29).
+//
+// ⭐ A REFERENCE THAT MAY POINT AT SEVERAL TABLES is walked in each table a named value belongs to — the value
+// names its own table (its class, the same road ResolveReferenceTarget takes) — and the walks are ORed, each
+// under its own tag and table. A table that records no parent is a FLAT list, and «in hierarchy» over a flat
+// list IS the list («hierarchy only» over it is nothing), exactly as ibQueryHierarchyScope answers.
+//
+// The leaf may stand at the end of a reference walk (`Doc.Item IN HIERARCHY`): the reading's join chain hands it
+// over already on the table it reached, under that table's alias, and the write path's EXISTS the same way — so
+// the column and the qualifier here are the ones to compare, whichever road asked.
+//
+// Null when it cannot be said here, and the caller reads the subtree instead, as before: the driver walks no
+// trees, a named value names no table of a query, the table is not a plain one, or two values of one table are
+// spelled differently.
+ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQueryCondition& c, const wxString& mainQual)
+{
+	if (queryable == nullptr || c.m_col == nullptr || c.m_col->IsRawColumn() || c.m_expr || c.m_values.empty()
+	    || queryable->GetMetaData() == nullptr)
+		return nullptr;
+	bool dropsRepeats = false;   // UNION where the dialect allows it in the recursive part: a looped chain ends
+	{
+		ibConnectionScope scope;
+		if (!scope || !ibCanWalkTree(scope.get()))
+			return nullptr;
+		dropsRepeats = scope.get()->GetDialect().m_features.m_recursiveCteUnion;
+	}
+	const std::vector<wxString> fields = ColumnFieldNames(c.m_col);
+	if (fields.size() < 2)
+		return nullptr;
+
+	// Each named value spelled as the column stores it, and filed under the table it names: the leading fields
+	// (tag, table) must agree inside one table, and the last is the id a walk starts from. The parameter may be
+	// one value or an array of them; an EMPTY one names no subtree and is passed over, as ibQueryHierarchyScope
+	// passes it over.
+	struct Tree
+	{
+		const ibBackendQueryable*   m_target = nullptr;
+		std::vector<ibQueryExprPtr> m_leading, m_roots;
+		const ibValue*              m_first = nullptr;
+	};
+	std::vector<Tree> trees;
+	for (const ibValue& v : c.m_values) {
+		if (v.IsEmpty())
+			continue;
+		const ibCtorMetaValueType* ctor = queryable->GetMetaData()->GetTypeCtor(v.GetClassType());
+		const ibBackendQueryable* target = ctor != nullptr ? ctor->GetQueryable() : nullptr;
+		if (target == nullptr)
+			return nullptr;
+		ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+		int position = 1;
+		BindWriteValue(capture, c.m_col, queryable->GetMetaData(), v, position);
+		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+		if (consts.size() != fields.size() || !consts.back())
+			return nullptr;
+		auto tree = std::find_if(trees.begin(), trees.end(), [target](const Tree& t) { return t.m_target == target; });
+		if (tree == trees.end()) {
+			trees.push_back(Tree{ target, std::vector<ibQueryExprPtr>(consts.begin(), consts.end() - 1), {}, &v });
+			tree = trees.end() - 1;
+		}
+		for (size_t i = 0; i + 1 < consts.size(); ++i) {
+			const ibQueryExprPtr& a = tree->m_leading[i];
+			const ibQueryExprPtr& b = consts[i];
+			const bool same = a && b && a->m_kind == ibQueryExprKind::Const && b->m_kind == ibQueryExprKind::Const
+				&& a->m_blob.GetDataLen() == b->m_blob.GetDataLen()
+				&& (a->m_blob.GetDataLen() == 0
+					? (a->m_const.GetType() == b->m_const.GetType() && a->m_const.CompareValueEQ(b->m_const))
+					: memcmp(a->m_blob.GetData(), b->m_blob.GetData(), a->m_blob.GetDataLen()) == 0);
+			if (!same)
+				return nullptr;
+		}
+		tree->m_roots.push_back(consts.back());
+	}
+	if (trees.empty())
+		return nullptr;   // nothing named: the caller's empty IN matches nothing, as it always did
+
+	const bool belowOnly = c.m_unfold == ibQueryDimUnfold::HierarchyOnly;
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(c.m_col);
+	ibQueryExprPtr any;
+	for (Tree& tree : trees) {
+		const ibBackendQueryable* target = tree.m_target;
+		const ibBackendQueryColumn* rowKey = RowKeyColumn(target);
+		if (target->GetSourceRelation(wxString()) != nullptr || target->GetQueryTableName().IsEmpty() || rowKey == nullptr)
+			return nullptr;
+		const ibBackendQueryColumn* parentCol = target->GetHierarchyColumn();
+
+		ibQueryExprPtr pred;
+		const std::vector<bool> compared = ComparedFields(layout, *tree.m_first);
+		for (size_t i = 0; i < tree.m_leading.size(); ++i)
+			if (i >= compared.size() || compared[i])
+				pred = AndFold(pred, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[i]), tree.m_leading[i]));
+
+		if (parentCol == nullptr) {
+			if (belowOnly)
+				continue;   // nothing stands under anything in a flat list
+			any = OrFold(any, AndFold(pred, ibIn(ibColQ(mainQual, fields.back()), std::move(tree.m_roots))));
+			continue;
+		}
+
+		const std::vector<wxString> keyFields = ColumnFieldNames(rowKey);
+		const std::vector<wxString> parentFields = ColumnFieldNames(parentCol);
+		if (keyFields.empty() || parentFields.empty())
+			return nullptr;
+		const wxString table  = target->GetQueryTableName();
+		const wxString key    = keyFields.back();
+		const wxString parent = parentFields.back();
+
+		// THE NAME SAYS WHICH WALK IT IS — the table, the kind of walk and the roots' own bytes — so two
+		// conditions asking for the same walk share one declaration, and two that start elsewhere never meet
+		// under one name.
+		std::uint64_t h = ibHashCombine(kIbHashBasis, belowOnly ? 2 : 1);
+		for (const wxUniChar ch : table)
+			h = ibHashCombine(h, static_cast<std::uint64_t>(ch.GetValue()));
+		for (const ibQueryExprPtr& root : tree.m_roots) {
+			const unsigned char* bytes = static_cast<const unsigned char*>(root->m_blob.GetData());
+			for (size_t i = 0; i < root->m_blob.GetDataLen(); ++i)
+				h = ibHashCombine(h, bytes[i]);
+			h = ibHashCombine(h, root->m_const.GetValueHash());
+		}
+		const wxString name = wxString::Format(wxT("q_t%016llx"), static_cast<unsigned long long>(h));
+
+		const ibQueryRelPtr start = ibProject(
+			ibFilter(ibScan(table), ibIn(ibCol(belowOnly ? parent : key), std::move(tree.m_roots))),
+			{ ibQueryProjItem{ ibCol(key), wxT("k") } });
+		const ibQueryRelPtr step = ibProject(
+			ibJoin(ibScan(table, wxT("t")), ibScan(name, wxT("w")),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("t"), parent), ibCol(wxT("w"), wxT("k")))),
+			{ ibQueryProjItem{ ibCol(wxT("t"), key), wxT("k") } });
+		auto walk = std::make_shared<ibQueryCte>();
+		walk->m_name      = name;
+		walk->m_query     = dropsRepeats ? ibUnion(start, step) : ibUnionAll(start, step);
+		walk->m_recursive = true;
+
+		ibQueryExprPtr in = ibInQuery(ibColQ(mainQual, fields.back()),
+			ibProject(ibScan(name), { ibQueryProjItem{ ibCol(wxT("k")), wxEmptyString } }));
+		in->m_with = walk;
+		any = OrFold(any, AndFold(pred, in));
+	}
+	// Every table named was flat and «hierarchy only» was asked: nothing stands under anything — no row.
+	return any ? any : ibIn(ibColQ(mainQual, fields.back()), {});
 }
 
 // Decompose a COLUMN ordered compare (>=, <=, >, <) LEXICOGRAPHICALLY over its physical fields, reusing the
@@ -1481,6 +1636,17 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	// SET-valued `In` (the semi-join key reduction) — reads m_values, not m_value, so it MUST branch before
 	// FilterOpToBinOp below, which would answer Eq and then compare against an unset m_value.
 	if (c.m_op == ibQueryFilterOp::In) {
+		// ⭐ «IN HIERARCHY» — the values AS NAMED. Walked by the server where it can (BuildSubtreeIn); read
+		// here otherwise, and tested as the list it always was. Never compared as named: that answers the
+		// question without its subordinates, with a total that looks entirely right.
+		if (c.m_unfold != ibQueryDimUnfold::Elements) {
+			if (ibQueryExprPtr walked = BuildSubtreeIn(queryable, c, mainQual))
+				return walked;
+			ibQueryCondition expanded = c;
+			expanded.m_values = ibQueryHierarchyScope(queryable, c.m_col, c.m_values, c.m_unfold).Accepted();
+			expanded.m_unfold = ibQueryDimUnfold::Elements;
+			return BuildConditionExpr(queryable, expanded, mainQual, pathAsExists);
+		}
 		// A METADATA column takes the route Eq does, through the write spread (DecomposeIn). Not because the
 		// field name would be wrong — FirstSqlFieldOfColumn already skips the _TYPE discriminator and picks the
 		// first primitive slot, which is right for a single-primitive column. It is because of the other two

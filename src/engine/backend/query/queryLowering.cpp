@@ -1929,10 +1929,30 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			const ibBackendQueryable* owner = OwnerOfPathLeaf(sources, *e.m_lhs, cols);
 			if (owner == nullptr)
 				ThrowQueryException(e.m_line, e.m_col, _("IN HIERARCHY needs a field whose own source is known - a reference column of a source this query reads"));
-			const ibQueryHierarchyScope scope(owner, cols.back(),
-				ibQueryHierarchyNamedValues(e.m_list.empty() ? ibValue() : EvalValue(*e.m_list.front(), params)),
-				e.m_unfold);
-			values = scope.Accepted();
+			const std::vector<ibValue> named =
+				ibQueryHierarchyNamedValues(e.m_list.empty() ? ibValue() : EvalValue(*e.m_list.front(), params));
+
+			// ⭐⭐ …EXCEPT WHERE THE SERVER CAN WALK IT. A field of a query that reads only database tables goes
+			// down AS NAMED — at the end of a reference walk too: the reading's join chain hands the leaf over on
+			// the table it reached — and the provider has the server walk the subtree (BuildSubtreeIn — WITH
+			// RECURSIVE), or reads it there when the driver cannot. Resolved here, the target table was read
+			// WHOLE on every run and the subtree sent back as one parameter per value.
+			//
+			// A query that also reads something held in memory keeps the old road: its leaves may be answered
+			// over rows here, where only a list is understood.
+			const bool allInDatabase = std::all_of(sources.begin(), sources.end(),
+				[](const ibSourceBinding& b) { return b.m_q != nullptr && !b.m_q->IsComputedInRam(); });
+			if (allInDatabase) {
+				ibQueryCondition asNamed;
+				asNamed.m_col    = cols.back();
+				asNamed.m_path   = cols.size() > 1 ? cols : std::vector<const ibBackendQueryColumn*>{};
+				asNamed.m_op     = ibQueryFilterOp::In;
+				asNamed.m_unfold = e.m_unfold;
+				asNamed.m_values = named;
+				ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(asNamed);
+				return e.m_negated ? ibQueryPredicate::Not(leaf) : leaf;
+			}
+			values = ibQueryHierarchyScope(owner, cols.back(), named, e.m_unfold).Accepted();
 		}
 		else if (e.m_subquery) {
 			ibSubqueryOwner localOwner;   // the inner queryable lives only for this materialisation

@@ -799,16 +799,77 @@ bool       ibQueryResult::IsResultNull(const wxString& name)                    
 // ==========================================================================
 // ibQueryRenderer (merged from queryRenderer.cpp)
 // ==========================================================================
+// Every named query an EXPRESSION hands along (ibQueryExpr::m_with), in the order they are met — gathered into
+// the statement's WITH before the select is written (Render). A walk over the whole tree, operands and
+// subqueries included: a declaration left behind here would leave its name read and never declared. One name
+// is declared once — two conditions that need the same walk share it.
+static void CollectDeclared(const ibQueryRel* rel, std::vector<ibQueryCte>& out);
+
+static void CollectDeclared(const ibQueryExprPtr& expr, std::vector<ibQueryCte>& out)
+{
+	if (!expr)
+		return;
+	if (expr->m_with && expr->m_with->m_query
+	    && std::none_of(out.begin(), out.end(), [&expr](const ibQueryCte& c) { return c.m_name == expr->m_with->m_name; })) {
+		CollectDeclared(expr->m_with->m_query.get(), out);   // what it reads, first
+		out.push_back(*expr->m_with);
+	}
+	CollectDeclared(expr->m_lhs, out);
+	CollectDeclared(expr->m_rhs, out);
+	for (const ibQueryExprPtr& arg : expr->m_args)
+		CollectDeclared(arg, out);
+	for (const auto& branch : expr->m_cases) {
+		CollectDeclared(branch.first, out);
+		CollectDeclared(branch.second, out);
+	}
+	CollectDeclared(expr->m_else, out);
+	if (expr->m_over) {
+		for (const ibQueryExprPtr& key : expr->m_over->m_partitionBy)
+			CollectDeclared(key, out);
+		for (const ibQuerySortKey& key : expr->m_over->m_orderBy)
+			CollectDeclared(key.m_expr, out);
+	}
+	CollectDeclared(expr->m_subquery.get(), out);
+}
+
+static void CollectDeclared(const ibQueryRel* rel, std::vector<ibQueryCte>& out)
+{
+	if (rel == nullptr)
+		return;
+	CollectDeclared(rel->m_predicate, out);
+	for (const ibQueryProjItem& item : rel->m_projection)
+		CollectDeclared(item.m_expr, out);
+	for (const ibQuerySortKey& key : rel->m_sortKeys)
+		CollectDeclared(key.m_expr, out);
+	CollectDeclared(rel->m_joinPredicate, out);
+	for (const ibQueryExprPtr& key : rel->m_groupKeys)
+		CollectDeclared(key, out);
+	CollectDeclared(rel->m_having, out);
+	CollectDeclared(rel->m_input.get(), out);
+	CollectDeclared(rel->m_right.get(), out);
+}
+
 ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 {
 	m_out = ibRenderedQuery{};
 	m_paramPos = 0;
 
+	// ⭐ THE STATEMENT'S OWN NAMED QUERIES, AND THEN THOSE ITS CONDITIONS HANDED ALONG (ibQueryExpr::m_with) —
+	// declared together, ahead of the select, because an engine may not nest a WITH where it is used.
+	std::vector<ibQueryCte> declared(ir.m_with.begin(), ir.m_with.end());
+	CollectDeclared(ir.m_root.get(), declared);
+	for (const ibQueryCte& cte : ir.m_with)
+		CollectDeclared(cte.m_query.get(), declared);
+	const bool recursive = std::any_of(declared.begin(), declared.end(), [](const ibQueryCte& c) { return c.m_recursive; });
+	if (recursive && !m_dialect.m_features.m_recursiveCte)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+			_("This database cannot walk a hierarchy itself (WITH RECURSIVE): the subtree has to be read and passed as a list"));
+
 	// ⭐ THE NAMED QUERIES FIRST — `WITH a AS (…), b AS (…) SELECT …`. They render BEFORE the main
 	// select so their bind parameters land in placeholder order, which is the order the driver binds
 	// them in: a CTE written after the select would have its values bound to the select's markers.
 	wxString with;
-	for (const ibQueryCte& cte : ir.m_with) {
+	for (const ibQueryCte& cte : declared) {
 		if (cte.m_name.IsEmpty() || !cte.m_query)
 			continue;
 		// REFUSED, NOT INLINED. An engine without `WITH` needs the subquery FORM, and that is a
@@ -820,6 +881,10 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 		with += with.IsEmpty() ? wxT("WITH ") : wxT(", ");
 		with += QuoteIdent(cte.m_name) + wxT(" AS (") + RenderSelect(cte.m_query.get()) + wxT(")");
 	}
+	// ONE `RECURSIVE` FOR THE WHOLE LIST — said once, before the first name, and the ordinary named queries
+	// stand beside the recursive ones.
+	if (recursive)
+		with = wxT("WITH RECURSIVE ") + with.Mid(5);   // "WITH " -> "WITH RECURSIVE "
 	if (!with.IsEmpty())
 		with += wxT(" ");
 
@@ -1095,6 +1160,12 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::In: {
+		// A SET THAT IS A QUERY — `x IN ( SELECT … )`: its select renders here, its binds in placeholder order.
+		if (expr->m_subquery) {
+			const wxString lhs = RenderExpr(expr->m_lhs);
+			return wxT("(") + lhs + (expr->m_negated ? wxT(" NOT IN (") : wxT(" IN ("))
+				+ RenderSelect(expr->m_subquery.get()) + wxT("))");
+		}
 		// Empty list = constant predicate; lhs not evaluated (so no stray bind).
 		if (expr->m_args.empty())
 			return expr->m_negated ? wxT("(1 = 1)") : wxT("(1 = 0)");
@@ -2029,6 +2100,11 @@ bool ibCanPushWindow(const ibDatabaseLayer* layer)
 bool ibCanUseCte(const ibDatabaseLayer* layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_cte;
+}
+
+bool ibCanWalkTree(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_features.m_recursiveCte;
 }
 
 int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)

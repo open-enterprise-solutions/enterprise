@@ -23,6 +23,8 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		d.m_features.m_window        = true;
 		d.m_features.m_cte           = true;
+		d.m_features.m_recursiveCte      = true;
+		d.m_features.m_recursiveCteUnion = true;   // UNION in the recursive part — a loop in a parent chain ends
 		d.m_features.m_fullOuterJoin = true;
 		d.m_features.m_iLike         = true;
 		d.m_features.m_rollup        = true;   // GROUP BY ROLLUP(...) — standard spelling

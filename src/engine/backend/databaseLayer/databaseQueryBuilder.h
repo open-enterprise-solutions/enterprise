@@ -67,7 +67,7 @@ enum class ibQueryExprKind
 	BinOp,    // m_binOp applied to m_lhs / m_rhs
 	Func,     // m_name ( m_args... )
 	Case,     // CASE WHEN m_cases[i].first THEN m_cases[i].second ... [ELSE m_else] END
-	In,       // m_lhs [NOT m_negated] IN ( m_args... )
+	In,       // m_lhs [NOT m_negated] IN ( m_args... ) — or IN ( m_subquery ) when a subquery is set
 	IsNull,   // m_lhs IS [NOT m_negated] NULL
 	Not,      // NOT m_lhs
 	Cast,     // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
@@ -175,7 +175,15 @@ struct ibQueryExpr
 
 	// Exists: the correlated subquery. A shared_ptr to the (fwd-declared) relation tree — the subquery
 	// references the OUTER write row's columns, so it renders as a self-contained `EXISTS ( SELECT … )`.
+	// In: the set it tests against, when it is a query rather than a list — `x IN ( SELECT … )`.
 	std::shared_ptr<ibQueryRel> m_subquery;
+
+	// ⭐ A NAMED QUERY THIS EXPRESSION READS, declared ahead of the whole statement (`WITH …`). An engine
+	// may not nest WITH inside a subquery (Firebird does not), so the one who writes the condition cannot
+	// place the declaration where it is used: it hands it along, and the renderer gathers every such
+	// declaration into the statement's WITH before the select is written. A recursive one (a walk down a
+	// parent chain — «in hierarchy») is the case that asked for it.
+	std::shared_ptr<struct ibQueryCte> m_with;
 
 	ibQuerySpan m_span;
 
@@ -632,6 +640,16 @@ inline ibQueryExprPtr ibExists(ibQueryRelPtr subquery, bool negated = false)
 	return e;
 }
 
+// lhs [NOT] IN ( <subquery> ) — the subquery selects ONE column. Uncorrelated: it is a set, not a test per row.
+inline ibQueryExprPtr ibInQuery(ibQueryExprPtr lhs, ibQueryRelPtr subquery, bool negated = false)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::In);
+	e->m_lhs      = std::move(lhs);
+	e->m_subquery = std::move(subquery);
+	e->m_negated  = negated;
+	return e;
+}
+
 // ⭐ ONE NAMED QUERY, WRITTEN ONCE AND READ BY NAME — a common table expression.
 //
 // It exists for the thing a package already says: a statement NAMES its result (`ONTO`) and later
@@ -645,6 +663,10 @@ struct ibQueryCte
 {
 	wxString      m_name;
 	ibQueryRelPtr m_query;
+	// RECURSIVE: the query reads its own name — a UNION whose second member joins back to it, the way a
+	// parent chain is walked down. Said with `WITH RECURSIVE`, which only a dialect that walks trees has
+	// (ibSqlFeatures::m_recursiveCte).
+	bool          m_recursive = false;
 };
 
 struct ibQueryIR
@@ -1120,6 +1142,11 @@ BACKEND_API bool ibCanPushWindow(const ibDatabaseLayer* layer);
 // joined here. (FB 2.1+, PG, SQLite 3.8.3+ yes; the ANSI baseline — ODBC — no.) Asked before
 // choosing the shape, unlike the renderer, which refuses once a WITH has already been built.
 BACKEND_API bool ibCanUseCte(const ibDatabaseLayer* layer);
+
+// WITH RECURSIVE — can this driver walk a parent chain itself? It is what keeps «in hierarchy» inside the
+// SQL: without it the subtree has to be read here and sent back as a list. (FB 2.1+, PG, SQLite 3.8.3+
+// yes; ODBC no.)
+BACKEND_API bool ibCanWalkTree(const ibDatabaseLayer* layer);
 
 // (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'
 //  PRESENCE already IS that capability, and the one caller — the temp-table manager — needs the

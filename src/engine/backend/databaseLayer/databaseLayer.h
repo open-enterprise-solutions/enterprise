@@ -85,6 +85,12 @@ struct ibSqlFeatures
 {
 	bool m_window        = false;   // SUM() OVER (...)
 	bool m_cte           = false;   // WITH ... AS (...)
+	// WITH RECURSIVE — a parent chain walked by the server («in hierarchy», ibQueryCte::m_recursive). And whether its
+	// recursive part may be joined by UNION rather than UNION ALL: UNION drops a row it has already produced,
+	// which is what ends a corrupt chain that loops back on itself. Firebird takes UNION ALL only there, and
+	// stops such a loop at its recursion limit with an error instead of an answer.
+	bool m_recursiveCte      = false;
+	bool m_recursiveCteUnion = false;
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
 	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side
