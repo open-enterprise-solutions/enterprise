@@ -401,6 +401,8 @@ void ibProcUnit::BorrowScopeFrom(ibProcUnit* donor)
 //
 // A profile of a thin pipeline lambda put GetPUState + Current at 9.13% of the
 // run, against 14.83% for the interpreter itself. See docs/private/runtime-perf.md §1i.
+// (Since 2026-09-28 a bound thread answers Current() from its own copy — ~2 ns, no
+// lock — so that is what these lines measured, not what a lookup costs now.)
 //
 // Passing it in is also the more CORRECT shape: entering and leaving a call
 // through two independently-resolved states would be a bug, not a feature.
@@ -421,6 +423,67 @@ inline bool EndByteCode(ibProcUnitState* st)
 //Stack reset
 inline void ResetByteCode() { auto* st = ibSession::GetPUState(); while (EndByteCode(st)); }
 
+// The runaway-recursion refusal, OUT OF LINE. It formats the whole stack, and built inside the guard
+// below it gave every script call a 384-byte frame, seven saved registers and a stack-cookie check (the
+// disassembly, 2026-09-28) — for a message a correct script never reaches. Same shape as the raise
+// helpers above.
+IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
+{
+	// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
+	// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
+	// times — and printing each one buries the two lines that say anything: where it
+	// started, and what is going round. Measured 2026-09-04: the message came back as two
+	// hundred identical lines, tens of kilobytes of them, and a person had to scroll past
+	// all of it to learn nothing it had not said in the first two.
+	//
+	//     ConfigurationModule (#line 4)
+	//     CommonModule.CachedProbe (#line 9) x 197
+	//
+	// Consecutive identical frames only: a cycle through several functions still shows
+	// every one of them, because there the repetition IS the shape worth reading.
+	ibString strError;
+	ibString previous;
+	long repeats = 0;
+
+	// Closes the run of identical frames that has just ended — writes the frame once, and
+	// how many times it stood there when that is more than once.
+	const auto flush = [&strError, &previous, &repeats]() {
+		if (previous.IsEmpty())
+			return;
+		strError += wxT("\n") + previous;
+		if (repeats > 1)
+			strError += ibString::Format(wxT(" x %ld"), repeats);
+	};
+
+	for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
+		const ibRunContext* stackContext = state->GetRunContext(i);
+		wxASSERT(stackContext);
+		const ibByteCode* stackByteCode = stackContext->GetByteCode();
+		wxASSERT(stackByteCode);
+
+		const ibString frame = ibString::Format(wxT("%s (#line %d)"),
+			stackByteCode->m_strModuleName,
+			stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
+		);
+
+		if (frame == previous) {
+			repeats++;
+			continue;
+		}
+
+		flush();
+		previous = frame;
+		repeats = 1;
+	}
+	flush();
+
+	// ⚠ THE STACK IS DATA. Concatenating it onto the literal made the WHOLE thing the format
+	// argument, and a frame carries names the author wrote — a per cent sign in one of them
+	// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
+	// the compile-error site in backend_exception.cpp; passed as an argument here too.
+	ibBackendCoreException::Error(wxT("%s"),
+		_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
+}
 
 struct ibProcStackGuard {
 
@@ -437,63 +500,8 @@ struct ibProcStackGuard {
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
 		m_state = state;
 		wxASSERT(state != nullptr);
-		if (state->m_recCount > MAX_REC_COUNT) { //critical error
-
-			// ⚠ THE REPEAT IS THE WHOLE POINT, SO IT IS COUNTED AND NOT REPRINTED. A runaway is
-			// recursion, so the frame that ran away is BY DEFINITION on the stack hundreds of
-			// times — and printing each one buries the two lines that say anything: where it
-			// started, and what is going round. Measured 2026-09-04: the message came back as two
-			// hundred identical lines, tens of kilobytes of them, and a person had to scroll past
-			// all of it to learn nothing it had not said in the first two.
-			//
-			//     ConfigurationModule (#line 4)
-			//     CommonModule.CachedProbe (#line 9) x 197
-			//
-			// Consecutive identical frames only: a cycle through several functions still shows
-			// every one of them, because there the repetition IS the shape worth reading.
-			ibString strError;
-			ibString previous;
-			long repeats = 0;
-
-			// Closes the run of identical frames that has just ended — writes the frame once, and
-			// how many times it stood there when that is more than once.
-			const auto flush = [&strError, &previous, &repeats]() {
-				if (previous.IsEmpty())
-					return;
-				strError += wxT("\n") + previous;
-				if (repeats > 1)
-					strError += ibString::Format(wxT(" x %ld"), repeats);
-			};
-
-			for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
-				const ibRunContext* stackContext = state->GetRunContext(i);
-				wxASSERT(stackContext);
-				const ibByteCode* stackByteCode = stackContext->GetByteCode();
-				wxASSERT(stackByteCode);
-
-				const ibString frame = ibString::Format(wxT("%s (#line %d)"),
-					stackByteCode->m_strModuleName,
-					stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
-				);
-
-				if (frame == previous) {
-					repeats++;
-					continue;
-				}
-
-				flush();
-				previous = frame;
-				repeats = 1;
-			}
-			flush();
-
-			// ⚠ THE STACK IS DATA. Concatenating it onto the literal made the WHOLE thing the format
-			// argument, and a frame carries names the author wrote — a per cent sign in one of them
-			// is a conversion specifier `FormatV` then reads a missing argument for. Same shape as
-			// the compile-error site in backend_exception.cpp; passed as an argument here too.
-			ibBackendCoreException::Error(wxT("%s"),
-				_("Number of recursive calls exceeded the maximum allowed value!\nCall stack :") + strError);
-		}
+		if (state->m_recCount > MAX_REC_COUNT) //critical error
+			RaiseRecursionLimit(state);
 		state->m_recCount++;
 		m_currentContext = runContext;
 
@@ -1129,8 +1137,12 @@ start_label:
 			}
 
 			//enter in debugger
-			if (debugServer != nullptr && !evalMode)
-				debugServer->EnterDebugger(pContext, curCode, lPrevLine);
+			//
+			// "Is anyone debugging?" is asked HERE, inline — it is EnterDebugger's own first line. A debug
+			// server exists whenever a configuration is loaded (metadataConfiguration.cpp), attached or
+			// not, so every instruction of every run made an out-of-line call only to hear "no" (2026-09-28).
+			if (ibDebuggerServer* const dbg = debugServer; dbg != nullptr && !evalMode && dbg->IsDebugging())
+				dbg->EnterDebugger(pContext, curCode, lPrevLine);
 
 			switch (curCode.m_numOper)
 			{
@@ -1972,6 +1984,18 @@ start_label:
 					pContext->m_cachedEntry = lCodeLine;
 					pContext->m_cachedKey = probe;
 				}
+
+				// THE DECLARATORS ARE STEPPED OVER, NOT RUN. Every parameter and local is an
+				// OPER_FUNC_PARAM / OPER_FUNC_LOCAL right after this opcode — the debugger and the
+				// AOT writer read them off the tape — and their case below is an empty `break`. Run,
+				// each one cost a full turn of the loop (the line store, the cancel tick, the debugger
+				// check, the dispatch): ~6 ns per parameter and per local, on every call
+				// (RuntimeBench.CallCost, 2026-09-28). The debugger loses nothing: it never stops on a
+				// declarator (IsSteppableOpcode, debugServer.cpp).
+				while (lCodeLine + 1 < lFinish
+					&& (codeBase[lCodeLine + 1].m_numOper == OPER_FUNC_PARAM
+						|| codeBase[lCodeLine + 1].m_numOper == OPER_FUNC_LOCAL))
+					lCodeLine++;
 			}
 			break;
 			case OPER_LFUNC: {

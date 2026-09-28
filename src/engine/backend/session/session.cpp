@@ -483,6 +483,37 @@ namespace {
 std::shared_mutex s_currentMutex;
 std::unordered_map<std::thread::id, std::weak_ptr<ibSession>> s_currentByThread;
 
+// ⭐ A THREAD KEEPS ITS OWN ANSWER. Current() is asked twice on every script call (the interpreter's
+// entry and the frame's run stack), and the map above answers with a shared lock, a thread-id hash and
+// a weak_ptr lock — 24 ns alone, and every session in the process taking the SAME lock: two threads
+// asking at once paid 72 ns, four 200, eight 640 (SessionBench.CallCost, 2026-09-28).
+//
+// A binding changes rarely, and only in the places that write the map — so the thread keeps the answer
+// it read and the EPOCH it read it at. Every writer bumps the epoch holding the unique lock, and a
+// session's destruction bumps it too, since that expires its weak entries without writing the map. An
+// answer read at the current epoch is the answer the map would give now.
+//
+// Trivial and zero-initialised: no lazy-init guard on Windows, and epoch 0 is never current.
+std::atomic<uint64_t> s_bindingEpoch{ 1 };
+
+struct ibThreadBinding {
+	uint64_t   m_epoch;
+	ibSession* m_session;   // nullptr: the thread had no binding at m_epoch
+};
+
+// Linux reaches it at a fixed offset, as the string pool (fstring.cpp) — from inside the shared library
+// the default model is a __tls_get_addr call per access.
+#if defined(__linux__)
+thread_local ibThreadBinding t_binding __attribute__((tls_model("initial-exec")));
+#else
+thread_local ibThreadBinding t_binding;
+#endif
+
+void BindingsChanged() noexcept
+{
+	s_bindingEpoch.fetch_add(1, std::memory_order_release);
+}
+
 } // namespace
 
 ibSession::ibSession(wxString id, ibSessionKind kind)
@@ -494,6 +525,10 @@ ibSession::ibSession(wxString id, ibSessionKind kind)
 
 ibSession::~ibSession()
 {
+	// FIRST, so no thread answers Current() with this session from its own copy (t_binding): the weak
+	// entries have just expired, and the copies are only good for the epoch they were read at.
+	BindingsChanged();
+
 	// s_currentByThread holds weak_ptr<ibSession>; when the last strong
 	// reference drops, every entry pointing here auto-expires. Subsequent
 	// Current() calls do lock() and observe nullptr. The normal teardown
@@ -939,6 +974,13 @@ ibSession* ibSession::Current()
 	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
 	if (regPtr == nullptr) return nullptr;
 	auto& reg = *regPtr;
+
+	// The thread's own copy of its binding, while no binding has changed since it was read (t_binding).
+	const ibThreadBinding cached = t_binding;
+	const bool cachedIsCurrent = cached.m_epoch == s_bindingEpoch.load(std::memory_order_acquire);
+	if (cachedIsCurrent && cached.m_session != nullptr)
+		return cached.m_session;
+
 	const auto tid = std::this_thread::get_id();
 
 	// ⭐⭐ A THREAD THAT BOUND ITSELF MEANS IT — and it is asked FIRST, before the debug redirect below,
@@ -949,11 +991,19 @@ ibSession* ibSession::Current()
 	// 🛑 THE GUESS USED TO WIN. With two runtimes stopped — an application at its own startup breakpoint
 	// and a background run inside a print — every evaluation was worked out in the FIRST of them, while
 	// the stack and the locals on screen belonged to the second (2026-09-25).
-	{
+	//
+	// Read from the map only when the copy is stale; a current copy saying "no binding" skips it. The
+	// epoch is read UNDER the lock, where no writer can move it, so it names exactly the map state read.
+	if (!cachedIsCurrent) {
 		std::shared_lock<std::shared_mutex> lk(s_currentMutex);
+		const uint64_t epoch = s_bindingEpoch.load(std::memory_order_acquire);
 		if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
-			if (auto sp = it->second.lock()) return sp.get();
+			if (auto sp = it->second.lock()) {
+				t_binding = { epoch, sp.get() };
+				return sp.get();
+			}
 		}
+		t_binding = { epoch, nullptr };
 	}
 
 	// Debug-thread redirection: a thread registered as a debug-server
@@ -1064,7 +1114,11 @@ void ibSession::BindSessionToThread(ibSession* s, std::thread::id tid)
 		s_currentByThread[tid] = s->weak_from_this();
 	}
 	else
+	{
 		s_currentByThread.erase(tid);
+	}
+	
+	BindingsChanged();
 	// Interpreter state needs no separate setup — ibSession::GetPUState()
 	// resolves via Current() each call, so the binding above is the
 	// single point that "switches" the state visible to this thread.
@@ -1074,6 +1128,8 @@ void ibSession::UnbindThread(std::thread::id tid)
 {
 	std::unique_lock<std::shared_mutex> lk(s_currentMutex);
 	s_currentByThread.erase(tid);
+	
+	BindingsChanged();
 }
 
 void ibSession::UnbindSession(ibSession* s)
@@ -1090,6 +1146,8 @@ void ibSession::UnbindSession(ibSession* s)
 		else
 			++it;
 	}
+	
+	BindingsChanged();
 }
 
 // A sessionless FRAME fallback lived here — a raw thread_local pointer with a
@@ -1407,7 +1465,11 @@ ibSessionScope::ibSessionScope(ibSession* s)
 		s_currentByThread[tid] = s->weak_from_this();
 	}
 	else
+	{
 		s_currentByThread.erase(tid);
+	}
+	
+	BindingsChanged();
 	// Interpreter state — no separate cache to manage. ibSession::GetPUState()
 	// resolves through Current() each call; the binding update above is
 	// what makes the new session's state visible.
@@ -1421,6 +1483,8 @@ ibSessionScope::~ibSessionScope()
 		s_currentByThread[tid] = m_prev;   // weak_ptr copy of still-live binding
 	else
 		s_currentByThread.erase(tid);
+	
+	BindingsChanged();
 }
 
 std::shared_ptr<ibDatabaseLayer> ibSession::DatabaseLayer()

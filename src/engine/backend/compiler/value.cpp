@@ -225,9 +225,18 @@ ibValue::~ibValue()
 	DEBUG_VALUE_DELETE();
 }
 
+// The write-denied refusal, OUT OF LINE. Built inside Reset, its message — a translation lookup and three
+// wxStrings — gave Reset a 288-byte frame and a stack-cookie check, and Reset runs on every slot of every
+// frame a script call releases: the price of a sentence that is almost never said, paid on each of them
+// (the disassembly, 2026-09-28). Same shape as the raise helpers in procUnit.cpp.
+IB_NOINLINE static void RaiseWriteDenied()
+{
+	ibBackendCoreException::Error(_("Attempt to assign a value to a write-denied variable"));
+}
+
 void ibValue::Reset()
 {
-	if (m_typeClass != ibValueTypes::TYPE_EMPTY && m_bReadOnly) ibBackendCoreException::Error(_("Attempt to assign a value to a write-denied variable"));
+	if (m_typeClass != ibValueTypes::TYPE_EMPTY && m_bReadOnly) RaiseWriteDenied();
 
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef)
 		m_pRef->DecrRef();

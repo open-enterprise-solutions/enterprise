@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
@@ -32,10 +33,16 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <new>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include <wx/init.h>   // SessionBench — wxBase before application data
+#include <wx/image.h>  // wxInitAllImageHandlers — the configuration loads icons
+#include <wx/log.h>    // wxLogStderr — a warning must not become a modal box
 
 // Resident-set probe for the million-row bench. NOMINMAX because this file uses
 // std::min and windows.h would macro it away.
@@ -57,6 +64,8 @@
 #include "backend/compiler/codeDef.h"
 #include "backend/compiler/value.h"
 #include "backend/fnumber.h"
+#include "backend/appData.h"                   // SessionBench — the application's road
+#include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
 
 namespace {
@@ -223,6 +232,183 @@ TEST(RuntimeBench, DISABLED_Recursion) {
     std::function<int64_t(int)> fib = [&](int n) -> int64_t { return n < 2 ? n : fib(n - 1) + fib(n - 2); };
     const double baseTot = BestTotalNs(5, [&]{ g_sink += (uint64_t)fib(N); });
     Row("recursion (ns/call)", oesTot / double(calls), baseTot / double(calls), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- THE CALL, apart from what the body does ------------------------------
+// `recursion` prices a call together with Fib's own compare, two subtractions
+// and an addition, so it cannot say how much of its figure is the call. Each
+// row here is one loop with and without a call in it, and the difference is the
+// call: an empty procedure, a function passing one argument back, the same with
+// eight locals (what a wider frame costs to reserve and release), and the same
+// callee placed after a hundred other functions in its module (the entry of a
+// called function is found by a linear walk over the module's functions).
+// `ibSession::Current()` is timed directly — a frame asks for it.
+namespace {
+
+wxString CallCostModule() {
+    return
+        wxT("Procedure Empty() Public\n")
+        wxT("EndProcedure\n")
+        wxT("Function Ident(x) Public\n")
+        wxT("  Return x;\n")
+        wxT("EndFunction\n")
+        wxT("Function Wide(x) Public\n")
+        wxT("  var a; var b; var c; var d; var e; var f; var g; var h;\n")
+        wxT("  a = x;\n")
+        wxT("  Return a;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopOnly(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = i; i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopEmpty(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do Empty(); s = i; i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopIdent(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = Ident(i); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n")
+        wxT("Function LoopWide(n) Public\n")
+        wxT("  var i; var s; i = 0;\n")
+        wxT("  While i < n Do s = Wide(i); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
+        wxT("EndFunction\n");
+}
+
+// ns per loop iteration of one of the module's Loop* functions.
+double CallCostPerIter(ibProcUnit& unit, const wxChar* fn, long n) {
+    ibValue argN((int)n), ret;
+    return BestTotalNs(5, [&]{ unit.CallAsFunc(fn, ret, argN); g_sink += (uint64_t)ret.GetInteger(); }) / double(n);
+}
+
+} // namespace
+
+TEST(RuntimeBench, DISABLED_CallCost) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, CallCostModule()));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    // The same module behind a hundred procedures declared first.
+    wxString padded;
+    for (int k = 0; k < 100; ++k)
+        padded << wxT("Procedure Pad") << k << wxT("() Public\nEndProcedure\n");
+    padded << CallCostModule();
+    ibCompileCode ccPadded(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(ccPadded, padded));
+    ibProcUnit puPadded; ASSERT_TRUE([&]{ try { puPadded.Execute(ccPadded.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const double loop     = CallCostPerIter(pu, wxT("LoopOnly"), n);
+    const double empty    = CallCostPerIter(pu, wxT("LoopEmpty"), n);
+    const double ident    = CallCostPerIter(pu, wxT("LoopIdent"), n);
+    const double wide     = CallCostPerIter(pu, wxT("LoopWide"), n);
+    const double padLoop  = CallCostPerIter(puPadded, wxT("LoopOnly"), n);
+    const double padIdent = CallCostPerIter(puPadded, wxT("LoopIdent"), n);
+
+    const double current = TimeNsPerOp(1000000, [&](long){ g_sink += (uint64_t)(uintptr_t)ibSession::Current(); });
+
+    RowOes("loop alone (ns/iter)", loop, "ns");
+    RowOes("call: empty procedure", empty - loop, "ns");
+    RowOes("call: Ident(x), 1 arg", ident - loop, "ns");
+    RowOes("call: Wide(x), 8 locals", wide - loop, "ns");
+    RowOes("call: after 100 funcs", padIdent - padLoop, "ns");
+    RowOes("Current(), no session", current, "ns");
+    SUCCEED();
+}
+
+// --- THE SAME CALLS ON THE APPLICATION'S ROAD -----------------------------
+// Every RuntimeBench row runs SESSIONLESS: no application data, no registry, and
+// ibSession::Current() answers at its first line. The application never runs that
+// way — a script runs on a thread bound to its session — so what a call pays for
+// finding its session never showed in any of them. Here application data is up and
+// the thread is bound, and Current() is timed with 1–8 threads asking at once, each
+// bound to a session of its own: the load a server with several sessions puts on it.
+struct SessionBench : ::testing::Test {
+    wxInitializer                   m_wxInit;
+    std::shared_ptr<ibSession>      m_session;
+    std::unique_ptr<ibSessionScope> m_bound;
+    bool                            m_ownsAppData = false;
+
+    void SetUp() override {
+        if (!m_wxInit.IsOk())
+            GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+        // As BuiltInRuntime (test_runtime.cpp): image handlers for the icons the
+        // configuration loads, and no modal log box in a headless run.
+        wxInitAllImageHandlers();
+        if (wxLog::GetActiveTarget() != nullptr)
+            delete wxLog::SetActiveTarget(new wxLogStderr());
+        if (ibApplicationData::Get() == nullptr) {
+            if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+                GTEST_SKIP() << "appData env unavailable headless";
+            m_ownsAppData = true;
+        }
+        if (ibApplicationData::GetSessionRegistry() == nullptr)
+            GTEST_SKIP() << "no session registry after CreateAppDataEnv";
+        m_session = std::make_shared<ibSession>(wxString(wxT("bench")), ibSessionKind::Enterprise);
+        m_bound   = std::make_unique<ibSessionScope>(m_session.get());
+    }
+
+    // Put back as found, so the benches that run after this one stay sessionless.
+    void TearDown() override {
+        m_bound.reset();
+        m_session.reset();
+        if (m_ownsAppData && ibApplicationData::Get() != nullptr)
+            ibApplicationData::DestroyAppDataEnv();
+    }
+};
+
+TEST_F(SessionBench, DISABLED_CallCost) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, CallCostModule()));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const double loop  = CallCostPerIter(pu, wxT("LoopOnly"), n);
+    const double empty = CallCostPerIter(pu, wxT("LoopEmpty"), n);
+    const double ident = CallCostPerIter(pu, wxT("LoopIdent"), n);
+    RowOes("bound: loop (ns/iter)", loop, "ns");
+    RowOes("bound: call empty proc", empty - loop, "ns");
+    RowOes("bound: call Ident(x)", ident - loop, "ns");
+
+    // Current() with `threads` threads asking at once, each bound to a session of its
+    // own; the slowest thread's figure, since that is the one a caller waits for.
+    const auto currentUnderLoad = [](int threads) {
+        const long perThread = 1000000;
+        std::vector<double> ns(threads, 0.0);
+        std::atomic<int> ready{ 0 };
+        std::atomic<bool> go{ false };
+        std::vector<std::thread> pool;
+        for (int t = 0; t < threads; ++t) {
+            pool.emplace_back([&, t] {
+                const auto session = std::make_shared<ibSession>(wxString::Format(wxT("bench-%d"), t), ibSessionKind::Enterprise);
+                const ibSessionScope bound(session.get());
+                ++ready;
+                while (!go) std::this_thread::yield();
+                uint64_t sink = 0;
+                const auto t0 = Clock::now();
+                for (long i = 0; i < perThread; ++i) sink += (uint64_t)(uintptr_t)ibSession::Current();
+                const auto t1 = Clock::now();
+                ns[t] = std::chrono::duration<double, std::nano>(t1 - t0).count() / double(perThread);
+                g_sink += sink;
+            });
+        }
+        while (ready < threads) std::this_thread::yield();
+        go = true;
+        for (std::thread& th : pool) th.join();
+        return *std::max_element(ns.begin(), ns.end());
+    };
+    RowOes("Current(), bound", TimeNsPerOp(1000000, [&](long){ g_sink += (uint64_t)(uintptr_t)ibSession::Current(); }), "ns");
+    for (int threads : { 2, 4, 8 }) {
+        double best = 1e300;
+        for (int r = 0; r < 3; ++r) best = std::min(best, currentUnderLoad(threads));
+        const std::string label = "Current(), " + std::to_string(threads) + " threads";
+        RowOes(label.c_str(), best, "ns");
+    }
     SUCCEED();
 }
 
