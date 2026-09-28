@@ -133,6 +133,7 @@ bool NeedsParens(const ibQueryAstExpr& child)
 	case ibQueryAstExprKind::In:
 	case ibQueryAstExprKind::IsNull:
 	case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::Refs:     // `(x REFS Catalog.Goods) = TRUE` — without them the `=` binds to the type name
 	case ibQueryAstExprKind::Arith:
 	case ibQueryAstExprKind::Not:
 		return true;
@@ -300,13 +301,22 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 
 	case ibQueryAstExprKind::Case:
 	{
+		// ⚠ WHAT A BRANCH GIVES BACK IS READ AS A VALUE — the parser takes THEN and ELSE at the
+		// arithmetic level, so a CONDITION there has to come bracketed: `THEN (Qty > 0)`. Written bare,
+		// `THEN Qty > 0` read as `THEN Qty` and died on the `>` with "expected END". Arithmetic needs no
+		// bracket there and gets none, so every query that already round-tripped still reads the same.
+		const auto branchValue = [](const ibQueryAstExpr& value) {
+			return NeedsParens(value) && value.m_kind != ibQueryAstExprKind::Arith
+				? wxT("(") + RenderExpr(value) + wxT(")")
+				: RenderExpr(value);
+		};
 		wxString out = Kw(ibQueryKeyword::Case);
 		for (const auto& branch : expr.m_cases) {
 			out += wxT(" ") + Kw(ibQueryKeyword::When) + wxT(" ") + RenderExpr(*branch.first);
-			out += wxT(" ") + Kw(ibQueryKeyword::Then) + wxT(" ") + RenderExpr(*branch.second);
+			out += wxT(" ") + Kw(ibQueryKeyword::Then) + wxT(" ") + branchValue(*branch.second);
 		}
 		if (expr.m_else)
-			out += wxT(" ") + Kw(ibQueryKeyword::Else) + wxT(" ") + RenderExpr(*expr.m_else);
+			out += wxT(" ") + Kw(ibQueryKeyword::Else) + wxT(" ") + branchValue(*expr.m_else);
 		return out + wxT(" ") + Kw(ibQueryKeyword::End);
 	}
 	}

@@ -1235,6 +1235,92 @@ const ibBackendQueryColumn* ExprSpreadColumn(const ibQueryColumnExpr* e)
 	return spread;
 }
 
+// ⭐ …AND ONE THAT ANSWERS WITH A BOOLEAN, recognised the same way. A server hands a Boolean back as the
+// number its dialect keeps it in, and a computed output has no column of its own to say how its field is
+// read — so `TRUE AS Flag`, `CASE … THEN TRUE ELSE FALSE END` and every condition asked for its value came
+// back as 1 and 0, while a stored Boolean attribute, which reads itself (RawType::Boolean), came back as a
+// Boolean (compose_run, 2026-09-28). Told this, the result reads the field the way the attribute does.
+bool ExprAnswersBoolean(const ibQueryColumnExpr* e)
+{
+	if (e == nullptr)
+		return false;
+	switch (e->m_kind) {
+	case ibQueryColumnExprKind::Const:
+		return e->m_const.GetType() == ibValueTypes::TYPE_BOOLEAN;
+	case ibQueryColumnExprKind::Column:
+		return e->m_col != nullptr && e->m_field.IsEmpty()
+			&& e->m_col->GetTypeDesc().GetClsidCount() == 1
+			&& e->m_col->GetTypeDesc().ContainType(ibValueTypes::TYPE_BOOLEAN);
+	case ibQueryColumnExprKind::Case: {
+		bool any = false;
+		const auto arm = [&any](const ibQueryColumnExprPtr& a) {
+			if (!a)
+				return true;   // no ELSE — nothing to disagree with
+			if (a->m_kind == ibQueryColumnExprKind::Const) {
+				const ibValueTypes vt = a->m_const.GetType();
+				if (vt == ibValueTypes::TYPE_NULL || vt == ibValueTypes::TYPE_EMPTY)
+					return true;   // abstains, as it does for a spread
+			}
+			if (!ExprAnswersBoolean(a.get()))
+				return false;
+			any = true;
+			return true;
+		};
+		for (const std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>& wt : e->m_cases)
+			if (!arm(wt.second))
+				return false;
+		return arm(e->m_else) && any;
+	}
+	default:
+		return false;
+	}
+}
+
+// The one reader a Boolean output goes through: a raw Boolean column, which takes the field's name from
+// whoever asks, so a single one serves every alias.
+const ibBackendQueryColumn* BooleanOutputReader()
+{
+	static const ibBackendColumnRawDB s_reader = ibBackendColumnRawDB::Boolean(wxString());
+	return &s_reader;
+}
+
+// What each computed output of a statement is READ THROUGH when its one field cannot say it — a composite
+// reassembled from its spread (ExprSpreadColumn), a Boolean read as one (ExprAnswersBoolean).
+// `spreadsProjected`: whether this road projects a composite as its spread, which the page read
+// (BuildPageIR) does.
+std::vector<ibDataQueryResult::ibComputedSpread> ComputedReadsOf(const std::vector<ibQueryColumnSelect>* exprs,
+	bool spreadsProjected)
+{
+	std::vector<ibDataQueryResult::ibComputedSpread> reads;
+	if (exprs == nullptr)
+		return reads;
+	for (const ibQueryColumnSelect& sc : *exprs) {
+		// ⚠ THE PREFIX IS THE AUTHOR'S NAME, NOT THE STATEMENT'S. The reader spells the statement's alias
+		// itself (`ibSqlAliasOf(prefix)`, the cursor source below), so handing it one already spelled
+		// would spell it twice and find nothing.
+		if (const ibBackendQueryColumn* col = spreadsProjected ? ExprSpreadColumn(sc.m_expr.get()) : nullptr)
+			reads.push_back({ sc.m_alias, sc.m_alias, col });
+		else if (ExprAnswersBoolean(sc.m_expr.get()))
+			reads.push_back({ sc.m_alias, sc.m_alias, BooleanOutputReader() });
+	}
+	return reads;
+}
+
+// …told to the result, wherever a result is made from a statement that projected them.
+void ReadComputedOutputs(ibDataQueryResult& result, const ibDataQuerySpec& spec, bool spreadsProjected)
+{
+	std::vector<ibDataQueryResult::ibComputedSpread> reads = ComputedReadsOf(spec.m_selectExprs, spreadsProjected);
+	// …and a computed GROUP KEY, which an aggregate query publishes under its alias the same way.
+	if (spec.m_groupExprs != nullptr && spec.m_groupAliases != nullptr)
+		for (size_t i = 0; i < spec.m_groupExprs->size() && i < spec.m_groupAliases->size(); ++i) {
+			const wxString& alias = (*spec.m_groupAliases)[i];
+			if (!alias.IsEmpty() && ExprAnswersBoolean((*spec.m_groupExprs)[i].get()))
+				reads.push_back({ alias, alias, BooleanOutputReader() });
+		}
+	if (!reads.empty())
+		result.SetComputedSpreads(std::move(reads));
+}
+
 // Does the predicate tree carry a reference dot-walk LEAF (a Compare/LIKE/BETWEEN leaf with m_path)?
 // Such a tree needs the dot-walk join machinery (BuildPageIR), not the plain mainQual lowering.
 bool PredicateHasPath(const ibQueryPredicatePtr& p)
@@ -2109,27 +2195,19 @@ ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, co
 				part.resize(size, last);
 				runs.push_back(BuildPageIR(partSpec, req, effective));
 			}
-			return ibDataQueryResult(q.ExecuteIR(runs, external), spec.m_queryable);
+			ibDataQueryResult parted(q.ExecuteIR(runs, external), spec.m_queryable);
+			ReadComputedOutputs(parted, spec, /*spreadsProjected*/ true);   // the same projection, read the same way
+			return parted;
 		}
 
 		const ibQueryIR ir = BuildPageIR(spec, req, effective);
 		ibDataQueryResult result(q.ExecuteIR(ir, external), spec.m_queryable);
 
-		// …and where a computed output came back as a field SPREAD, the result is told so, from the same
-		// question the projection asked (ExprSpreadColumn) and with the same prefix it used. Asked twice
-		// rather than carried: the alias is all that travels between them, and a map threaded through the
-		// L2 IR would put an L3 column pointer in a tier that has no business holding one.
-		if (spec.m_selectExprs != nullptr) {
-			std::vector<ibDataQueryResult::ibComputedSpread> spreads;
-			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
-				// ⚠ THE PREFIX IS THE AUTHOR'S NAME, NOT THE STATEMENT'S. The reader spells the statement's
-				// alias itself (`ibSqlAliasOf(prefix)`, the cursor source below), so handing it one already
-				// spelled would spell it twice and find nothing.
-				if (const ibBackendQueryColumn* col = ExprSpreadColumn(sc.m_expr.get()))
-					spreads.push_back({ sc.m_alias, sc.m_alias, col });
-			if (!spreads.empty())
-				result.SetComputedSpreads(std::move(spreads));
-		}
+		// …and where a computed output came back as a field SPREAD, or answers with a Boolean, the result is
+		// told so, from the same question the projection asked (ExprSpreadColumn) and with the same prefix it
+		// used. Asked twice rather than carried: the alias is all that travels between them, and a map
+		// threaded through the L2 IR would put an L3 column pointer in a tier that has no business holding one.
+		ReadComputedOutputs(result, spec, /*spreadsProjected*/ true);
 		return result;
 	}
 
@@ -2171,7 +2249,9 @@ ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& sp
 		const std::vector<ibValue> external = BuildExternal(req, cache.m_effectiveSort);
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
-		return ibDataQueryResult(q.ExecuteRendered(cache.m_rendered, external), spec.m_queryable);
+		ibDataQueryResult result(q.ExecuteRendered(cache.m_rendered, external), spec.m_queryable);
+		ReadComputedOutputs(result, spec, /*spreadsProjected*/ true);   // the page's own projection, cached
+		return result;
 	}
 
 // A dot-walk through an EMPTY or broken reference must read its target attribute's TYPED EMPTY value, not
@@ -2706,7 +2786,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 	{
 		ibDatabaseQueryBuilder q(spec.m_holder);
 		BuildAggregateQuery(spec, q);
-		return ibDataQueryResult(RunSpecStatement(spec, q), spec.m_queryable);
+		ibDataQueryResult result(RunSpecStatement(spec, q), spec.m_queryable);
+		// A Boolean output is read as one here too. A composite is left as it was: this road's projection
+		// has not been checked to spread one, and telling the reader it did would lose the value.
+		ReadComputedOutputs(result, spec, /*spreadsProjected*/ false);
+		return result;
 	}
 
 // ⭐⭐ THE SAME ASSEMBLY, STOPPED ONE STEP EARLIER. `Build()` renders nothing and touches no

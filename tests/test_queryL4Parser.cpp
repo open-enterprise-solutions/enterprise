@@ -678,6 +678,29 @@ TEST(QueryRender, CaseRoundTrips) {
 	ExpectRoundTrip(wxT("SELECT CASE WHEN Price > 100 THEN \"big\" ELSE \"small\" END AS size FROM Catalog.Products"));
 }
 
+// ⭐⭐ WHAT THE RENDERER WRITES, THE PARSER READS. Each shape below was written by the renderer and then
+// refused by the parser — the one failure the query constructor cannot survive, because it renders its
+// query and reads it straight back (an inventory of the two against each other, 2026-09-28).
+TEST(QueryRender, OrderByACallRoundTrips) {
+	// A word followed by `(` was read as a column, and the bracket as "unexpected text after the query".
+	ExpectRoundTrip(wxT("SELECT Date FROM Document.Sales ORDER BY YEAR(Date) DESC, SUBSTRING(Number, 1, 3)"));
+}
+
+TEST(QueryRender, GroupByAComputedKeyRoundTrips) {
+	// A group key was read as a primary, which stopped at the `*`.
+	ExpectRoundTrip(wxT("SELECT Price * Qty AS Amount, COUNT(*) AS Lines FROM Catalog.Products GROUP BY Price * Qty"));
+}
+
+TEST(QueryRender, ACaseBranchGivingAConditionRoundTrips) {
+	// THEN is read as a value: a condition there went out bare and came back as "expected END".
+	ExpectRoundTrip(wxT("SELECT CASE WHEN Qty > 0 THEN (Price > 100) ELSE FALSE END AS Flag FROM Catalog.Products"));
+}
+
+TEST(QueryRender, ARefsTestInsideAComparisonRoundTrips) {
+	// Unbracketed, the `=` after the type name belonged to nothing.
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE (Owner REFS Catalog.Vendors) = TRUE"));
+}
+
 TEST(QueryRender, TotalsRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner"));
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner HIERARCHY"));
@@ -1378,6 +1401,20 @@ TEST(QueryL4Parser, TotalsSplitWithNothingInCommon)
 	ASSERT_EQ(sel->m_totalsSplits.size(), 2u);
 	EXPECT_EQ(sel->m_totalsSplits[0].m_levels.size(), 1u);
 	EXPECT_EQ(sel->m_totalsSplits[1].m_levels.size(), 1u);
+}
+
+// …AND A NODE MAY HANG OFF THE GRAND TOTAL — `BY OVERALL SPLIT …`. The renderer writes it with no comma
+// (a node is not the next item of a list), and the parser stopped at OVERALL unless a comma followed.
+TEST(QueryL4Parser, OverallFollowedBySplitRoundTrips)
+{
+	auto sel = Parse(wxT("SELECT Item, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY OVERALL SPLIT ByItem BY Item"));
+	ASSERT_TRUE(sel != nullptr);
+	EXPECT_TRUE(sel->m_totalsOverall);
+	EXPECT_TRUE(sel->m_totalsBy.empty());
+	ASSERT_EQ(sel->m_totalsSplits.size(), 1u);
+	EXPECT_EQ(sel->m_totalsSplits[0].m_name, wxT("ByItem"));
+	ExpectRoundTrip(ibRenderQuery(*sel));
 }
 
 // ⭐ THE WORD SURVIVES THE ROUND TRIP — and this is the half that was forgotten when PERIODS went

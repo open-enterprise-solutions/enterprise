@@ -19,6 +19,9 @@
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryConstructorModel.h"
 #include "backend/composition/dataComposer.h"
+#include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a virtual table that consumes its condition
+#include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
+#include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
 
 namespace {
 
@@ -213,6 +216,113 @@ TEST(QueryDescribeOutput, AColumnWithNoTableToReadItFromIsRefusedWithTheReason)
 
 	std::vector<ibQueryLowering::OutputColumn> schema;
 	EXPECT_THROW(ibQueryLowering::DescribeOutput(*select, {}, schema), ibBackendException);
+}
+
+// ===========================================================================
+//  Describing is not running — a parameter has no value yet
+// ===========================================================================
+
+namespace {
+
+// A table in memory with these columns, untyped — a source's columns and nothing else.
+ibValue TableWith(std::initializer_list<const wxChar*> names)
+{
+	ibValueModelTable* const table = new ibValueModelTable();
+	const ibValue held(table);
+	for (const wxChar* name : names)
+		table->GetColumnCollection()->AddColumn(name, ibTypeDescription(), name);
+	return held;
+}
+
+// A register's balance, reduced to what the describing doors touch: a moment, and a condition the
+// table CONSUMES ITSELF — the argument that evaluated its parameter while being described.
+class ConsumingBalance : public ibQueryableSourceDescriptor
+{
+public:
+	ConsumingBalance()
+		: m_rows(TableWith({ wxT("Item"), wxT("QuantityBalance"), wxT("Warehouse") }))
+		, m_scope(TableWith({ wxT("Warehouse") })) {}
+
+	wxString GetNamespace() const override { return wxT("AccumulationRegister"); }
+	wxString GetName() const override { return wxT("Stock.Balance"); }
+	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+	const ibBackendQueryable* GetConditionScope() const override { return &m_scope; }
+	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override {
+		ibQuerySourceParameter moment;
+		moment.m_name = wxT("Period");
+		out.push_back(moment);
+		ibQuerySourceParameter condition;
+		condition.m_name = wxT("Condition");
+		condition.m_condition = true;
+		condition.m_consumedBySource = true;
+		out.push_back(condition);
+	}
+
+private:
+	ibTempTableQueryable m_rows;
+	ibTempTableQueryable m_scope;
+};
+
+// An OPEN configuration — only an open one has a source factory to register into.
+struct OpenConfiguration : ibMetaDataConfigurationFile
+{
+	LoadGuard m_open{ this };
+};
+
+} // namespace
+
+TEST(QueryDescribing, AnUnsetParameterInAConditionTheTableConsumesIsNotAMistake)
+{
+	// The query constructor would not open this query: "parameter '&Warehouse' is not set". The
+	// parameters of a query being WRITTEN are set by the code that later runs it, never here.
+	ConsumingBalance balance;   // before the configuration: its factory goes first, and never outlives what it holds
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&balance);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibQueryParser parser;
+	const ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT B.Item AS Item, B.QuantityBalance AS Quantity ")
+		wxT("FROM AccumulationRegister.Stock.Balance(&At, Warehouse = &Warehouse) AS B"));
+	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
+
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	ASSERT_NO_THROW(ibQueryLowering::DescribeOutput(*package.SingleSelect(), {}, schema));
+	ASSERT_EQ(2u, schema.size());
+	EXPECT_EQ(wxT("Item"), schema[0].m_name);
+	EXPECT_EQ(wxT("Quantity"), schema[1].m_name);
+
+	// …and a NAME is still checked. The parameter is excused because it has no value yet; a column
+	// the table does not have is a mistake the author can fix, and the check must still say so.
+	const ibQueryPackage wrong = parser.ParsePackage(
+		wxT("SELECT B.Item AS Item FROM AccumulationRegister.Stock.Balance(&At, Nowhere = &Warehouse) AS B"));
+	EXPECT_THROW(ibQueryLowering::CheckNames(wrong, {}), ibBackendException);
+}
+
+TEST(QueryDescribing, AConditionAskedForItsValueIsABooleanOutput)
+{
+	// The language reads a condition where a value stands; the run refused it in three places —
+	// the selection, a CASE branch and one side of a comparison. It is a Boolean output now.
+	ConsumingBalance balance;
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&balance);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibQueryParser parser;
+	const ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT B.Item AS Item, B.QuantityBalance > 0 AS InStock, ")
+		wxT("CASE WHEN B.Item IS NULL THEN FALSE ELSE (B.QuantityBalance > 100) END AS Plenty ")
+		wxT("FROM AccumulationRegister.Stock.Balance(&At) AS B WHERE (B.QuantityBalance > 0) = TRUE"));
+	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
+
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	ASSERT_NO_THROW(ibQueryLowering::DescribeOutput(*package.SingleSelect(), {}, schema));
+	ASSERT_EQ(3u, schema.size());
+	EXPECT_EQ(wxT("InStock"), schema[1].m_name);
+	EXPECT_TRUE(schema[1].m_type.ContainType(ibValueTypes::TYPE_BOOLEAN)) << "a condition answers with a Boolean";
+	EXPECT_TRUE(schema[2].m_type.ContainType(ibValueTypes::TYPE_BOOLEAN)) << "so does a CASE whose arms are conditions";
 }
 
 // ===========================================================================

@@ -308,7 +308,9 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 
 	if (AcceptKw(ibQueryKeyword::Group)) {
 		ExpectKw(ibQueryKeyword::By, wxT("BY"));
-		do { sel->m_groupBy.push_back(ParsePrimary()); } while (AcceptPunct(wxT(',')));
+		// A KEY IS AN EXPRESSION, as a window's PARTITION BY key already is: `GROUP BY Price * Qty` is
+		// what the renderer writes for a computed key, and a primary stopped at the `*`.
+		do { sel->m_groupBy.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
 	}
 
 	// ⚠ HAVING IS ITS OWN CLAUSE, not a tail of GROUP BY. Nested inside it, `SELECT … FROM …
@@ -635,7 +637,14 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 			// A LEADING SIGN starts an expression too — `ORDER BY -Total` is "biggest first" written
 			// the short way, and it reads as a name only until the minus is accounted for.
 			|| (tk.m_kind == ibQueryTokenKind::Op && (tk.m_text == wxT("-") || tk.m_text == wxT("+")))
-			|| (tk.m_kind == ibQueryTokenKind::Punct && tk.m_text == wxT("("));
+			|| (tk.m_kind == ibQueryTokenKind::Punct && tk.m_text == wxT("("))
+			// ⚠ …AND A WORD WITH A BRACKET BEHIND IT IS A CALL — `ORDER BY YEAR(Date)`,
+			// `CAST(x AS Number)`, `VALUE(Enum.Kind.Retail)`. No attribute name is ever followed by `(`,
+			// so the bracket settles what the word alone could not. Read as a name, the word came back
+			// as a column and the `(` as "unexpected text after the query" — for text the renderer
+			// itself writes, so the constructor broke its own query on the way back (2026-09-28).
+			|| ((tk.m_kind == ibQueryTokenKind::Ident || tk.m_kind == ibQueryTokenKind::Keyword)
+			    && Peek().IsPunct(wxT('(')));
 
 		if (startsExpression) {
 			it.m_expr = ParsePredicate();
@@ -816,8 +825,10 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	if (AcceptKw(ibQueryKeyword::Overall)) {
 		sel.m_totalsOverall = true;
 		// `BY OVERALL` alone is a whole totals query — one row over everything. The comma is what
-		// says dimensions follow.
-		if (!AcceptPunct(wxT(',')))
+		// says dimensions follow — and so does SPLIT, which opens a node of its own and needs no comma
+		// before it: `BY OVERALL SPLIT ByItem BY Item` is what the renderer writes for a report whose
+		// only node hangs off the grand total, and this line used to stop at OVERALL and refuse the rest.
+		if (!AcceptPunct(wxT(',')) && !Cur().IsKeyword(ibQueryKeyword::Split))
 			return;
 	}
 

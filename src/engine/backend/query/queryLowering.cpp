@@ -8,6 +8,7 @@
 #include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
 #include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
+#include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
 #include "backend/diagnostics/journal.h"  // ibJournal — the technology journal
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
@@ -23,17 +24,18 @@
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
-#include <unordered_set>                  // the link step matches rows by a key tuple
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
 // stayed green while the other three CI jobs could not compile it. See docs/portability.md.
 #include <algorithm>
-#include <wx/tokenzr.h>   // the OVER area may name several groupings, comma-separated
 #include <set>          // the aggregate inputs already claimed in one TOTALS clause
 #include <optional>     // a condition that reads no field is known before any row is — or is not
 #include <functional>   // FiltersAroundVirtualTables — the walks over a select and its conditions
+#include <unordered_set>                  // the link step matches rows by a key tuple
+
+#include <wx/tokenzr.h>   // the OVER area may name several groupings, comma-separated
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
 // Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
@@ -1319,6 +1321,30 @@ const ibValue* FindParam(const std::map<wxString, ibValue>& params, const wxStri
 	return nullptr;
 }
 
+// ⭐ DESCRIBING IS NOT RUNNING. A parameter has no value until the code that runs the query sets one,
+// and the doors that only DESCRIBE a query — do its names resolve (CheckNames), what does it return
+// (DescribeOutput), which projections are left free (UngroupedProjections) — are asked while it is
+// still being WRITTEN. So every parameter the text names and the caller did not set is answered EMPTY:
+// the answer the report's own describing door already gives (ibValueDataComposition::ParameterValues)
+// — empty is an answer, and the shape of the result never depends on it.
+//
+// 🛑 It was left to each caller, and each forgot in its own way: the query constructor and the dynamic
+// list passed no values at all. A virtual table whose source consumes its own condition
+// (`Stock.Balance(&At, Warehouse = &Warehouse)`) evaluated `&Warehouse` while being described, and the
+// constructor would not open such a query — "parameter '&Warehouse' is not set" (2026-09-28). The value
+// slots had been excused where they are read; the consumed condition, one branch over, had not.
+//
+// The names are the lexer's (ParamNames), the one reading of which words are parameters; the text is
+// the renderer's, the one walk that reaches every part of a query.
+std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::map<wxString, ibValue>& params)
+{
+	std::map<wxString, ibValue> every = params;
+	for (const wxString& name : ibQueryLexer::ParamNames(text))
+		if (FindParam(every, name) == nullptr)
+			every.emplace(name, ibValue());
+	return every;
+}
+
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
 	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
@@ -1513,13 +1539,38 @@ ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& 
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
 
 // Is this AST expression a COMPUTED WHERE / aggregate-input lhs (arithmetic or CASE)?
+// A CONDITION — what a WHERE is made of. Standing where a VALUE is asked for (`Qty > 100 AS Big`, a CASE
+// branch, one side of `(x REFS T) = TRUE`), it answers with a Boolean per row, and BuildColumnExprFromAst
+// makes it a value the engines can compute.
+bool IsConditionAst(const ibQueryAstExpr& e)
+{
+	switch (e.m_kind) {
+	case ibQueryAstExprKind::Compare:
+	case ibQueryAstExprKind::Logical:
+	case ibQueryAstExprKind::Not:
+	case ibQueryAstExprKind::Like:
+	case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::IsNull:
+	case ibQueryAstExprKind::Refs:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool IsComputedExprAst(const ibQueryAstExpr& e)
 {
 	// A SCALAR CALL COUNTS — `YEAR(Date)`, `DATEDIFF(a, b, Day)`, `SUBSTRING(s, 1, 3)` are computed
 	// per row exactly as arithmetic and CASE are, so every place that asks "is this computed" (a
 	// WHERE lhs, an aggregate's input, a sort key) gets the same answer about all three.
+	//
+	// ⭐ …AND SO DOES A CONDITION ASKED FOR ITS VALUE. The language reads `SELECT Qty > 100 AS Big`,
+	// `THEN (Qty > 100)` and `WHERE (x REFS T) = TRUE`, and every one of them was refused at the run —
+	// "unsupported projection expression", "unsupported expression in a computed column", "expected a
+	// column" — three places each missing the same answer (2026-09-28). Given here, it is given to all.
 	return e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case
-	    || e.m_kind == ibQueryAstExprKind::ScalarCall;
+	    || e.m_kind == ibQueryAstExprKind::ScalarCall || IsConditionAst(e);
 }
 
 // Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / projection: a single DB source
@@ -2348,6 +2399,27 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return c;
 	}
 
+	// ⭐ A CONDITION AS A VALUE is the CASE that says so: TRUE where it holds, FALSE where its negation
+	// does — and neither where a NULL operand leaves it UNKNOWN, so the value is NULL there exactly as the
+	// server's own boolean would be. Built through the WHERE builder, the one reading of a condition; twice,
+	// so the two arms share no node a later pass might rewrite under the other.
+	case ibQueryAstExprKind::Compare:
+	case ibQueryAstExprKind::Logical:
+	case ibQueryAstExprKind::Not:
+	case ibQueryAstExprKind::Like:
+	case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::IsNull:
+	case ibQueryAstExprKind::Refs: {
+		auto c = std::make_shared<ibQueryColumnExpr>();
+		c->m_kind = ibQueryColumnExprKind::Case;
+		c->m_cases.emplace_back(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false),
+		                        ibQueryColumnExpr::Const(ibValue(true)));
+		c->m_cases.emplace_back(ibQueryPredicate::Not(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false)),
+		                        ibQueryColumnExpr::Const(ibValue(false)));
+		return c;
+	}
+
 	// ⭐ THE SCALAR CALLS — read here rather than in the parser, because THIS is where a word can be
 	// checked against the configuration and refused with the position it was written at. The unit of
 	// a period call arrives as an ordinary name (`Month`), and it is looked up in the SAME vocabulary
@@ -2606,6 +2678,17 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 
 	case ibQueryAstExprKind::Func:
 		return TypeOfFold(e.m_func, e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription());
+
+	// A condition asked for its value answers with a Boolean — certain from its kind alone.
+	case ibQueryAstExprKind::Compare:
+	case ibQueryAstExprKind::Logical:
+	case ibQueryAstExprKind::Not:
+	case ibQueryAstExprKind::Like:
+	case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::IsNull:
+	case ibQueryAstExprKind::Refs:
+		return ibTypeDescription(g_valueBooleanCLSID);
 
 	case ibQueryAstExprKind::ScalarCall: {
 		// 🛑 THE CALLS WERE NOT HERE, so every one of them went out untyped: `MONTH(Date)`,
@@ -3416,8 +3499,10 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			// per row, it has no physical name to be read back by, and it carries its alias. Listed beside
 			// them rather than given a branch of its own — one rule for "an expression in the selection",
 			// so `YEAR(Date)` groups in an aggregate query the same way `a * b` does.
-			else if (e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case
-			      || e.m_kind == ibQueryAstExprKind::ScalarCall) {
+			//
+			// ⭐ ASKED OF THE ONE DOOR, not listed again here: this was a second copy of IsComputedExprAst's
+			// list, and a condition in the selection (`Qty > 100 AS Big`) was missing from both.
+			else if (IsComputedExprAst(e)) {
 				// ⭐⭐ …UNLESS NO ENGINE CAN BE ASKED FOR IT. `PRESENTATION(x)` and `VALUETYPE(x)` are
 				// questions put to the VALUE, not readings of a field, so there is nothing to render:
 				// the INPUT is projected and the question is answered over the row that came back.
@@ -5688,8 +5773,9 @@ int ibQueryLowering::PruneUnresolved(ibQueryPackage& package, const std::map<wxS
 	return dropped;
 }
 
-void ibQueryLowering::CheckNames(const ibQueryPackage& package, const std::map<wxString, ibValue>& params)
+void ibQueryLowering::CheckNames(const ibQueryPackage& package, const std::map<wxString, ibValue>& set)
 {
+	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQueryPackage(package), set);
 	for (const ibQueryAstStatement& statement : package.m_statements)
 		if (statement.m_select)
 			CheckSelectNames(*statement.m_select, params);
@@ -5877,8 +5963,9 @@ std::vector<ibQueryAstExprPtr> ibQueryLowering::AggregatedColumns(const ibQueryS
 }
 
 std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
-	const ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
+	const ibQuerySelect& ast, const std::map<wxString, ibValue>& set)
 {
+	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQuery(ast), set);   // describing — see WithEveryParameter
 	// UNVERIFIABLE IS EMPTY, not a guess — the same promise CheckNames and PruneUnresolved make. A
 	// host reading this as "the work still to do" would otherwise add group keys to a query nobody
 	// could resolve.
@@ -6762,10 +6849,11 @@ ibDataQueryResult ibQueryLowering::ExecuteSourceless(const ibQuerySelect& ast,
 //////////////////////////////////////////////////////////////////////
 
 void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
-                                     const std::map<wxString, ibValue>& params,
+                                     const std::map<wxString, ibValue>& set,
                                      std::vector<OutputColumn>& outSchema)
 {
 	outSchema.clear();
+	const std::map<wxString, ibValue> params = WithEveryParameter(ibRenderQuery(astIn), set);   // describing — see WithEveryParameter
 
 	// TOTALS describes its DETAIL. A totals query answers with a TREE, and the levels of that tree are
 	// made at the fold — but what a host asks this question for is "which fields does this query put
