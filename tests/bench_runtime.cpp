@@ -10,12 +10,14 @@
 //   (the two lines are one shell command; the continuation backslash is left out
 //    because a trailing \ inside a // comment splices the next line into it)
 //
-// Three groups:
+// The main groups:
 //   RuntimeBench  — the ibProcUnit bytecode interpreter (dispatch, calls,
 //                   branches, strings, LINQ). The "runtime" number.
 //   NumberBench   — ibNumber arithmetic directly (immediate vs heap tier,
 //                   ToString / FromString), with an int64 / double baseline.
 //   ParserBench   — ibCompileCode::Compile throughput (ns/compile, lines/s).
+//   JsonBench     — JSONReader / JSONWriter over a document, next to nlohmann's own
+//                   parse / dump of the same text.
 //
 // Every OES figure is printed next to a native-C++ baseline and the ratio
 // (oes/base) so the numbers read as an *overhead factor*, not raw nanoseconds
@@ -67,6 +69,8 @@
 #include "backend/appData.h"                   // SessionBench — the application's road
 #include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
+#include "backend/system/value/valueJson.h"    // JsonBench
+#include "3rdparty/nlohmann/json.hpp"          // JsonBench - the native baseline
 
 namespace {
 
@@ -1958,6 +1962,73 @@ TEST(NumberBench, DISABLED_Arithmetic) {
         const double base = TimeNsPerOp(N / 5, [&](long){ volatile double d = std::stod("1234567.89"); g_sink += (uint64_t)d; });
         Row("FromString (parse)", oes, base, "ns");
     }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// JsonBench — JSONReader / JSONWriter, vs nlohmann's own DOM on the same text
+// ===========================================================================
+
+TEST(JsonBench, DISABLED_ReadAndWrite) {
+    std::cout << "\n[ JsonBench | JSONReader / JSONWriter | x = oes/nlohmann ]\n";
+
+    // An exchange's shape: many small objects of short strings and a few numbers - every key and every
+    // string a value of its own, which is where a conversion per string shows.
+    std::string lines = "[";
+    for (int i = 0; i < 5000; ++i) {
+        if (i != 0) lines += ",";
+        lines += "{\"code\":\"C" + std::to_string(100000 + i) + "\",\"name\":\"Item number " + std::to_string(i)
+            + "\",\"unit\":\"pcs\",\"group\":\"Kitchen goods\",\"barcode\":\"48200" + std::to_string(1000000 + i)
+            + "\",\"price\":" + std::to_string(10 + i % 900) + ".50,\"quantity\":" + std::to_string(i % 37)
+            + ",\"vat\":\"20%\",\"supplier\":\"Supplier " + std::to_string(i % 40) + "\",\"note\":\"\",\"active\":true}";
+    }
+    lines += "]";
+    // The same shape in Cyrillic: two bytes of UTF-8 to a character, so what a string keeps is the room its
+    // characters take or the room its bytes did.
+    std::string cyrillic = "[";
+    for (int i = 0; i < 5000; ++i) {
+        if (i != 0) cyrillic += ",";
+        cyrillic += "{\"code\":\"C" + std::to_string(100000 + i) + "\",\"name\":\"\xD0\x9F\xD0\xBE\xD0\xB7\xD0\xB8\xD1\x86\xD1\x96\xD1\x8F "
+            + std::to_string(i) + "\",\"group\":\"\xD0\x9A\xD1\x83\xD1\x85\xD0\xBE\xD0\xBD\xD0\xBD\xD1\x96 \xD1\x82\xD0\xBE\xD0\xB2\xD0\xB0\xD1\x80\xD0\xB8\","
+            "\"supplier\":\"\xD0\x9F\xD0\xBE\xD1\x81\xD1\x82\xD0\xB0\xD1\x87\xD0\xB0\xD0\xBB\xD1\x8C\xD0\xBD\xD0\xB8\xD0\xBA "
+            + std::to_string(i % 40) + "\",\"price\":" + std::to_string(10 + i % 900) + ".50}";
+    }
+    cyrillic += "]";
+    // A message that is one long string (a file sent as base64).
+    const std::string blob = "{\"data\":\"" + std::string(8 * 1024 * 1024, 'A') + "\"}";
+
+    auto bench = [](const char* label, const std::string& utf8) {
+        // The text as a script hands it over - a runtime string (JSONReader.SetString gets the argument's
+        // GetString()) - so what is timed is the script's road, not a conversion only this test would make.
+        const ibString text = ibString::FromUTF8(utf8.data(), utf8.size());
+        ibValue built;
+        const double read = BestTotalNs(5, [&]{
+            ibValueJsonReader reader;
+            reader.SetText(text);
+            built = reader.ReadValue();
+            g_sink += (uint64_t)built.GetType();
+        });
+        const double readBase = BestTotalNs(5, [&]{
+            const nlohmann::json doc = nlohmann::json::parse(utf8);
+            g_sink += (uint64_t)doc.size();
+        });
+        const double write = BestTotalNs(5, [&]{
+            ibValueJsonWriter writer;
+            writer.WriteValue(built);
+            const ibValue result(writer.Close());   // what the script's Close() hands back
+            g_sink += (uint64_t)result.GetType();
+        });
+        const nlohmann::json doc = nlohmann::json::parse(utf8);
+        const double writeBase = BestTotalNs(5, [&]{ g_sink += (uint64_t)doc.dump().size(); });
+        std::cout << "  " << label << " (" << utf8.size() / 1024 << " KB)\n";
+        Row("  read  (ms)", read / 1e6, readBase / 1e6, "ms");
+        Row("  write (ms)", write / 1e6, writeBase / 1e6, "ms");
+    };
+    bench("5000 objects x 11 members", lines);
+    bench("the same in Cyrillic, 5 members", cyrillic);
+    bench("one 8 MB string", blob);
 
     EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
     SUCCEED();

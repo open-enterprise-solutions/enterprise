@@ -20,6 +20,8 @@
 #include <string>
 #include <utility>     // std::move, std::pair
 
+#include <wx/strconv.h>   // wxMBConvUTF8 - the script's text to UTF-8, as wxString::utf8_str() does
+
 namespace {
 
 // How deep a value may nest before it is refused. The parser walks any depth without a stack of its own; what
@@ -89,10 +91,12 @@ public:
 		return Push(ibJsonValueType_Number, ibValue(number));
 	}
 
-	bool string(string_t& value)          { return Push(ibJsonValueType_String, ibValue(wxString::FromUTF8(value.data(), value.size()))); }
+	// A string and a key go straight into the runtime string (ibString::FromUTF8): through a wxString first
+	// they were built twice - an allocation and a copy each, for every string of the document.
+	bool string(string_t& value)          { return Push(ibJsonValueType_String, ibValue(ibString::FromUTF8(value.data(), value.size()))); }
 	bool binary(binary_t&)                { return false; }   // not a thing JSON text has
 	bool start_object(std::size_t)        { return Push(ibJsonValueType_ObjectStart, ibValue()); }
-	bool key(string_t& value)             { return Push(ibJsonValueType_PropertyName, ibValue(wxString::FromUTF8(value.data(), value.size()))); }
+	bool key(string_t& value)             { return Push(ibJsonValueType_PropertyName, ibValue(ibString::FromUTF8(value.data(), value.size()))); }
 	bool end_object()                     { return Push(ibJsonValueType_ObjectEnd, ibValue()); }
 	bool start_array(std::size_t)         { return Push(ibJsonValueType_ArrayStart, ibValue()); }
 	bool end_array()                      { return Push(ibJsonValueType_ArrayEnd, ibValue()); }
@@ -181,11 +185,18 @@ bool ibValueJsonReader::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-void ibValueJsonReader::SetText(const wxString& text)
+void ibValueJsonReader::SetText(const ibString& text)
 {
 	Close();
 
-	const wxScopedCharBuffer utf8 = text.utf8_str();   // parsed where it lies - not copied a second time
+	// The script's string turned into UTF-8 once, from where it lies - through a wxString it was copied whole
+	// before it was even encoded, which on a message of tens of megabytes is tens of megabytes more. The
+	// converter is the one wxString::utf8_str() uses, so a text reads as it did; it is also faster in a Debug
+	// build than ibString::ToUtf8, which appends a character at a time. A text it cannot convert is an empty
+	// buffer, as before - and an empty text is not JSON.
+	size_t length = 0;
+	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), text.length(), &length);
+	const char* const utf8 = converted.data() != nullptr ? converted.data() : "";
 
 	std::vector<ibToken> tokens;
 	ibJsonTokenSink sink(tokens);
@@ -195,9 +206,9 @@ void ibValueJsonReader::SetText(const wxString& text)
 		// Room for the first tokens at once - and NO MORE than that on the text's word: a 30 MB message that is
 		// one base64 string is ten tokens, and a reserve by its length was 360 MB committed before a byte was
 		// parsed. Inside the try, so that memory refused here is a refusal a script can catch like any other.
-		tokens.reserve(std::min<size_t>(utf8.length() / 4 + 1, 65536));
+		tokens.reserve(std::min<size_t>(length / 4 + 1, 65536));
 		// STRICT: the whole text is one value. Something after it is not "extra", it is a text that is not JSON.
-		parsed = nlohmann::json::sax_parse(utf8.data(), utf8.data() + utf8.length(), &sink,
+		parsed = nlohmann::json::sax_parse(utf8, utf8 + length, &sink,
 			nlohmann::json::input_format_t::json, /*strict*/ true);
 		if (!parsed)
 			failure = sink.GetError();
@@ -337,10 +348,13 @@ ibValue ibValueJsonReader::BuildValue(int depth)
 			// one lookup, and ITS fold - a second opinion on what "the same key" means is a collision it would
 			// have overwritten and this would not have seen, and a scan of all the entries per repeated key was
 			// quadratic in a message from outside.
-			const wxString spelled = name.GetString();
+			//
+			// The name stays the runtime string it is: FindProp takes one, and a wxString in between was two
+			// allocations per key for nothing.
+			const ibString spelled = name.GetString();
 			const long matched = object->FindProp(spelled);
 			if (matched >= 0) {
-				const wxString held = object->Entries()[static_cast<size_t>(matched)].first.GetString();
+				const ibString held = object->Entries()[static_cast<size_t>(matched)].first.GetString();
 				if (held != spelled)
 					ibBackendCoreException::Error(_("JSONReader: the object has the keys '%s' and '%s', which differ only in case - a Structure cannot hold both; walk it with Read() instead"),
 						held, spelled);
@@ -518,7 +532,7 @@ void ibValueJsonWriter::EndContainer(bool object)
 void ibValueJsonWriter::WriteEndObject() { EndContainer(true); }
 void ibValueJsonWriter::WriteEndArray()  { EndContainer(false); }
 
-void ibValueJsonWriter::WritePropertyName(const wxString& name)
+void ibValueJsonWriter::WritePropertyName(const ibString& name)
 {
 	if (m_open.empty() || !m_open.back().m_object)
 		ibBackendCoreException::Error(_("JSONWriter: a property name belongs inside an object - WriteStartObject first"));
@@ -531,7 +545,7 @@ void ibValueJsonWriter::WritePropertyName(const wxString& name)
 		m_text += wxT(',');
 	top.m_hasMembers = true;
 	NewLine(m_open.size());
-	ibJsonText::AppendQuoted(m_text, name);
+	ibJsonText::AppendQuoted(m_text, name.wc_str(), name.length());
 	m_text += m_formatting == ibJsonFormatting_Indented ? wxT(": ") : wxT(":");
 	top.m_nameWritten = true;
 }
@@ -622,7 +636,10 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 	}
 	case ibValueTypes::TYPE_STRING:
 		BeginValue();
-		ibJsonText::AppendQuoted(m_text, target->GetString());
+		{
+			const ibString text = target->GetString();   // escaped where it lies, not copied into a wxString
+			ibJsonText::AppendQuoted(m_text, text.wc_str(), text.length());
+		}
 		return;
 	default:
 		break;
