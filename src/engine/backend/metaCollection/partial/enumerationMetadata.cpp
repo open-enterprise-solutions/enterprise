@@ -22,6 +22,9 @@
 ibValueMetaObjectEnumeration::ibValueMetaObjectEnumeration() : ibValueMetaObjectRecordDataEnumRef()
 {
 	m_propertyQuickChoice->SetValue(true);
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 }
 
 ibValueMetaObjectEnumeration::~ibValueMetaObjectEnumeration()
@@ -61,7 +64,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectEnumeration::CreateSourceObject
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectEnumeration::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectEnumeration::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -70,7 +73,7 @@ ibBackendValueForm* ibValueMetaObjectEnumeration::GetListForm(const ibFormReques
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectEnumeration::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectEnumeration::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,

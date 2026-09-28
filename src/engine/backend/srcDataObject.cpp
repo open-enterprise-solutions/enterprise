@@ -45,9 +45,10 @@ bool ibSourceDataObject::GetValueByPath(const std::vector<ibSourceHop>& path, ib
 // here, so the nested node refs stay valid across the walk; leaf = GetColumn() points into the owning
 // metaobject (stable regardless).
 bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
-	wxString* outText, bool* outLeafIsTable, bool* outContainerIsTable) const
+	wxString* outText, bool* outLeafIsTable, bool* outContainerIsTable, bool* outAvailable) const
 {
 	leaf = nullptr;
+	if (outAvailable != nullptr) *outAvailable = true;
 	const ibSourceExplorer* explorer = GetSourceExplorer();
 	// A reference hop's design-time value is an empty typed reference-as-source; park them so the
 	// explorers they vend (which the next node aliases) outlive each step.
@@ -64,6 +65,7 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 			return false;   // not a column at this level -> broken binding
 		if (outText != nullptr) { *outText += wxT("."); *outText += node->GetSourceName(); }
 		leaf = node->GetColumn();
+		if (outAvailable != nullptr && leaf != nullptr && !leaf->IsAvailable()) *outAvailable = false;
 		if (i + 1 >= path.size()) {
 			// Leaf reached — the control-class facts: is the leaf itself a table (a tabular section drops as a
 			// tablebox), and is its container a table (then the leaf is a per-row COLUMN, bindable only INTO

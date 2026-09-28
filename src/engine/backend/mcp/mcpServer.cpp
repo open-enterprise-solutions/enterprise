@@ -1397,8 +1397,11 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// then busy until a person clicks, and nobody is watching this socket. Long enough for real
 	// work, finite so a forgotten dialog is answered instead of hung on.
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
-		ibJournalError(wxT("mcp"), wxT("%s: the main thread did not take it within five minutes - "
-			"the call is still queued and will run"), toolName);
+		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
+		// put a modal "Designer Error" box (and a dump) on top of the very dialog the call was waiting
+		// behind, in front of a person who had pressed nothing (2026-09-28).
+		ibJournalWarning(wxT("mcp"), wxT("%s: not finished within five minutes - most likely waiting behind "
+			"a dialog; the call still runs when it is answered"), toolName);
 
 		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
 		// queued and WILL run; what expired is our patience, not the call. Reported as an error it

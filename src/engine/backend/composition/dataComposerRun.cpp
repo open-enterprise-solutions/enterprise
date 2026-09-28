@@ -365,6 +365,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	info.m_kind   = output.Kind();   // read off its fields — a column grouping is what makes it a cross-table
 	info.m_schema = schema;
 	info.m_name   = output.m_name;
+	// …and how many outputs this run draws: the ones Run reads (a driver, and something declared).
+	info.m_outputCount = std::max<size_t>(1, static_cast<size_t>(std::count_if(m_outputs.begin(), m_outputs.end(),
+		[this](const Output& other) { return other.m_driver != nullptr && Declares(other); })));
 	// WHERE THE ROWS' DIMENSIONS END — the same count the clause writer wrote them by, asked the
 	// same way, so the two can never disagree about which heading belongs where.
 	//
@@ -461,7 +464,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			bool shows = false;
 			for (const wxString& name : shown)
 				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
-			info.m_shown[i] = shows;
+			// …and a column of something this base does not use is not shown, whoever chose it — the
+			// columns a star was materialised into included (OutputColumn::m_available).
+			info.m_shown[i] = shows && schema[i].m_available;
 		}
 	}
 	// ⭐ …AND THEY STAND IN THE ORDER THEY WERE CHOSEN. The query publishes its measures before its details —
@@ -500,10 +505,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	}
 
 	info.m_detailsAxis = DetailAxisOf(output);
-	info.m_rowLevels = GetCurrentGroupDesc().IsOk()
+	const ibGroupDescription readerGroup = GetAvailableGroupDesc();   // the render's answer — see there
+	info.m_rowLevels = readerGroup.IsOk()
 		? [&] {
 			size_t named = 0;
-			for (const ibGroupLineDescription& line : GetCurrentGroupDesc().m_lines)
+			for (const ibGroupLineDescription& line : readerGroup.m_lines)
 				if (!line.m_path.IsEmpty())
 					++named;
 			return named;

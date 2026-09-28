@@ -17,6 +17,7 @@
 #include "templates/docViewFormEditor.h"
 #include "templates/docViewInterface.h"
 #include "templates/docViewCommonAttribute.h"
+#include "templates/docViewFunctionalOption.h"
 #include "templates/docViewRole.h"
 #include "templates/docViewComposer.h"   // a composer opens on a tab, like a form or a template
 #include "templates/docViewConfigCompare.h"
@@ -50,6 +51,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaSectionCLSID, CLASSINFO(ibInterfaceEditDocument), CLASSINFO(ibInterfaceEditView));
 	// A common attribute opens on its COMPOSITION — the same gesture as a section.
 	AddDocTemplate(g_metaCommonAttributeCLSID, CLASSINFO(ibCommonAttributeEditDocument), CLASSINFO(ibCommonAttributeEditView));
+	// …and a functional option on its MEMBERS, the same gesture again.
+	AddDocTemplate(g_metaFunctionalOptionCLSID, CLASSINFO(ibFunctionalOptionEditDocument), CLASSINFO(ibFunctionalOptionEditView));
 	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleEditDocument), CLASSINFO(ibRoleEditView));
 
 	// Tools — invisible template, opened through CreateDocument<T>().

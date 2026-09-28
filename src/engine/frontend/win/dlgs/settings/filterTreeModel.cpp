@@ -1,4 +1,5 @@
 #include "filterTreeModel.h"
+#include "frontend/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsFieldTree::IsAvailable — which lines are listed
 
 #include <algorithm>   // std::count — how many segments a field's text names (ibFieldText)
 
@@ -328,6 +329,21 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 	}
 }
 
+bool ibFilterTreeModel::IsListed(const ibFilterNodeDescription& node) const
+{
+	// ⭐ APPLIED, NEVER SHOWN — the whole meaning of `Inaccessible`, and the one place it is asked. The
+	// line stays in the filter and runs; a READER simply does not see it. The designer does, because that
+	// window is where it was written (2026-08-24: before this the mode was authored, serialised and
+	// consulted by nothing at all).
+	if (!m_authoring && node.m_display == ibFilterDisplayMode_Inaccessible)
+		return false;
+	// …AND A CONDITION ON A FIELD THE OPTIONS OF THE BASE TAKE AWAY — the same answer for another reason,
+	// asked of the field tree the pickers come from. No authoring exemption: in the designer the options
+	// take nothing away.
+	return m_fields == nullptr || node.m_kind != ibFilterNodeKind_Condition
+		|| (m_fields->IsAvailable(node.m_left.m_path) && m_fields->IsAvailable(node.m_right.m_path));
+}
+
 unsigned int ibFilterTreeModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& /*anchor*/,
 	int /*count*/, ibDataViewItemArray& out) const
 {
@@ -358,11 +374,7 @@ unsigned int ibFilterTreeModel::GetFirstFetch(const ibDataViewItem& parent, cons
 	// across fetches.
 	unsigned int added = 0;
 	for (size_t i = 0; i < children->size(); ++i) {
-		// ⭐ APPLIED, NEVER SHOWN — the whole meaning of `Inaccessible`, and the one place it is
-		// asked. The line stays in the filter and runs; a READER simply does not see it. The
-		// designer does, because that window is where it was written (2026-08-24: before this the
-		// mode was authored, serialised and consulted by nothing at all).
-		if (!m_authoring && (*children)[i].m_display == ibFilterDisplayMode_Inaccessible)
+		if (!IsListed((*children)[i]))
 			continue;
 		ibFilterPath path = parentNode->GetPath();
 		path.push_back(i);

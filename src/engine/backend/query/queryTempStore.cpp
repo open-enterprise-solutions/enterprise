@@ -17,18 +17,23 @@ namespace {
 class ibTempStoreColumn : public ibBackendQueryColumn
 {
 public:
-	ibTempStoreColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id)
-		: m_name(name), m_type(type), m_id(id) {}
+	ibTempStoreColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id, bool available)
+		: m_name(name), m_type(type), m_id(id), m_available(available) {}
 
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	// ⭐ WHETHER WHAT IT WAS MADE FROM MAY BE SHOWN (functional options) — the select that made the table
+	// answered it (OutputColumn::m_available), and the table keeps the answer. It answered yes for
+	// everything before, so a report reading a temp table showed what the base does not use.
+	bool               IsAvailable()     const override { return m_available; }
 
 private:
 	wxString                  m_name;
 	mutable ibTypeDescription m_type;   // mutable: GetTypeDesc() is const but the interface returns a non-const ref
 	ibMetaID                  m_id;
+	bool                      m_available;
 };
 
 // A snapshot standing in the source registry as an ordinary queryable, so the statements after it
@@ -42,7 +47,7 @@ public:
 		: m_rows(std::move(rows))
 	{
 		for (const ibQueryRamColumn& c : m_rows.Columns())
-			m_columns.push_back(std::make_unique<ibTempStoreColumn>(c.m_name, c.m_type, c.m_id));
+			m_columns.push_back(std::make_unique<ibTempStoreColumn>(c.m_name, c.m_type, c.m_id, c.m_available));
 
 		// THE INDEX, built once when the table is stored. A map from the value in an indexed column
 		// to the rows carrying it — which is the whole of what an index is, and the reason a read

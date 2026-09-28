@@ -330,6 +330,17 @@ TEST(NumberDivision, QuotientAndRemainderReconstructTheDividend) {
     EXPECT_EQ((a / b).Trunc() * b + (a % b), a);
 }
 
+TEST(NumberDivision, AQuotientLimbGuessedOneTooLargeIsCorrected) {
+    // 2^96 / (2^64 + 1): the quotient limb estimated from the top two limbs is one too large, and the
+    // long division has to add the divisor back — its rare branch, found by running the division
+    // against the base-2 one it replaced.
+    const ibNumber a(wxString(wxT("79228162514264337593543950336")));
+    const ibNumber b(wxString(wxT("18446744073709551617")));
+    EXPECT_EQ(a % b, ibNumber(wxString(wxT("18446744069414584321"))));
+    EXPECT_EQ((a / b).Trunc(), ibNumber(wxString(wxT("4294967295"))));
+    EXPECT_EQ((a / b).Trunc() * b + (a % b), a);
+}
+
 TEST(NumberArith, DivByZeroThrows) {
     EXPECT_THROW({ ibNumber c = ibNumber(5) / ibNumber(0); (void)c; },
                  std::runtime_error);

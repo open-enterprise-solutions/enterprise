@@ -107,6 +107,15 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 		(char)isc_info_svc_line,
 		(char)isc_info_svc_running
 	};
+	// ⭐ AND EACH QUERY WAITS ONE SECOND AT MOST (`isc_info_svc_timeout`, a 4-byte value behind a 2-byte
+	// length). Asked for a LINE, the service holds the call until one comes — and a backup without verbose
+	// output writes none — so the cancel, checked between queries, was never reached while the service sat
+	// still, and a process's exit waited on it (2026-09-28: a designer held open by the night's backup).
+	// With the timeout the answer comes back every second, empty when there is nothing to read.
+	const char sendItems[] = {
+		(char)isc_info_svc_timeout, 4, 0,
+		1, 0, 0, 0
+	};
 	// 256 KB — large enough for ordinary gbak verbose output between
 	// 200 ms poll ticks. Truncation handled by the retry loop below.
 	std::vector<char> resp(256 * 1024);
@@ -129,7 +138,7 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 			if (canceled()) return false;
 			const ISC_STATUS rc = iface->GetIscServiceQuery()(
 				status, &svc, nullptr,
-				0, nullptr,
+				sizeof(sendItems), sendItems,
 				sizeof(req), req,
 				(unsigned short)resp.size(), resp.data());
 			if (rc != 0)
@@ -169,6 +178,11 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 					// blocks on write once its internal buffer fills.
 					truncated = true;
 					break;
+				} else if (tag == (unsigned char)isc_info_svc_timeout ||
+				           tag == (unsigned char)isc_info_data_not_ready) {
+					// A FLAG — one byte, no length: the second passed with nothing to read. Read as a
+					// length-prefixed item it would swallow the `isc_info_svc_running` behind it.
+					continue;
 				} else {
 					// Skip a 2-byte length + payload for unknown tags.
 					if (i + 2 > resp.size()) break;

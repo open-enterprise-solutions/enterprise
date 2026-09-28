@@ -7,13 +7,13 @@
 //	one does - beside its metadata file, not inside the query surface.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "constant.h"
+#include "metaStoredValueObject.h"
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot - the declaration it merges its column into
 
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void ibValueMetaObjectConstant::ContributeTables(ibSchemaSnapshot& out) const
+void ibValueMetaObjectStoredValue::ContributeTables(ibSchemaSnapshot& out) const
 {
 	// sys_const is a SHARED, EXTERNAL single-row table: ALL constants are COLUMNS of the one table
 	// (GetPhysicalTableName is static "sys_const"), and the table itself is owned by CreateConstantSQLTable

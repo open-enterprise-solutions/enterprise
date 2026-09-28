@@ -164,6 +164,8 @@ add_executable(oes_tests
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
     test_typeFamilyAdjust.cpp
+    test_eventHandler.cpp
+    test_functionalOption.cpp
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp

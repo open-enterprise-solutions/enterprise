@@ -114,12 +114,9 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 		wxString MakeTypeString(const ibMetaData* metaData, const ibTypeDescription& typeDesc) const {
 			wxString strDescr;
 			for (auto clsid : typeDesc.GetClsidList()) {
-				if (metaData->IsRegisterCtor(clsid) && strDescr.IsEmpty()) {
-					strDescr = metaData->GetNameObjectFromID(clsid);
-				}
-				else if (metaData->IsRegisterCtor(clsid)) {
-					strDescr = strDescr + wxT(", ") + metaData->GetNameObjectFromID(clsid);
-				}
+				const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);   // one look-up: known, and its name
+				if (typeCtor != nullptr)
+					strDescr = strDescr.IsEmpty() ? typeCtor->GetClassName() : strDescr + wxT(", ") + typeCtor->GetClassName();
 			}
 			if (strDescr.IsEmpty()) return wxT("<empty>");
 			return strDescr;
@@ -193,7 +190,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 				// PIN this reference hop to the target we descend into — the child fields carry it, so a later
 				// walk coerces the composite reference to THIS branch instead of guessing. Recorded ALWAYS (even
 				// single-target): the reference could be widened to composite later without re-picking.
-				const std::vector<ibSourceHop> childPrefix = data->ChildPrefix(reference_to_clsid(refType));
+				const std::vector<ibSourceHop> childPrefix = data->ChildPrefix(metaData->GetIDObjectFromMetaID(refType, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference));
 				ibValue refValue = ibValueReferenceDataObject::Create(metaData, refType);   // empty typed reference (ref-counted)
 				ibSourceDataObject* refSource = nullptr;
 				refValue.ConvertToValue(refSource);

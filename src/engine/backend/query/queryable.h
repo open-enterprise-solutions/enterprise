@@ -653,12 +653,14 @@ struct ibSubqueryOutput
 	wxString                    m_name;            // what the outer query writes
 	const ibBackendQueryColumn* m_col = nullptr;   // read through this column…
 	wxString                    m_alias;           // …or by this name, when the door has no column for it
+	
 	// …or, for a reference / enum / composite leaf, reassembled from the field spread projected under
 	// this prefix. THE SAME THREE-WAY RULE the selection reader uses (queryLowering, MaterialiseInto):
 	// prefix first, then alias, then the column. A nested table reads its rows the one way its own
 	// schema is read, or the value arrives as one field of an object instead of the object.
 	wxString                    m_objectPrefix;
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
+	
 	// ⭐ AND WHO KEEPS `m_col` ALIVE, when it is not the metadata. The inner SELECT's schema owns the
 	// columns IT minted (a dot-walk leaf, a synthetic measure) through OutputColumn::m_ownedCol, and
 	// that schema is a LOCAL of the function that builds this list — so a wrapper holding the bare
@@ -667,6 +669,10 @@ struct ibSubqueryOutput
 	//
 	// Carried as a share: empty for a metadata column (it outlives everything), set for a minted one.
 	std::shared_ptr<ibBackendQueryColumn> m_owned;
+	
+	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — the inner schema's answer
+	// (OutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
+	bool                                  m_available = true;
 };
 
 // ==========================================================================
@@ -1059,6 +1065,7 @@ public:
 	ibTypeDescription& GetTypeDesc()      const override { return m_origin->GetTypeDesc(); }
 	ibTypeDescription& GetTypeValueDesc() const override { return m_origin->GetTypeValueDesc(); }
 	bool               IsAllowed()        const override { return m_origin->IsAllowed(); }
+	bool               IsAvailable()      const override { return m_origin->IsAvailable(); }
 	wxIcon             GetColumnIcon()    const override { return m_origin->GetColumnIcon(); }
 	Kind               GetColumnKind()    const override { return m_origin->GetColumnKind(); }
 	// …and WHAT IT STANDS FOR answers for it here too: a twin of a raw column IS that raw column for

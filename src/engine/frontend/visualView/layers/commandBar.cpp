@@ -18,6 +18,7 @@
 #include "backend/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
 #include "backend/composition/dataComposer.h"   // the two settings sections + GetCurrentFilterDesc
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate — commands of a part this base does not use
 #include "backend/compositionDescription.h"     // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess
 #include <set>                                  // std::set — the form's reference-type set
 #ifndef OES_USE_WEB
@@ -99,7 +100,7 @@ static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 	// The form's PRIMARY object type from metadata — always available, incl. the designer (where the runtime
 	// source object below may not be populated yet).
 	if (const ibValueMetaObjectGenericData* obj = form->GetMetaObject())
-		types.insert(reference_to_clsid(obj->GetMetaID()));
+		types.insert(reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())));
 	// Plus every reference type in the form's source data (primary + explorer nodes, recursively).
 	if (ibSourceDataObject* src = form->GetSourceObject()) {
 		if (IsReference(src->GetSourceClassType()))
@@ -107,6 +108,16 @@ static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 		CollectExplorerRefTypes(src->GetSourceExplorer(), types);
 	}
 	return types;
+}
+
+// ⭐ A PARAMETER TYPE TAKES A FORM'S TYPE when it is that type or a barrier over it — a print command for
+// `DocumentRef` stands on every document's form, one for `AnyRef` on every form with a reference. Compared as
+// equal, a barrier matched no form at all. What a type admits is one range of ids (clsid_admitted_max), and
+// the form's types are an ordered set: one lookup.
+static bool AdmitsFormType(const ibClassID& parameterType, const std::set<ibClassID>& formTypes)
+{
+	const auto first = formTypes.lower_bound(parameterType);
+	return first != formTypes.end() && *first <= clsid_admitted_max(parameterType);
 }
 
 // A "parameterizable" command (its Parameter type names >= 1 REFERENCE type) is available ONLY where the form
@@ -118,7 +129,7 @@ static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std
 	for (const ibClassID& t : cmd->GetParameterType().GetClsidList())
 		if (IsReference(t)) {
 			parameterized = true;
-			if (formTypes.count(t) > 0)
+			if (AdmitsFormType(t, formTypes))
 				return false;   // matches a form data type -> keep
 		}
 	return parameterized;   // typed but no form type matches -> exclude; untyped -> keep
@@ -129,7 +140,7 @@ static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std
 static bool CommandIsTypedFor(const ibValueMetaObjectCommand* cmd, const std::set<ibClassID>& formTypes)
 {
 	for (const ibClassID& t : cmd->GetParameterType().GetClsidList())
-		if (IsReference(t) && formTypes.count(t) > 0)
+		if (IsReference(t) && AdmitsFormType(t, formTypes))
 			return true;
 	return false;
 }
@@ -347,6 +358,11 @@ void ibValueCommandBar::BuildQuickFilters()
 	// reader has set anything, which is the whole point of marking it.
 	const ibFilterDescription& filter = model->GetModelComposer().GetCurrentFilterDesc();
 
+	// ⭐ A LINE ON A FIELD THE OPTIONS OF THE BASE TAKE AWAY IS NOT PUT UP — it stays in the filter and
+	// applies, as the settings window hides it. Whose field it is, is the composer's to say: the line is
+	// its setting, over its source (ibDataComposer::IsAvailable).
+	const ibDataComposer& composer = model->GetModelComposer();
+
 	ibActionID id = g_quickFilterIdFirst;
 	for (size_t i = 0; i < filter.m_nodes.size() && id <= g_quickFilterIdLast; ++i) {
 		const ibFilterNodeDescription& node = filter.m_nodes[i];
@@ -354,7 +370,8 @@ void ibValueCommandBar::BuildQuickFilters()
 		// question with no answer. Only conditions, and only at the top level: a line inside a group
 		// means something only together with its siblings.
 		if (node.m_kind != ibFilterNodeKind_Condition
-		 || node.m_display != ibFilterDisplayMode_QuickAccess)
+		 || node.m_display != ibFilterDisplayMode_QuickAccess
+		 || !composer.IsAvailable(node.m_left.m_path) || !composer.IsAvailable(node.m_right.m_path))
 			continue;
 		ibCommandEntry entry(id++, ibQuickFilterCaption(node), ibPictureDescription(),
 			ibRepresentation_Text);
@@ -437,7 +454,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			};
 
 			for (ibValueMetaObjectCommand* cmd : obj->GetCommandArrayObject()) {
-				if (cmd == nullptr || cmd->IsDeleted())
+				// …nor a command of a part of the system this base does not use (functionalOptionGate.h).
+				if (cmd == nullptr || cmd->IsDeleted() || !ibFunctionalOptionGate::IsAvailable(cmd))
 					continue;
 				ibValueCommandBarItem* item = transientItem(cmd);
 				if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd)) {
@@ -462,9 +480,9 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			// for the goods catalog into the Print group of every invoice with a goods column — to run on the
 			// invoice with a parameter of the wrong kind (found by the audit, 2026-09-22).
 			if (const ibMetaData* metaData = obj->GetMetaData()) {
-				const std::set<ibClassID> formTypes = { reference_to_clsid(obj->GetMetaID()) };
+				const std::set<ibClassID> formTypes = { reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())) };
 				for (ibValueMetaObjectCommand* cmd : metaData->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaCommonCommandCLSID }, /*use_child_filter*/ true)) {
-					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes))
+					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes) || !ibFunctionalOptionGate::IsAvailable(cmd))
 						continue;
 					if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd))
 						fileUnder(group, transientItem(cmd));
@@ -542,7 +560,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// bar item, a bare button and the inspector cell can't drift on "is this command alive / what's its caption+icon".
 	ibActionID synthId = 32000;
 	for (const auto& item : m_items) {
-		if (item == nullptr || !item->IsVisible())
+		// Hidden (Visible off) or hidden by the functional options it names — dropped the same way.
+		if (item == nullptr || !item->IsVisible() || !item->IsAvailable())
 			continue;
 		const ibCommandDescription bindDesc = item->GetBindingDesc();
 		// A command projection renders ONLY when it carries a command (actionEvent is retired — the command is the
@@ -1035,6 +1054,7 @@ bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyFunctionalOptions->GetName(), m_propertyFunctionalOptions->GetNodeValue());
 	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // command SOURCE (the hop path)
 	return true;
 }
@@ -1048,6 +1068,7 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyFunctionalOptions->SetNodeValue(node.GetProperty(m_propertyFunctionalOptions->GetName()));
 	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // command SOURCE (the hop path)
 	return true;
 }

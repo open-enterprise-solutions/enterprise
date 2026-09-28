@@ -212,6 +212,14 @@ ibTypeDescription& ibValueMetaObjectCommonAttributeColumn::GetTypeDesc() const
 	return s_emptyTypeDesc;
 }
 
+// …and what a value may be, the declaration's as well.
+ibTypeDescription& ibValueMetaObjectCommonAttributeColumn::GetTypeValueDesc() const
+{
+	if (ibValueMetaObjectCommonAttribute* const src = GetSource())
+		return src->GetTypeValueDesc();
+	return s_emptyTypeDesc;
+}
+
 const ibTranslateString& ibValueMetaObjectCommonAttributeColumn::GetFormat() const
 {
 	if (const ibValueMetaObjectCommonAttribute* const src = GetSource())

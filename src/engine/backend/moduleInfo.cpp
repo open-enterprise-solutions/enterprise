@@ -38,6 +38,93 @@ std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
 	return m_procUnit;
 }
 
+#include "backend/metaCollection/metaEventHandlerObject.h"        // who handles an event
+#include "backend/metaCollection/partial/commonObject.h"          // ibValueManagerDataObject — a manager event's Source
+#include "backend/session/session.h"                              // ibSession::EditModuleManagerFor — where they run
+#include "backend/moduleManager/moduleManager.h"                  // FindCommonModule — an event handler's module
+
+// Every event handler of `metaData` for this event of `source`, called with `source` and the event's
+// arguments — the second half of an owner's event (ExecAsEvent) and of a manager's (ExecAsManagerEvent).
+static void ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
+	const ibString& strEventName, ibValue** paParams, const long lSizeArray)
+{
+	if (metaData == nullptr || source == nullptr)
+		return;
+	const std::vector<ibValueMetaObjectEventHandler*> handlers =
+		metaData->GetAnyArrayObject<ibValueMetaObjectEventHandler>(g_metaEventHandlerCLSID);
+	if (handlers.empty())
+		return;
+
+	// WHO TAKES THIS EVENT, asked first: by its number (its name's hash, a UTF-8 pass over it — made once, not
+	// once per handler) and by the value's type. Nobody — the event is over here, and nothing below is paid for.
+	const long eventId = ibValueMetaObjectEventHandler::EventId(strEventName);
+	const ibClassID sourceType = source->GetClassType();
+	std::vector<const ibValueMetaObjectEventHandler*> taking;
+	for (const ibValueMetaObjectEventHandler* handler : handlers)
+		if (handler != nullptr && !handler->IsDeleted() && handler->Handles(sourceType, eventId))
+			taking.push_back(handler);
+	if (taking.empty())
+		return;
+
+	// An event handler's module is a MANAGER module, found where the manager value and a parameterized
+	// job find theirs (ibSession::EditModuleManagerFor): the modules registered for this configuration.
+	// No such manager, nothing runs and nobody is called.
+	const ibValueModuleManager* const moduleManager = ibSession::EditModuleManagerFor(metaData);
+	if (moduleManager == nullptr)
+		return;
+
+	// Source first — the value itself, referred to the way an aggregate hands itself out, and only now that
+	// somebody takes the event: a reference taken and dropped on every event would put an object nobody holds
+	// through zero. Then the event's arguments — the SAME ones, by pointer, so what a procedure writes into
+	// them (Cancel, StandardProcessing) is what the raiser reads.
+	ibValue sourceArgument = source->GetValue(true);
+	std::vector<ibValue*> params = { &sourceArgument };
+	params.insert(params.end(), paParams, paParams + lSizeArray);
+
+	for (const ibValueMetaObjectEventHandler* handler : taking) {
+		const ibRuntimeModuleDataObject* const unit = moduleManager->FindCommonModule(handler->GetHandlerModule());
+		if (unit == nullptr)
+			continue;
+		if (const std::shared_ptr<ibProcUnit> procUnit = unit->GetProcUnit())   // pinned for the call, as ExecAsProc pins it
+			procUnit->CallAsProc(strEventName, params.data(), static_cast<long>(params.size()));
+	}
+}
+
+void ibRuntimeModuleDataObject::ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const
+{
+	// The owner's own procedure first — what the event always did.
+	ExecAsProc(strEventName, paParams, lSizeArray);
+
+	// …then its event handlers, the runtime value this descriptor is a part of handed over as Source. The
+	// configuration is the owner's own, asked of the module it runs.
+	if (const ibValueMetaObjectModuleBase* const module = GetMetaForCompile())
+		ExecEventHandlers(module->GetMetaData(), GetRuntimeOwner(), strEventName, paParams, lSizeArray);
+}
+
+bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGenericData* metaObject, const ibString& strEventName,
+	ibValue** paParams, const long lSizeArray)
+{
+	if (metaObject == nullptr)
+		return false;
+	const ibMetaData* const metaData = metaObject->GetMetaData();
+
+	// The manager module's own procedure first — found where the manager value finds it (EditModuleManagerFor),
+	// NOT in the session's runtime root. The root holds the configuration's common modules; a manager module is
+	// registered where its metaobject's metadata lives, which in the Designer is a compile-cache manager with no
+	// root at all. Asked of the root, a job "ran" and did nothing.
+	const ibValueMetaObjectCommonModule* const module = metaObject->GetManagerModule();
+	const ibValueModuleManager* const moduleManager = module != nullptr ? ibSession::EditModuleManagerFor(metaData) : nullptr;
+	const ibRuntimeModuleDataObject* const unit = moduleManager != nullptr ? moduleManager->FindCommonModule(module) : nullptr;
+	if (unit == nullptr)
+		return false;
+	unit->ExecAsProc(strEventName, paParams, lSizeArray);
+
+	// …then its event handlers, the manager itself handed over as Source.
+	const ibValuePtr<ibValueManagerDataObject> manager = metaObject->CreateManagerDataObjectValue();
+	ExecEventHandlers(metaData, manager, strEventName, paParams, lSizeArray);
+	return true;
+}
+
 const ibRuntimeRoot* ibRuntimeModuleDataObject::GetRoot() const
 {
 	// Default: walk up. Root descriptor overrides and returns `this`

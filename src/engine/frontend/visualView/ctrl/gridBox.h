@@ -54,7 +54,9 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	virtual ibSourceObject* GetSourceObject() const override;
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override { return m_propertySource->GetSourceAttributeObject(); }
-	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
+	virtual bool IsUnbound() const override { return m_propertySource->IsEmptyProperty(); }
+	// Bound to a field this base does not use -> not available (the chrome gate in window.cpp).
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindowComposite::IsAvailable(); }
 	// The type the binding is restricted to (the two the ctor declares) and the config the names
 	// resolve against — both answered the way the tablebox answers them.
 	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertySource->GetValueAsTypeDesc(); }

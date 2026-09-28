@@ -23,6 +23,7 @@ enum { eOrderField = 1, eOrderDir };
 // ---- The model — a virtual list over the buffer's sort list (Field + editable Direction). ----
 class ibSortEditor::ibSortLineModel : public ibDataViewVirtualListModel {
 	ibSortEditor* m_editor;
+	ibSettingsListedLines m_listed;   // which lines the rows are — a line on an unavailable field is not listed
 public:
 	explicit ibSortLineModel(ibSortEditor* editor) : ibDataViewVirtualListModel(), m_editor(editor) {}
 	// ⭐ ONE WORD FOR ONE THING. This class was `ibOrderModel` and this getter `GetOrder`, standing
@@ -31,15 +32,24 @@ public:
 	// **sort**; *order* survives only where it must: the query's `ORDER BY`, and the node key on
 	// disk, which is an opaque key and not a name.
 	ibSortDescription* GetSortDesc() const { return m_editor->GetSort(); }
-	void ResetFromList() { ibSortDescription* o = GetSortDesc(); Reset(o != nullptr ? (unsigned int)o->m_lines.size() : 0u); }
+	void ResetFromList() {
+		m_listed = ibSettingsListedLines();
+		if (const ibSortDescription* o = GetSortDesc())
+			m_listed.Read(o->m_lines, m_editor->m_fieldSource);
+		Reset(m_listed.Count());
+	}
+	// The line a row is — see ibSettingsListedLines.
+	size_t LineAt(size_t row) const { return m_listed.At(row); }
+	unsigned int GetListedCount() const { return m_listed.Count(); }
 	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
 		ibSortDescription* o = GetSortDesc();
 		if (o == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer (a Reset lands
 		// after the paint is queued) — reading past the end crashed on repaint.
-		if (row >= o->m_lines.size())
+		const size_t at = LineAt(row);
+		if (at >= o->m_lines.size())
 			return;
-		const ibSortLineDescription& line = o->m_lines[row];
+		const ibSortLineDescription& line = o->m_lines[at];
 		// EVERY COLUMN READS AS WHAT IT IS — the field by its path, the direction by
 		// its enumeration caption. No indices, no parallel lists.
 		if (col == eOrderField)
@@ -236,11 +246,12 @@ void ibSortEditor::ReloadFields()
 		m_fieldSource->Populate(m_fieldCtrl);
 }
 
-// THE ROW'S INDEX, which is what an EDIT needs. A virtual-list row id is 1-based.
+// THE ROW'S LINE, which is what an EDIT needs. A virtual-list row id is 1-based, and the row shows the
+// line the model maps it to — not the one at the same number, once a line is hidden.
 size_t ibSortEditor::IndexAt(const ibDataViewItem& row) const
 {
 	const size_t id = reinterpret_cast<size_t>(row.GetID());
-	return id > 0 ? id - 1 : (size_t)-1;
+	return id > 0 && m_model != nullptr ? m_model->LineAt(id - 1) : (size_t)-1;
 }
 
 // Add the chosen available field to the sort list (default Ascending; direction is edited
@@ -259,7 +270,7 @@ void ibSortEditor::AddForField(const wxTreeItemId& item)
 		return;
 	o->Append(field->GetPath(), true);
 	RefreshLines();
-	ibSelectLastSettingsRow(m_view, o->m_lines.size());
+	ibSelectLastSettingsRow(m_view, m_model->GetListedCount());
 }
 
 // A NEW LINE IS EMPTY — the field is chosen in the row, by hand. Taking whatever is
@@ -271,7 +282,7 @@ void ibSortEditor::OnAdd(wxCommandEvent&)
 		return;
 	o->Append(wxEmptyString, true);
 	RefreshLines();
-	ibSelectLastSettingsRow(m_view, o->m_lines.size());
+	ibSelectLastSettingsRow(m_view, m_model->GetListedCount());
 }
 
 void ibSortEditor::OnRemove(wxCommandEvent&)
@@ -285,10 +296,10 @@ void ibSortEditor::OnRemove(wxCommandEvent&)
 	const ibDataViewItem& sel = m_view->GetSelection();
 	if (!sel.IsOk())
 		return;
-	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || index > o->m_lines.size())
+	const size_t index = IndexAt(sel);
+	if (index >= o->m_lines.size())
 		return;
-	o->m_lines.erase(o->m_lines.begin() + (index - 1));
+	o->m_lines.erase(o->m_lines.begin() + index);
 	RefreshLines();
 }
 
@@ -302,13 +313,14 @@ void ibSortEditor::MoveLine(int delta)
 	const ibDataViewItem& sel = m_view->GetSelection();
 	if (!sel.IsOk())
 		return;
-	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || index > o->m_lines.size())
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based ROW
+	if (index == 0 || index > m_model->GetListedCount())
 		return;
 	const int target = static_cast<int>(index - 1) + delta;
-	if (target < 0 || target >= static_cast<int>(o->m_lines.size()))
+	if (target < 0 || target >= static_cast<int>(m_model->GetListedCount()))
 		return;   // already at that end
-	std::swap(o->m_lines[index - 1], o->m_lines[static_cast<size_t>(target)]);
+	// Traded with the next LISTED line — a hidden one keeps its place.
+	std::swap(o->m_lines[m_model->LineAt(index - 1)], o->m_lines[m_model->LineAt(static_cast<size_t>(target))]);
 	RefreshLines();
 	// The row travelled — the cursor goes with it, or the next press moves a
 	// different line.

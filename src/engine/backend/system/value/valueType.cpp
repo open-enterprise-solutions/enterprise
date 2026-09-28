@@ -62,9 +62,19 @@ ibString ibValueTypeDescription::GetString() const
 // A DESCRIPTION ALLOWS WHAT ONE OF ITS TYPES ALLOWS — each asked by its own gate
 // (ibCtorAbstractType::AllowValue), so a family answers for its members and a characteristic for the
 // types of its chart.
-static bool AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
+//
+// ⭐ A DYNAMIC TYPE ANSWERS FROM ITS ID, its gate not looked up. Each admits its own class, and a barrier
+// (`CatalogRef`, `AnyRef`) the classes its bits spell — clsid_admits, the comparison those gates make
+// themselves; the lookup was paid on every write of a reference and every event raised. A characteristic
+// admits the types of its chart, which no bit says: its gate is asked.
+bool ibValueTypeDescription::AllowValue(const ibTypeDescription& typeDescription, const ibClassID& clsid, const ibMetaData* source)
 {
 	for (const ibClassID& declared : typeDescription.GetClsidList()) {
+		if (IsMetaValue(declared) && !IsCharacteristic(declared)) {
+			if (clsid_admits(declared, clsid))
+				return true;
+			continue;
+		}
 		const ibCtorAbstractType* gate = source != nullptr
 			? source->GetAvailableCtor(declared) : ibValue::GetAvailableCtor(declared);
 		if (gate != nullptr && gate->AllowValue(clsid))

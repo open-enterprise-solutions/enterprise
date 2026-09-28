@@ -188,7 +188,8 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	// composer and read by nobody (audit § C8, "write-only"), so a report of two outputs printed two
 	// blocks of figures with nothing to say which was which — and naming them is exactly what the
 	// structure window offers a person to do.
-	m_outputName = info.m_name;
+	m_outputName  = info.m_name;
+	m_outputCount = info.m_outputCount;
 
 	TakeSchema(info.m_schema);
 }
@@ -586,10 +587,12 @@ void ibSpreadsheetComposeDriver::WidenTo(int columns, bool firstSection)
 // column titles, because it captions one block and the heading captions the page. Written the same
 // way for both layouts, so a table and a grouping are captioned by one rule and neither has its own.
 //
-// An output nobody named prints nothing at all: a blank caption line reads as a row that failed.
+// An output nobody named prints nothing at all: a blank caption line reads as a row that failed. Nor
+// does the only output of a run — a caption tells blocks apart, and a lone output's name (`ByWarehouse`)
+// stood over the figures as if it were the report's title (2026-09-28).
 void ibSpreadsheetComposeDriver::WriteOutputCaption()
 {
-	if (m_document == nullptr || m_outputName.IsEmpty())
+	if (m_document == nullptr || m_outputName.IsEmpty() || m_outputCount < 2)
 		return;
 
 	wxObjectDataPtr<ibBackendSpreadsheetObject> caption(new ibBackendSpreadsheetObject());

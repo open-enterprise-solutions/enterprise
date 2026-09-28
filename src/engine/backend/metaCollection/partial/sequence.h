@@ -132,6 +132,7 @@ public:
 		wxString GetPhysicalName() const override;
 		ibMetaID GetColumnId()     const override;
 		ibTypeDescription& GetTypeDesc() const override;
+		bool     IsAvailable()     const override;   // the PointInTime attribute's too — and so its sequence's
 
 		// Where it lies: nowhere of its own — in the PERIOD, then in the RECORDER.
 		std::vector<ibColumnSlot> DescribeLayout() const override;
@@ -212,7 +213,7 @@ public:
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const override;
 
 	//support form
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(),
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(),
 		ibBackendControlFrame* ownerControl = nullptr) const override;
 
 	// ⭐ WHO TAKES THE BORDER BACK. On (the default) the platform does it itself, by the rows the

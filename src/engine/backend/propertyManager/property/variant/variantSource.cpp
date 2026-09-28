@@ -42,8 +42,10 @@ void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 		std::set<ibClassID> clear_list;
 		if (gateMeta != nullptr) {
 			for (auto clsid : m_typeDesc.GetClsidList()) {
+				if (!::IsTabularSection(clsid))
+					continue;   // the kind off the id first: only a tabular section is looked up
 				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-				if (typeCtor != nullptr && ::IsTabularSection(clsid)) {
+				if (typeCtor != nullptr) {
 					const ibValueMetaObject* metaTable = typeCtor->GetMetaObject();
 					if (metaTable == nullptr || metaTable->GetParent() != gateMeta)
 						clear_list.insert(clsid);
@@ -141,6 +143,20 @@ const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() con
 	// Just hand the source-id path to the OWNER factory's dot — it resolves the leaf column
 	// (null for a whole-attribute binding or a broken path).
 	return m_ownerProperty != nullptr ? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
+}
+
+// The same walk the dot makes (WalkSource: the head gates to the form's attribute, the hops walk its explorer),
+// asked the one question more it answers on the way.
+bool ibVariantDataSource::IsSourceAvailable() const
+{
+	const std::vector<ibSourceHop>& path = m_sourceDesc.GetPath();
+	if (m_ownerProperty == nullptr || path.size() < 2)
+		return true;
+	ibBackendFormAttributeValue* holder = m_ownerProperty->FindSourceHolder(m_sourceDesc.GetFirst());
+	const ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+	const ibBackendSourceColumn* leaf = nullptr;
+	bool available = true;
+	return source == nullptr || !source->WalkColumns(path, 1, leaf, nullptr, nullptr, nullptr, &available) || available;
 }
 
 ////////////////////////////////////////////////////////////////////////////

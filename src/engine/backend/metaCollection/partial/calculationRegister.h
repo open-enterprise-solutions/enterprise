@@ -298,7 +298,7 @@ public:
 
 #pragma region _form_builder_h_
 	//support form
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	// The register's own table, plus its marks' when the recalculation is on — see calculationRegisterMetadataSchema.cpp.
@@ -377,7 +377,7 @@ protected:
 protected:
 
 	//get default form — the list, whatever is asked: there is no record to create on its own
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 		return GetListForm();
 	}
 

@@ -268,10 +268,17 @@ const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 	static const ibString s_absent;
 	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
 		return s_absent;
-	// Only a stored name can be lent: a string key's own text. A key of another kind has no name to
-	// lend (and FindProp cannot reach it by name either).
+	// A string key lends its own text. A key of another kind — a number, a date — is NAMED by its text as well:
+	// a LINQ projection over containers names its columns so (procUnitLINQ.cpp), and a key 42 came out as a
+	// column with no name. That text is nowhere to be lent from, so it is made into this thread's one slot and
+	// lives until the next such name here; every caller copies it on the spot. (FindProp still cannot reach
+	// such a key by name — a text is not a number.)
 	const ibValue& key = m_entries[lPropNum].first;
-	return key.m_typeClass == ibValueTypes::TYPE_STRING ? key.m_sData : s_absent;
+	if (key.m_typeClass == ibValueTypes::TYPE_STRING)
+		return key.m_sData;
+	static thread_local ibString s_made;
+	s_made = key.GetString();
+	return s_made;
 }
 
 bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

@@ -26,9 +26,12 @@ ibValueMetaObjectChartOfAccounts::ibValueMetaObjectChartOfAccounts() : ibValueMe
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("Source") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 }
 
 ibValueMetaObjectChartOfAccounts::~ibValueMetaObjectChartOfAccounts()
@@ -88,29 +91,29 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfAccounts::CreateSourceOb
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfAccounts::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, eFormObject, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfAccounts::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, eFormFolder, ownerControl, CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfAccounts::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, eFormList, ownerControl,
 		ibCreateHierarchyList(request.m_create, GetQueryable(), GetDataIsFolder()->GetQueryColumn(), GetDataPresentationAttribute()->GetQueryColumn()));   // migrated onto the universal dynamic list (hierarchy via queryable)
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfAccounts::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, eFormSelect, ownerControl,
 		CreateSourceObject(request.m_create, eFormSelect));   // select front-driven — choice mode
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return CreateAndBuildForm(request, eFormFolderSelect, ownerControl,
 		CreateSourceObject(request.m_create, eFormFolderSelect));   // folder-select = choice + IsFolder = true

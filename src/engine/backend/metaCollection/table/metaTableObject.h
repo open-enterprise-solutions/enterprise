@@ -71,6 +71,8 @@ public:
 	// base default vends NO queryable (no physical table); the DB leaf overrides this.
 	virtual const ibBackendQueryable* GetQueryable() const override { return nullptr; }
 
+	// A tabular section a form binds a table to may belong to a functional option, and its fields with it.
+	virtual bool IsFunctionalOptionAllowed() const override { return true; }
 
 	ibItemMode GetTableUse() const { return m_propertyUse->GetValueAsEnum(); }
 

@@ -118,7 +118,10 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	// Unbound (no source picked) -> the whole composite (chrome + inner) is not rendered
 	// (ibValueWindowComposite::UpdateWithLayers gate). Ask the PROPERTY (IsEmptyProperty), NOT
 	// GetSourceDesc — the latter walks the source and can be broken; the property flag is cheap and safe.
-	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
+	virtual bool IsUnbound() const override { return m_propertySource->IsEmptyProperty(); }
+	// On a field or a TABULAR SECTION this base does not use -> not available, and not rendered by the same
+	// gate. Body in tableBox.cpp — a section is no column.
+	virtual bool IsAvailable() const override;
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_table; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_table; }
 
@@ -624,6 +627,10 @@ public:
 	void SetVisibleColumn(bool visible = true) const { m_propertyVisible->SetValue(visible); }
 	bool GetVisibleColumn() const { return m_propertyVisible->GetValueAsBoolean(); }
 
+	// A column on a field this base does not use is not available — asked of the column's field (ibPropertySource).
+	// An empty binding is not a reason here: a column may stand on the model rather than a source (OnUpdated).
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueControl::IsAvailable(); }
+
 	void SetWidthColumn(int width) const { m_propertyWidth->SetValue(width); }
 	int GetWidthColumn() const { return m_propertyWidth->GetValueAsUInteger(); }
 
@@ -781,11 +788,11 @@ private:
 
 	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("OnChange"), _("Change"), wxArrayString{ wxT("Control") });
-	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandartProcessing") });
+	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandardProcessing") });
 
 	friend class ibDataViewValueRenderer;
 };

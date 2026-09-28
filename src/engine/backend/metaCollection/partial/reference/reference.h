@@ -304,6 +304,7 @@ protected:
 	ibReferenceState m_state = ibReferenceState::Raw;
 
 	const ibValueMetaObjectRecordDataRef* m_metaObject;
+	ibClassMetaclass m_metaclass = ibClassMetaclass_None;   // the family m_metaObject is of — asked of it once; GetClassType composes the id
 	ibReference* m_reference_impl;
 
 	bool m_foundedRef;

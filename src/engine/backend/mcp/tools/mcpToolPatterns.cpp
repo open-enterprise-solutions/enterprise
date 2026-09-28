@@ -3744,8 +3744,8 @@ const std::vector<ibMcpPattern>& Patterns()
 		"NOTE: IN THIS PLATFORM THE MECHANISM IS ALREADY THERE, and only the filling is written. What\n"
 		"may be entered from what is the SOURCE's `ListGeneration` (metadata_bind); the person uses its\n"
 		"form's standard Generate command; the new object fills itself in its object module's\n"
-		"`Filling(Source, StandartProcessing)` - `Source` empty for a plain new object, and\n"
-		"`StandartProcessing = False` refusing the entry - and code asks the same with\n"
+		"`Filling(FillingData, StandardProcessing)` - `FillingData` empty for a plain new object, and\n"
+		"`StandardProcessing = False` refusing the entry - and code asks the same with\n"
 		"`doc.Fill(source)`. The syntax helper's guide.basedOn has the handler written out.") },
 
 	{ wxT("traceability"),
@@ -5136,6 +5136,12 @@ const std::vector<ibMcpPattern>& Patterns()
 		"every write buys a readable \"version 3\" and costs a query per write plus a race when two\n"
 		"people save the same object. The alternative - key by the moment, number only when showing -\n"
 		"is cheaper and less pretty. Know which you chose and why.\n"
+		"\n"
+		"NOTE: THE OBJECT A VERSION BELONGS TO IS ANY OBJECT - of every kind that gets a history, and\n"
+		"of kinds added next year. So the key field is declared as \"any reference\" (or any reference of\n"
+		"one kind, when only documents get a history), not as a list of today's types: that list is the\n"
+		"field nobody extends when the next catalog arrives, and its versions are then silently not\n"
+		"kept. Whether the platform lets a field be declared that way is worth ASKING first.\n"
 		"\n"
 		"NOTE: WHAT THIS NEEDS FROM A PLATFORM. Only one thing, and it is usually already there: a\n"
 		"value that can PACK ITSELF into a tree and back. Given that, a stored version is one\n"

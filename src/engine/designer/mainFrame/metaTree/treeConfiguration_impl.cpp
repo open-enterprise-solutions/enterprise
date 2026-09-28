@@ -237,8 +237,17 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	// comes after the create (the create is the engine's, and a tool makes forms with nobody to ask),
 	// so undoing it is the asker's; it used to return here and leave a form with no kind and no layout
 	// standing in the tree, as if the person had said yes.
+	//
+	// ⚠ AND REFUSED IS ANYTHING BUT A KIND THE OWNER OFFERED. The dialog's own Cancel answers wxNOT_FOUND,
+	// but closed from outside — window_dismiss, the close box, Esc — it answers wxID_CANCEL, and that
+	// number was taken for a kind: written into FormType, which rebuilds the form and announces it
+	// again, and the tree asked again — a wizard behind every Cancel, each one deeper in the stack
+	// (2026-09-28).
 	const ibFormID chosen = dlg.ShowModal();
-	if (chosen == wxNOT_FOUND) {
+	bool offered = false;
+	for (unsigned int idx = 0; idx < optList.GetItemCount() && !offered; idx++)
+		offered = optList.GetItemId(idx) == chosen;
+	if (!offered) {
 		if (ibMetaData* const metaData = GetMetaData())
 			metaData->RemoveMetaObject(form);
 		return false;
@@ -1605,8 +1614,10 @@ const ibMetaTreeGroupDef s_groups[] = {
 	// cannot: where a group NESTS is this tree's own shape.
 	{ g_metaParameterizedJobCLSID, 0, ibMetaRow::Item },
 	{ g_metaScheduledJobCLSID,     g_metaParameterizedJobCLSID, ibMetaRow::Item },
+	{ g_metaEventHandlerCLSID,     0, ibMetaRow::Item },
 
 	{ g_metaSessionParameterCLSID, 0, ibMetaRow::Item },
+	{ g_metaFunctionalOptionCLSID, 0, ibMetaRow::Item },
 	{ g_metaCommonAttributeCLSID,  0, ibMetaRow::Item },
 	{ g_metaPictureCLSID,          0, ibMetaRow::Item },
 	// A section holds sections, so its rows are groups themselves.

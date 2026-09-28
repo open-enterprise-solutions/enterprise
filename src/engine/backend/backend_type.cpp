@@ -12,8 +12,7 @@ ibValue ibBackendTypeFactory::CreateValue() const
 	const ibTypeDescription& typeDesc = GetTypeDesc();
 	if (typeDesc.GetClsidCount() == 1) {
 		const ibClassID& clsid = typeDesc.GetFirstClsid();
-		if (ibValue::IsRegisterCtor(clsid)) {
-			const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
+		if (const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid)) {
 			if (so->GetObjectTypeCtor() == ibCtorObjectType::ibCtorObjectType_object_enum) {
 				try {
 					// ⚠⚠ THE VALUE BELONGS TO THE ENUMERATION, AND THE ENUMERATION DIES HERE.
@@ -171,7 +170,7 @@ ibTypeDescription& ibBackendTypeConfigFactory::GetTypeValueDesc() const
 	}
 	if (chart == nullptr)
 		chart = metaData->FindAnyObjectByFilter<ibValueMetaObjectChartOfCharacteristicTypes>(
-			static_cast<ibMetaID>(metaID_from_clsid(clsid)));
+			static_cast<ibMetaID>(clsid_metaID(clsid)));
 	if (chart == nullptr)
 		return declared;
 
@@ -197,9 +196,22 @@ ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType 
 }
 
 #include "backend/metaData.h"                          // the registry the referenceable kinds come from
+#include "backend/metaCtor.h"                          // ib_find_meta_any_kind — a metatype's family of a kind
+#include "backend/metaCollection/metaEventHandlerObject.h"   // g_eventSourceKinds — what raises events
 #include "backend/system/value/valueDynamicList.h"     // g_valueDynamicListCLSID
 #include "backend/system/value/valueDataComposition.h" // g_valueDataCompositionCLSID
 #include "backend/system/value/valueSpreadsheet.h"     // g_valueSpreadsheetCLSID
+
+#include <algorithm>                                    // std::find — a family offered once, whatever its members
+
+// Every metatype's family of one kind — `CatalogRef`, `DocumentRef`… for references — asked of the metatypes
+// themselves, so a new metatype brings its own.
+static void AppendMetaAnyKinds(ibCtorObjectMetaType kind, std::vector<ibClassID>& out)
+{
+	for (const ibCtorAbstractType* metaType : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_metadata))
+		if (const ibCtorMetaAnyKind* family = ib_find_meta_any_kind(metaType->GetClassName(), kind))
+			out.push_back(family->GetClassType());
+}
 
 // ⭐⭐ WHAT A FIELD OF THIS KIND MAY HOLD — see the header. Built from the registry, so nothing keeps a
 // list of metatypes that would have to learn about each new one.
@@ -210,6 +222,31 @@ ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType 
 void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataType,
 	const ibMetaData* metaData, std::vector<ibClassID>& out)
 {
+	// ⭐ AN EVENT'S SOURCE is nothing a field holds: an object, a manager, a record set of a metaobject that
+	// RAISES an event — its event module declares one. A report's object or a data processor's declares none,
+	// and offered, it would be a source with an empty list of events. The FAMILY (`DocumentObject` is every
+	// document's object) comes before them, offered through such a member: a metatype's types all raise the
+	// events its metaobject declares. So the configuration is asked, and without one nothing is offered.
+	if (filterDataType == ibSelectorDataType::ibSelectorDataType_eventSource) {
+		if (metaData == nullptr)
+			return;
+		std::vector<ibClassID> members;
+		for (const ibCtorObjectMetaType kind : g_eventSourceKinds) {
+			for (const ibCtorMetaValueType* so : metaData->GetListCtorsByType(kind)) {
+				const ibValueMetaObjectModuleBase* const module = so->GetEventModule();
+				if (module == nullptr || module->GetDefaultProcedureCount() == 0)
+					continue;
+				members.push_back(so->GetClassType());
+				// …and its family, the member's own id with the metaID left ANY — where its metaclass keeps one.
+				const ibClassID family = clsid_any_of(so->GetClassType());
+				if (ibValue::IsRegisterCtor(family) && std::find(out.begin(), out.end(), family) == out.end())
+					out.push_back(family);
+			}
+		}
+		out.insert(out.end(), members.begin(), members.end());
+		return;
+	}
+
 	const bool anyType = filterDataType == ibSelectorDataType::ibSelectorDataType_any;
 
 	if (anyType)
@@ -246,19 +283,26 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 		out.push_back(g_valueSpreadsheetCLSID);
 	}
 
-	if (metaData == nullptr)
-		return;
+	// ⭐ THE FAMILIES OF REFERENCES — `CatalogRef`, `DocumentRef`… — a reference to any object of the metatype,
+	// the ones added later included. Each comes before its members, which the picker puts under it.
+	const bool references = anyType || filterDataType == ibSelectorDataType::ibSelectorDataType_reference;
+	if (references)
+		AppendMetaAnyKinds(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference, out);
 
 	// EVERYTHING REFERENCEABLE, asked of the registry — and the CHARACTERISTICS beside them, which are
 	// the declaration standing for whatever their chart allows. A table shape wants the tabular sources
 	// instead: those are its references.
-	if (anyType || filterDataType == ibSelectorDataType::ibSelectorDataType_reference ||
-		filterDataType == ibSelectorDataType::ibSelectorDataType_table) {
+	if (metaData != nullptr && (references || filterDataType == ibSelectorDataType::ibSelectorDataType_table)) {
 		for (auto so : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
 			out.push_back(so->GetClassType());
 		for (auto so : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic))
 			out.push_back(so->GetClassType());
 	}
+
+	// …and `AnyRef` last — a reference to anything at all.
+	if (references)
+		if (const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef")))
+			out.push_back(anyRef->GetClassType());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

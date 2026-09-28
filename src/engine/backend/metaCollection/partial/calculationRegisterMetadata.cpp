@@ -77,8 +77,12 @@ void ibValueMetaObjectCalculationRegister::ApplyChartBinding()
 ibValueMetaObjectCalculationRegister::ibValueMetaObjectCalculationRegister() : ibValueMetaObjectRegisterData()
 {
 	//set default proc
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
 }
 
 ibValueMetaObjectCalculationRegister::~ibValueMetaObjectCalculationRegister()
@@ -95,7 +99,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectCalculationRegister::GetDefaultFormB
 
 #pragma region _form_builder_h_
 // The list is ordered by the registration period — the register's one period (see HasPeriod).
-ibBackendValueForm* ibValueMetaObjectCalculationRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectCalculationRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,

@@ -27,7 +27,8 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
 
     wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(wxparent);
 
-    if (notebook != nullptr && m_propertyVisible->GetValueAsBoolean()) {
+    // A page the functional options of this base make unavailable is off the notebook the way an invisible one is.
+    if (notebook != nullptr && m_propertyVisible->GetValueAsBoolean() && IsAvailable()) {
         notebook->AddPage(page, m_propertyTitle->GetValueAsTranslateString(), false, m_propertyPicture->GetValueAsBitmap());
         page->SetOrientation(m_propertyOrient->GetValueAsInteger());
     }
@@ -48,7 +49,8 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
 void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost)
 {
     ibValueFrame* parentControl = GetParent(); int pos = wxNOT_FOUND;
-    if (m_propertyVisible->GetValueAsBoolean()) {
+    const bool shown = m_propertyVisible->GetValueAsBoolean() && IsAvailable();
+    if (shown) {
         for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
             ibValueNotebookPage* child = dynamic_cast<ibValueNotebookPage*>(parentControl->GetChild(i));
             wxASSERT(child);
@@ -65,9 +67,9 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
 
     // RemovePage DETACHES without hiding — see OnCreated. A page turned invisible therefore has to
     // be hidden here too, or it goes on painting over the tab strip it was just taken off.
-    ((wxWindow*)wxobject)->Show(m_propertyVisible->GetValueAsBoolean());
+    ((wxWindow*)wxobject)->Show(shown);
 
-    if (m_propertyVisible->GetValueAsBoolean()) {
+    if (shown) {
 
         if (pos != pos_old)
             notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyTitle->GetValueAsTranslateString(), pos_old == wxNOT_FOUND, m_propertyPicture->GetValueAsBitmap());

@@ -391,7 +391,6 @@ public:
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Manager:       return "manager";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Object:        return "object";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_Selection:     return "selection";
-				case ibCtorObjectMetaType::ibCtorObjectMetaType_List:          return "list";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection: return "tabularSection";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet:     return "recordSet";
 				case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey:     return "recordKey";

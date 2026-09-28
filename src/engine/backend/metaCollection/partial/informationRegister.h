@@ -141,8 +141,8 @@ public:
 
 #pragma region _form_builder_h_
 	//support form 
-	virtual ibBackendValueForm* GetRecordForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
-	virtual ibBackendValueForm* GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetRecordForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
+	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 	//prepare menu for item
@@ -218,7 +218,7 @@ protected:
 protected:
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
 			return GetRecordForm();
@@ -542,7 +542,7 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 #pragma region _form_builder_h_
 	//support show 
 	virtual void ShowFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
-	virtual ibBackendValueForm* GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
+	virtual ibFormPtr<ibBackendValueForm> GetFormValue(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr);
 #pragma endregion
 
 	//support actionData

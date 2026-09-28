@@ -24,9 +24,12 @@ ibValueMetaObjectChartOfCharacteristicTypes::ibValueMetaObjectChartOfCharacteris
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("Source") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewCode"),   ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 }
 
 ibValueMetaObjectChartOfCharacteristicTypes::~ibValueMetaObjectChartOfCharacteristicTypes()
@@ -99,7 +102,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectChartOfCharacteristicTypes::Cre
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -108,7 +111,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetObjectForm(c
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -117,7 +120,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderForm(c
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -126,7 +129,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(con
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -135,7 +138,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(c
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,

@@ -5,14 +5,14 @@
 // ibString (fstring.h) — the engine's own string, as a FACADE.
 //
 // Outside, an ibString is ONE POINTER (sizeof(void*)) — the handle the rest of
-// the engine passes, returns and keeps in a value's union. Inside, in the module
-// (fstring.cpp), lives the text itself: a wchar_t string (exactly wxString's
-// wxChar width) on a per-thread pooled allocator, together with the count of the
-// ibStrings holding it — ibNumber's scheme for its heap tier (fnumber.h). A copy
-// of a string is one more owner of the text, not a copy of the characters; a
-// write goes to a text of its own (copy on write); an empty string holds nothing
-// and allocates nothing. Nothing outside the module can reach the text but
-// through this facade.
+// the engine passes, returns and keeps in a value's union — on ONE BLOCK: the count
+// of the ibStrings holding it, the length, the room, and the wchar_t characters
+// (exactly wxString's wxChar width) right after them — ibNumber's scheme for its
+// heap tier (fnumber.h). The block's header is visible here, so a string is copied
+// and READ inline; it is made, written into and freed in the module (fstring.cpp),
+// from a per-thread pool. A copy of a string is one more owner of the text, not a
+// copy of the characters; a write goes to a text of its own (copy on write); an
+// empty string holds nothing and allocates nothing.
 //
 // The ONLY thing it does with wxWidgets is convert itself to/from a wxString at
 // the boundary (operator wxString / ctor). Every operation is its own — ported
@@ -48,8 +48,6 @@
 #define BACKEND_API WXIMPORT
 #endif
 #endif
-
-class ibStringStore;     // the text itself — fstring.cpp
 
 // --- ibString ---------------------------------------------------------------
 
@@ -94,30 +92,33 @@ public:
 
 	// --- other conversions (native) ---
 	std::wstring   ToStdWString() const;
-	const wchar_t* wc_str() const noexcept;
+	// READING IS INLINE — the length and the characters are in the block's header (Shared, below), so asking a
+	// string for them is no call into the module, as it was not before the text went behind the facade.
+	const wchar_t* wc_str() const noexcept { return m_impl != nullptr ? m_impl->Chars() : L""; }
 
 	// UTF-8 form for DB / serialization / wire — native codec, no wxString.
 	std::string ToUtf8() const;
 	void SetUtf8(const char* p, size_t n);
 
 	// --- query / element access / iteration (no conversion) ---
-	bool   IsEmpty() const noexcept;
+	bool   IsEmpty() const noexcept { return m_impl == nullptr || m_impl->m_len == 0; }
 	// True when the string is empty or contains only whitespace. No
 	// allocation — scans the wchar buffer directly (cf. IsBlankString).
 	bool   IsBlank() const noexcept;
-	size_t Len()     const noexcept;                   // wxChar units (== wxString::Length)
+	size_t Len()     const noexcept { return m_impl != nullptr ? m_impl->m_len : 0; }   // wxChar units (== wxString::Length)
 	size_t Length()  const noexcept { return Len(); }  // wxString-name alias (migration convenience)
 	// A text this string owns alone is emptied where it is, and keeps its capacity for what comes next;
 	// a shared one is let go.
 	void   Clear() noexcept;
 	ibString& Empty()      { Clear(); return *this; }   // wx's Empty() CLEARS; IsEmpty() asks
-	wchar_t operator[](size_t i) const;
+	// Read at the terminator too: s[Len()] is '\0'.
+	wchar_t operator[](size_t i) const { return wc_str()[i]; }
 	// ⚠ A WRITABLE CHARACTER makes the text this string's own first; the reference is good until the
 	// string is next copied or changed — held across a copy, it would write into both.
 	wchar_t& operator[](size_t i);
-	wchar_t GetChar(size_t i) const;
+	wchar_t GetChar(size_t i) const { return wc_str()[i]; }
 	void    SetChar(size_t i, wchar_t c);
-	wchar_t Last() const;
+	wchar_t Last() const { return View().back(); }
 	const wchar_t* begin() const noexcept { return wc_str(); }
 	const wchar_t* end()   const noexcept { return wc_str() + Len(); }
 	wchar_t*       begin();   // ⚠ as operator[] above
@@ -129,10 +130,10 @@ public:
 	size_t length() const noexcept { return Len(); }
 	size_t size()   const noexcept { return Len(); }
 	const wchar_t* c_str() const noexcept { return wc_str(); }
-	size_t find(const ibString& sub, size_t start = 0) const;
-	size_t find(wchar_t c, size_t start = 0) const;
-	size_t rfind(const ibString& sub, size_t start = npos) const;
-	size_t rfind(wchar_t c, size_t start = npos) const;
+	size_t find(const ibString& sub, size_t start = 0) const { return View().find(sub.View(), start); }
+	size_t find(wchar_t c, size_t start = 0) const           { return View().find(c, start); }
+	size_t rfind(const ibString& sub, size_t start = npos) const { return View().rfind(sub.View(), start); }
+	size_t rfind(wchar_t c, size_t start = npos) const          { return View().rfind(c, start); }
 	size_t find_first_of(const ibString& set, size_t start = 0) const;
 	size_t find_last_of(const ibString& set, size_t start = npos) const;
 	size_t find_first_not_of(const ibString& set, size_t start = 0) const;
@@ -154,8 +155,8 @@ public:
 	ibString SubString(size_t from, size_t to) const { return Mid(from, to - from + 1); }
 	// wx's Find: an int, wxNOT_FOUND (-1) when absent, and a CHARACTER may be sought from the end.
 	// A search from a position is `find` above — std's name for std's meaning.
-	int    Find(const ibString& sub) const;
-	int    Find(wchar_t c, bool fromEnd = false) const;
+	int    Find(const ibString& sub) const { return AsFound(View().find(sub.View())); }
+	int    Find(wchar_t c, bool fromEnd = false) const { return AsFound(fromEnd ? View().rfind(c) : View().find(c)); }
 	bool   Contains(const ibString& sub) const { return find(sub) != npos; }
 	size_t Freq(wchar_t c) const;
 	bool   StartsWith(const ibString& p, ibString* rest = nullptr) const;
@@ -238,11 +239,11 @@ public:
 	size_t Replace(const ibString& from, const ibString& to, bool replaceAll = true);
 
 	// --- comparison (native; case-insensitive folds per-char via wxTolower) ---
-	bool operator==(const ibString& o) const noexcept;
+	bool operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
 	bool operator!=(const ibString& o) const noexcept { return !(*this == o); }
-	bool operator<(const ibString& o)  const noexcept;
+	bool operator<(const ibString& o)  const noexcept { return View() < o.View(); }
 	// …and against a literal, exact — see operator+ above for why.
-	bool operator==(const wchar_t* s) const noexcept;
+	bool operator==(const wchar_t* s) const noexcept { return View().compare(s != nullptr ? s : L"") == 0; }
 	bool operator!=(const wchar_t* s) const noexcept { return !(*this == s); }
 	friend bool operator==(const wchar_t* a, const ibString& b) { return b == a; }
 	friend bool operator!=(const wchar_t* a, const ibString& b) { return !(b == a); }
@@ -256,7 +257,11 @@ public:
 	bool IsSameAs(const wchar_t* s, bool caseSensitive = true) const;
 	bool IsSameAs(const wxString& s, bool caseSensitive = true) const;
 	bool IsSameAs(wchar_t c, bool caseSensitive = true) const;
-	int  Cmp(const ibString& o) const noexcept;
+	int  Cmp(const ibString& o) const noexcept {
+		if (m_impl == o.m_impl) return 0;
+		const int r = View().compare(o.View());
+		return r < 0 ? -1 : (r > 0 ? 1 : 0);
+	}
 	int  CmpNoCase(const ibString& o) const;
 	bool IsAscii() const noexcept;
 
@@ -282,15 +287,20 @@ public:
 	void AppendCodepoint(uint32_t cp);
 
 private:
-	// ⭐ THE OWNERS' COUNT is the one thing the facade knows of its text — enough to copy a string and
-	// let it go INLINE, with no call into the module: a string value's copy is the runtime's most
-	// frequent string operation (measured 2026-09-26: 5.5 → 10.3 ns while it was a call). The
-	// characters stay behind the facade, in Impl (fstring.cpp), which derives from this.
+	// ⭐ THE BLOCK'S HEADER is what the facade knows of its text: the owners' count — enough to copy a string
+	// and let it go INLINE, with no call into the module (a string value's copy is the runtime's most frequent
+	// string operation: measured 2026-09-26, 5.5 → 10.3 ns while it was a call) — and the length and the room,
+	// with the characters right after the header in the same block — enough to READ it inline. Making a text,
+	// writing into it and freeing it stay behind the facade, in Impl (fstring.cpp), which derives from this.
 	struct Shared {
-		explicit Shared(long owners) noexcept : m_refCount(owners) {}
+		Shared(long owners, size_t room) noexcept : m_refCount(owners), m_len(0), m_cap(room) {}
 		std::atomic<long> m_refCount;
+		size_t            m_len;   // characters, the terminator not counted
+		size_t            m_cap;   // characters the block has room for, the terminator not counted
+		wchar_t*       Chars() noexcept       { return reinterpret_cast<wchar_t*>(this + 1); }
+		const wchar_t* Chars() const noexcept { return reinterpret_cast<const wchar_t*>(this + 1); }
 	};
-	struct Impl;                                  // : Shared — the text itself, fstring.cpp
+	struct Impl;                                  // : Shared — making and freeing the block, fstring.cpp
 
 	static void Hold(Shared* shared) noexcept {
 		if (shared != nullptr) shared->m_refCount.fetch_add(1, std::memory_order_relaxed);
@@ -301,10 +311,14 @@ private:
 	}
 	static void Free(Shared* shared) noexcept;    // the last owner went: the text is destroyed — fstring.cpp
 
-	// A write goes to a text this string owns alone (Own copies it first when anybody else holds it).
-	const ibStringStore& Text() const noexcept;   // to READ: the text held, or the one empty text
-	ibStringStore& Own();                         // to WRITE: the text made this string's own
-	static ibString Adopt(ibStringStore&& text);  // a finished text, handed to a new string
+	// A write goes to a text this string owns alone, with room for `room` characters at least: Own copies it
+	// first when anybody else holds it, and grows it when it has no room. SetLength says how much was written.
+	std::wstring_view View() const noexcept { return std::wstring_view(wc_str(), Len()); }   // to READ
+	wchar_t* Own(size_t room = 0);                // to WRITE: the characters, made this string's own
+	void SetLength(size_t length) noexcept;       // …and how many of them there are now
+
+	// wx's found-or-not: an int, -1 when absent.
+	static int AsFound(size_t at) noexcept { return at == npos ? -1 : static_cast<int>(at); }
 
 	Shared* m_impl = nullptr;   // nullptr = the empty string: no text, nothing allocated
 };

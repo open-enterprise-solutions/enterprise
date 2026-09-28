@@ -7,6 +7,7 @@
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
 #include "backend/metaCollection/partial/commonObject.h"   // the owners an attribute asks: generic data, a hierarchy
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — the column's IsAvailable
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -61,12 +62,29 @@ const ibTranslateString& ibValueMetaObjectAttributeBase::GetFormat() const
 	return s_none;
 }
 
+// The field itself, or the object it stands in, may belong to a part of the system this base does not use —
+// and so may every object its type can hold, which takes the field with them.
+bool ibValueMetaObjectAttributeBase::IsAvailable() const
+{
+	return ibFunctionalOptionGate::IsAvailable(this) && ibFunctionalOptionGate::IsTypeAvailable(GetMetaData(), GetTypeDesc());
+}
+
 // WHAT A VALUE HERE MAY BE — the type factory's answer (backend_type.cpp: a characteristic stands for its
 // chart's types). Overridden here only because an attribute is both a type factory and a source column,
 // and each base declares the question: one overrider answers for both, with the factory's answer.
 ibTypeDescription& ibValueMetaObjectAttributeBase::GetTypeValueDesc() const
 {
 	return ibBackendTypeConfigFactory::GetTypeValueDesc();
+}
+
+// …and through the type property, which stands a barrier (`AnyRef`, `CatalogRef`) for its members as it
+// refreshes. A characteristic stays the factory's answer — its chart's list.
+ibTypeDescription& ibValueMetaObjectAttribute::GetTypeValueDesc() const
+{
+	const ibTypeDescription& declared = GetTypeDesc();
+	if (declared.GetClsidCount() == 1 && IsCharacteristic(declared.GetFirstClsid()))
+		return ibValueMetaObjectAttributeBase::GetTypeValueDesc();
+	return m_propertyType->GetValueAsTypeValueDesc();
 }
 
 bool ibValueMetaObjectAttributeBase::ContainType(const ibValueTypes& valType) const
@@ -82,17 +100,6 @@ bool ibValueMetaObjectAttributeBase::ContainType(const ibClassID& clsid) const
 bool ibValueMetaObjectAttributeBase::EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const
 {
 	return GetTypeDesc().EqualType(clsid, rhs);
-}
-
-bool ibValueMetaObjectAttributeBase::ContainMetaType(ibCtorObjectMetaType type) const
-{
-	for (auto& clsid : GetTypeDesc().GetClsidList()) {
-		const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(clsid);
-		if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == type)
-			return true;
-	}
-
-	return false;
 }
 
 /////////////////////////////////////////////////////////////////////////

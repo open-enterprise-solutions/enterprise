@@ -95,6 +95,7 @@ public:
 			virtual const ibFormatString& GetColumnFormat() const {
 				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
 			}
+			virtual bool IsColumnAvailable() const override { return m_metaAttribute->IsAvailable(); }
 
 			ibValueTabularSectionColumnInfo();
 			ibValueTabularSectionColumnInfo(ibValueMetaObjectAttributeBase* attribute);
@@ -188,7 +189,12 @@ public:
 		m_recordColumnCollection(new ibValueTabularSectionDataObjectColumnCollection(this)) {
 		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 		// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual
-		// source binding needed; ibDataRamComposer reads the storage's nodes in place.)
+		// source binding needed; ibDataRamComposer reads the storage's nodes in place.) ⭐ AND IT KNOWS WHAT IT
+		// READS FROM THE START: the storage's columns — a question asked before the first page (IsGroupedModel, a
+		// quick filter) gets the answer a page gets — and the configuration its paths are walked in, the section's
+		// own (ibDataRamComposer::IsAvailable).
+		Storage().SetColumns(m_recordColumnCollection);
+		GetModelComposer().SetMetaData(tableObject != nullptr ? tableObject->GetMetaData() : nullptr);
 		// (No m_filterRow template population — the filter lives in L5 (ListSettings->Filter) now; the
 		// filter dialog offers the columns from the metadata / column collection directly.)
 	}

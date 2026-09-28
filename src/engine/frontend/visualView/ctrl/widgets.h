@@ -105,9 +105,11 @@ class ibValueStaticText : public ibValueWindow,
 
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
-	// NEVER "missing" — an unbound static text is a caption, and captions render. Answering true
+	// NEVER "unbound" — a static text with no binding is a caption, and captions render. Answering true
 	// here would hide every plain label on every form (window.cpp gates Show on it).
-	virtual bool IsSourceMissing() const override { return false; }
+	virtual bool IsUnbound() const override { return false; }
+	// A bound field this base does not use takes the text with it.
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindow::IsAvailable(); }
 
 	//Get source attribute
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
@@ -180,7 +182,7 @@ protected:
 	// switch: a configuration that wants to open something else — or nothing — says so here, and
 	// does not have to learn a second name because this control is a label rather than an editor.
 	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
 };
 
 #include <wx/textctrl.h>
@@ -225,7 +227,9 @@ class ibValueTextCtrl : public ibValueWindow,
 	// Unbound (no source picked) -> not rendered (ibValueWindow::UpdateWindow gate). Ask the PROPERTY
 	// directly (IsEmptyProperty), NOT GetSourceDesc — the latter resolves / walks the source and can be
 	// broken (a dangling binding); the flag on the stored property is cheap and always safe.
-	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
+	virtual bool IsUnbound() const override { return m_propertySource->IsEmptyProperty(); }
+	// Bound to a field this base does not use -> not available.
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindow::IsAvailable(); }
 
 	//Get source attribute
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
@@ -352,11 +356,11 @@ private:
 
 	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("OnChange"), _("Change"), wxArrayString{ wxT("Control") });
-	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
-	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandartProcessing") });
+	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
+	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandardProcessing") });
 
 	friend class ibValueForm;
 };
@@ -448,7 +452,9 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 	// Unbound (no source picked) -> not rendered. Ask the PROPERTY (IsEmptyProperty), NOT GetSourceDesc —
 	// the latter walks the source and can be broken; the property flag is cheap and always safe.
-	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
+	virtual bool IsUnbound() const override { return m_propertySource->IsEmptyProperty(); }
+	// Bound to a field this base does not use -> not available.
+	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindow::IsAvailable(); }
 
 	//get source attribute
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {

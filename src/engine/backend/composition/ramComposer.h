@@ -27,10 +27,15 @@ public:
 	// Bind the RAM value-storage this composer filters + sorts (NON-owning — the model owns the storage AND us).
 	ibDataRamComposer& FromStorage(const ibRamValueStorage* storage) {
 		m_storage = storage;
+		m_availablePaths.clear();   // a new source answers anew
 		return *this;
 	}
 
 	bool HasSource() const override { return m_storage != nullptr; }
+
+	// The storage's own answer — the first hop is its column (a tabular section's or a record set's asks its
+	// attribute; a value table's has no option over it), the rest the query model's walk (WalkFrom).
+	bool IsWalkAvailable(const std::vector<wxString>& hops) const override;
 
 	// The ONLY output: filter + sort (+ group later) the storage's nodes → their STORAGE indices in display
 	// order (index i ↔ storage node i). The model (RunComposerPage) windows this by the browsed anchor and

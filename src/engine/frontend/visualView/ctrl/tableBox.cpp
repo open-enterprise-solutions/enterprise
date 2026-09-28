@@ -12,6 +12,7 @@
 #include "backend/system/value/valueTable.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — a tabular section this base does not use
 #include "frontend/win/dlgs/settings/savedSettings.h"   // the setting marked "restore on open" goes on here
 #include "backend/settings/settingsComposer.h"          // ibSettingsCategory — which shelf these settings sit on
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
@@ -472,6 +473,20 @@ bool ibValueModelTableBox::HasCommandBar() const
 bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
+// The binding answers for a field, but a tabular section is no column — its node in the source carries none —
+// so for it the SECTION the table shows answers. Only for a NESTED source (the table stands on a field of the
+// form's object, [head, section]): the form's own list is always available, since a list form of an object
+// the base does not use may still be opened from a reference to it, and must not come up empty. (Unbound is
+// the other question — IsUnbound.)
+bool ibValueModelTableBox::IsAvailable() const
+{
+	if (!m_propertySource->IsAvailable() || !ibValueWindowComposite::IsAvailable())
+		return false;
+	if (m_tableModel == nullptr || m_propertySource->GetValueAsSourceDesc().GetHopCount() < 2)
+		return true;
+	return ibFunctionalOptionGate::IsAvailable(m_tableModel->GetSourceMetaObject());
 }
 
 const ibValueMetaObjectCompositeData* ibValueModelTableBox::GetSourceMetaObject() const

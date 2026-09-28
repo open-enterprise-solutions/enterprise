@@ -90,6 +90,11 @@ public:
 		std::shared_ptr<ibBackendQueryColumn> m_ownedCol;
 		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
 		ibColumnRole                m_role = ibColumnRole::Detail;
+		// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — every column its expression reads,
+		// every hop of every walk (IsExprAvailable), and for a star each column it stands for. Its own:
+		// `m_col` may be a walk's LEAF, which answers for itself alone, so a nested query, a temp table
+		// and the shown columns of a run ask this rather than the column.
+		bool                        m_available = true;
 
 		// ⭐ WHAT IT HOLDS, ASKED HERE — not worked out by each reader: m_type where the query states one (a
 		// fold's is the fold's — TypeOfFold), else the column it is read from; empty = unknown. A report, a

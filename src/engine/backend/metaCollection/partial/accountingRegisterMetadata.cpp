@@ -21,10 +21,15 @@
 
 ibValueMetaObjectAccountingRegister::ibValueMetaObjectAccountingRegister() : ibValueMetaObjectRegisterData()
 {
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("Replacing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+
 	// The two totals tables are declared with their initialiser on the class itself — see
-	// accountingRegister.h. Nothing to do here.
+	// accountingRegister.h; nothing about them is done here.
 }
 
 ibValueMetaObjectAccountingRegister::~ibValueMetaObjectAccountingRegister()
@@ -39,7 +44,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormBy
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectAccountingRegister::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(request, eFormList, ownerControl,
 		ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn()));   // migrated onto the universal dynamic list

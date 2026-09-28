@@ -6117,3 +6117,71 @@ msgstr "Тут нічого друкувати. Якщо у формі кіль�
 #: src/engine/frontend/docView/docView.cpp:1272
 msgid "Print"
 msgstr "Друк"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:33
+msgid "Event handlers"
+msgstr "Обробники подій"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
+msgid "Event handler"
+msgstr "Обробник події"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:119
+msgid "What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."
+msgstr "Що викликає подію: об'єкти, менеджери або набори записів одного об'єкта метаданих чи всіх об'єктів метаданих одного виду (DocumentObject - об'єкт будь-якого документа). Можна вказати кілька; тоді подія - та, яку викликає кожен із них."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:121
+msgid "Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."
+msgstr "Яку з подій джерела обробляють - у списку те, що джерело викликає. У модулі обробника готується процедура з ім'ям події, першим параметром вона приймає Source."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "Handler module"
+msgstr "Модуль обробника"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."
+msgstr "Код обробника: процедура з ім'ям події; першим параметром вона приймає Source - значення, що викликало подію, - а потім параметри самої події. Викликається після того, як подію обробив власний модуль джерела, з тими самими параметрами."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
+msgid "Open handler module"
+msgstr "Відкрити модуль обробника"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:35
+msgid "Functional options"
+msgstr "Функціональні опції"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+msgid "Visibility"
+msgstr "Видимість"
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "User visibility"
+msgstr "Видимість для користувача"
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
+msgstr "Функціональні опції, за яких елемент доступний: поки всі вони вимкнені, ні він, ні те, що в ньому лежить, не показується і не пропонується. Порожньо - доступний за будь-яких опцій. Діє разом із властивістю Видимість і не змінює її."
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "Initial value"
+msgstr "Початкове значення"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."
+msgstr "Значення опції в базі, де її ще ніхто не перемикав, - опція, що прийшла з оновленням. Типово увімкнена, щоб робоча частина системи не зникла сама собою; вимкнена - для нової частини, яку база має увімкнути свідомо."
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "Requires"
+msgstr "Залежить від"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."
+msgstr "Опція, під якою працює ця. Поки та вимкнена, ця теж вважається вимкненою, яким би не було її власне значення, - те, що до неї входить, не показується."
+
+#: src/engine/backend/system/value/valueSpreadsheet.cpp:430
+msgid "Cells are counted from 0 - a row or a column cannot be negative"
+msgstr "Клітинки рахуються від 0 - рядок і колонка не можуть бути від'ємними"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
+msgid "Open functional option composition"
+msgstr "Відкрити склад функціональної опції"

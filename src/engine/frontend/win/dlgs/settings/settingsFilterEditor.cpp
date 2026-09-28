@@ -216,6 +216,16 @@ public:
 						SetControlValue(found.front());
 						return false;   // written already - the model has nothing more to take from the text
 					}
+					// …and the field's FACADE: every reference it may hold, a family's and AnyRef's members
+					// included (ConvertToMetaIds) - a `CatalogRef` field is looked for in each catalog, where the
+					// value typed above is the empty family and finds nothing.
+					for (const ibMetaID& id : ibValueReferenceDataObject::ConvertToMetaIds(item->m_left.m_type.GetClsidList(), m_editor->GetMetaData())) {
+						const ibValue reference(ibValueReferenceDataObject::Create(m_editor->GetMetaData(), id));
+						if (reference.FindValue(text, found) && !found.empty()) {
+							SetControlValue(found.front());
+							return false;
+						}
+					}
 				}
 			}
 		}
@@ -744,7 +754,7 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 	m_toolbar->Bind(wxEVT_TOOL, &ibFilterEditor::OnFilterGroupSelected, this, kFilterCmdGroup);
 	m_toolbar->Bind(wxEVT_TOOL, &ibFilterEditor::OnFilterUngroup, this, kFilterCmdUngroup);
 
-	m_model = new ibFilterTreeModel();
+	m_model = new ibFilterTreeModel(m_fieldSource);
 	m_model->SetFilter(m_filter);
 	m_view->AssociateModel(m_model);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibFilterEditor::OnContextMenu, this);
@@ -1133,8 +1143,15 @@ static ibFilterPath ibMoveSelectedFilterChild(ibFilterTreeModel* model, ibDataVi
 		return ibFilterPath();   // the root line has nowhere to move within
 
 	const size_t idx = path.back();
-	const int target = static_cast<int>(idx) + delta;
-	if (idx >= owner->size() || target < 0 || target >= static_cast<int>(owner->size()))
+	if (idx >= owner->size())
+		return ibFilterPath();
+	// THE NEXT LINE THE TREE LISTS is the one traded with — a line applied and not shown keeps its
+	// place, so one press always moves what the person sees.
+	int target = static_cast<int>(idx) + delta;
+	while (target >= 0 && target < static_cast<int>(owner->size())
+		&& !model->IsListed((*owner)[static_cast<size_t>(target)]))
+		target += delta;
+	if (target < 0 || target >= static_cast<int>(owner->size()))
 		return ibFilterPath();   // already at that end
 
 	std::swap((*owner)[idx], (*owner)[static_cast<size_t>(target)]);

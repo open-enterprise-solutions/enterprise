@@ -6267,3 +6267,71 @@ msgstr "Здесь нечего печатать. Если в форме нес�
 #: src/engine/frontend/docView/docView.cpp:1272
 msgid "Print"
 msgstr "Печать"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:33
+msgid "Event handlers"
+msgstr "Обработчики событий"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
+msgid "Event handler"
+msgstr "Обработчик события"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:119
+msgid "What raises the event: the objects, managers or record sets of one metaobject, or of every metaobject of a kind (DocumentObject - every document's object). Several may be named; the event is then one every one of them raises."
+msgstr "Что вызывает событие: объекты, менеджеры или наборы записей одного объекта метаданных либо всех объектов метаданных одного вида (DocumentObject - объект любого документа). Можно указать несколько; тогда событие - то, которое вызывает каждый из них."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:121
+msgid "Which of the source's events is handled - the list is what the source raises. The handler module is prepared with its procedure, named as the event and taking Source first."
+msgstr "Какое из событий источника обрабатывается - в списке то, что источник вызывает. В модуле обработчика готовится процедура с именем события, первым параметром она принимает Source."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "Handler module"
+msgstr "Модуль обработчика"
+
+#: src/engine/backend/metaCollection/metaEventHandlerObject.h:126
+msgid "The handler's code: a procedure named as the event, taking Source - the value that raised it - before the event's own arguments. Called after the source's own module has handled the event, with the same arguments."
+msgstr "Код обработчика: процедура с именем события; первым параметром она принимает Source - значение, вызвавшее событие, - а затем параметры самого события. Вызывается после того, как событие обработал собственный модуль источника, с теми же параметрами."
+
+#: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
+msgid "Open handler module"
+msgstr "Открыть модуль обработчика"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:35
+msgid "Functional options"
+msgstr "Функциональные опции"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+msgid "Visibility"
+msgstr "Видимость"
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "User visibility"
+msgstr "Пользовательская видимость"
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
+msgstr "Функциональные опции, при которых элемент доступен: пока все они выключены, ни он, ни то, что в нём лежит, не показывается и не предлагается. Пусто - доступен при любых опциях. Действует вместе со свойством Видимость и не меняет его."
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "Initial value"
+msgstr "Начальное значение"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."
+msgstr "Значение опции в базе, где её ещё никто не переключал, - опция, пришедшая с обновлением. По умолчанию включена, чтобы работающая часть системы не пропала сама собой; выключена - для новой части, которую база должна включить сознательно."
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "Requires"
+msgstr "Зависит от"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."
+msgstr "Опция, под которой работает эта. Пока та выключена, эта тоже считается выключенной, каким бы ни было её собственное значение, - то, что в неё входит, не показывается."
+
+#: src/engine/backend/system/value/valueSpreadsheet.cpp:430
+msgid "Cells are counted from 0 - a row or a column cannot be negative"
+msgstr "Ячейки считаются от 0 - строка и колонка не могут быть отрицательными"
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
+msgid "Open functional option composition"
+msgstr "Открыть состав функциональной опции"

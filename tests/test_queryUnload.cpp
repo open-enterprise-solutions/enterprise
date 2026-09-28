@@ -46,9 +46,12 @@ ibQueryRamTable Rows(const std::vector<wxString>& names, const std::vector<std::
 	return table;
 }
 
-ibValueModelTable* TableOf(const ibValue& value)
+// HELD, not lent: a caller hands this the table straight out of ToValueTable, a temporary that dies at the end
+// of the line — a bare pointer taken from it was a freed table by the next one ("Pure virtual function called"
+// on macOS, a SEGFAULT beside it; Windows read the freed memory and passed).
+ibValuePtr<ibValueModelTable> TableOf(const ibValue& value)
 {
-	return value.ConvertToType<ibValueModelTable>();
+	return ibValuePtr<ibValueModelTable>(value);
 }
 
 // The rows as a script reads them: by column name, in order.
@@ -82,8 +85,8 @@ TEST(QueryUnload, Columns_FollowTheFastTable_InOrderAndByName)
 {
 	const ibValue result = Rows({ wxT("Code"), wxT("Name"), wxT("Price") }, {}).ToValueTable();
 
-	ibValueModelTable* table = TableOf(result);
-	ASSERT_NE(table, nullptr);
+	const ibValuePtr<ibValueModelTable> table = TableOf(result);
+	ASSERT_TRUE(table != nullptr);
 	ibValueModelTable::ibValueModelColumnCollection* columns = table->GetColumnCollection();
 	ASSERT_EQ(columns->GetColumnCount(), 3u);
 	EXPECT_EQ(columns->GetColumnInfo(0)->GetColumnName(), wxT("Code"));
@@ -98,8 +101,8 @@ TEST(QueryUnload, Caption_IsTheColumns_OrItsName)
 	rows.AddColumn(1, wxT("AmountBalance"), ibTypeDescription(), wxT("Amount Balance"));
 	rows.AddColumn(2, wxT("Code"), ibTypeDescription());
 
-	ibValueModelTable* table = TableOf(rows.ToValueTable());
-	ASSERT_NE(table, nullptr);
+	const ibValuePtr<ibValueModelTable> table = TableOf(rows.ToValueTable());
+	ASSERT_TRUE(table != nullptr);
 	ibValueModelTable::ibValueModelColumnCollection* columns = table->GetColumnCollection();
 	ASSERT_EQ(columns->GetColumnCount(), 2u);
 	EXPECT_EQ(columns->GetColumnInfo(0)->GetColumnCaption(), wxT("Amount Balance"));
@@ -115,8 +118,8 @@ TEST(QueryUnload, Rows_AreLoadedInOrder)
 		{ Str(wxT("A-3")), Str(wxT("Washer")) },
 	}).ToValueTable();
 
-	ibValueModelTable* table = TableOf(result);
-	ASSERT_NE(table, nullptr);
+	const ibValuePtr<ibValueModelTable> table = TableOf(result);
+	ASSERT_TRUE(table != nullptr);
 	EXPECT_EQ(table->Count(), 3u);
 
 	const auto read = ReadRows(table, { wxT("Code"), wxT("Name") });
@@ -130,8 +133,8 @@ TEST(QueryUnload, Rows_AreLoadedInOrder)
 // 4 - a query that found nothing still answers with its shape.
 TEST(QueryUnload, NoRows_StillHasTheColumns)
 {
-	ibValueModelTable* table = TableOf(Rows({ wxT("Code"), wxT("Name") }, {}).ToValueTable());
-	ASSERT_NE(table, nullptr);
+	const ibValuePtr<ibValueModelTable> table = TableOf(Rows({ wxT("Code"), wxT("Name") }, {}).ToValueTable());
+	ASSERT_TRUE(table != nullptr);
 	EXPECT_EQ(table->Count(), 0u);
 	EXPECT_EQ(table->GetColumnCollection()->GetColumnCount(), 2u);
 }
@@ -163,8 +166,8 @@ TEST(QueryUnload, TheTable_OutlivesTheFastTable)
 		kept = Rows({ wxT("N") }, cells).ToValueTable();
 	}   // the fast table is gone; only the value table remains
 
-	ibValueModelTable* table = TableOf(kept);
-	ASSERT_NE(table, nullptr);
+	const ibValuePtr<ibValueModelTable> table = TableOf(kept);
+	ASSERT_TRUE(table != nullptr);
 	EXPECT_EQ(table->Count(), 200u);
 	const auto read = ReadRows(table, { wxT("N") });
 	ASSERT_EQ(read.size(), 200u);

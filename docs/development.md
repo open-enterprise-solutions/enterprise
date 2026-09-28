@@ -236,6 +236,14 @@ output to a document) measures something nobody waits for.
 **Ask one question once.** When many readers ask the same thing with the same key, fold them
 into one question before the join, not after.
 
+**Hot paths carry `ibString`.** The engine's own string (`backend/fstring.h`) is a shared handle:
+copying it copies a reference, not the characters. A name that reaches the runtime is taken as
+`const ibString&` — `ibProcUnit::CallAsProc` / `CallAsFunc`, `ibRuntimeModuleDataObject::ExecAsProc` /
+`ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays where speed is not the question
+(the interface, serialisation, metadata edits). Both conversions are implicit, and each one makes a new
+text, so convert at the boundary, once. `ib_clsid_hash(const wxString&)` converts to UTF-8 and allocates
+on every call, so hash once per event, not once per handler.
+
 ---
 
 ## 7. Finding a defect

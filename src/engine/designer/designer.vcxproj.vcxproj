@@ -193,6 +193,7 @@
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp" />
     <ClCompile Include="docManager\templates\docViewInterface.cpp" />
     <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp" />
+    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp" />
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
     <ClCompile Include="docManager\templates\docViewModuleEditor.cpp" />
     <ClCompile Include="docManager\templates\docViewComposer.cpp" />
@@ -233,6 +234,7 @@
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
     <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp" />
+    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp" />
     <ClCompile Include="win\editor\roleEditor\roleEditor.cpp" />
     <ClCompile Include="win\editor\visualEditor\innerFrame.cpp" />
     <ClCompile Include="win\editor\visualEditor\titleFrame.cpp" />
@@ -252,6 +254,7 @@
     <ClInclude Include="docManager\templates\docViewFormEditor.h" />
     <ClInclude Include="docManager\templates\docViewInterface.h" />
     <ClInclude Include="docManager\templates\docViewCommonAttribute.h" />
+    <ClInclude Include="docManager\templates\docViewFunctionalOption.h" />
     <ClInclude Include="docManager\templates\docViewMetaFile.h" />
     <ClInclude Include="docManager\templates\docViewModuleEditor.h" />
     <ClInclude Include="docManager\templates\docViewComposer.h" />
@@ -282,6 +285,7 @@
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />
     <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h" />
+    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h" />
     <ClInclude Include="win\editor\roleEditor\roleEditor.h" />
     <ClInclude Include="win\editor\visualEditor\innerFrame.h" />
     <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h" />

@@ -36,6 +36,10 @@ ibTypeDescription& ibPropertyType::GetValueAsTypeDesc() const {
 	return get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc();
 }
 
+ibTypeDescription& ibPropertyType::GetValueAsTypeValueDesc() const {
+	return get_cell_variant<ibVariantDataAttribute>()->GetTypeValueDesc();
+}
+
 void ibPropertyType::SetValue(const ibTypeDescription& val) {
 	m_propValue = CreateVariantData(m_owner, val);
 }

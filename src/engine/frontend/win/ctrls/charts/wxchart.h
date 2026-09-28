@@ -59,7 +59,12 @@ private:
 
 private:
     bool m_needsFit;
-    wxSharedPtr<wxVector<const wxChartsElement*>> m_activeElements;
+    // WHERE THE MOUSE IS, not which elements it was over. The elements are the chart's to rebuild (new
+    // data remakes every slice), and pointers kept across that dangle: the next paint drew a tooltip out
+    // of a freed slice (designer crash 2026-09-28, wxChart::DrawTooltips). The point is asked again at
+    // every draw, so a tooltip always stands on elements that exist.
+    wxPoint m_activePoint;
+    bool m_hasActivePoint = false;
 };
 
 #endif

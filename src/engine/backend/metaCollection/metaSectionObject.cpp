@@ -18,6 +18,7 @@ ibValueMetaObjectSection::ibValueMetaObjectSection(const wxString& name, const w
 
 #include "backend/metaData.h"
 #include "metaCommandGroupObject.h"   // ibValueMetaObjectCommandGroup / g_platformCommandGroups
+#include "backend/functionalOption/functionalOptionGate.h"     //ibFunctionalOptionGate::IsAvailable — a part this base does not use is not offered
 
 // The declared group a checked item is filed under. Only a command names one — every other kind is filed by
 // its area alone — so the kind is asked first and the command second, the way the configuration tree asks a
@@ -38,6 +39,10 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(ibInterfaceCommandSec
 			continue;
 		// Filed under a group of its own, so in no platform area — the overload below takes it.
 		if (DeclaredGroupOf(object) != nullptr)
+			continue;
+		// Not used in this base: not offered. The object itself stays — a form of it still opens from a
+		// reference that points at it; only the section does not lead there.
+		if (!ibFunctionalOptionGate::IsAvailable(object))
 			continue;
 
 		const ibInterfaceCommandSection& object_type = object->GetCommandSection();
@@ -60,7 +65,7 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(const ibValueMetaObje
 		return false;
 
 	for (const auto object : m_metaData->GetAnyArrayObject()) {
-		if (object->IsSetInterface(m_metaId) && DeclaredGroupOf(object) == group)
+		if (object->IsSetInterface(m_metaId) && DeclaredGroupOf(object) == group && ibFunctionalOptionGate::IsAvailable(object))
 			array.emplace_back(object);
 	}
 

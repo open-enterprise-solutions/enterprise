@@ -1,6 +1,8 @@
 #include "choiceLink.h"
 
 #include "backend/propertyManager/property/propertyChoiceLink.h"
+#include "backend/metaData.h"      // ibMetaData::GetIDObjectFromMetaID — the class a type row's metaobject is registered under
+#include "backend/objCtorDefs.h"   // ibCtorObjectMetaType_Reference
 
 #include "frontend/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 
@@ -22,6 +24,15 @@ wxIcon FieldPicture(const wxIcon& own, const wxIcon& ordinary)
 	return wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU, wxSize(16, 16));
 }
 
+}
+
+// A type row names its metaobject by metaID; the link keeps the class of that object's REFERENCE — the id the
+// configuration registered it under, its metaclass included.
+static ibClassID ReferenceClassOf(const ibPropertyChoiceLink* property, ibMetaID id)
+{
+	const ibPropertyObject* owner = property != nullptr ? property->GetPropertyObject() : nullptr;
+	const ibMetaData* metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	return metaData != nullptr ? metaData->GetIDObjectFromMetaID(id, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) : 0;
 }
 
 ibDialogChoiceLink::ibDialogChoiceLink(wxWindow* parent, ibPropertyChoiceLink* property,
@@ -182,7 +193,7 @@ void ibDialogChoiceLink::BuildControls()
 		// The row answers with the metaID of the type's own metaobject, and the description keeps the
 		// CLASS id — the reference kind of that object. One is the thing, the other is the thing's type.
 		m_link.m_governedType = (picked != wxNOT_FOUND && (size_t)picked < m_types.size())
-			? reference_to_clsid(m_types[(size_t)picked].m_id) : 0;
+			? ReferenceClassOf(m_property, m_types[(size_t)picked].m_id) : 0;
 	});
 }
 
@@ -207,7 +218,7 @@ void ibDialogChoiceLink::ShowSelected()
 	if (m_types.size() > 1) {
 		int selected = wxNOT_FOUND;
 		for (size_t idx = 0; idx < m_types.size(); idx++) {
-			if (reference_to_clsid(m_types[idx].m_id) == m_link.m_governedType) {
+			if (ReferenceClassOf(m_property, m_types[idx].m_id) == m_link.m_governedType) {
 				selected = (int)idx;
 				break;
 			}

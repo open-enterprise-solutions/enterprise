@@ -69,7 +69,7 @@ void ibValueStaticBoxSizer::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	target->SetForegroundColour(m_propertyFG->GetValueAsColour());
 	target->SetBackgroundColour(m_propertyBG->GetValueAsColour());
 	target->Enable(m_propertyEnabled->GetValueAsBoolean());
-	target->Show(m_propertyVisible->GetValueAsBoolean());
+	target->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable());
 	target->SetToolTip(m_propertyTooltip->GetValueAsString());
 
 	if (m_propertyMinSize->GetValueAsSize() != wxDefaultSize)

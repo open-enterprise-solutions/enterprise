@@ -13,6 +13,7 @@
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer
 #include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionDriver — a composition is printed through
+#include "backend/query/queryConstructorModel.h"            // WalkFrom — the hops of a path, a reference by its type
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>    // std::find / std::distance — the grouping paths are looked up by value
@@ -127,6 +128,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder()
 {
 	if (m_storage == nullptr)
 		return {};
+	m_availablePaths.clear();   // a new order reads the options as they stand now
 
 	// ⭐⭐ THE USER'S SETTING IS READ HERE TOO, and that is what makes it ONE construction (Max,
 	// 2026-08-23: "saved settings apply to the RAM table as well"). A value table, a tabular section
@@ -217,6 +219,27 @@ std::vector<long> ibDataRamComposer::ComputeOrder()
 	return order;
 }
 
+// ⭐ WHAT THIS BASE DOES NOT USE IS NOT SHOWN — the question the DB side asks its source (see
+// ibDataComposer::IsAvailable), asked of the storage the same way: the first hop is the storage's column (a
+// storage names its columns singly), the rest are hops by TYPE through the query model's walk, one hidden hop
+// hiding the walk. A value table belongs to no configuration, so the door never walks for one. A name the
+// storage does not have is not this question.
+bool ibDataRamComposer::IsWalkAvailable(const std::vector<wxString>& hops) const
+{
+	const ibValueModel::ibValueModelColumnCollection* columns = m_storage != nullptr ? m_storage->Columns() : nullptr;
+	if (columns == nullptr || hops.empty())
+		return true;
+
+	const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* head = columns->GetColumnByName(hops.front());
+	if (head == nullptr)
+		return true;
+
+	ibQueryConstructorField start;
+	start.m_type      = head->GetColumnTypeValue();
+	start.m_available = head->IsColumnAvailable();
+	return ibQueryConstructorModel(m_metaData).WalkFrom(start, std::vector<wxString>(hops.begin() + 1, hops.end())).m_available;
+}
+
 // ---------------------------------------------------------------------------
 // THE DRIVER WALK — the same schema, filled from a degenerate table
 // ---------------------------------------------------------------------------
@@ -239,6 +262,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 {
 	if (m_storage == nullptr)
 		return false;
+	m_availablePaths.clear();   // a run reads the options as they stand now
 
 	// The fields to print — asked of the composition through the same accessor the DB side uses, so a
 	// reader's selected-fields table means the same thing on both.
@@ -246,12 +270,13 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 		? std::vector<wxString>() : SelectedFor(m_outputs.front());
 
 	if (fields.empty()) {
-		// Nothing chosen: every column the storage has, in its own order.
+		// Nothing chosen: every column the storage has, in its own order — but what this base does not use.
 		if (ibValueModel::ibValueModelColumnCollection* columns = m_storage->Columns())
 			for (unsigned int index = 0; index < columns->GetColumnCount(); ++index)
 				if (ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column =
 						columns->GetColumnInfo(index))
-					fields.push_back(column->GetColumnName());
+					if (IsAvailable(column->GetColumnName()))
+						fields.push_back(column->GetColumnName());
 	}
 	if (fields.empty())
 		return false;   // a table with no columns has nothing to print, and that is not a failure to report
@@ -422,10 +447,10 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 			line.m_showsWhatIsUnder = true;
 			// A HEADING CARRIES ITS OWN KEY and nothing of the rows beneath it — read off the first row
 			// of the part, whose value for this field IS the key by construction.
-			const std::vector<ibValue> key = keyValuesOf(parts[at].front());
-			driver.OnGroupBegin(line, key);
+			const std::vector<ibValue> heading = keyValuesOf(parts[at].front());
+			driver.OnGroupBegin(line, heading);
 			walk(parts[at], level + 1);
-			driver.OnGroupEnd(line, key);
+			driver.OnGroupEnd(line, heading);
 		}
 	};
 	walk(order, 0);

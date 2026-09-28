@@ -8,8 +8,8 @@ class ibCtorMetaValueTypeConstantObject :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = object_to_clsid(m_metaObject->GetMetaID());
+	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectStoredValue* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
+		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	wxString GetClassName() const {
@@ -21,24 +21,26 @@ public:
 	virtual ibValue CreateObject() const;
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Object; }
+	// A constant's write raises BeforeWrite / OnWrite in its own module — what an event handler of it offers.
+	virtual const ibValueMetaObjectModuleBase* GetEventModule() const override { return m_metaObject->GetObjectModule(); }
 
 protected:
 	ibClassID m_classType;
-	ibValueMetaObjectConstant* m_metaObject;
+	ibValueMetaObjectStoredValue* m_metaObject;
 };
 
 #define registerConstObject()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantObject(this))
 #define unregisterConstObject()\
-	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID()))
+	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 //const-manager class 
 class ibCtorMetaValueTypeConstantManager :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = manager_to_clsid(m_metaObject->GetMetaID());
+	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectStoredValue* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
+		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
 	virtual wxString GetClassName() const {
@@ -52,12 +54,12 @@ public:
 
 protected:
 	ibClassID m_classType;
-	ibValueMetaObjectConstant* m_metaObject;
+	ibValueMetaObjectStoredValue* m_metaObject;
 };
 
 #define registerConstManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantManager(this))
 #define unregisterConstManager()\
-	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID()))
+	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID(), clsid_metaclass(GetClassType())))
 
 #endif 

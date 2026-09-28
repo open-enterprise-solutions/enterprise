@@ -2,7 +2,9 @@
 #define _METAFORMOBJECT_H__
 
 #include "metaModuleObject.h"
+
 #include "backend/uniqueKey.h"
+#include "backend/backend_form.h"   // ibFormPtr — what a form is handed out by
 
 #include <functional>
 
@@ -33,7 +35,7 @@ public:
 protected:
 
 	//get default form (the default Execute opens it; a command overrides Execute and returns nullptr here)
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const = 0;
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const = 0;
 };
 
 // -----------------------------------------------------------------------
@@ -69,14 +71,14 @@ public:
 	//
 	// The request is FIRST, as it is on the generic builder that calls this — one function name, one
 	// place for the same argument.
-	static ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
+	static ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
 		ibBackendControlFrame* ownerControl = nullptr,
 		ibSourceDataObject* srcObject = nullptr);
 
 	// …and the same without naming the KIND of form, which the creator already knows. Not an overload
 	// "without the request" — every one of these takes it; this one only spares the caller a fact it
 	// would have to read off the creator to repeat back.
-	static ibBackendValueForm* CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
+	static ibFormPtr<ibBackendValueForm> CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
 		ibBackendControlFrame* ownerControl = nullptr,
 		ibSourceDataObject* srcObject = nullptr);
 
@@ -91,7 +93,7 @@ public:
 	// `formGuid` is the form's IDENTITY: empty lets it fall back to the source (the ordinary
 	// open), a supplied one gives this instance an identity of its own — what an element placed
 	// on the start page needs, since it may sit there beside a twin.
-	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
 		const ibUniqueKey& formGuid = wxNullGuid) const = 0;
 #pragma endregion
 
@@ -142,20 +144,20 @@ public:
 	// pass. The two kinds differ only in the entry: an OBJECT form goes through its owning GenericData (which
 	// binds the source object), a COMMON form builds standalone — both land on CreateAndBuildForm underneath.
 	// The form ptr is kept for the paste re-home: Construct reads its LIVE paste mark at build time.
-	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibBackendValueForm*()> build) noexcept
+	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibFormPtr<ibBackendValueForm>()> build) noexcept
 		: m_form(form), m_build(std::move(build)) {}
 
-	// Runs `build()`, wrapped into an ibValue* (out-of-line — needs formWrapper complete). If the form's metaobject
-	// is marked as a paste at build time, the built controls re-home (PasteNode) and the stored blob is normalized to
-	// raw. The paste completion (ibValueMetaObject::PasteObject) forces this build while the mark is still live, so
-	// there is no captured flag — the live mark is the signal.
-	ibValue* Construct() const;
+	// Runs `build()` and answers with the form as a value — what the compile cache keeps (out-of-line). If the
+	// form's metaobject is marked as a paste at build time, the built controls re-home (PasteNode) and the stored
+	// blob is normalized to raw. The paste completion (ibValueMetaObject::PasteObject) forces this build while the
+	// mark is still live, so there is no captured flag — the live mark is the signal.
+	ibValue Construct() const;
 
 	ibValueMetaObjectFormBase* Form() const { return m_form; }
 
 private:
 	ibValueMetaObjectFormBase*           m_form;
-	std::function<ibBackendValueForm*()> m_build;
+	std::function<ibFormPtr<ibBackendValueForm>()> m_build;
 };
 
 // -----------------------------------------------------------------------
@@ -217,7 +219,7 @@ public:
 	// An object form belongs to a business object, and THAT object knows which source my kind
 	// implies — a list form gets the list, an object form a NEW object. Body out-of-line: the
 	// owner's type must be complete.
-	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
 		const ibUniqueKey& formGuid = wxNullGuid) const override;
 #pragma endregion
 
@@ -299,7 +301,7 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 
 #pragma region _form_builder_h_
 	//support form
-	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
 		const ibUniqueKey& formGuid = wxNullGuid) const override;
 #pragma endregion
 
@@ -309,7 +311,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Default)
 			return GetObjectForm();

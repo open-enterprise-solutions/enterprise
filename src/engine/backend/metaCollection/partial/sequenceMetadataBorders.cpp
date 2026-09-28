@@ -17,6 +17,7 @@ wxString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetSynonym()    
 wxString ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetPhysicalName() const { return m_seq->GetPointInTime()->GetPhysicalName(); }
 ibMetaID ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetColumnId()     const { return m_seq->GetPointInTime()->GetColumnId(); }
 ibTypeDescription& ibValueMetaObjectSequence::ibBackendColumnPointInTime::GetTypeDesc() const { return m_seq->GetPointInTime()->GetTypeDesc(); }
+bool     ibValueMetaObjectSequence::ibBackendColumnPointInTime::IsAvailable()     const { return m_seq->GetPointInTime()->IsAvailable(); }
 
 // THE MOMENT LIES IN TWO OTHER COLUMNS — the period first, then the recorder. Each describes itself,
 // so this is their layouts one after the other: sorting by the moment IS sorting by the period and

@@ -73,7 +73,7 @@ struct SequenceBorderFix : ::testing::Test {
 		ASSERT_NE(dimension, nullptr);
 		ASSERT_EQ(seq->GetDimensionArrayObject().size(), 1u);
 		seq->GetDimensionArrayObject().front()->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_STRING);
-		seq->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID()));
+		seq->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
 		ASSERT_TRUE(seq->HasBorders()) << "the borders' holder is numbered with the sequence";
 
 		// ⭐ RUN IT. A reference read back from a row is created through the configuration's TYPE registry,

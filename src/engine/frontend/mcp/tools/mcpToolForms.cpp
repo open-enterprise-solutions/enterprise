@@ -33,6 +33,7 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/objCtor.h"   // ibCtorMetaValueType — what a reference type points at, by its id
 #include "backend/backend_command.h"                            // WalkCommand — the receiver judges a binding
 #include "backend/commandDescription.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
@@ -190,7 +191,7 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 	// layout is generated FROM the source: no source, no fields. The mistake was
 	// not the missing argument — it was reaching past the owner for a thing only
 	// the owner knows how to make.
-	ibBackendValueForm* built = nullptr;
+	ibFormPtr<ibBackendValueForm> built;
 
 	if (const ibValueMetaObjectGenericData* owner =
 			object->GetParent() != nullptr
@@ -204,15 +205,15 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 			ibFormRequest(), creator, creator->GetTypeForm(), nullptr, nullptr);
 	}
 
-	ibValueForm* form = dynamic_cast<ibValueForm*>(built);
-	if (form == nullptr) {
+	const ibValuePtr<ibValueForm> form(built);
+	if (!form) {
 		refusal = wxString::Format(
 			ibMcpText("'%s' could not be opened. Its module may have refused - messages_read has "
 			  "what the platform said."), object->GetName());
 		return nullptr;
 	}
 
-	form->IncrRef();
+	form->IncrRef();   // the caller's reference — the holders above give theirs back on the way out
 	return form;
 }
 
@@ -234,8 +235,8 @@ ibValueForm* OpenObjectForm(const ibDataNode& params, wxString& refusal, bool& g
 	if (record == nullptr)
 		return nullptr;
 
-	ibValueForm* form = dynamic_cast<ibValueForm*>(record->GetObjectForm());
-	if (form == nullptr) {
+	const ibValuePtr<ibValueForm> form(record->GetObjectForm());
+	if (!form) {
 		refusal = wxString::Format(
 			ibMcpText("The object form of '%s' could not be opened. Its module may have refused - messages_read "
 			  "has what the platform said."), object->GetName());
@@ -313,6 +314,14 @@ ibValueFrame* FindControl(ibValueFrame* from, ibFormID wanted)
 	return nullptr;
 }
 
+// ⭐ WHAT A REFERENCE TYPE POINTS AT — the type's own ctor holds its metaobject: one probe by the id, where the
+// whole tree was walked for the metaID the id carries. Null for a barrier (`AnyRef`, `CatalogRef`), which points
+// at no one object, and for a type the configuration does not register.
+const ibValueMetaObject* PointedAt(const ibMetaData* metaData, const ibClassID& clsid)
+{
+	const ibCtorMetaValueType* type = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	return type != nullptr ? type->GetMetaObject() : nullptr;
+}
 
 } // namespace
 
@@ -703,7 +712,10 @@ public:
 		return ibMcpText("Set one property of one control - its caption, its width, what it is BOUND "
 			"to - or one EVENT, whose value is the name of a procedure in the form's module. "
 			"form_control lists both and what each holds now; a property whose values are a "
-			"closed set is set by its word.\n"
+			"closed set is set by its word, and one that holds several (`select: multiple`) by an array "
+			"of them - the whole set, an empty array clears it. `FunctionalOptions` is such a set: the "
+			"functional options a control is available under; while all of them are off it is not available - "
+			"neither shown nor offered, and neither is what it holds.\n"
 			"A PICTURE goes in `value` in its own shape, the one form_control reads it in: {Type: 1, ClassId} "
 			"for an engine picture (picture_list -> engine `id`), {Type: 2, Guid} for one the configuration "
 			"declares (picture_list -> configuration `guid`), {Type: 3, Image: {Name, Buffer, Width, Height}} "
@@ -1167,17 +1179,13 @@ public:
 				// not — the target is another object entirely, and materialising it
 				// eagerly is what makes the tree infinite.
 				//
-				// So the hop is resolved the way the platform states identity: a
-				// reference's class id is CONSTRUCTIVE, its body being the metaID of
-				// the object it points at. Read the id, find the object, answer with
-				// ITS fields. No lookup table, and true for a metatype added tomorrow.
+				// So the hop is resolved by the TYPE: a reference's class id names the
+				// type whose own ctor holds the object it points at (PointedAt) — one
+				// probe, and true for a metaclass added tomorrow. Answer with ITS fields.
 				if (next != nullptr && next->GetHelperCount() == 0
 					&& IsReference(next->GetTypeDesc().GetFirstClsid())) {
 
-					const ibMetaID target =
-						(ibMetaID)(next->GetTypeDesc().GetFirstClsid() & kIbClsidBodyMask);
-
-					if (ibValueMetaObject* pointed = ibFindMetaObjectById(activeMetaData, target)) {
+					if (const ibValueMetaObject* pointed = PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid())) {
 
 						walked = walked.IsEmpty() ? segment : walked + wxT(".") + segment;
 
@@ -1236,7 +1244,7 @@ private:
 	// metaobject, because that is where the answer lives once the hop has left the
 	// form's own source behind — and asked one level deep, for the same reason the
 	// rest of this is lazy.
-	static ibDataValue Referenced(ibValueMetaObject* object)
+	static ibDataValue Referenced(const ibValueMetaObject* object)
 	{
 		std::vector<ibDataValue> out;
 
@@ -1562,7 +1570,7 @@ public:
 		//
 		// One path, two halves, and the hop ids are the same kind of thing on both
 		// sides — which is why a binding can express `Warehouse.Code` at all.
-		ibValueMetaObject* through = nullptr;
+		const ibValueMetaObject* through = nullptr;
 
 		wxStringTokenizer segments(ArgPath().Text(params), wxT("."));
 		while (segments.HasMoreTokens()) {
@@ -1635,12 +1643,10 @@ public:
 				explorer = next;            // a section — its columns are nodes
 			}
 			else if (IsReference(next->GetTypeDesc().GetFirstClsid())) {
-				// The border. The body of a reference's class id IS the metaID of
-				// what it points at — constructive, so no lookup table and true for
-				// a metatype added tomorrow.
+				// The border. What a reference points at is its type's own metaobject
+				// (PointedAt) — one probe by the id, true for a metaclass added tomorrow.
 				explorer = nullptr;
-				through = ibFindMetaObjectById(activeMetaData,
-					(ibMetaID)(next->GetTypeDesc().GetFirstClsid() & kIbClsidBodyMask));
+				through = PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid());
 			}
 			else {
 				explorer = nullptr;         // a leaf; a further segment will refuse

@@ -8,6 +8,7 @@
 #include "backend/propertyManager/property/propertyCommandSource.h" // ibPropertyCommandSource — the button's command SOURCE property (real picker)
 #include "backend/backend_command.h"                                // ibBackendCommandReceiver — a bar item is a receiver (via the door it inherits)
 #include "backend/propertyManager/property/propertyPicture.h"// ibPropertyPicture
+#include "backend/propertyManager/property/propertyFunctionalOptions.h" // ibPropertyFunctionalOptions — the item's functional options
 #include "frontend/visualView/controlEnum.h"   // ibRepresentation / ibValueEnumRepresentation
 #include "frontend/frontendTypes.h"            // ibFrontendWindow
 #include "frontend/visualView/layers/commandReceiver.h"   // ibFrontendCommandReceiver — the command door the bar IS-A
@@ -88,6 +89,9 @@ public:
 	wxString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
+	// Available by the functional options it names — false while all of them are off in this base. Beside
+	// Visible, never written into it.
+	bool IsAvailable() const { return m_propertyFunctionalOptions->IsAvailable(); }
 	// "Modifies data" is NOT the item's to own — it is a COMMAND attribute (a view-only form greys a data-changing
 	// command). The item obeys: BuildCommands reads the flag off the bound command through the door, never here.
 
@@ -161,6 +165,10 @@ private:
 	// properties in ONE per-page name map (a collision asserts in PrepareToAddItem). Label stays _("Command").
 	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, wxT("BoundCommand"), _("Command"),
 		_("The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."));
+	// USER VISIBILITY — a group of its own, as on an element of a form (control.h).
+	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(wxT("UserVisibility"), _("User visibility"));
+	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, wxT("FunctionalOptions"), _("Functional options"),
+		_("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
 // A command bar is a CONTAINER layer object (ibValueLayerObject) — NOT a control; it is PART OF a

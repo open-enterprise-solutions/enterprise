@@ -86,6 +86,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		wxString GetSynonym() const override      { return m_owner != nullptr ? m_owner->GetSynonym() : wxString(); }
 		wxString GetComment() const override      { return m_owner != nullptr ? m_owner->GetComment() : wxString(); }
 		bool     IsAllowed() const override       { return m_owner != nullptr && m_owner->IsAllowed(); }
+		bool     IsAvailable() const override     { return m_owner == nullptr || m_owner->IsAvailable(); }
 		wxIcon   GetColumnIcon() const override   { return m_owner != nullptr ? m_owner->GetColumnIcon() : wxIcon(); }
 		wxString GetPhysicalName() const override { return m_owner != nullptr ? m_owner->GetPhysicalName() : wxString(); }
 		ibMetaID GetColumnId() const override     { return m_owner != nullptr ? m_owner->GetColumnId() : 0; }
@@ -131,9 +132,6 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	//contain type
 	bool ContainType(const ibValueTypes& valType) const;
 	bool ContainType(const ibClassID& clsid) const;
-
-	//contain meta type
-	bool ContainMetaType(ibCtorObjectMetaType type) const;
 
 	//equal type 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const;
@@ -197,6 +195,9 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source
 	// explorer skips deleted / disabled fields without touching the metaobject.
 	virtual bool IsAllowed() const override           { return ibValueMetaObject::IsAllowed(); }
+	// IsAvailable (column base) routes to the functional options of this base — the field, or the object it
+	// stands in, may belong to a part of the system the base does not use (metaAttributeObject.cpp).
+	virtual bool IsAvailable() const override;
 	// ⚠ NOT `override` ANY MORE, and deliberately still HERE. These two are the query face's
 	// questions, but the schema tier asks them of the ATTRIBUTE directly (an index name, a column
 	// being renamed) and it is right to: both are derived from the metaID, which is the attribute's
@@ -251,11 +252,15 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 		m_propertyType->SetValue(ibValue::GetIDByVT(valType));
 	}
 
+	// A field a form binds to may belong to a functional option (the predefined ones are the object's
+	// identity, and do not).
+	virtual bool IsFunctionalOptionAllowed() const override { return true; }
+
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//check if attribute is fill 
+	//check if attribute is fill
 	virtual bool FillCheck() const { return m_propertyFillCheck->GetValueAsBoolean() && GetClsidCount() > 0; }
 
 	virtual ibItemMode GetItemMode() const;
@@ -264,6 +269,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
 
 	/**
 	* Property events

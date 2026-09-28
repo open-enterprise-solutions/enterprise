@@ -746,6 +746,7 @@
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="interfaceHelper.h" />
     <ClInclude Include="compositionHelper.h" />
+    <ClInclude Include="functionalOptionHelper.h" />
     <ClInclude Include="metaCollection\metaSectionObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -758,7 +759,22 @@
     <ClInclude Include="metaCollection\metaScheduledJobObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaEventHandlerObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaSessionParameterObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaFunctionalOptionObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="functionalOption\functionalOptionGate.h">
+      <Filter>functionalOption</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaStoredValueObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaQueryDescriptor.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaCommonAttributeObject.h">
@@ -866,6 +882,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyFunctionalOptions.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyCalcSchedule.h">
@@ -1077,6 +1096,9 @@
       <Filter>mcp\tools</Filter>
     </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolComposition.cpp">
+      <Filter>mcp\tools</Filter>
+    </ClCompile>
+    <ClCompile Include="mcp\tools\mcpToolFunctionalOption.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolSection.cpp">
@@ -1748,28 +1770,13 @@
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantAction.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\constantManager.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantMetadataMenu.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\constantMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantMetadataSchema.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\constantObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp">
@@ -2104,6 +2111,7 @@
     <ClCompile Include="value_cast.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
     <ClCompile Include="compositionHelper.cpp" />
+    <ClCompile Include="functionalOptionHelper.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -2134,6 +2142,36 @@
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="functionalOption\functionalOptionGate.cpp">
+      <Filter>functionalOption</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectAction.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectQuery.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectRecord.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaStoredValueObjectSchema.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -2150,6 +2188,15 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaEventHandlerObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp">
@@ -2286,6 +2333,9 @@
     <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyFunctionalOptions.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -2406,6 +2456,9 @@
     </Filter>
     <Filter Include="composition">
       <UniqueIdentifier>{8f4d2a17-6c3e-4b9a-a52d-7e90c41f55b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="functionalOption">
+      <UniqueIdentifier>{dde010a6-35dc-4fb6-8c21-ccae9a9c760d}</UniqueIdentifier>
     </Filter>
     <Filter Include="composition\drivers">
       <UniqueIdentifier>{3b6a91d4-52c7-4e18-9f0a-2d84e6b71c39}</UniqueIdentifier>

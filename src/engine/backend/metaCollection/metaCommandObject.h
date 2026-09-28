@@ -136,7 +136,7 @@ protected:
 
 
 	// required by ibBackendCommandItem, but a command overrides Execute and never opens a form.
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType /*cmdType*/ = ibInterfaceCommandType::ibInterfaceCommandType_Default) const override { return nullptr; }
+	virtual ibFormPtr<ibBackendValueForm> GetFormByCommandType(ibInterfaceCommandType /*cmdType*/ = ibInterfaceCommandType::ibInterfaceCommandType_Default) const override { return nullptr; }
 
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;

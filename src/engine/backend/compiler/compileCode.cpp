@@ -1905,6 +1905,12 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		byteFn.m_strRealName = createdFunction->m_strRealName;
 	}
 
+	// The entry's own place in m_listFunc, so a call reaches this function by index instead of walking the list
+	// for the entry line (OPER_FUNC, procUnit.cpp) — the index OPER_LFUNC carries in m_param3, where a named
+	// function's entry holds its frame shape instead.
+	if (!isLambda)
+		m_cByteCode.m_listCode[lAddress].m_param4.m_numIndex = (long)m_cByteCode.m_listFunc.size();
+
 	m_cByteCode.m_listFunc.push_back(std::move(byteFn));
 
 	return true;

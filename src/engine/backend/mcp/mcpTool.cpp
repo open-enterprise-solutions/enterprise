@@ -13,6 +13,7 @@
 #include "backend/pictureDescription.h"                         // ibPictureDescriptionMemory — that shape
 #include "backend/propertyManager/property/propertyChoiceLink.h"         // a choice reads in its own shape too
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"  // …named as the inspector names it
+#include "backend/propertyManager/property/variant/variantMetaDesc.h"    // a set of objects, placed whole
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
@@ -1794,8 +1795,11 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// …and the WORD only when a word came. Read as text unconditionally, a number was refused
 		// here as `ibDataValue: wrong value kind (expected 4, got 2)` before the id was ever looked
 		// at — so the steady way above was promised and could not be taken (measured 2026-09-22,
-		// setting a command's Group by the id metadata_get had just listed).
-		const wxString word = byNumber ? wxString() : ibMcpValueArgument().Text(params);
+		// setting a command's Group by the id metadata_get had just listed). An ARRAY was refused the
+		// same way (`expected 4, got 7`) before the set below was reached: promised in form_set's
+		// description, and never once taken (measured 2026-09-28, putting a column under an option).
+		const bool bySet = asked != nullptr && asked->Kind() == ibDataKind::Array;
+		const wxString word = byNumber || bySet ? wxString() : ibMcpValueArgument().Text(params);
 
 		// TWO VOCABULARIES FOR ONE VALUE — the inspector reads "Within second",
 		// the language writes `WithinSecond`, and type_members answers with the
@@ -1807,6 +1811,70 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			r.Replace(wxT(" "), wxEmptyString);
 			return l.IsSameAs(r, false);
 		};
+
+		// ⭐ A SET IS SENT AS A SET. A property that holds several (`select: multiple`) takes them as an
+		// array — every member at once, each by id or by name, and an empty array clears it. One word
+		// keeps meaning "this one alone", as it always did; joining one to what is there is metadata_bind.
+		//
+		// ⚠ CARRIED IN A CHOICE'S OWN VARIANT — built while listing, owned by nobody — and never in the
+		// one the property holds: editing that edits the old value and the new one at once
+		// (mcpToolBind.cpp says how that lost the second end of a binding).
+		if (mode == ibPropertyChoiceMode::Mult && bySet) {
+
+			if (choices.GetCount() == 0) {
+				refusal = wxString::Format(ibMcpText("'%s' is chosen from the configuration, and there is "
+					"nothing of that kind in it yet."), name);
+				return false;
+			}
+
+			ibMetaDescription set;
+
+			for (const ibDataValue& member : asked->AsArray()) {
+
+				const bool memberByNumber = member.Kind() == ibDataKind::Number;
+				if (!memberByNumber && member.Kind() != ibDataKind::String) {
+					refusal = wxString::Format(ibMcpText("'%s' takes its members by name or by id."), name);
+					return false;
+				}
+
+				const long memberId = memberByNumber ? (long)member.AsNumber().ToInt() : 0;
+				const wxString memberWord = memberByNumber ? wxString() : member.AsString();
+
+				unsigned int index = 0;
+				for (; index < choices.GetCount(); ++index) {
+					if (memberByNumber ? choices.GetId(index) == memberId
+						: same(choices.GetName(index), memberWord) || same(choices.GetLabel(index), memberWord))
+						break;
+				}
+
+				if (index == choices.GetCount()) {
+					refusal = wxString::Format(ibMcpText("'%s' has no choice '%s'."), name,
+						memberByNumber ? wxString::Format(wxT("%li"), memberId) : memberWord);
+					return false;
+				}
+
+				const ibMetaID chosen = (ibMetaID)choices.GetId(index);
+				if (!set.ContainMetaType(chosen))
+					set.AppendMetaType(chosen);
+			}
+
+			wxVariant placing = choices.GetValue(0);
+			ibVariantDataMetaDesc* carried = property->find_cell_variant<ibVariantDataMetaDesc>(placing);
+			if (carried == nullptr) {
+				refusal = wxString::Format(ibMcpText("'%s' holds several values, but not as a set of "
+					"configuration objects; send one at a time."), name);
+				return false;
+			}
+
+			carried->GetMetaDesc() = set;
+
+			if (!ibMcpApplyByHand(property, placing, refusal))
+				return false;
+
+			result.SetValue(wxT("property"), name);
+			result.SetValue(wxT("value"), property->GetValue().MakeString());
+			return true;
+		}
 
 		for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 

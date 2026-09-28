@@ -67,6 +67,16 @@ public:
 	// its columns are named by whoever made it, and that name IS the caption.
 	wxString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
 
+	// ⭐ WHAT IT STANDS FOR, when that is something the configuration declared — a register's dimension,
+	// resource or analytics slot published into a view. Handed over by the publisher at the moment it hands
+	// over the picture; the attribute lives as long as the configuration, and so does the surface this
+	// column belongs to.
+	ibTempColumn& StandsFor(const ibBackendSourceColumn* declared) { m_standsFor = declared; return *this; }
+
+	// ⭐ AVAILABLE AS WHAT IT STANDS FOR (functional options) — asked live, so a view column of a dimension this
+	// base does not use goes with the dimension. An ordinary temp table's column stands for nothing: available.
+	bool IsAvailable() const override { return m_standsFor == nullptr || m_standsFor->IsAvailable(); }
+
 private:
 	wxString                  m_name;
 	wxString                  m_physical;   // == m_name unless the storage spells it differently
@@ -75,6 +85,7 @@ private:
 	wxString                  m_synonym;    // empty = the name
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
 	wxIcon                    m_icon;       // none = the base's default
+	const ibBackendSourceColumn* m_standsFor = nullptr;   // see StandsFor
 };
 
 class ibTempTableQueryable : public ibBackendQueryable

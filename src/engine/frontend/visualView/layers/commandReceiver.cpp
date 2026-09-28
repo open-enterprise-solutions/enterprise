@@ -9,7 +9,8 @@
 #include "backend/backend_picture.h"                // ibBackendPicture::CreatePicture (a standard action's picture)
 #include "backend/srcDataObject.h"                  // ibSourceDataObject — the form's main object (command parameter)
 #include "backend/metaCollection/genericData.h"     // ibValueMetaObjectGenericData::GetMetaID (parameter type match)
-#include "backend/typeDescription.h"                // ibTypeDescription::ContainType / GetClsidList (command parameter type)
+#include "backend/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
+#include "backend/system/value/valueType.h"         // ibValueTypeDescription::AllowValue — a barrier parameter takes its members
 #include "backend/compiler/value.h"                 // ibValue (the resolved command parameter)
 #include "backend/backend_command.h"              // ibBackendCommandSender::ResolveCommandPath — the SERVER walk (starts on the form)
 #include "frontend/visualView/layers/commandBar.h" // GatherFormCommands / ibCommandSourceEntry — reliable fallback for WalkCommand
@@ -17,12 +18,13 @@
 #include <wx/window.h>                              // wxWindow::FindFocus — the active control for a table-row parameter
 #endif
 
-// A control's current value, taken if its type is in `paramType` — a tablebox yields its selected ROW, another
-// control its own value. True + fills `out` on a match.
+// A control's current value, taken if `paramType` admits it (AllowValue): its own type, or a barrier over it such
+// as `DocumentRef`. A tablebox yields its selected ROW, another control its own value. True + fills `out` on a match.
 static bool MatchControlValue(ibValueFrame* node, const ibTypeDescription& paramType, ibValue& out)
 {
 	ibValue value;
-	if (node != nullptr && node->GetControlValue(value) && !value.IsEmpty() && paramType.ContainType(value.GetClassType())) {
+	if (node != nullptr && node->GetControlValue(value) && !value.IsEmpty()
+		&& ibValueTypeDescription::AllowValue(paramType, value.GetClassType())) {
 		out = value;
 		return true;
 	}
@@ -86,7 +88,7 @@ static bool ResolveCommandParameter(ibValueForm* form, const ibValueMetaObjectCo
 	// is its current row, and that is (b).
 	if (ibSourceDataObject* src = form->GetSourceObject(); src != nullptr && !src->IsTableSource())
 		if (const ibValueMetaObjectGenericData* mo = src->GetSourceMetaObject())
-			if (paramType.ContainType(reference_to_clsid(mo->GetMetaID())))
+			if (ibValueTypeDescription::AllowValue(paramType, reference_to_clsid(mo->GetMetaID(), clsid_metaclass(mo->GetClassType())), form->GetMetaData()))
 				if (ibValue* asValue = dynamic_cast<ibValue*>(src)) {
 					out = ibValue(asValue);
 					return true;

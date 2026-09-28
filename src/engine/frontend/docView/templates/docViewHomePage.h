@@ -141,7 +141,7 @@ private:
 		ibHomePageItem     m_item;
 		wxWindow*          m_window = nullptr;
 		const ibDocument*  m_formDoc = nullptr;
-		ibValueForm*       m_valueForm = nullptr;
+		ibValuePtr<ibValueForm> m_valueForm;
 	};
 
 	// Build a column: the items stacked one under another with a draggable sash between each
@@ -165,8 +165,8 @@ private:
 
 	// Build the item's runtime form value, bound to the source its kind implies. Null for a
 	// form that is gone or refused to open — the pane then says so instead of leaving a hole
-	// in the splitter.
-	ibValueForm* CreateFormValue(const ibValueMetaObjectFormBase* metaForm) const;
+	// in the splitter. Handed out HELD: the pane's document takes it only when it is shown.
+	ibValuePtr<ibValueForm> CreateFormValue(const ibValueMetaObjectFormBase* metaForm) const;
 
 	wxWindow* m_workspace = nullptr;
 	// The pane a form is being opened into RIGHT NOW: its document does not exist yet when it

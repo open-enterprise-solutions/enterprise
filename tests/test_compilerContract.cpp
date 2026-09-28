@@ -70,6 +70,16 @@
 // EXACTLY TWO, and that is the reading that justifies pasting: an operand that
 // changed for one construct moves the digests of the sources using it and no
 // others. Sixteen at once would have meant something global again. (AOT v29.)
+//
+// AND FOUR MOVED 2026-09-28 — `FunctionsAndForwardReference`, `LambdaWithCapture`,
+// `LambdaWithoutCapture`, `MethodStyleLinqPipeline`. `OPER_FUNC` now carries its
+// function's index into `m_listFunc` in `m_param4.m_numIndex`, so a call reaches the
+// function by index instead of walking the list for the entry line. The reading: the
+// four are exactly the sources with a named function at an index other than 0 — the
+// rest render `p4(0,0)` as before — and each new digest, taken again with every
+// OPER_FUNC's p4 set back to zero, is the old one: nothing else moved. No AOT version
+// for it: an older blob has 0 there, which the runtime checks against the entry line
+// and walks past when it is not this function.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -439,7 +449,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		17872137707533945073ULL);
+		1028328384514311286ULL);   // 2026-09-28: OPER_FUNC carries its function's index (p4)
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {
@@ -473,7 +483,7 @@ TEST(CompilerContract, LambdaWithCapture) {
 		wxT("           Return x + n;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		15162364356553405039ULL);
+		6118677560355011688ULL);   // 2026-09-28: OPER_FUNC carries its function's index (p4)
 }
 
 TEST(CompilerContract, LambdaWithoutCapture) {
@@ -483,7 +493,7 @@ TEST(CompilerContract, LambdaWithoutCapture) {
 		wxT("           Return x * 2;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		11654458325135447023ULL);
+		1585126425517606684ULL);   // 2026-09-28: OPER_FUNC carries its function's index (p4)
 }
 
 TEST(CompilerContract, MethodStyleLinqPipeline) {
@@ -492,5 +502,5 @@ TEST(CompilerContract, MethodStyleLinqPipeline) {
 		wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction)")
 		wxT(".Select(Function(x) Return x * 2 EndFunction).Count();\n")
 		wxT("EndFunction\n"),
-		16600608637943105378ULL);
+		16717294680290488284ULL);   // 2026-09-28: OPER_FUNC carries its function's index (p4)
 }

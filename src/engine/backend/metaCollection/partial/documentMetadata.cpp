@@ -27,11 +27,14 @@ ibValueMetaObjectDocument::ibValueMetaObjectDocument() : ibValueMetaObjectRecord
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnDelete"),     ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("StandartProcessing") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("Source") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Filling"),      ibContentHelper::eProcedureHelper, { wxT("FillingData"), wxT("StandardProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnCopy"),       ibContentHelper::eProcedureHelper, { wxT("CopiedObject") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("Posting"),      ibContentHelper::eProcedureHelper, { wxT("Cancel"), wxT("PostingMode") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("UndoPosting"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
-	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewNumber"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandartProcessing") });
+	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("SetNewNumber"), ibContentHelper::eProcedureHelper, { wxT("Prefix"), wxT("StandardProcessing") });
+	
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("ChoiceDataGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("ChoiceData"), wxT("Parameters"), wxT("StandardProcessing") });
 
 }
 
@@ -98,7 +101,7 @@ ibSourcePtr<ibSourceDataObject> ibValueMetaObjectDocument::CreateSourceObject(co
 }
 
 #pragma region _form_builder_h_
-ibBackendValueForm* ibValueMetaObjectDocument::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -107,7 +110,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetObjectForm(const ibFormRequest
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetListForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,
@@ -116,7 +119,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const ibFormRequest& 
 	);
 }
 
-ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetSelectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		request,

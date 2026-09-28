@@ -227,7 +227,8 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	// unbound-source-control visibility gate. It stays selectable via the object tree while hidden, so its
 	// Source picker is reachable. (GetModelColumn can't gate this — it falls back to the control id.)
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
-	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean() || sourceMissing);
+	// …nor is a column the functional options of this base make unavailable (its field, or the options it names).
+	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean() || sourceMissing || !IsAvailable());
 	dataViewColumn->SetSortable(sortable);
 	dataViewColumn->SetResizeable(m_propertyResizable->GetValueAsBoolean());
 	// 🛑 …AND ITS NEIGHBOUR WAS NEVER APPLIED. `Reorderable` serialised both ways and was edited in

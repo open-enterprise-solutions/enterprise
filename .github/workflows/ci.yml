@@ -16,6 +16,37 @@
 # So these jobs build from scratch. That is slow (wxWidgets dominates), and the
 # right fix is a COMPILER cache — ccache / sccache key on preprocessed input, not
 # on timestamps — but a correct slow signal beats a fast lying one.
+#
+# ⭐ THE COMPILER CACHE IS WIRED (2026-09-28) on the Linux and macOS jobs. ccache
+# answers an object by the hash of the preprocessed source and the command line,
+# so a file that changed is a miss whatever its time says — the property the
+# build-directory cache lacked. Each job sets CMAKE_{C,CXX}_COMPILER_LAUNCHER
+# (which reaches the wxWidgets submodule too), restores its own cache before
+# configuring and saves it at the end even when a test failed — a green build
+# under a red test is still a warm cache for the next push. Every job keys its
+# own: the objects differ with the preset and the flags. `ccache -s -v` after the
+# build prints the hit rate and why the rest missed. backend_core.cpp takes
+# __DATE__/__TIME__ and is a miss every time, which is what a build stamp should be.
+#
+# ⚠ NO CCACHE_BASEDIR. It rewrites the absolute paths of a compile into paths
+# relative to the build directory — and `__FILE__` with them, and two suites find
+# their data beside their own source (`tests/scripts`, `metaCollection/partial`):
+# from the test's working directory the relative path led nowhere, and they failed
+# on the first cached run (2026-09-28). A runner's workspace path is the same on
+# every run, so the cache needs no rewriting to hit.
+#
+# ⚠ wxWidgets WITHOUT PRECOMPILED HEADERS here (-DwxBUILD_PRECOMP=OFF). ccache does
+# not cache a compile that reads a precompiled header unless it is configured
+# around it, so wx's ~1300 translation units were rebuilt on every run (1324
+# "uncacheable" on the first cached one). Without the header each one costs more
+# once, and nothing afterwards.
+#
+# A run cancelled by a newer push (concurrency, below) still saves what it
+# compiled — so the run after it starts from that part, not from nothing.
+#
+# Not on Windows yet: MSVC's Debug writes debug info into a shared PDB (/Zi),
+# and ccache caches only objects that carry their own (/Z7) — that is a change
+# to the build's flags, not to this file.
 
 name: CI
 
@@ -65,6 +96,12 @@ jobs:
   tests-linux:
     name: Tests (Linux, Debug)
     runs-on: ubuntu-22.04
+    # The compiler cache — see the note at the top of this file. The same five lines on every job that has it.
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -88,8 +125,15 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       # Every non-GUI test target, not just oes_tests: ctest registers them all, so
       # building one leaves the others reported as "<name>_NOT_BUILT" failures.
@@ -150,6 +194,17 @@ jobs:
             echo "=============== $t ==============="
             gdb -batch -ex run -ex "bt 40" --args ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
+
+      # Saved whatever the tests said: the objects are as good after a red test as after a green one.
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
 
   # ---------------------------------------------------------------------------
   # The shipping platform. Building is the signal here — Windows runners are the
@@ -224,6 +279,11 @@ jobs:
   tests-postgres:
     name: Dialect (PostgreSQL, Debug)
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
 
     services:
       postgres:
@@ -264,8 +324,15 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       - name: Build the dialect target
         run: cmake --build --preset linux-debug --target oes_pg_dialect_test
@@ -279,6 +346,16 @@ jobs:
           OES_PG_USER: postgres
           OES_PG_PASSWORD: postgres
         run: ./bin/Debug/oes_pg_dialect_test --gtest_color=no
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
 
   # ---------------------------------------------------------------------------
   # Firebird — EXECUTED, on the kit the package ships.
@@ -298,6 +375,11 @@ jobs:
   tests-firebird:
     name: Firebird (Linux, Debug)
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -315,13 +397,20 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       # ⚠ POSTGRES IS ON HERE TOO, as in every other job. This one is ABOUT Firebird, so it was configured
       # with that driver alone — and the test tree does not build without the other: three query tests
       # name `ibDatabaseLayerPostgres::Dialect()` outright, so the link failed before a single Firebird
       # test ran (first run of this job, 2026-09-22). What a job is about is which tests it RUNS, not
       # which drivers exist in the binary.
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       - name: Build the test target
         run: cmake --build --preset linux-debug --target oes_tests
@@ -350,6 +439,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
   # ---------------------------------------------------------------------------
   # The backend suite under AddressSanitizer + UndefinedBehaviorSanitizer
   # (OES_SANITIZE, CMakeLists.txt). The general jobs prove the tests PASS; this
@@ -366,6 +465,11 @@ jobs:
     name: Tests (Linux, ASan + UBSan)
     runs-on: ubuntu-22.04
     continue-on-error: true
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -383,10 +487,17 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       - name: Configure
         run: >
           cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
-          -DOES_SANITIZE=address,undefined
+          -DOES_SANITIZE=address,undefined -DwxBUILD_PRECOMP=OFF
 
       # The same targets as tests-linux. ⚠ NO LEAK CHECK WHILE BUILDING: gtest_discover_tests RUNS each test
       # binary to list its tests, and a leak reported at that exit would fail the build before a single
@@ -431,6 +542,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
   # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
   # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
@@ -451,11 +572,15 @@ jobs:
     # Raising 60 to 90 bought the hang thirty more minutes to sit in. The bound now lives on the run
     # step, where the hang is; THIS number is only the outer envelope.
     #
-    # The real build-time fix remains the COMPILER cache this file already names and already
-    # installs (`ccache` is in the apt list of three jobs and wired into none of them): keyed on
-    # preprocessed input rather than timestamps, so it cannot serve the stale object a directory
-    # cache can.
+    # The real build-time fix is the COMPILER cache, keyed on preprocessed input rather than
+    # timestamps, so it cannot serve the stale object a directory cache can — wired since
+    # 2026-09-28 (the note at the top of this file).
     timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -476,8 +601,15 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config gdb \
             libgtk-3-dev libsqlite3-dev uuid-dev xvfb
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       # -k 0 keeps ninja going after a failed compile instead of stopping at the first
       # one. The frontend is being compiled by GCC for the first time, so errors come in
@@ -586,6 +718,16 @@ jobs:
           fi
           exit $status
 
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
   # ---------------------------------------------------------------------------
   # macOS on ARM — the third toolchain, and the one that is a different CPU as
   # well as a different compiler.
@@ -619,6 +761,11 @@ jobs:
     name: Tests (macOS 14, arm64, Debug)
     runs-on: macos-14
     timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -632,16 +779,23 @@ jobs:
       - run: bash .github/fetch-submodules.sh
         shell: bash
 
-      # cmake ships on the runner image; ninja does not. No GTK, no uuid-dev —
+      # cmake ships on the runner image; ninja and ccache do not. No GTK, no uuid-dev —
       # wx uses Cocoa here and the guid path is CoreFoundation's CFUUID.
       - name: Install build dependencies
-        run: brew install ninja
+        run: brew install ninja ccache
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
 
       # Same driver set as the other jobs: both clients are dlopen'd at RUNTIME
       # (firebirdInterface / postgresInterface), so enabling them costs no brew
       # package — it only compiles the driver sources, which is the point.
       - name: Configure
-        run: cmake --preset macos-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset macos-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       # -k 0 for the same reason the GUI job uses it: a first-time toolchain
       # returns errors in families, and one round should surface all of them.
@@ -680,6 +834,16 @@ jobs:
             lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
 
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+
   # ---------------------------------------------------------------------------
   # Runtime benchmarks — a RECORD, not a gate.
   #
@@ -700,6 +864,11 @@ jobs:
   benchmarks-linux:
     name: Benchmarks (Linux, Release) — record only
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     # Runs on the BRANCH THE WORK HAPPENS ON. This is the only job that builds
     # Release — wxWidgets from scratch, ~16 minutes before the benches even start —
     # and it was held back to master for that reason, which meant the numbers only
@@ -731,12 +900,19 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       # Same driver flags as the Debug suite job. They are not optional: the test
       # target links tests that call into the drivers directly (test_queryRenderer
       # uses ibDatabaseLayerPostgres::Dialect()), so without them the link fails
       # on undefined references after ~16 minutes of compiling.
       - name: Configure
-        run: cmake --preset linux-release -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset linux-release -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON -DwxBUILD_PRECOMP=OFF
 
       - name: Build the bench target
         run: cmake --build --preset linux-release --target oes_tests
@@ -810,3 +986,13 @@ jobs:
           name: benchmarks-linux-release
           path: build/linux-release/benchmarks.txt
           if-no-files-found: warn
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v || true
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}

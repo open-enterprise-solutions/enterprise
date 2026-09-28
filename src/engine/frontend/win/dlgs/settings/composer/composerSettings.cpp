@@ -277,11 +277,12 @@ wxString ibDescribeTypes(const ibTypeDescription& typeDesc, const ibMetaData* me
 
 	wxString described;
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
-		if (!metaData->IsRegisterCtor(clsid))
+		const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);   // one look-up: known, and its name
+		if (typeCtor == nullptr)
 			continue;
 		if (!described.IsEmpty())
 			described += wxT(", ");
-		described += metaData->GetNameObjectFromID(clsid);
+		described += typeCtor->GetClassName();
 	}
 	return described.IsEmpty() ? _("<any>") : described;
 }
@@ -613,8 +614,10 @@ public:
 	// Table / Rows / Columns will read, and the field column stays exactly what it is.
 	enum { kColNode = 1, kColField, kColKind };
 
-	explicit ibComposerStructureModel(std::function<std::vector<ibOutputDescription>*()> outputs)
-		: m_outputs(std::move(outputs)) {
+	// `fields` — the tree the page picks from, asked which fields a level's cell names (never owned here).
+	explicit ibComposerStructureModel(std::function<std::vector<ibOutputDescription>*()> outputs,
+		const ibSettingsFieldTree* fields = nullptr)
+		: m_outputs(std::move(outputs)), m_fields(fields) {
 	}
 
 	// THE AXIS A ROW READS — its levels, or null where the coordinate points at nothing. Every
@@ -765,8 +768,12 @@ public:
 				variant = wxString();   // the records name no field — the Structure cell above already says so
 				return;
 			}
+			// A field the options of the base take away is not named: the level stays — what it holds
+			// hangs under it — and groups by it still, unseen.
 			wxString fields;
 			for (const auto& field : level.m_settings.m_group.m_lines) {
+				if (m_fields != nullptr && !m_fields->IsAvailable(field.m_path))
+					continue;
 				if (!fields.IsEmpty()) fields += wxT(", ");
 				fields += field.m_path;
 			}
@@ -939,6 +946,7 @@ private:
 	}
 
 	std::function<std::vector<ibOutputDescription>*()> m_outputs;   // asked every time — no copy kept here
+	const ibSettingsFieldTree* m_fields = nullptr;   // which fields a level's cell names — see GetValue
 	mutable std::map<ibStructurePos, wxObjectDataPtr<ibStructureNode>> m_nodes;
 };
 
@@ -963,8 +971,10 @@ class ibSelectedListModel : public ibDataViewModel {
 public:
 	enum { kColText = 1 };
 
-	explicit ibSelectedListModel(std::function<std::vector<ibSelectedFieldDescription>*()> list)
-		: m_list(std::move(list)) {}
+	// `fields` — the tree the page picks from, asked which lines are shown (never owned here).
+	explicit ibSelectedListModel(std::function<std::vector<ibSelectedFieldDescription>*()> list,
+		const ibSettingsFieldTree* fields = nullptr)
+		: m_list(std::move(list)), m_fields(fields) {}
 
 	std::vector<ibSelectedFieldDescription>* List() const { return m_list ? m_list() : nullptr; }
 	size_t Count() const { const std::vector<ibSelectedFieldDescription>* list = List(); return list != nullptr ? list->size() : 0u; }
@@ -985,6 +995,7 @@ private:
 	Row* RowFor(size_t row) const;
 
 	std::function<std::vector<ibSelectedFieldDescription>*()> m_list;
+	const ibSettingsFieldTree* m_fields = nullptr;   // which lines are shown — see GetFirstFetch
 	mutable std::vector<wxObjectDataPtr<class ibSelectedListModel::Row>> m_rows;
 };
 
@@ -1033,10 +1044,17 @@ unsigned int ibSelectedListModel::GetFirstFetch(const ibDataViewItem& parent, co
 {
 	if (parent.IsOk())
 		return 0;
-	const size_t count = Count();
-	for (size_t i = 0; i < count; ++i)
+	// ⭐ A ROW IS ITS POSITION IN THE LIST, so leaving one out needs no mapping: a field the options of
+	// the base take away is not listed, stays in the set and is applied — hidden, never removed.
+	const std::vector<ibSelectedFieldDescription>* list = List();
+	unsigned int added = 0;
+	for (size_t i = 0; i < Count(); ++i) {
+		if (m_fields != nullptr && !m_fields->IsAvailable((*list)[i].m_path))
+			continue;
 		out.Add(ibDataViewItem(RowFor(i)));
-	return (unsigned int)count;
+		++added;
+	}
+	return added;
 }
 
 // ONE ROW of that list — its position, and nothing else. A grouping field has no children and no
@@ -1055,8 +1073,10 @@ class ibGroupingFieldsModel : public ibDataViewModel {
 public:
 	enum { kColField = 1, kColKind };
 
-	explicit ibGroupingFieldsModel(std::function<ibLevelDescription*()> level)
-		: m_level(std::move(level)) {
+	// `fields` — the tree the page picks from, asked which lines are shown (never owned here).
+	explicit ibGroupingFieldsModel(std::function<ibLevelDescription*()> level,
+		const ibSettingsFieldTree* fields = nullptr)
+		: m_level(std::move(level)), m_fields(fields) {
 	}
 
 	ibLevelDescription* Level() const { return m_level ? m_level() : nullptr; }
@@ -1097,10 +1117,16 @@ public:
 		int /*count*/, ibDataViewItemArray& out) const override {
 		if (parent.IsOk())
 			return 0;
-		const size_t count = FieldCount();
-		for (size_t i = 0; i < count; ++i)
+		// Left out the way the selected fields are — see ibSelectedListModel::GetFirstFetch.
+		const ibLevelDescription* level = Level();
+		unsigned int added = 0;
+		for (size_t i = 0; i < FieldCount(); ++i) {
+			if (m_fields != nullptr && !m_fields->IsAvailable(level->m_settings.m_group.m_lines[i].m_path))
+				continue;
 			out.Add(ibDataViewItem(RowFor(i)));
-		return (unsigned int)count;
+			++added;
+		}
+		return added;
 	}
 
 private:
@@ -1113,6 +1139,7 @@ private:
 	}
 
 	std::function<ibLevelDescription*()> m_level;
+	const ibSettingsFieldTree* m_fields = nullptr;   // which lines are shown — see GetFirstFetch
 	mutable std::vector<wxObjectDataPtr<ibGroupingFieldRow>> m_rows;
 };
 
@@ -2368,7 +2395,7 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	// and asking for it every time is what keeps this window from holding a second copy.
 	// THE MODEL READS THE STRUCTURE BUFFER — the outputs themselves, not a flattened ladder. That is
 	// what lets the tree show a second output, a column axis, and a level made of several fields.
-	m_structureModel = new ibComposerStructureModel([this] { return &Structure(); });
+	m_structureModel = new ibComposerStructureModel([this] { return &Structure(); }, m_fieldSource.get());
 	m_structureView->AssociateModel(m_structureModel);
 
 	// A DOUBLE-CLICK EDITS THE CELL under the cursor — the same gesture the settings grids use.
@@ -2465,7 +2492,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	ibStyleSettingsGrid(m_groupingView);
 	m_groupingModel = new ibGroupingFieldsModel([this]() -> ibLevelDescription* {
 		return CurrentLevel();   // the remembered node — this model is read DURING a selection change
-	});
+	}, m_fieldSource.get());
 	m_groupingView->AssociateModel(m_groupingModel);
 
 	// THE FIELD, as a VALUE — the same cell the structure tree uses, opening the same picker.
@@ -2596,7 +2623,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	ibStyleSettingsGrid(page.m_view);
 	page.m_model = new ibSelectedListModel([this]() -> std::vector<ibSelectedFieldDescription>* {
 		return CurrentFieldSet();
-	});
+	}, m_fieldSource.get());
 	page.m_view->AssociateModel(page.m_model);
 	// ⭐ A LINE OF THIS LIST IS A FIELD, so it is edited the way every other field is: the shared
 	// row-value cell, which opens the SAME picker the sort and the grouping open (Max, 2026-08-21:
@@ -3817,7 +3844,9 @@ void ibComposerSettingsPanel::BindFieldSource()
 	for (const ibQueryConstructorField& field : m_fieldList)
 		// NO metaID — a field of a PARSED TEXT stands behind no metaobject attribute, and the type is
 		// what says whether it unfolds anyway. wxNOT_FOUND is what "there is no such id" means here.
-		plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type });
+		// ⭐ What the options of the base take away goes in too, marked: the query keeps the field, the
+		// pickers do not show it, and a line already on it is hidden, not dropped.
+		plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available });
 	m_fieldSource->SetPlainFields(std::move(plain), GetEditedMetaData());
 	// ⭐ AND WHICH OF THOSE FIELDS ARE RESOURCES — asked of the composition every time the tree
 	// draws, never copied into it. Being a resource is a DECLARATION this window makes on the

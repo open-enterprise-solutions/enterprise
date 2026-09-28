@@ -796,17 +796,9 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// 🛑 IT READ THE DESCRIPTION'S FIRST VARIANT REGARDLESS, and that is what lost every per-node
 		// edit: a reader set a grouping's own filter, the window handed it back, and this line put
 		// the AUTHOR's structure over it on the next compose.
-		{
-			// Asked of the SECTION — the question is about the structure, so it is put to the accessor
-			// that answers it.
-			const std::vector<ibOutputDescription>& stored = composer.GetCurrentStructure();
-			if (!stored.empty()) {
-				std::vector<ibDataComposer::Output>& live = composer.Outputs();
-				live.resize(stored.size());
-				for (size_t i = 0; i < stored.size(); ++i)
-					static_cast<ibOutputDescription&>(live[i]) = stored[i];   // the driver each output has stays
-			}
-		}
+		// Asked of the SECTION — the question is about the structure, so it is put to the accessor that
+		// answers it — and applied by the composer's one door, less what this base does not use.
+		composer.ApplyAvailableStructure();
 	}
 
 	ibSpreadsheetComposeDriver driver(target);

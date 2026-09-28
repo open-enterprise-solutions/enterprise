@@ -452,18 +452,10 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// ⚠ ASKED OF THE COMPOSER, NOT OF THE DESCRIPTION. `GetCurrentStructure` answers with the setting
 	// in force, so the outputs and the settings cannot come from two different places.
 	//
-	// 🛑 THIS IS A SECOND ROAD, on purpose for now: valueDataComposition.cpp does the same six lines
-	// before its own compose. They are obliged to agree and nothing enforces it. Converging them is a
-	// change to the composition value's own setup and is not made from here.
-	{
-		const std::vector<ibOutputDescription>& stored = composer.GetCurrentStructure();
-		if (!stored.empty()) {
-			std::vector<ibDataComposer::Output>& live = composer.Outputs();
-			live.resize(stored.size());
-			for (size_t i = 0; i < stored.size(); ++i)
-				static_cast<ibOutputDescription&>(live[i]) = stored[i];
-		}
-	}
+	// (🗑️ A SECOND ROAD stood here — the same six lines valueDataComposition.cpp ran before its own compose,
+	//  obliged to agree with them and nothing enforcing it. Both now go through the composer's one door, which
+	//  also leaves out what this base does not use.)
+	composer.ApplyAvailableStructure();
 
 	// ⭐⭐ A DRIVER PER OUTPUT, AND THE RIGHT ONE FOR ITS SHAPE. A grouping's columns are the schema's;
 	// a cross-table's are made by its column dimension's VALUES and are not known until they arrive.

@@ -238,6 +238,10 @@ public:
 	*/
 	virtual bool CanDeleteControl() const = 0;
 
+	// Available by the functional options of this base — answered by an element of a form (control.h);
+	// anything else in the tree (a form, a sizer item) always is.
+	virtual bool IsAvailable() const { return true; }
+
 public:
 
 	// before/after run 

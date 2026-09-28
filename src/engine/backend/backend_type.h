@@ -91,6 +91,9 @@ enum ibSelectorDataType {
 	ibSelectorDataType_reference,
 	ibSelectorDataType_table,
 	ibSelectorDataType_resource,
+	// WHAT RAISES AN EVENT — an object, a manager, a record set, of one metaobject or of every one of a
+	// metatype: what an event handler names as its source.
+	ibSelectorDataType_eventSource,
 };
 
 //////////////////////////////////////////////////////////////

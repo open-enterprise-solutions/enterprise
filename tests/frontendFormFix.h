@@ -82,8 +82,15 @@ struct FrontendFormFix : FrontendRuntimeFix {
 
 	// The supported way to build a form in a test. Returns nullptr if the frame
 	// didn't come up (caller GTEST_SKIPs on !frameReady first).
+	//
+	// The form is born owned and handed to the test with a reference the test never gives back — test forms
+	// live to the end of the process, as they always did: the hosts and documents built over them are leaked
+	// on purpose (see test_frontendVisualHost.cpp), and a form freed under them would take them down.
 	ibValueForm* NewForm() {
-		return dynamic_cast<ibValueForm*>(ibBackendValueForm::CreateNewForm());
+		const ibValuePtr<ibValueForm> form(ibBackendValueForm::CreateNewForm());
+		if (form)
+			form->IncrRef();
+		return form;
 	}
 };
 

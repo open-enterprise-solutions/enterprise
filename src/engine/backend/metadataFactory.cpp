@@ -33,15 +33,24 @@ void ibMetaImage::UnregisterCtor(ibCtorMetaValueType* typeCtor)
 	m_factoryCtors.Unregister(typeCtor);   // registry owns it → freed here; typeCtor dangles after
 }
 
+// ⭐ BY THE ID THE PAIR SPELLS. A metaobject's type is registered under `kind | metaclass | metaID` (objCtor.h):
+// the kind of refType, the metaobject's metaclass — its class's id — and its metaID. So the id is built
+// and looked up; this walked every type of the configuration instead, and was asked on every GetClassType of
+// an object, a record set, a manager — every event raised. An external processor files its object and manager
+// under kinds of their own, the second probe. What is found is checked to be this metaobject's: an id names
+// one within a configuration, and the metaobject handed in may be another configuration's.
 ibCtorMetaValueType* ibMetaImage::FindCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	// (metaValue, refType) key — metadata-specific, kept linear.
-	ibCtorMetaValueType* result = nullptr;
-	m_factoryCtors.ForEach([&](ibCtorMetaValueType* typeCtor) {
-		if (result == nullptr && refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
-			result = typeCtor;
-	});
-	return result;
+	if (metaValue == nullptr)
+		return nullptr;
+	const ibClassID metaID = metaValue->GetMetaID();
+	const ibClassMetaclass metaclass = clsid_metaclass(metaValue->GetClassType());
+	ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(make_clsid_dynamic(metaID, metatype_to_kind(refType), metaclass));
+	if (typeCtor == nullptr && refType == ibCtorObjectMetaType::ibCtorObjectMetaType_Object)
+		typeCtor = m_factoryCtors.Find(externalObject_to_clsid(metaID, metaclass));
+	else if (typeCtor == nullptr && refType == ibCtorObjectMetaType::ibCtorObjectMetaType_Manager)
+		typeCtor = m_factoryCtors.Find(externalManager_to_clsid(metaID, metaclass));
+	return typeCtor != nullptr && typeCtor->GetMetaObject() == metaValue ? typeCtor : nullptr;
 }
 
 ibValue ibMetaData::CreateObject(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
@@ -219,31 +228,20 @@ wxString ibMetaData::GetNameObjectFromID(const ibClassID& clsid, bool upper) con
 	return ibValue::GetNameObjectFromID(clsid, upper);
 }
 
-ibMetaID ibMetaData::GetVTByID(const ibClassID& clsid) const
+ibClassID ibMetaData::GetIDObjectFromMetaID(const ibMetaID& metaID, ibCtorObjectMetaType refType) const
 {
-	const ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
-	if (typeCtor != nullptr) {
-		const ibValueMetaObject* metaValue = typeCtor->GetMetaObject();
-		wxASSERT(metaValue);
-		return metaValue->GetMetaID();
-	}
-	return ibValue::GetVTByID(clsid);
-}
-
-ibClassID ibMetaData::GetIDByVT(const ibMetaID& valueType, ibCtorObjectMetaType refType) const
-{
-	// (metaID, refType) key — metadata-specific, kept linear (not the hot clsid path).
+	// (metaID, refType) key — metadata-specific, kept linear (not the hot clsid path). A metaID not found is
+	// 0: it used to fall to ibValue::GetIDByVT, whose unsigned char took the metaID's low byte, so 1024 came
+	// back Undefined and 1029 Null.
 	ibClassID result = 0;   // RegisterCtor guarantees GetClassType() > 0, so 0 = not-found
 	if (m_image) m_image->ForEachCtor([&](const ibCtorMetaValueType* typeCtor) {
 		if (result != 0) return;
 		const ibValueMetaObject* metaValue = typeCtor->GetMetaObject();
 		wxASSERT(metaValue);
-		if (refType == typeCtor->GetMetaTypeCtor() && valueType == metaValue->GetMetaID())
+		if (refType == typeCtor->GetMetaTypeCtor() && metaID == metaValue->GetMetaID())
 			result = typeCtor->GetClassType();
 	});
-	if (result != 0)
-		return result;
-	return ibValue::GetIDByVT(static_cast<ibValueTypes>(valueType));
+	return result;
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const wxString& className) const
@@ -258,7 +256,7 @@ ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibClassID& clsid) const
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	return m_image ? m_image->FindCtor(metaValue, refType) : nullptr;   // linear (metaValue,refType) lookup
+	return m_image ? m_image->FindCtor(metaValue, refType) : nullptr;   // the id (metaValue, refType) spells — O(1)
 }
 
 ibCtorAbstractType* ibMetaData::GetAvailableCtor(const wxString& className) const
@@ -299,11 +297,13 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType() const
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID& clsid, ibCtorObjectMetaType refType) const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	// Note: clsid here is the metaObject's id (m->GetClassType()), NOT the ctor's —
-	// shared across refType variants, so it's a separate (non-unique) key kept linear.
+	// Note: clsid here is the METACLASS's id (g_metaCatalogCLSID), NOT a ctor's — shared across refType variants,
+	// so it's a separate (non-unique) key kept linear. A ctor's own id carries its metaobject's metaclass
+	// (clsid.h), so it is compared as bits: asking each metaobject its class went to the class registry (by its
+	// C++ type) once per type of the configuration.
+	const ibClassMetaclass metaclass = clsid_metaclass(clsid);
 	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* t) {
-		const ibValueMetaObject* const m = t->GetMetaObject();
-		if (refType == t->GetMetaTypeCtor() && clsid == m->GetClassType())
+		if (refType == t->GetMetaTypeCtor() && clsid_metaclass(t->GetClassType()) == metaclass)
 			retVector.push_back(t);
 	});
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
