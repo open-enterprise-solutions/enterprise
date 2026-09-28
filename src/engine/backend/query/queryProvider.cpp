@@ -4489,8 +4489,10 @@ bool LevelsUnfoldHierarchy(const std::vector<ibTotalLevel>& levels)
 //   * a level lists the RECORDS (a level with no fields) — the rows are what is printed;
 //   * a level is keyed by the ROW'S IDENTITY — its heading carries the row's own cells (AttachDimValue);
 //   * a level is read BY PERIODS — padded from its figures by a pass of its own;
-//   * an aggregate is AVG or DISTINCT (not a fold of parts), has an AREA (OVER — folded over nodes), or
-//     shares its slot with another one or with a key (the part would overwrite what the other reads).
+//   * an aggregate is DISTINCT (different values are not a sum of parts), has an AREA (OVER — folded over
+//     nodes), or shares its slot with another one or with a key (the part would overwrite what the other
+//     reads). AVG is folded from two parts — a sum in its slot, a count beside it — and divided once the tree
+//     is built (FoldByKeysFirst's `averages`).
 bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates, const ibBackendQueryable* source)
 {
@@ -4512,7 +4514,7 @@ bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 	}
 	for (size_t i = 0; i < aggregates.size(); ++i) {
 		const ibDataQueryBuilder::AggregateItem& a = aggregates[i];
-		if (a.m_fn == ibDataQueryBuilder::AggregateFn::Avg || a.m_distinct || a.m_scopeDepth > 0)
+		if (a.m_distinct || a.m_scopeDepth > 0)
 			return false;
 		const ibMetaID slot = AggSlotId(aggregates, i);
 		if (std::find(taken.begin(), taken.end(), slot) != taken.end())
@@ -4527,10 +4529,15 @@ bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 // met — with each aggregate's PART in the aggregate's own slot. `rolled` folds those parts again: a count's
 // parts are ADDED, a computed input is read from its slot; the slots do not move, so the tree's figures land
 // exactly where the full fold puts them.
+//
+// ⭐ AN AVERAGE IS TWO PARTS: the sum in its slot and the count in a cell of its own beside it (an aggregate id
+// past the last real one, declared as no column, so it never reaches the tree's columns). Both are added by
+// the fold; `averages` names the pairs, and DivideAverages turns each into the average once the tree is built.
 ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTotalLevel>& levels,
 	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	std::vector<ibDataQueryBuilder::AggregateItem>& rolled,
-	std::vector<std::unique_ptr<ibBackendQueryColumn>>& owned, long& read)
+	std::vector<std::unique_ptr<ibBackendQueryColumn>>& owned,
+	std::vector<std::pair<ibMetaID, ibMetaID>>& averages, long& read)
 {
 	ibQueryRamTable table;
 	for (const ibQueryRamColumn& c : rows.Columns())
@@ -4550,6 +4557,18 @@ ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTota
 		a.m_expr.reset();
 		if (a.m_fn == ibDataQueryBuilder::AggregateFn::Count)
 			a.m_fn = ibDataQueryBuilder::AggregateFn::Sum;
+	}
+	std::vector<size_t> averaged;   // which aggregates are averages, in the order their counts were numbered
+	for (size_t i = 0; i < aggregates.size(); ++i) {
+		if (aggregates[i].m_fn != ibDataQueryBuilder::AggregateFn::Avg)
+			continue;
+		const ibMetaID counted = ibSynthId(ibSynthKind::Aggregate, static_cast<ibMetaID>(aggregates.size() + averaged.size()));
+		owned.push_back(std::make_unique<ibSubqueryExprColumn>(wxString(), counted));
+		rolled[i].m_fn = ibDataQueryBuilder::AggregateFn::Sum;   // the sums of the parts…
+		ibDataQueryBuilder::AggregateItem count{ ibDataQueryBuilder::AggregateFn::Sum, owned.back().get(), wxString() };
+		rolled.push_back(count);                                  // …and their counts, beside them
+		averages.emplace_back(AggSlotId(aggregates, i), counted);
+		averaged.push_back(i);
 	}
 
 	std::vector<ibMetaID> keyIds;
@@ -4603,10 +4622,39 @@ ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTota
 			groups[g].m_parts[i].Feed(aggregates[i], rows);
 	}
 
-	for (const Group& group : groups)
+	for (const Group& group : groups) {
 		for (size_t i = 0; i < aggregates.size(); ++i)
-			table.SetCell(group.m_row, AggSlotId(aggregates, i), group.m_parts[i].Result(aggregates[i]));
+			if (aggregates[i].m_fn != ibDataQueryBuilder::AggregateFn::Avg)
+				table.SetCell(group.m_row, AggSlotId(aggregates, i), group.m_parts[i].Result(aggregates[i]));
+		for (size_t k = 0; k < averaged.size(); ++k) {
+			const ibAggAcc& part = group.m_parts[averaged[k]];
+			table.SetCell(group.m_row, averages[k].first, part.m_n > 0 ? ibValue(part.m_sum) : RamNullValue());
+			table.SetCell(group.m_row, averages[k].second, ibValue(ibNumber(part.m_n)));
+		}
+	}
 	return table;
+}
+
+// …and each average made from its two parts, on every heading of the finished tree: the sum over the count,
+// or NULL where nothing was counted — what an average of no values is (ibAggAcc::Result). The count's cell is
+// taken away again; it was never a figure of the report.
+void DivideAverages(ibSelectorTree::Node& node, const std::vector<std::pair<ibMetaID, ibMetaID>>& averages)
+{
+	for (const std::pair<ibMetaID, ibMetaID>& average : averages) {
+		const auto counted = node.m_values.find(average.second);
+		if (counted == node.m_values.end())
+			continue;
+		const auto summed = node.m_values.find(average.first);
+		const bool any = counted->second > ibValue(ibNumber(0));
+		const ibValue value = (any && summed != node.m_values.end() && !RamIsNullValue(summed->second))
+			? ibValue(summed->second.GetNumber() / counted->second.GetNumber())
+			: RamNullValue();
+		node.m_values.erase(average.second);
+		node.m_values[average.first] = value;
+	}
+	for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+		if (child != nullptr)
+			DivideAverages(*child, averages);
 }
 
 } // namespace
@@ -5488,11 +5536,15 @@ ibSelectorTree ibQueryComposer::BuildDimensionTree(ibQueryRowCursor& rows,
 		if (CanFoldByKeysFirst(levels, aggregates, source)) {
 			std::vector<ibDataQueryBuilder::AggregateItem> rolled;
 			std::vector<std::unique_ptr<ibBackendQueryColumn>> owned;   // the parts' columns, alive through the fold
+			std::vector<std::pair<ibMetaID, ibMetaID>> averages;         // an average's sum slot and its count's
 			long read = 0;
-			ibQueryRamTable grouped = FoldByKeysFirst(rows, levels, aggregates, rolled, owned, read);
+			ibQueryRamTable grouped = FoldByKeysFirst(rows, levels, aggregates, rolled, owned, averages, read);
 			ibJournalInfo(wxT("query.road"), wxT("RAM: folded %ld detail rows into %ld groups by their keys - a level unfolds a reference hierarchy"),
 			              read, grouped.RowCount());
-			return BuildDimensionTree(grouped, levels, rolled, holder, source);
+			ibSelectorTree tree = BuildDimensionTree(grouped, levels, rolled, holder, source);
+			if (!averages.empty())
+				DivideAverages(tree.Root(), averages);
+			return tree;
 		}
 		ibQueryRamTable snapshot = ibDrainToRamTable(rows);
 		ibJournalInfo(wxT("query.road"), wxT("RAM: drained %ld detail rows - a level unfolds a reference hierarchy"),

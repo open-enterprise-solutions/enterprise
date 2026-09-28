@@ -831,9 +831,15 @@ ibQueryPredicatePtr ConditionOnPass(const ibValueMetaObjectAccountingRegister* r
 		const ibBackendQueryColumn* head = walks ? leaf.m_path.front() : leaf.m_col;
 
 		// ⭐ `IN HIERARCHY` HERE IS A SELECTION — the fold by it is the account argument's, which took the plain
-		// account names before this (SplitAccountCondition). So the word is resolved into the subtree it stands
-		// for, read through the column on the movements (or the row a walk ends at), and the leaf is an IN.
-		if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+		// account names before this (SplitAccountCondition).
+		//
+		// On a surface in the database it goes down AS NAMED, one leaf per slot the kind stands in: the database
+		// provider has the server walk the subtree (BuildSubtreeIn — WITH RECURSIVE), in whichever table each
+		// named value belongs to — an analytics slot holds references of many — so a chart or a catalog is no
+		// longer read whole for every reading. A surface held in memory resolves it here into the subtree it
+		// stands for, read through the column on the movements (or the row a walk ends at), and the leaf is an
+		// IN: a filter over rows in memory cannot walk it (RefuseNamedHierarchy).
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements && (source == nullptr || source->IsComputedInRam())) {
 			const ibBackendQueryable* owner = reg->GetQueryable();
 			const ibAcctConditionColumn onLines = ConditionColumnOn(reg, owner, shape, creditSide, kindsDr, kindsCr, head);
 			const ibBackendQueryColumn* column = onLines.m_column != nullptr ? onLines.m_column
@@ -847,6 +853,9 @@ ibQueryPredicatePtr ConditionOnPass(const ibValueMetaObjectAccountingRegister* r
 			leaf.m_values = ibQueryHierarchyScope(owner, column, leaf.m_values, leaf.m_unfold).Accepted();
 			leaf.m_unfold = ibQueryDimUnfold::Elements;
 			leaf.m_op     = ibQueryFilterOp::In;
+		}
+		else if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+			leaf.m_op = ibQueryFilterOp::In;   // the values as named; the provider walks them, slot by slot
 		}
 
 		return over(head, /*nullWhereAbsent*/ false, [&](const ibBackendQueryColumn* column) {
