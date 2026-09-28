@@ -1526,8 +1526,8 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 	nlohmann::json groups = nlohmann::json::array();
 	struct GroupSpec { ibClassID clsid; const char* name; };
 	const GroupSpec specs[] = {
+		{ g_metaFunctionalOptionCLSID,            "Functional options" },   // first, above the constants: they decide what is there at all
 		{ g_metaConstantCLSID,                    "Constants" },
-		{ g_metaFunctionalOptionCLSID,            "Functional options" },   // a stored value too, beside the constants
 		{ g_metaCatalogCLSID,                     "Catalogs" },
 		{ g_metaDocumentCLSID,                    "Documents" },
 		{ g_metaDataProcessorCLSID,               "Data processors" },

@@ -71,17 +71,18 @@ void ibDialogFunctionAll::BuildTree()
 	wxImageList* imageList = m_treeCtrlElements->GetImageList();
 	wxASSERT(imageList);
 	wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
-	wxTreeItemId constants = AppendGroupItem(root, g_metaConstantCLSID, _("Constants"));
-	for (auto constant : AvailableObjects(g_metaConstantCLSID)) {
-		const int imageIndex = imageList->Add(constant->GetIcon());
-		m_treeCtrlElements->AppendItem(constants, constant->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(constant));
-	}
-	// …and the functional options beside them — a stored value too, switched from its own form by whoever may
-	// write it, whether or not a section offers it.
+	// The functional options FIRST, above the constants: they decide which parts of the system are there at
+	// all, so they are the first thing a person setting a base up looks for. A stored value too, switched from
+	// its own form by whoever may write it, whether or not a section offers it.
 	wxTreeItemId functionalOptions = AppendGroupItem(root, g_metaFunctionalOptionCLSID, _("Functional options"));
 	for (auto option : AvailableObjects(g_metaFunctionalOptionCLSID)) {
 		const int imageIndex = imageList->Add(option->GetIcon());
 		m_treeCtrlElements->AppendItem(functionalOptions, option->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(option));
+	}
+	wxTreeItemId constants = AppendGroupItem(root, g_metaConstantCLSID, _("Constants"));
+	for (auto constant : AvailableObjects(g_metaConstantCLSID)) {
+		const int imageIndex = imageList->Add(constant->GetIcon());
+		m_treeCtrlElements->AppendItem(constants, constant->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(constant));
 	}
 	wxTreeItemId catalogs = AppendGroupItem(root, g_metaCatalogCLSID, _("Catalogs"));
 	for (auto catalog : AvailableObjects(g_metaCatalogCLSID)) {
