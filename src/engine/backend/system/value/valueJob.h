@@ -149,6 +149,8 @@ constexpr ibClassID g_valueScheduleCLSID = value_to_clsid("VL_SCHED");
 //  job off must not mean opening the Designer against production.
 //////////////////////////////////////////////////////////////////////
 
+constexpr ibClassID g_valuePredefinedJobsCLSID = value_to_clsid("VL_PJOBS");
+
 class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 	public:
 
@@ -208,6 +210,9 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 	explicit ibValuePredefinedJobs(ibMetaData* metaData);
 
 	virtual wxString GetClassName() const { return wxT("PredefinedJobs"); }
+
+	// Its own id — the array it derives from answers with the array's.
+	virtual ibClassID GetClassType() const override { return g_valuePredefinedJobsCLSID; }
 };
 
 #endif // !__VALUE_JOB_H__

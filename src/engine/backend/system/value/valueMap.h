@@ -7,6 +7,10 @@
 #include <unordered_map>
 #include <string>
 
+constexpr ibClassID g_valueContainerCLSID = value_to_clsid("VL_CONTR");
+constexpr ibClassID g_valueKeyValueCLSID  = system_to_clsid("VL_KEVAL");
+constexpr ibClassID g_valueStructureCLSID = value_to_clsid("VL_STRUT");
+
 // A key -> value map (script "Container"; "Structure" is the string-keyed
 // variant). Keys are DATA: they live in the store below and are reached by NAME,
 // never mirrored into the member table. Two consequences the previous design got
@@ -134,6 +138,9 @@ public:
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
+		// Its own id, not the registry's — one is made per step of a walk over a map.
+		virtual ibClassID GetClassType() const override { return g_valueKeyValueCLSID; }
+
 		virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;        //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 	};
@@ -145,6 +152,10 @@ public:
 	ibValueContainer(bool readOnly);
 
 	virtual ~ibValueContainer();
+
+	// Its own id, not the registry's (see the note beside the class ids in procUnitLINQ.cpp). A
+	// structure answers with its own.
+	virtual ibClassID GetClassType() const override { return g_valueContainerCLSID; }
 
 	// KEY access. Resolved straight against the store — the member table carries
 	// only methods, so FindProp returns a key's entry index (or -1), and
@@ -207,6 +218,10 @@ protected:
 // structure
 class BACKEND_API ibValueStructure : public ibValueContainer {
 	public:
+
+	// Its own id — the map it derives from answers with the map's; a structure that is something more
+	// answers with its own (globalContextManager.cpp, valueSpreadsheet.cpp).
+	virtual ibClassID GetClassType() const override { return g_valueStructureCLSID; }
 
 	ibValueStructure() : ibValueContainer(false, ibKeyKind::Name) {}
 	ibValueStructure(const std::map<wxString, ibValue>& structureValues) : ibValueContainer(true, ibKeyKind::Name) {

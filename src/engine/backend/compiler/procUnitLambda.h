@@ -57,6 +57,10 @@ class ibValueIterator : public ibValue {
 
 	virtual ~ibValueIterator() = default;
 
+	// Its own id, not the registry's: OPER_FOREACH asks it on every turn of every loop, and the base answer
+	// goes through typeid and a hash of the type's name (the sampled profile, 2026-09-28).
+	virtual ibClassID GetClassType() const override { return g_valueIterator; }
+
 	// NOT transferable: a cursor is a position inside somebody else's collection,
 	// and advancing it from a second session would move it under the first.
 	virtual bool IsTransferable() const override { return false; }
@@ -103,6 +107,9 @@ inline constexpr ibClassID g_valueFunction = system_to_clsid("VL_FUNC");   // he
 class ibValueFunction : public ibValue, public ibEventDispatcher {
 	public:
 	ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
+
+	// Its own id, not the registry's — see ibValueIterator above.
+	virtual ibClassID GetClassType() const override { return g_valueFunction; }
 
 	// ibEventDispatcher — a lambda IS its own dispatcher: run its own body with the args (+ trailing cancel). NOT const
 	// (the invoke may build a capture frame / mutate the chain the lambda holds). IsEmpty is false: a bound lambda is set.
@@ -571,6 +578,10 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 
 inline bool IsEmptyValue(const ibValue& cValue1)
 {
+	// A boolean — what a comparison leaves, and what a filter's lambda answers for every row — is read
+	// where it lies, as OPER_IF reads its condition; anything else asks its own emptiness, a virtual call.
+	if (cValue1.m_typeClass == ibValueTypes::TYPE_BOOLEAN)
+		return !cValue1.m_bData;
 	return cValue1.IsEmpty();
 }
 

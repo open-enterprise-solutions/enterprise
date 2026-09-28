@@ -8,7 +8,12 @@
 #include "backend/system/value/valueTable.h"   // ibValueModelTable — ToValueTable
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
 
-ibValue ibQueryRamTable::ToValueTable() const
+namespace {
+
+// The one load behind both ToValueTable: `Rows` is const when the cells are copied and not when they are
+// moved. Here and not in the header — nobody outside asks for it.
+template <class Rows>
+ibValue LoadValueTable(const std::vector<ibQueryRamColumn>& ramColumns, Rows& ramRows)
 {
 	ibValueModelTable* const table = new ibValueModelTable();
 	// 🛑 Held while its rows are made: a table fresh from `new` has a count of zero, a row that takes the
@@ -17,9 +22,9 @@ ibValue ibQueryRamTable::ToValueTable() const
 	const ibValue keep(table);
 
 	ibValueModelTable::ibValueModelColumnCollection* const columns = table->GetColumnCollection();
-	std::vector<ibMetaID> ids;   // each table column's id, in step with m_columns
-	ids.reserve(m_columns.size());
-	for (const ibQueryRamColumn& column : m_columns) {
+	std::vector<ibMetaID> ids;   // each table column's id, in step with ramColumns
+	ids.reserve(ramColumns.size());
+	for (const ibQueryRamColumn& column : ramColumns) {
 		const auto* const added = columns->AddColumn(column.m_name, column.m_type,
 			column.m_caption.IsEmpty() ? column.m_name : column.m_caption);
 		ids.push_back(added != nullptr ? static_cast<ibMetaID>(added->GetColumnID()) : ibMetaID());
@@ -30,15 +35,29 @@ ibValue ibQueryRamTable::ToValueTable() const
 	// per row, O(n²): 50 000 rows took seventy seconds (measured on the LINQ answer). A table being built has
 	// nobody watching it. A row starts as the model's own empty row (NewRow — every column its type's empty
 	// value), and a cell this table holds is adjusted to its column's type on the way in.
-	for (const Row& from : m_rows) {
+	//
+	// `std::move` of a const cell is still the const cell, so the copying load copies and the moving one moves.
+	for (auto& source : ramRows) {
 		ibComposerNode* const row = table->NewRow();
 		for (size_t i = 0; i < ids.size(); ++i)
-			if (const ibValue* const cell = from.find_value(m_columns[i].m_id))
-				row->AppendTableValue(ids[i], ibValueTypeDescription::AdjustValue(m_columns[i].m_type, *cell));
+			if (auto* const cell = source.find_value(ramColumns[i].m_id))
+				row->AppendTableValue(ids[i], ibValueTypeDescription::AdjustValue(ramColumns[i].m_type, std::move(*cell)));
 		table->Append(row, /*notify*/ false);
 	}
 
 	return keep;
+}
+
+} // namespace
+
+ibValue ibQueryRamTable::ToValueTable() const &
+{
+	return LoadValueTable(m_columns, m_rows);
+}
+
+ibValue ibQueryRamTable::ToValueTable() &&
+{
+	return LoadValueTable(m_columns, m_rows);
 }
 
 void FoldBalancesForward(ibQueryRamTable& table,

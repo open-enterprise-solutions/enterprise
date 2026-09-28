@@ -150,7 +150,10 @@ public:
 	// and caption, the rows in this order. There were nine copies of that loop; all but the LINQ one added their
 	// rows the slow way. A column with no type stays UNTYPED — it keeps whatever arrives, where a String one would
 	// turn every number into text.
-	ibValue ToValueTable() const;
+	ibValue ToValueTable() const &;
+	// …and from a table that is done with — the one a builder fills to hand straight on: its cells MOVE into the
+	// value table instead of being copied, which counted a reference up here and down again as this one died.
+	ibValue ToValueTable() &&;
 
 private:
 	// One row's cells re-labelled — see AppendRowsRekeyed. Built anew beside the old one rather than edited

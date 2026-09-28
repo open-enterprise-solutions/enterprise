@@ -50,6 +50,35 @@
 // diagnostics are needed again, prefer wxLogDebug at coarse-grained
 // entry points rather than per-row writes.
 
+// ⭐ THE REFUSALS AND THE DEFAULTS OF A LAMBDA CALL ARE OUT OF LINE. A pipeline calls
+// CallLambdaWithArgs once per row, and every message a branch there could say was built in its own
+// frame: 632 bytes and a stack cookie, 48 of its 62 calls wx message code, paid on each row for
+// branches no row takes (the disassembly and the sampled profile, 2026-09-28). What stays in it is
+// the call itself.
+
+// A call this lambda cannot take — not made, or given more arguments than it has parameters.
+IB_NOINLINE static void RefuseLambdaCall(const ibByteCode::ibByteFunction* bfn, long argCount)
+{
+	if (bfn == nullptr)
+		ibBackendQueryLinqException::Error(_("Lambda value is not initialised"));
+	ibBackendQueryLinqException::Error(_("Lambda must accept at least %ld argument(s)"), argCount);
+}
+
+// The parameters the caller did not pass, from their compile-time defaults — refused for one that has none.
+IB_NOINLINE static void FillLambdaDefaults(ibValueFunction& fn, const ibByteCode::ibByteFunction* bfn,
+                                           ibRunContext& frame, long from)
+{
+	const ibByteCode* const pLocalByteCode = fn.GetParentBc();
+	for (long i = from; i < (long)bfn->m_listParam.size(); i++) {
+		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
+		if (puDef.m_numArray == DEF_VAR_SKIP) {
+			ibBackendQueryLinqException::Error(
+				_("Lambda missing required argument '%s'"), bfn->m_listParam[i].m_strName);
+		}
+		CopyValue(frame.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
+	}
+}
+
 // Lambda invocation with N bound-by-ref args from host (C++) code.
 // Mirrors Phase 1+2 of OPER_CALL_LAMBDA minus the OPER_SET/SETCONST
 // tape walk — args come from C++ pointers, not bytecode operands.
@@ -63,17 +92,11 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
                                 long argCount, ibValue& retVal)
 {
 	const ibByteCode::ibByteFunction* bfn = fn.GetFunction();
-	if (bfn == nullptr) {
-		ibBackendQueryLinqException::Error(_("Lambda value is not initialised"));
-	}
+	if (bfn == nullptr || (long)bfn->m_listParam.size() < argCount)
+		RefuseLambdaCall(bfn, argCount);
 
 	const long lambdaParamCount = (long)bfn->m_listParam.size();
 	const long lambdaVarCount   = bfn->m_lVarCount;
-
-	if (lambdaParamCount < argCount) {
-		ibBackendQueryLinqException::Error(
-			_("Lambda must accept at least %ld argument(s)"), argCount);
-	}
 
 
 	// A FRAME THAT CAN BE CAPTURED MUST OWN ITS ARGUMENTS.
@@ -133,23 +156,9 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 			cRunContext.m_pRefLocVars[i] = argPtrs[i];
 	}
 
-	// Fill missing tail params from compile-time defaults.
-	const ibByteCode* pLocalByteCode = fn.GetParentBc();
-	for (long i = argCount; i < lambdaParamCount; i++) {
-		if (i >= (long)bfn->m_listParam.size()) {
-			ibBackendQueryLinqException::Error(
-				_("Lambda m_listParam shorter than paramCount at %ld"), i);
-		}
-		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
-		if (puDef.m_numArray == DEF_VAR_SKIP) {
-			const wxString& nm = (i < (long)bfn->m_listParam.size())
-				? bfn->m_listParam[i].m_strName
-				: wxString::Format(wxT("p%ld"), i);
-			ibBackendQueryLinqException::Error(
-				_("Lambda missing required argument '%s'"), nm);
-		}
-		CopyValue(cRunContext.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
-	}
+	// Missing tail params from compile-time defaults.
+	if (argCount < lambdaParamCount)
+		FillLambdaDefaults(fn, bfn, cRunContext, argCount);
 
 	fn.Execute(&cRunContext, &retVal, /*bDelta*/false);
 
@@ -528,19 +537,20 @@ private:
 // heard of has no answer. What keeps it out of the language is that nothing names it and no ctor is
 // published — not that it is unknown.
 
-// ⭐⭐ THE FOUR CLASS IDS, DECLARED HERE AND REGISTERED AT THE BOTTOM. They sit above the classes
+// ⭐⭐ THE CLASS IDS, DECLARED HERE AND REGISTERED AT THE BOTTOM. They sit above the classes
 // because each class ANSWERS with its own id — see GetClassType on each — and a constant cannot be
 // used before it is written down. The registration itself stays at the bottom with its neighbours.
 //
 // 🛑 WHY THE CLASSES ANSWER AT ALL, INSTEAD OF LETTING THE BASE ANSWER FOR THEM. `ibValue::
 // GetClassType()` for an object tag ends in `GetTypeIDByRef(this)`, which takes `typeid(*this)` and
 // looks the result up in the ctor REGISTRY (valueFactory.cpp) — RTTI plus a map probe to learn a
-// number the class has known since it was compiled. These four are the values a query is MADE of,
-// so that question is asked per row and, in a projection, per field.
+// number the class has known since it was compiled. These are the values a query is MADE of, and
+// the query itself, so that question is asked per row and, in a projection, per field.
 constexpr ibClassID g_valueLinqRows   = system_to_clsid("VL_LQRW");
 constexpr ibClassID g_valueLinqShape  = system_to_clsid("VL_LQSH");
 constexpr ibClassID g_valueLinqRecord = system_to_clsid("VL_LQRC");
 constexpr ibClassID g_valueLinqGroup  = system_to_clsid("VL_LQGR");
+constexpr ibClassID g_valueQuery      = system_to_clsid("VL_QRY");
 
 // ⭐ "IS THIS ONE OF OURS" — AN INTEGER COMPARE, NOT A TYPE WALK. Every wrapper below answers its
 // own id, so the question needs no `dynamic_cast`: ask the value what it is, and cast only once the
@@ -661,38 +671,64 @@ private:
 // later `row.Field` could look it up. For a three-field projection over ten thousand rows that is
 // thirty thousand name lookups to express something the compiler knew in full while compiling.
 //
-// Here the names live in the SHAPE, once per query, and a row is a vector of values in field order.
+// Here the names live in the SHAPE, once per query, and a row is its values in field order.
 // Filling one is a store at a known index. Reading one back by name is answered by this class
 // itself — `FindProp` walks the shape's names rather than a member table, because a light class
 // answers its own questions and does not go through the general machinery to do it.
+//
+// ⭐⭐ ONE ALLOCATION PER ROW: THE VALUES LIE RIGHT BEHIND THE OBJECT. The width is the compiler's —
+// one per query, known before the first row — so the vector they used to live in never grew; it
+// was only a second block, allocated with every row and freed with it (`ibLinqRow` stood in a
+// ninth of a `from … select`, 2026-09-28). The object and its values are now one block, the
+// trailing-array layout a counted object of variable size usually takes.
+//
+// 🛑 WHAT KEEPS IT SOUND, and all of it is this class's own:
+//   * a record WITH fields is made only by `Make` — that constructor is private, so nobody can
+//     `new` one without room behind it;
+//   * the block is given back by the class's own `operator delete`, which the virtual destructor
+//     selects when DecrRef says `delete this` — the same global pair that made it;
+//   * the values are built and destroyed by hand, in the constructor and the destructor;
+//   * a copy would not carry the values, so there is none. A record travels by its handle.
+// The registry's `new T()` makes one with no fields and nothing behind it, which is a sound record.
 class ibValueLinqRecord : public ibValue {
 public:
 	ibValueLinqRecord() : ibValue(ibValueTypes::TYPE_VALUE) {}
-	ibValueLinqRecord(ibValueLinqShape* shape, long count)
-		: ibValue(ibValueTypes::TYPE_VALUE), m_shape(shape), m_values((size_t)(count < 0 ? 0 : count)) {
-		if (m_shape != nullptr) m_shape->IncrRef();
+
+	static ibValueLinqRecord* Make(ibValueLinqShape* shape, long count) {
+		const size_t fields = (size_t)(count < 0 ? 0 : count);
+		void* const block = ::operator new(sizeof(ibValueLinqRecord) + fields * sizeof(ibValue));
+		return ::new (block) ibValueLinqRecord(shape, fields);
 	}
-	virtual ~ibValueLinqRecord() { if (m_shape != nullptr) m_shape->DecrRef(); }
+	static void operator delete(void* block) { ::operator delete(block); }
+
+	ibValueLinqRecord(const ibValueLinqRecord&) = delete;
+	ibValueLinqRecord& operator=(const ibValueLinqRecord&) = delete;
+
+	virtual ~ibValueLinqRecord() {
+		for (size_t i = m_count; i-- > 0;)
+			Values()[i].~ibValue();
+		if (m_shape != nullptr) m_shape->DecrRef();
+	}
 
 	virtual ibClassID GetClassType() const override { return g_valueLinqRecord; }
 
 	// A row EXISTS: it is not empty because a field of it happens to be.
-	virtual bool IsEmpty() const override { return m_values.empty(); }
+	virtual bool IsEmpty() const override { return m_count == 0; }
 
 	virtual ibString GetString() const override {
 		// What a watch shows. Names included — the person reading it did not write the ordinals.
 		ibString text;
-		for (size_t i = 0; i < m_values.size(); ++i) {
+		for (size_t i = 0; i < m_count; ++i) {
 			if (i != 0) text << wxT(", ");
 			if (m_shape != nullptr && (long)i < m_shape->Count()) text << m_shape->NameAt((long)i) << wxT("=");
-			text << m_values[i].GetString();
+			text << Values()[i].GetString();
 		}
 		return text;
 	}
 
 	// ⭐ ITS OWN ANSWERS. Four overrides and no member table: the surface IS the shape, so there is
 	// nothing to build, nothing to cache and nothing to invalidate.
-	virtual long     GetNProps() const override { return (long)m_values.size(); }
+	virtual long     GetNProps() const override { return (long)m_count; }
 	virtual long     FindProp(const ibString& name) const override {
 		return m_shape != nullptr ? m_shape->Ordinal(name) : wxNOT_FOUND;
 	}
@@ -704,8 +740,8 @@ public:
 			? m_shape->NameAt(lPropNum) : s_absent;
 	}
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
-		if (lPropNum < 0 || (size_t)lPropNum >= m_values.size()) return false;
-		pvarPropVal = m_values[(size_t)lPropNum];
+		if (lPropNum < 0 || (size_t)lPropNum >= m_count) return false;
+		pvarPropVal = Values()[(size_t)lPropNum];
 		return true;
 	}
 	// A projected row is an answer, not a variable: what produced it is gone by the time anyone
@@ -723,8 +759,8 @@ public:
 	// Filled by the instruction that projects — BY POSITION, which is the position the compiler
 	// wrote the field at.
 	void SetField(long ordinal, const ibValue& value) {
-		if (ordinal >= 0 && (size_t)ordinal < m_values.size())
-			m_values[(size_t)ordinal] = value;
+		if (ordinal >= 0 && (size_t)ordinal < m_count)
+			Values()[(size_t)ordinal] = value;
 	}
 
 	// ⭐ THE CELL WHERE IT LIVES, not a copy of it. `GetPropVal` has to answer through the general
@@ -734,13 +770,64 @@ public:
 	// GetPropVal's `false` produced one copy later.
 	const ibValue& ValueAt(long ordinal) const {
 		static const ibValue s_absent;
-		return (ordinal >= 0 && (size_t)ordinal < m_values.size())
-			? m_values[(size_t)ordinal] : s_absent;
+		return (ordinal >= 0 && (size_t)ordinal < m_count)
+			? Values()[(size_t)ordinal] : s_absent;
 	}
 
 private:
-	ibValueLinqShape*    m_shape = nullptr;   // shared by every row of the query; refcounted
-	std::vector<ibValue> m_values;            // field order = the order they were written in
+	// Only through Make, which has made the room behind the object for `count` values.
+	ibValueLinqRecord(ibValueLinqShape* shape, size_t count)
+		: ibValue(ibValueTypes::TYPE_VALUE), m_shape(shape), m_count(count) {
+		if (m_shape != nullptr) m_shape->IncrRef();
+		for (size_t i = 0; i < m_count; ++i)
+			::new (Values() + i) ibValue();
+	}
+
+	// The values, in field order — the order they were written in — right behind the object.
+	ibValue*       Values()       { return reinterpret_cast<ibValue*>(this + 1); }
+	const ibValue* Values() const { return reinterpret_cast<const ibValue*>(this + 1); }
+
+	ibValueLinqShape* m_shape = nullptr;   // shared by every row of the query; refcounted
+	size_t            m_count = 0;         // how many values lie behind the object
+};
+
+// A RUN OF ROWS WHERE THEY LIE — a collection's own, or a bucket's — lent without copying.
+struct ibLinqRowSpan {
+	const ibValue* m_data = nullptr;
+	size_t         m_size = 0;
+
+	const ibValue* begin() const { return m_data; }
+	const ibValue* end()   const { return m_data + m_size; }
+	size_t         size()  const { return m_size; }
+	bool           empty() const { return m_size == 0; }
+	const ibValue& operator[](size_t i) const { return m_data[i]; }
+};
+
+// ⭐ A BUCKET'S ROWS — the first one in place, a vector only from the second. A join keys its inner
+// side by what is usually unique, so nearly every bucket holds one row, and the vector made for it
+// was an allocation per inner row to keep a list of one (KeepInBucket, a fifth of the join's
+// samples, 2026-09-28). A group, which does hold many, pays the vector exactly as before.
+class ibLinqBucketRows {
+public:
+	explicit ibLinqBucketRows(const ibValue& row) : m_one(row) {}
+
+	void Add(const ibValue& row) {
+		if (m_more.empty()) {
+			m_more.reserve(4);
+			m_more.push_back(std::move(m_one));   // the first moves over; the place it leaves is empty
+		}
+		m_more.push_back(row);
+	}
+
+	// Asked anew by every reader: the bucket can grow after a view of it was handed out, and a run
+	// taken once would not see the rows added since — or would point at the one that moved.
+	ibLinqRowSpan Rows() const {
+		return m_more.empty() ? ibLinqRowSpan{ &m_one, 1 } : ibLinqRowSpan{ m_more.data(), m_more.size() };
+	}
+
+private:
+	ibValue              m_one;
+	std::vector<ibValue> m_more;
 };
 
 // The collection itself. One object per loop, and everything a pipeline does lives on it.
@@ -755,7 +842,7 @@ public:
 	ibValueLinqRows() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
 	// A VIEW over somebody else's rows — what a bucket lookup hands out. It keeps the owner alive
 	// and copies nothing.
-	ibValueLinqRows(ibValueLinqRows* owner, const std::vector<ibValue>* view)
+	ibValueLinqRows(ibValueLinqRows* owner, const ibLinqBucketRows* view)
 		: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_owner(owner), m_view(view) {
 		if (m_owner != nullptr) m_owner->IncrRef();
 	}
@@ -773,14 +860,14 @@ public:
 	// A VIEW borrows somebody else's rows and has nothing else, so it answers about those.
 	virtual bool IsEmpty() const override {
 		return m_view != nullptr
-			? m_view->empty()
-			: (m_rows.empty() && m_buckets.empty() && m_seen.empty());
+			? m_view->Rows().empty()
+			: (m_rows.empty() && (m_index == nullptr || (m_index->m_buckets.empty() && m_index->m_seen.empty())));
 	}
 	virtual ibString GetString() const override { return wxT("<linq>"); }   // watch-safe, and dull
 
 	// ⭐ FIRST TIME? — `Distinct`, entire. ORDERED rather than hashed, and see the note on the
 	// buckets below for the measurement that says to keep it that way.
-	bool FirstTime(const ibValue& value) { return m_seen.insert(value).second; }
+	bool FirstTime(const ibValue& value) { return Index().m_seen.insert(value).second; }
 
 	void Keep(const ibValue& row)    { m_rows.push_back(row); }
 
@@ -852,22 +939,30 @@ public:
 	// bucket standing right beside it (`ibLinqGroups`: a find per group, with ibValue comparisons,
 	// for an address that was in hand at insert). A `std::map` node never moves, so keeping the
 	// entry is keeping both halves: the key to name the group and the rows to be its Values.
+	//
+	// ⭐ ONE WALK DOWN THE TREE, NOT TWO: `try_emplace` finds the key and places a new one in the same
+	// descent, where a `find` that missed was followed by an `emplace` that walked it again.
 	void KeepInBucket(const ibValue& key, const ibValue& row) {
-		const auto found = m_buckets.find(key);
-		if (found == m_buckets.end()) {
-			const auto added = m_buckets.emplace(key, std::vector<ibValue>{ row });
-			m_bucketOrder.push_back(&*added.first);
+		ibIndex& index = Index();
+		const auto placed = index.m_buckets.try_emplace(key, row);
+		if (placed.second) {
+			index.m_bucketOrder.push_back(&*placed.first);
 			return;
 		}
-		found->second.push_back(row);
+		placed.first->second.Add(row);
 	}
-	const std::vector<ibValue>* Bucket(const ibValue& key) const {
-		const auto found = m_buckets.find(key);
-		return found == m_buckets.end() ? nullptr : &found->second;
+	const ibLinqBucketRows* Bucket(const ibValue& key) const {
+		if (m_index == nullptr)
+			return nullptr;
+		const auto found = m_index->m_buckets.find(key);
+		return found == m_index->m_buckets.end() ? nullptr : &found->second;
 	}
 	// The buckets in FIRST-APPEARANCE order, each entry carrying its key and its rows together.
-	using ibBucketEntry = std::pair<const ibValue, std::vector<ibValue>>;
-	const std::vector<const ibBucketEntry*>& BucketOrder() const { return m_bucketOrder; }
+	using ibBucketEntry = std::pair<const ibValue, ibLinqBucketRows>;
+	const std::vector<const ibBucketEntry*>& BucketOrder() const {
+		static const std::vector<const ibBucketEntry*> s_none;
+		return m_index != nullptr ? m_index->m_bucketOrder : s_none;
+	}
 
 	// Rows into key order. A STABLE sort over an INDEX: equal keys keep the order they arrived in,
 	// and each row moves once instead of being swapped through every comparison.
@@ -936,16 +1031,18 @@ public:
 	}
 
 	// ⭐⭐ ITERATED IN PLACE. `foreach` over what a pipeline kept builds nothing per row: the state
-	// walks the vector the collection already holds, and holds the collection while it does.
+	// walks the rows the collection already holds, and holds the collection while it does. It asks
+	// for them at every step — a bucket's rows move from their place into a vector when a second
+	// arrives (ibLinqBucketRows), so where they lie is not a thing to keep.
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
 		class RowWalk : public ibValueIteratorState {
 		public:
-			RowWalk(ibValueLinqRows* owner, const std::vector<ibValue>& rows)
-				: m_owner(owner), m_rows(rows) { if (m_owner) m_owner->IncrRef(); }
-			~RowWalk() override { if (m_owner) m_owner->DecrRef(); }
+			explicit RowWalk(ibValueLinqRows* owner) : m_owner(owner) { m_owner->IncrRef(); }
+			~RowWalk() override { m_owner->DecrRef(); }
 			bool MoveNext(ibValue& current) override {
-				if (m_pos >= m_rows.size()) return false;
-				current = m_rows[m_pos++];
+				const ibLinqRowSpan rows = m_owner->Rows();
+				if (m_pos >= rows.size()) return false;
+				current = rows[m_pos++];
 				return true;
 			}
 			void Reset() override { m_pos = 0; }
@@ -953,24 +1050,49 @@ public:
 			// first one describes all of them — which is what a reader standing after the dot of a
 			// `foreach` variable is asking for. Nothing is consumed: the cursor does not move.
 			bool PeekSample(ibValue& current) const override {
-				if (m_rows.empty()) return false;
-				current = m_rows[0];
+				const ibLinqRowSpan rows = m_owner->Rows();
+				if (rows.empty()) return false;
+				current = rows[0];
 				return true;
 			}
+			long Remaining() const override {
+				const size_t count = m_owner->Rows().size();
+				return count > m_pos ? (long)(count - m_pos) : 0;
+			}
 		private:
-			ibValueLinqRows*            m_owner;
-			const std::vector<ibValue>& m_rows;
-			size_t                      m_pos = 0;
+			ibValueLinqRows* m_owner;
+			size_t           m_pos = 0;
 		};
-		return std::make_shared<RowWalk>(this, Rows());
+		return std::make_shared<RowWalk>(this);
 	}
 
-	const std::vector<ibValue>& Rows() const { return m_view != nullptr ? *m_view : m_rows; }
+	ibLinqRowSpan Rows() const {
+		return m_view != nullptr ? m_view->Rows() : ibLinqRowSpan{ m_rows.data(), m_rows.size() };
+	}
 
 private:
+	// ⭐ THE INDEXES ARE MADE WHEN FIRST USED. A join hands out a VIEW of a bucket for every outer
+	// row, and a view never indexes — yet it carried an empty set and an empty map, and an empty
+	// standard tree allocates its head node when it is made. Two allocations and two frees per outer
+	// row for containers nobody touched: the view's construction and destruction were a fifth of
+	// the join's samples (2026-09-28).
+	struct ibIndex {
+		// THE ONE KEY POLICY, taken from where it is written (value.h): *"grouping, joining and
+		// de-duplicating all need the same pair … every index takes them from here."* These two are
+		// trees, so they take its order, ibValueLess.
+		std::set<ibValue, ibValueLess>                   m_seen;
+		std::map<ibValue, ibLinqBucketRows, ibValueLess> m_buckets;
+		std::vector<const ibBucketEntry*>                m_bucketOrder;
+	};
+	ibIndex& Index() {
+		if (m_index == nullptr)
+			m_index.reset(new ibIndex());
+		return *m_index;
+	}
+
 	// A VIEW borrows: it has no rows of its own and reads the owner's.
-	ibValueLinqRows*             m_owner = nullptr;
-	const std::vector<ibValue>*  m_view  = nullptr;
+	ibValueLinqRows*        m_owner = nullptr;
+	const ibLinqBucketRows* m_view  = nullptr;
 
 	std::vector<ibValue> m_rows;
 
@@ -982,12 +1104,8 @@ private:
 	size_t               m_keyStride = 0;
 	// The way each key position runs (true = descending), `m_keyStride` of them — see KeepKey.
 	std::vector<bool>    m_keyDescending;
-	// THE ONE KEY POLICY, taken from where it is written (ibValueHash / ibValueEqual, value.h):
-	// *"grouping, joining and de-duplicating all need the same pair … every index takes them from
-	// here."* These two are indexes by value, so they take them from there.
-	std::set<ibValue, std::less<ibValue>>                       m_seen;
-	std::map<ibValue, std::vector<ibValue>, std::less<ibValue>> m_buckets;
-	std::vector<const ibBucketEntry*>                           m_bucketOrder;
+	// Values seen and buckets — see ibIndex. Null until `distinct` or a bucket first asks.
+	std::unique_ptr<ibIndex> m_index;
 };
 // GroupBy node — bucket upstream by key extracted via fn(elem).
 // On first MoveNext drain upstream + build buckets, then emit one
@@ -1434,6 +1552,9 @@ class ibValueQuery : public ibValueStaticMembers<&ibBindLinqMethods> {
 
 	virtual ~ibValueQuery() = default;
 
+	// Its own id, not the registry's copy of it — see the note beside the constants.
+	virtual ibClassID GetClassType() const override { return g_valueQuery; }
+
 	std::shared_ptr<ibValueIteratorState> CreateIterator() override {
 		if (m_state) m_state->Reset();
 		return m_state;
@@ -1443,8 +1564,6 @@ private:
 	std::shared_ptr<ibValueIteratorState> m_state;
 };
 
-
-constexpr ibClassID g_valueQuery = system_to_clsid("VL_QRY");
 
 SYSTEM_TYPE_REGISTER(ibValueQuery, "LinqQuery", g_valueQuery);
 
@@ -1550,9 +1669,15 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		// === Terminal operators (no args, materialise / aggregate) ===
 		case M::Count: // number of elements
 		{
-			long count = 0;
-			ibValue current;
-			while (upstream->MoveNext(current)) ++count;
+			// ASKED BEFORE IT IS WALKED. A cursor over a collection knows how many it holds; only a
+			// pipeline has to be driven to the end. Walking a query's own answer to count it made a new
+			// value per row — 13% of a whole `from … select` (the sampled profile, 2026-09-28).
+			long count = upstream->Remaining();
+			if (count < 0) {
+				count = 0;
+				ibValue current;
+				while (upstream->MoveNext(current)) ++count;
+			}
 			SetTypeNumber(ret, count);
 			break;
 		}
@@ -2143,7 +2268,7 @@ ibValue TableOfRows(ibValueLinqRows& kept, const std::vector<ibString>& columns,
 			}
 		}
 	}
-	return rows.ToValueTable();
+	return std::move(rows).ToValueTable();   // built to be handed on: its cells move, they are not copied
 }
 
 } // namespace
@@ -2214,7 +2339,7 @@ void ibLinqBucket(ibValue& scratch, const ibValue& key, const ibValue& row)
 void ibLinqBucketGet(ibValue& out, ibValue& scratch, const ibValue& key)
 {
 	ibValueLinqRows& kept = LinqResultIn(scratch);
-	const std::vector<ibValue>* const bucket = kept.Bucket(key);
+	const ibLinqBucketRows* const bucket = kept.Bucket(key);
 	if (bucket == nullptr) { out = ibValue(); return; }   // no match is an ordinary answer
 	out = new ibValueLinqRows(&kept, bucket);
 }
@@ -2255,7 +2380,7 @@ void ibLinqRow(ibValue& out, ibValue& shapeSlot, const ibString& names, long cou
 		shape = new ibValueLinqShape(names);
 		shapeSlot = shape;
 	}
-	out = new ibValueLinqRecord(shape, count);
+	out = ibValueLinqRecord::Make(shape, count);
 }
 
 void ibLinqField(ibValue& row, const ibValue& value, long ordinal)

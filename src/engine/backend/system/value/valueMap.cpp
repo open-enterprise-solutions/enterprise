@@ -610,7 +610,7 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueContainer, "Container", value_to_clsid("VL_CONTR"));
-VALUE_TYPE_REGISTER(ibValueStructure, "Structure", value_to_clsid("VL_STRUT"));
+VALUE_TYPE_REGISTER(ibValueContainer, "Container", g_valueContainerCLSID);
+VALUE_TYPE_REGISTER(ibValueStructure, "Structure", g_valueStructureCLSID);
 
-SYSTEM_TYPE_REGISTER(ibValueContainer::ibValueReturnContainer, "KeyValue", system_to_clsid("VL_KEVAL"));
+SYSTEM_TYPE_REGISTER(ibValueContainer::ibValueReturnContainer, "KeyValue", g_valueKeyValueCLSID);

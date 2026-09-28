@@ -114,6 +114,9 @@ public:
 
 	static ibValue AdjustValue(const ibTypeDescription& typeDescription, const ibValue& varValue,
 		const class ibMetaData* metaData = nullptr);
+	// …a value its caller is done with: where the description says nothing, it is handed back MOVED.
+	static ibValue AdjustValue(const ibTypeDescription& typeDescription, ibValue&& varValue,
+		const class ibMetaData* metaData = nullptr);
 
 	// ⭐ DOES THE DESCRIPTION ADMIT A VALUE OF THIS CLASS — the question AdjustValue asks, and an event
 	// handler asks of its source. See the definition.

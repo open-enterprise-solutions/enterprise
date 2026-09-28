@@ -324,6 +324,11 @@ public:
 		return current.m_typeClass != ibValueTypes::TYPE_EMPTY;
 	}
 
+	long Remaining() const override {
+		const long rows = m_model != nullptr ? (long)m_model->GetRowCount() : 0;
+		return rows > m_pos ? rows - m_pos : 0;
+	}
+
 private:
 	ibValueModel* m_model;
 	long          m_pos = 0;

@@ -35,6 +35,12 @@ public:
 	virtual bool MoveNext(ibValue& current) = 0;
 	virtual void Reset() = 0;
 
+	// HOW MANY ARE STILL TO COME, when the state knows without walking — a cursor over a collection
+	// does. A pipeline does not: a Where has to ask its predicate, and a Select has to run its function,
+	// which may do more than answer. LINQ's Count asks this before it drains (procUnitLINQ.cpp); -1 is
+	// "walk me".
+	virtual long Remaining() const { return -1; }
+
 	// IntelliSense / editor type-hint. Writes a skeleton value of the
 	// element type into `current` so the editor's static parser knows
 	// what `x` is in `For Each x In container`. Returns false when no
@@ -1814,6 +1820,25 @@ struct ibValueHash {
 };
 struct ibValueEqual {
 	bool operator()(const ibValue& a, const ibValue& b) const { return a.CompareValueLS(b) == 0; }
+};
+
+// …and the ORDER, for an index that is a tree: `CompareValueLS < 0`, with the kinds a real key is
+// — a number, a string, a date, each against its own kind — answered on the spot off the payload,
+// which is exactly what CompareValueLS answers for them. A join spent 14.5% of its whole time inside
+// the virtual call and the reference, null and rank checks that come before those lines (the sampled
+// profile, 2026-09-28). Anything else asks CompareValueLS, the one definition of the order.
+struct ibValueLess {
+	bool operator()(const ibValue& a, const ibValue& b) const {
+		if (a.m_typeClass == b.m_typeClass) {
+			switch (a.m_typeClass) {
+			case ibValueTypes::TYPE_NUMBER: return a.m_fData.Compare(b.m_fData) < 0;
+			case ibValueTypes::TYPE_STRING: return a.m_sData.Cmp(b.m_sData) < 0;
+			case ibValueTypes::TYPE_DATE:   return a.m_dData < b.m_dData;
+			default:                        break;
+			}
+		}
+		return a.CompareValueLS(b) < 0;
+	}
 };
 
 // A COMPOSITE key — a group-by prefix, a register's dimension tuple — is a

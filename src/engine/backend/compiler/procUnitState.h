@@ -108,9 +108,11 @@ struct ibRunStack {
 	void Release(const ibRun& run, const long count);
 
 	// Blocks are kept — a session allocates its stack once and lives on it.
-	void Rewind() { m_currentBlock = 0; m_top = 0; }
+	void Rewind() { m_currentBlock = 0; m_top = 0; m_curVals = nullptr; m_curRefs = nullptr; }
 
 private:
+	// Makes `block` the one being filled, creating the blocks up to it.
+	void EnterBlock(unsigned int block);
 
 	// Wide enough that ordinary nesting never leaves a block half-used, small enough
 	// that a session running one shallow script does not pay for much.
@@ -127,6 +129,14 @@ private:
 	std::vector<std::unique_ptr<ibBlock>> m_blocks;
 	unsigned int                          m_currentBlock = 0;
 	long                                  m_top = 0;
+
+	// ⭐ WHERE THE BLOCK BEING FILLED STARTS, kept beside its number. Every call reserves here, and
+	// reaching the slots through the number was a chain of loads each waiting for the one before —
+	// the vector, the pointer in it, the block, the array — before the first store (the sampled
+	// profile's hottest instructions in Reserve, 2026-09-28). Null until a block is entered, and
+	// again whenever the number changes to a block not yet looked up.
+	ibValue*                              m_curVals = nullptr;
+	ibValue**                             m_curRefs = nullptr;
 };
 
 struct ibProcUnitState {

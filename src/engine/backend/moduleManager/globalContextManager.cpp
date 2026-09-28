@@ -10,8 +10,14 @@
 
 #include "backend/objCtor.h"
 
+constexpr ibClassID g_valueGlobalContextStructureManagerCLSID = system_to_clsid("MG_SYAM");
+
 class ibValueGlobalContextStructureManager : public ibValueStructure {
 	public:
+
+	// Its own id — the structure it derives from answers with the structure's (valueMap.h). Not
+	// m_clsid below: that is the kind of metadata it manages.
+	virtual ibClassID GetClassType() const override { return g_valueGlobalContextStructureManagerCLSID; }
 
 	ibValueGlobalContextStructureManager() : m_metaData(nullptr), m_clsid(0) {}
 	ibValueGlobalContextStructureManager(const ibClassID& clsid, ibMetaData* metaData)
@@ -212,4 +218,4 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 //***********************************************************************
 
 SYSTEM_TYPE_REGISTER(ibValueGlobalContextManager, "GlobalContextManager", system_to_clsid("MG_SYSM"));
-SYSTEM_TYPE_REGISTER(ibValueGlobalContextStructureManager, "GlobalContextStructureManager", system_to_clsid("MG_SYAM"));
+SYSTEM_TYPE_REGISTER(ibValueGlobalContextStructureManager, "GlobalContextStructureManager", g_valueGlobalContextStructureManagerCLSID);

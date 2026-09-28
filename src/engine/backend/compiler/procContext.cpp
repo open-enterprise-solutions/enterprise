@@ -7,29 +7,34 @@
 //*                                          RunStack                                             *
 //*************************************************************************************************
 
+void ibRunStack::EnterBlock(unsigned int block)
+{
+	while (m_blocks.size() <= block)
+		m_blocks.emplace_back(new ibBlock());
+	m_currentBlock = block;
+	m_curVals      = m_blocks[block]->m_vals.get();
+	m_curRefs      = m_blocks[block]->m_refs.get();
+}
+
 bool ibRunStack::Reserve(const long count, ibRun& outRun)
 {
 	if (count < 0 || count > kBlockSlots)
 		return false;                      // wider than a block — the caller owns it instead
 
-	if (m_blocks.empty())
-		m_blocks.emplace_back(new ibBlock());
+	if (m_curVals == nullptr)
+		EnterBlock(m_currentBlock);        // the first reservation, or the first after the number moved
 
 	// Not enough room left in the block being filled: move to the next one WHOLE
 	// rather than splitting a frame across two. A frame's slots have to be
 	// contiguous — the interpreter indexes them as an array — and the tail left
 	// behind is at most one frame's worth, which the next Release reclaims anyway.
 	if (m_top + count > kBlockSlots) {
-		m_currentBlock++;
-		if (m_currentBlock >= m_blocks.size())
-			m_blocks.emplace_back(new ibBlock());
+		EnterBlock(m_currentBlock + 1);
 		m_top = 0;
 	}
 
-	ibBlock& block = *m_blocks[m_currentBlock];
-
-	outRun.m_vals  = block.m_vals.get() + m_top;
-	outRun.m_refs  = block.m_refs.get() + m_top;
+	outRun.m_vals  = m_curVals + m_top;
+	outRun.m_refs  = m_curRefs + m_top;
 	outRun.m_block = m_currentBlock;
 	outRun.m_mark  = (unsigned int)m_top;
 
@@ -51,8 +56,12 @@ void ibRunStack::Release(const ibRun& run, const long count)
 	for (long i = 0; i < count; i++)
 		run.m_vals[i].Reset();
 
-	m_currentBlock = run.m_block;
-	m_top          = (long)run.m_mark;
+	if (run.m_block != m_currentBlock) {
+		m_currentBlock = run.m_block;
+		m_curVals      = nullptr;              // looked up again by the next Reserve
+		m_curRefs      = nullptr;
+	}
+	m_top = (long)run.m_mark;
 }
 
 //*************************************************************************************************

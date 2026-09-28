@@ -364,5 +364,5 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 // Both VENDED, never creatable: the collection exists because a configuration declares jobs, and a
 // row exists because the collection produced it. `New JobSettings()` would refer to nothing — the
 // way in is ScheduledJobs.Predefined.
-SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs, "PredefinedJobs", value_to_clsid("VL_PJOBS"));
+SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs, "PredefinedJobs", g_valuePredefinedJobsCLSID);
 SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs::ibValueJobRow, "JobSettings", value_to_clsid("VL_JOBST"));

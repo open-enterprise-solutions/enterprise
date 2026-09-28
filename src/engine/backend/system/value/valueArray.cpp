@@ -469,4 +469,4 @@ bool ibValueArray::CompareValueEQ(const ibValue& cParam) const
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueArray, "Array", value_to_clsid("VL_ARR"));
+VALUE_TYPE_REGISTER(ibValueArray, "Array", g_valueArrayCLSID);

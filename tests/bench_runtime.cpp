@@ -2013,3 +2013,211 @@ TEST(ParserBench, DISABLED_CompileThroughput) {
     EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
     SUCCEED();
 }
+
+// ===========================================================================
+// SampledProfile — WHERE the time goes, not only how much
+// ===========================================================================
+//
+// The benches above say how long a row takes; they cannot say which function
+// the row's time is in, and ETW sampling (wpr, xperf, the VS profiler) needs an
+// elevated prompt that is not always at hand (2026-09-28). A thread can be
+// sampled from inside its own process without one: another thread suspends it
+// about once a millisecond, reads its registers, walks its stack with the
+// unwind tables the image already carries (RtlLookupFunctionEntry +
+// RtlVirtualUnwind — no allocation while the target is stopped, so a target
+// holding the heap lock cannot deadlock the sampler), and resumes it. The
+// addresses are named afterwards through dbghelp and the PDBs beside the
+// binaries. A couple of seconds of a scenario is a thousand-odd stacks.
+//
+// "self" is where the instruction pointer was; "total" is every function on the
+// stack at that moment, counted once per sample. Windows x64 only.
+#if defined(_WIN32) && defined(_M_X64)
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+
+namespace {
+
+class SampledStacks {
+public:
+    template <class F>
+    void Run(F&& scenario, double seconds) {
+        HANDLE target = nullptr;
+        ::DuplicateHandle(::GetCurrentProcess(), ::GetCurrentThread(), ::GetCurrentProcess(), &target,
+                          THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
+        std::atomic<bool> done{ false };
+        std::thread sampler([&] {
+            constexpr int kDepth = 64;
+            DWORD64 frames[kDepth];
+            while (!done.load(std::memory_order_relaxed)) {
+                const auto next = Clock::now() + std::chrono::microseconds(1000);
+                while (Clock::now() < next && !done.load(std::memory_order_relaxed)) std::this_thread::yield();
+                if (::SuspendThread(target) == (DWORD)-1)
+                    continue;
+                int depth = 0;
+                CONTEXT ctx{};
+                ctx.ContextFlags = CONTEXT_FULL;
+                if (::GetThreadContext(target, &ctx)) {
+                    // Nothing that allocates until the thread is resumed: the frames go into the array.
+                    while (depth < kDepth && ctx.Rip != 0) {
+                        frames[depth++] = ctx.Rip;
+                        DWORD64 imageBase = 0;
+                        PRUNTIME_FUNCTION fn = ::RtlLookupFunctionEntry(ctx.Rip, &imageBase, nullptr);
+                        if (fn == nullptr) {   // a leaf: its return address is at the top of the stack
+                            ctx.Rip = *reinterpret_cast<const DWORD64*>(ctx.Rsp);
+                            ctx.Rsp += 8;
+                        } else {
+                            PVOID handlerData = nullptr;
+                            DWORD64 establisher = 0;
+                            ::RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, ctx.Rip, fn, &ctx, &handlerData,
+                                               &establisher, nullptr);
+                        }
+                    }
+                }
+                ::ResumeThread(target);
+                if (depth > 0)
+                    m_stacks.emplace_back(frames, frames + depth);
+            }
+        });
+        const auto until = Clock::now() + std::chrono::duration<double>(seconds);
+        while (Clock::now() < until)
+            scenario();
+        done = true;
+        sampler.join();
+        ::CloseHandle(target);
+    }
+
+    void Print(const char* title, size_t top) const {
+        static bool symbolsLoaded = false;
+        const HANDLE process = ::GetCurrentProcess();
+        if (!symbolsLoaded) {
+            ::SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+            symbolsLoaded = ::SymInitialize(process, nullptr, TRUE) != FALSE;
+        }
+        std::map<DWORD64, std::string> names;
+        std::map<DWORD64, DWORD64> offsets;   // an address's distance from the start of its function
+        const auto nameOf = [&](DWORD64 address) -> const std::string& {
+            auto it = names.find(address);
+            if (it != names.end())
+                return it->second;
+            alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + 512];
+            SYMBOL_INFO* const symbol = reinterpret_cast<SYMBOL_INFO*>(buffer);
+            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            symbol->MaxNameLen = 511;
+            DWORD64 displacement = 0;
+            std::string name = ::SymFromAddr(process, address, &displacement, symbol) ? std::string(symbol->Name)
+                                                                                        : std::string("?");
+            offsets[address] = displacement;
+            return names.emplace(address, std::move(name)).first->second;
+        };
+
+        std::map<std::string, size_t> self, total;
+        for (const std::vector<DWORD64>& stack : m_stacks) {
+            self[nameOf(stack.front())]++;
+            std::vector<std::string> seen;
+            for (DWORD64 address : stack) {
+                const std::string& name = nameOf(address);
+                if (std::find(seen.begin(), seen.end(), name) == seen.end()) {
+                    seen.push_back(name);
+                    total[name]++;
+                }
+            }
+        }
+        const auto sortedOf = [](const std::map<std::string, size_t>& counts) {
+            std::vector<std::pair<size_t, std::string>> sorted;
+            for (const auto& kv : counts) sorted.emplace_back(kv.second, kv.first);
+            std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            return sorted;
+        };
+        const auto percent = [&](size_t hits) { return 100.0 * double(hits) / double(m_stacks.size()); };
+        std::cout << "\n[ sampled profile | " << title << " | " << m_stacks.size() << " stacks ]\n";
+
+        // SELF, each with the callers it was reached through most often — the name alone of an allocator
+        // or a hash says nothing about which of ours asked for it.
+        std::cout << "  -- self (and its commonest callers) --\n";
+        const auto selfSorted = sortedOf(self);
+        for (size_t i = 0; i < selfSorted.size() && i < top; ++i) {
+            std::cout << "  " << std::setw(5) << std::fixed << std::setprecision(1) << percent(selfSorted[i].first)
+                      << "%  " << selfSorted[i].second.substr(0, 110) << "\n";
+            if (i >= 10)
+                continue;
+            std::map<std::string, size_t> chains;
+            for (const std::vector<DWORD64>& stack : m_stacks) {
+                if (nameOf(stack.front()) != selfSorted[i].second)
+                    continue;
+                std::string chain;
+                for (size_t k = 1; k < stack.size() && k <= 3; ++k)
+                    chain += (k > 1 ? " <- " : "") + nameOf(stack[k]).substr(0, 48);
+                chains[chain]++;
+            }
+            const auto chainSorted = sortedOf(chains);
+            for (size_t c = 0; c < chainSorted.size() && c < 2; ++c)
+                std::cout << "           " << std::setw(5) << percent(chainSorted[c].first) << "%  <- "
+                          << chainSorted[c].second << "\n";
+
+            // …and WHICH INSTRUCTIONS in it, as offsets from its start, to be read against the dumpbin
+            // listing: a function's self time is a question about its code only once it has an address.
+            if (i >= 5)
+                continue;
+            std::map<std::string, size_t> hot;
+            for (const std::vector<DWORD64>& stack : m_stacks)
+                if (nameOf(stack.front()) == selfSorted[i].second) {
+                    std::ostringstream at;
+                    at << "+0x" << std::hex << offsets[stack.front()];
+                    hot[at.str()]++;
+                }
+            std::cout << "           at:";
+            const auto hotSorted = sortedOf(hot);
+            for (size_t h = 0; h < hotSorted.size() && h < 6; ++h)
+                std::cout << " " << hotSorted[h].second << " " << std::setprecision(1) << percent(hotSorted[h].first) << "%";
+            std::cout << "\n";
+        }
+
+        // TOTAL, without the frames every stack has (the test harness, main, the thread start).
+        std::cout << "  -- total --\n";
+        size_t shown = 0;
+        for (const auto& entry : sortedOf(total)) {
+            if (entry.first >= m_stacks.size())
+                continue;
+            if (shown++ >= top)
+                break;
+            std::cout << "  " << std::setw(5) << percent(entry.first) << "%  " << entry.second.substr(0, 110) << "\n";
+        }
+    }
+
+private:
+    std::vector<std::vector<DWORD64>> m_stacks;
+};
+
+} // namespace
+
+TEST(SampledProfile, DISABLED_Linq) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public; var inner public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function WhereLambda() Public\n")
+        wxT("  Return src.Where(Function(x) Return x > 100 EndFunction).Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function SelectBlock() Public\n")
+        wxT("  var q; q = from a in src select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function JoinBlock() Public\n")
+        wxT("  var q; q = from a in src join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)16000), ret;
+    pu.CallAsProc(wxT("Fill"), argN);
+
+    for (const wxChar* scenario : { wxT("WhereLambda"), wxT("SelectBlock"), wxT("JoinBlock") }) {
+        SampledStacks profile;
+        profile.Run([&]{ pu.CallAsFunc(scenario, ret); g_sink += (uint64_t)ret.GetInteger(); }, 2.0);
+        profile.Print(wxString(scenario).ToStdString().c_str(), 22);
+    }
+    SUCCEED();
+}
+#endif

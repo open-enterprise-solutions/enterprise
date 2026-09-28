@@ -91,9 +91,14 @@ private:
 
 };
 
+constexpr ibClassID g_valueSpreadsheetAreaCollectionCLSID = system_to_clsid("SY_SPAEA");
+
 class ibValueSpreadsheetDocumentAreaCollection :
 	public ibValueStructure {
 	public:
+
+	// Its own id — the structure it derives from answers with the structure's (valueMap.h).
+	virtual ibClassID GetClassType() const override { return g_valueSpreadsheetAreaCollectionCLSID; }
 
 public:
 
@@ -546,7 +551,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 
 VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", g_valueSpreadsheetCLSID);
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentRange, "SpreadsheetAreaRange", system_to_clsid("SY_SPPRA"));
-SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", system_to_clsid("SY_SPAEA"));
+SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", g_valueSpreadsheetAreaCollectionCLSID);
 SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentParameterCollection, "SpreadsheetParameterCollection", system_to_clsid("SY_SPPRM"));
 ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetOrient, "SpreadsheetOrient", enum_to_clsid("EN_SORNT"));
 ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetHorizontalAlignment, "SpreadsheetHorizontalAlignment", enum_to_clsid("EN_SHOAL"));
