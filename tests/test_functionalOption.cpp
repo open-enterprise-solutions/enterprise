@@ -103,7 +103,8 @@ TEST(FunctionalOption, TheSetAMemberKeepsSurvivesWriteAndRead)
 	ibWriterMemory writer;
 	ASSERT_TRUE(written.Save(writer));
 
-	ibReaderMemory reader(writer.buffer());
+	const wxMemoryBuffer blob = writer.buffer();   // held: a reader never reads a buffer that is already gone
+	ibReaderMemory reader(blob);
 	ibFunctionalOptionProbe read;
 	ASSERT_TRUE(read.Load(reader));
 
