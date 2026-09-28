@@ -1,10 +1,10 @@
 // =============================================================================
 // ibString — the module: the text behind the facade (fstring.h).
 //
-// Everything that knows how a string is stored lives here and nowhere else: the
-// per-thread pool the blocks come from, and Impl — one block holding the count of
-// the ibStrings that share it, the length, the room and the characters. The header
-// shows one pointer.
+// How a text is MADE, written into and freed lives here and nowhere else: the per-thread
+// pool the blocks come from, and Impl — one block holding the count of the ibStrings that
+// share it, the length, the room and the characters. The header shows one pointer and the
+// block's header (Shared), so copying and reading need no call into this module.
 // =============================================================================
 
 #include "backend/fstring.h"
@@ -167,23 +167,18 @@ void Drain() noexcept { detail::t_pool.Release(); }
 // one allocation from the pool. It was the count in one block with a std::basic_string in it, and the characters
 // in a second (445a49364): a new text paid two allocations, a slice two, a concatenation three (the copy, then
 // its growth).
+// The header (the count, the length, the room — Shared, in fstring.h, so reading is inline) and then the
+// characters: making and freeing the block are this module's.
 struct ibString::Impl : ibString::Shared
 {
-	size_t m_len;   // characters, the terminator not counted
-	size_t m_cap;   // characters the block has room for, the terminator not counted
+	explicit Impl(size_t cap) noexcept : Shared(1, cap) { Chars()[0] = wxT('\0'); }
 
-	explicit Impl(size_t cap) noexcept : Shared(1), m_len(0), m_cap(cap) { Chars()[0] = wxT('\0'); }
-
-	// The characters follow the header in the same block.
-	wchar_t*       Chars() noexcept       { return reinterpret_cast<wchar_t*>(this + 1); }
-	const wchar_t* Chars() const noexcept { return reinterpret_cast<const wchar_t*>(this + 1); }
-
-	static size_t BytesFor(size_t cap) noexcept { return sizeof(Impl) + (cap + 1) * sizeof(wchar_t); }
+	static size_t BytesFor(size_t cap) noexcept { return sizeof(Shared) + (cap + 1) * sizeof(wchar_t); }
 
 	// Room for `cap` characters at least — and for as many more as the pool's block holds anyway.
 	static Impl* Make(size_t cap) {
 		const size_t bytes = ibFStringPool::Capacity(BytesFor(cap));
-		return new (ibFStringPool::Allocate(bytes)) Impl((bytes - sizeof(Impl)) / sizeof(wchar_t) - 1);
+		return new (ibFStringPool::Allocate(bytes)) Impl((bytes - sizeof(Shared)) / sizeof(wchar_t) - 1);
 	}
 	static Impl* Copy(const wchar_t* text, size_t len, size_t cap) {
 		Impl* const impl = Make(cap < len ? len : cap);
@@ -203,13 +198,6 @@ void ibString::Free(Shared* shared) noexcept
 	const size_t bytes = Impl::BytesFor(impl->m_cap);
 	impl->~Impl();
 	ibFStringPool::Deallocate(impl, bytes);
-}
-
-std::wstring_view ibString::View() const noexcept
-{
-	if (m_impl == nullptr) return std::wstring_view();
-	const Impl* const impl = Impl::Of(m_impl);
-	return std::wstring_view(impl->Chars(), impl->m_len);
 }
 
 // A text somebody else holds is copied first, with exactly the room asked for — which is what a concatenation
@@ -238,8 +226,6 @@ namespace {
 bool IsSpace(wchar_t c) noexcept {
 	return c == wxT(' ') || c == wxT('\t') || c == wxT('\n') || c == wxT('\r') || c == wxT('\f') || c == wxT('\v');
 }
-
-int AsFound(size_t at) noexcept { return at == ibString::npos ? -1 : static_cast<int>(at); }
 
 // A piece of a text, made a text of its own — one block, the characters copied once.
 ibString Slice(std::wstring_view piece) { return ibString(piece.data(), piece.size()); }
@@ -314,7 +300,6 @@ ibString::ibString(const wxString& s) { if (!s.empty()) m_impl = Impl::Copy(s.wc
 
 wxString ibString::ToWxString() const { return wxString(wc_str(), Len()); }
 std::wstring ibString::ToStdWString() const { return std::wstring(wc_str(), Len()); }
-const wchar_t* ibString::wc_str() const noexcept { return m_impl != nullptr ? Impl::Of(m_impl)->Chars() : wxT(""); }
 
 std::string ibString::ToUtf8() const
 {
@@ -394,15 +379,11 @@ void ibString::AppendCodepoint(uint32_t cp)
 
 // --- query / element access ---------------------------------------------------------
 
-bool ibString::IsEmpty() const noexcept { return m_impl == nullptr || Impl::Of(m_impl)->m_len == 0; }
-
 bool ibString::IsBlank() const noexcept
 {
 	for (wchar_t c : View()) if (!IsSpace(c)) return false;
 	return true;
 }
-
-size_t ibString::Len() const noexcept { return m_impl != nullptr ? Impl::Of(m_impl)->m_len : 0; }
 
 void ibString::Clear() noexcept
 {
@@ -410,21 +391,13 @@ void ibString::Clear() noexcept
 	else { Release(m_impl); m_impl = nullptr; }
 }
 
-// Read at the terminator too, as the text it replaced allowed: s[Len()] is '\0'.
-wchar_t ibString::operator[](size_t i) const { return wc_str()[i]; }
 wchar_t& ibString::operator[](size_t i)      { return Own()[i]; }
-wchar_t ibString::GetChar(size_t i) const    { return wc_str()[i]; }
 void    ibString::SetChar(size_t i, wchar_t c) { Own()[i] = c; }
-wchar_t ibString::Last() const               { return View().back(); }
 wchar_t* ibString::begin() { return IsEmpty() ? nullptr : Own(); }
 wchar_t* ibString::end()   { return IsEmpty() ? nullptr : Own() + Len(); }
 
 // --- the std::wstring spelling ----------------------------------------------------------
 
-size_t ibString::find(const ibString& sub, size_t start) const { return View().find(sub.View(), start); }
-size_t ibString::find(wchar_t c, size_t start) const           { return View().find(c, start); }
-size_t ibString::rfind(const ibString& sub, size_t start) const { return View().rfind(sub.View(), start); }
-size_t ibString::rfind(wchar_t c, size_t start) const          { return View().rfind(c, start); }
 size_t ibString::find_first_of(const ibString& set, size_t start) const { return View().find_first_of(set.View(), start); }
 size_t ibString::find_last_of(const ibString& set, size_t start) const  { return View().find_last_of(set.View(), start); }
 size_t ibString::find_first_not_of(const ibString& set, size_t start) const { return View().find_first_not_of(set.View(), start); }
@@ -508,8 +481,6 @@ ibString ibString::Right(size_t count) const
 	const std::wstring_view text = View();
 	return count >= text.size() ? *this : Slice(text.substr(text.size() - count));
 }
-int    ibString::Find(const ibString& sub) const { return AsFound(View().find(sub.View())); }
-int    ibString::Find(wchar_t c, bool fromEnd) const { return AsFound(fromEnd ? View().rfind(c) : View().find(c)); }
 size_t ibString::Freq(wchar_t c) const { size_t n = 0; for (wchar_t x : View()) if (x == c) ++n; return n; }
 
 // `rest` may be this very string: what is returned is made before it is written.
@@ -751,9 +722,6 @@ size_t ibString::Replace(const ibString& fromText, const ibString& toText, bool 
 
 // --- comparison ----------------------------------------------------------------------------------------
 
-bool ibString::operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
-bool ibString::operator<(const ibString& o)  const noexcept { return View() < o.View(); }
-bool ibString::operator==(const wchar_t* s) const noexcept { return View().compare(s != nullptr ? s : wxT("")) == 0; }
 bool ibString::operator==(const wxString& s) const { return View().compare(0, npos, s.wc_str(), s.length()) == 0; }
 
 bool ibString::IsSameAs(const ibString& o, bool caseSensitive) const
@@ -778,13 +746,6 @@ bool ibString::IsSameAs(wchar_t c, bool caseSensitive) const
 {
 	const std::wstring_view text = View();
 	return text.size() == 1 && (caseSensitive ? text[0] == c : wxTolower(text[0]) == wxTolower(c));
-}
-
-int ibString::Cmp(const ibString& o) const noexcept
-{
-	if (m_impl == o.m_impl) return 0;
-	const int r = View().compare(o.View());
-	return r < 0 ? -1 : (r > 0 ? 1 : 0);
 }
 
 // The order of a case-folded index (stringUtils' ibStringCaseFoldLess): folded only where the characters
