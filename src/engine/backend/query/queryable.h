@@ -403,12 +403,16 @@ struct ibSemiJoinExists
 // object and answers in its own words), and `VALUETYPE(x)` is the type the value carries. Neither is
 // a reading of a field, so neither can be rendered into SQL at all: the input column is projected and
 // the question is put here, to the value that came back.
+//
+// `CAST(x AS Number(15, 2))` is the fourth such question — what the value IS as that type — and it is
+// answered the way a typed field answers it when a value is written into one (AdjustValue), so a query
+// and a script bring a value to a type alike.
 enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc, PeriodEnd, DateAdd, DateDiff,
                                   DatePart, Substring, WindowAgg, OutputRef, ValueAsk };
 
-// WHAT IS ASKED OF THE VALUE. Three questions, one kind — they differ in what is asked, never in how
-// it is answered, and a separate kind each would be three copies of the same walk.
-enum class ibQueryValueAsk { Presentation, RefPresentation, ValueType };
+// WHAT IS ASKED OF THE VALUE. The questions differ in what is asked, never in how it is answered, and a
+// separate kind each would be as many copies of the same walk. `AsType` reads its type from m_asType.
+enum class ibQueryValueAsk { Presentation, RefPresentation, ValueType, AsType };
 
 // ⭐ THE CALL A WINDOW MAKES — named as a CONCEPT here, spelled by the provider, exactly as
 // ibTotalsPeriod is. The five folds and the three ranking calls sit in one enum because they differ
@@ -499,8 +503,9 @@ struct ibQueryColumnExpr
 
 	// OutputRef — the published NAME of the result column this node reads (an aggregate's alias).
 	wxString                    m_outputName;
-	// ValueAsk — which question is put to m_lhs's value.
+	// ValueAsk — which question is put to m_lhs's value, and for `AsType` the type it is brought to.
 	ibQueryValueAsk             m_valueAsk = ibQueryValueAsk::Presentation;
+	ibTypeDescription           m_asType;
 
 	// WindowAgg — the call applied to m_lhs, partitioned by m_partition, ordered by m_windowOrder.
 	//
@@ -605,6 +610,11 @@ struct ibQueryColumnExpr
 	static ibQueryColumnExprPtr ValueAsk(ibQueryColumnExprPtr expr, ibQueryValueAsk ask) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::ValueAsk; e->m_lhs = std::move(expr); e->m_valueAsk = ask; return e;
+	}
+	// …and the one that carries a type: the value as `type` — see ibValueAsType.
+	static ibQueryColumnExprPtr AsType(ibQueryColumnExprPtr expr, const ibTypeDescription& type) {
+		ibQueryColumnExprPtr e = ValueAsk(std::move(expr), ibQueryValueAsk::AsType);
+		e->m_asType = type; return e;
 	}
 	static ibQueryColumnExprPtr Case(std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases,
 	                                 ibQueryColumnExprPtr otherwise) {

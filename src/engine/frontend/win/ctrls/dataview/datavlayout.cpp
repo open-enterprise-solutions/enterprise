@@ -378,6 +378,23 @@ const ibHeaderCell* ibDataViewColumnLayout::FindHeaderCellAt(int x, int band) co
 // position — the per-column best widths and the geometry.
 void ibDataViewCtrl::WXColumnTreeChanged()
 {
+	// ⭐ A COLUMN THAT LEFT THE TREE IS NOT ITS EXPANDER ANY MORE. The control keeps the expander by pointer, and a
+	// group that let the column go (ClearColumns, a column taken out) left it pointing at a column no position
+	// answers for: the paint asked where it stands, got wxNOT_FOUND, and walked four billion columns to reach it —
+	// the query constructor hung the moment its union field map was rebuilt for a copied branch (Max, 2026-09-28).
+	// Forgotten here, the next paint takes the first column there is (GetExpanderColumnOrFirstOne).
+	//
+	// …and so is every other column the control keeps by pointer — the keyboard's current one, the one being
+	// dragged: a column let go is the caller's to free, and a pointer left here would outlive it.
+	auto gone = [this](const ibDataViewColumn* column) {
+		return column != nullptr && GetColumnIndex(column) == wxNOT_FOUND;
+	};
+	if (gone(GetExpanderColumn()))
+		SetExpanderColumn(nullptr);
+	if (gone(m_currentCol))
+		m_currentCol = nullptr;
+	if (gone(m_dragColumn))
+		m_dragColumn = nullptr;
 	InvalidateColBestWidths();
 	OnColumnsCountChanged();
 }

@@ -69,6 +69,17 @@ void ibQueryConditionModel::SetRows(const std::vector<ibQueryAstExprPtr>& rows)
 		m_onChanged();
 }
 
+void ibQueryConditionModel::RemoveRow(unsigned int row)
+{
+	std::vector<ibQueryAstExprPtr> rows = Rows();
+	if (row >= rows.size())
+		return;
+	rows.erase(rows.begin() + row);
+	if (row < m_freehand.size())
+		m_freehand.erase(m_freehand.begin() + row);
+	SetRows(rows);
+}
+
 ibQueryAstExprPtr ibQueryConditionModel::RowAt(unsigned int row) const
 {
 	const std::vector<ibQueryAstExprPtr> rows = Rows();
@@ -159,8 +170,7 @@ bool ibQueryConditionModel::SetValueByRow(const wxVariant& variant, unsigned row
 	wxString text = variant.GetString();
 	text.Trim(true).Trim(false);
 	if (text.IsEmpty()) {
-		rows.erase(rows.begin() + row);
-		SetRows(rows);
+		RemoveRow(row);
 		return true;
 	}
 

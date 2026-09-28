@@ -118,6 +118,10 @@ public:
 	// AND THE LINK GOES, NOT THE TABLE. Clears the condition and forgets the pending mark; the table
 	// stays exactly where it was.
 	void RemoveLink(unsigned int row);
+	// …and when the TABLE goes, its marks go with it. They are kept by join index, so a join removed
+	// from the middle left every mark after it on the table before — a link started on one table
+	// showed up on its neighbour. Called by whoever erases the join, before the next fill.
+	void ForgetJoin(size_t joinIndex);
 
 	// ⭐ COPY THIS LINK ONTO THE NEXT TABLE THAT HAS NONE. A second link is nearly always the first
 	// one with a name changed — `a.Ref = b.Owner` then `a.Ref = c.Owner` — and retyping it is exactly

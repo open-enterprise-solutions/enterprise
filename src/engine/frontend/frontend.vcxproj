@@ -353,6 +353,7 @@
     <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryTempTableDialog.cpp" />
     <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp" />
     <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
@@ -761,6 +762,7 @@
     <ClInclude Include="win\dlgs\rowValueCell.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryTempTableDialog.h" />
     <ClInclude Include="win\dlgs\choiceLink\choiceLink.h" />
     <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />

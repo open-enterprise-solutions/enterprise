@@ -1826,6 +1826,10 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row, con
 				// carries a type, and reaching into the runtime's value zoo to build one is the leak
 				// that door exists to close.
 				return (RamIsNullValue(v) || v.IsEmpty()) ? RamNullValue() : ibTypeValueOf(v.GetClassType());
+			case ibQueryValueAsk::AsType:
+				// The value AS the type a CAST named — through the same door, for the same reason. NULL stays NULL:
+				// a missing value converted is still missing, not a zero nobody wrote.
+				return RamIsNullValue(v) ? RamNullValue() : ibValueAsType(v, e->m_asType);
 			case ibQueryValueAsk::Presentation:
 			case ibQueryValueAsk::RefPresentation:
 			default:

@@ -173,6 +173,14 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	const int gap = FromDIP(6);
 	wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
 	m_notebook = new wxNotebook(this, wxID_ANY);
+	// A TAB WEARS ITS PICTURE — the query constructor's for the same tab; Other is its Advanced. In the
+	// order the pages are added below, which is also each page's picture index.
+	{
+		wxWithImages::Images pictures;
+		for (const wxString& id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED })
+			pictures.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));   // normal DPI, no FromDIP
+		m_notebook->SetImages(pictures);
+	}
 
 	const auto makeList = [&](wxWindow* page) {
 		ibDataViewListCtrl* list = new ibDataViewListCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -246,7 +254,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_sources->AppendTextColumn(Word(KEY_ON), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
 		m_sources->AppendTextColumn(Word(KEY_EQUALS), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
 		wxToolBar* sourceBar = MakeBar(page);
-		AddTool(sourceBar, _("Add as join"), wxART_ADD, [this] { AddSelectedAsSource(true); });
+		AddTool(sourceBar, _("Add as join"), wxART_ADD_JOIN, [this] { AddSelectedAsSource(true); });
 		AddTool(sourceBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_sources); });
 		row->Add(pane(page, _("Tables"), sourceBar, m_sources), wxSizerFlags(4).Expand().Border(wxALL, gap));
 
@@ -257,7 +265,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_fields->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
 		m_fields->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(190));
 		wxToolBar* fieldBar = MakeBar(page);
-		AddTool(fieldBar, _("Add an expression"), wxART_ADD, [this] {
+		AddTool(fieldBar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
 			wxVector<wxVariant> values;
 			values.push_back(wxVariant(wxString::Format(wxT("Column%d"), m_fields->GetItemCount() + 1)));
 			values.push_back(wxVariant(wxString()));
@@ -279,7 +287,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_fields->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsField(); }));
 
 		page->SetSizer(row);
-		m_notebook->AddPage(page, _("Tables and fields"));
+		m_notebook->AddPage(page, _("Tables and fields"), false, 0);
 		m_pageTrees.push_back(tree);
 	}
 
@@ -299,7 +307,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		// name - `grp.Values.Count() > 1`.
 		m_conditions->AppendToggleColumn(_("On groups"), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(80));
 		wxToolBar* bar = MakeBar(page);
-		AddTool(bar, _("Add a condition"), wxART_ADD, [this] {
+		AddTool(bar, _("Add a condition"), wxART_ADD_CONDITION, [this] {
 			wxVector<wxVariant> values;
 			values.push_back(wxVariant(wxString()));
 			values.push_back(wxVariant(false));
@@ -312,7 +320,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_conditions->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToCondition(); }));
 
 		page->SetSizer(row);
-		m_notebook->AddPage(page, _("Conditions"));
+		m_notebook->AddPage(page, _("Conditions"), false, 1);
 		m_pageTrees.push_back(tree);
 	}
 
@@ -354,7 +362,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			new ibDataViewChoiceRenderer(functions, wxDATAVIEW_CELL_EDITABLE), 1, FromDIP(80), wxALIGN_LEFT), wxT("string"));
 		m_totals->AppendTextColumn(_("Of the field"), wxDATAVIEW_CELL_EDITABLE, FromDIP(170));
 		wxToolBar* totalBar = MakeBar(page);
-		AddTool(totalBar, _("Count the rows"), wxART_ADD, [this] {
+		AddTool(totalBar, _("Count the rows"), wxART_COUNT_ROWS, [this] {
 			wxString name = wxT("Count");
 			const auto taken = [this](const wxString& candidate) {
 				for (int at = 0; at < m_totals->GetItemCount(); ++at)
@@ -398,7 +406,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_totals->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedAsTotal(); }));
 
 		page->SetSizer(row);
-		m_notebook->AddPage(page, _("Grouping"));
+		m_notebook->AddPage(page, _("Grouping"), false, 2);
 		m_pageTrees.push_back(tree);
 	}
 
@@ -417,7 +425,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_order->AppendToggleColumn(Word(KEY_DESCENDING), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(90));
 		wxToolBar* bar = MakeBar(page);
 		// An order written by hand - a total's column name, when the query groups.
-		AddTool(bar, _("Add an expression"), wxART_ADD, [this] {
+		AddTool(bar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
 			wxVector<wxVariant> values;
 			values.push_back(wxVariant(wxString()));
 			values.push_back(wxVariant(false));
@@ -431,7 +439,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_order->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToOrder(); }));
 
 		page->SetSizer(row);
-		m_notebook->AddPage(page, _("Order"));
+		m_notebook->AddPage(page, _("Order"), false, 3);
 		m_pageTrees.push_back(tree);
 	}
 
@@ -479,7 +487,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 		sizer->Add(selection, wxSizerFlags().Border(wxALL, gap * 2));
 		page->SetSizer(sizer);
-		m_notebook->AddPage(page, _("Other"));
+		m_notebook->AddPage(page, _("Other"), false, 4);
 		m_pageTrees.push_back(nullptr);
 	}
 
@@ -1266,7 +1274,7 @@ void ibDialogLinqConstructor::AddTool(wxToolBar* bar, const wxString& label, con
 {
 	// THE PRODUCT'S OWN PICTURES first (wxART_FRONTEND serves ADD / EDIT / DELETE / UP / DOWN), the
 	// stock ones after, and the word when there is no picture at all - never an empty square.
-	const wxSize size = FromDIP(wxSize(16, 16));
+	const wxSize size(16, 16);   // a bundle's size is at normal DPI — the bar and the display scale it
 	wxBitmapBundle bitmap = wxArtProvider::GetBitmapBundle(artId, wxART_FRONTEND, size);
 	if (!bitmap.IsOk())
 		bitmap = wxArtProvider::GetBitmapBundle(artId, wxASCII_STR(wxART_MENU), size);

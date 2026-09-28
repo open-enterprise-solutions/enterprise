@@ -187,6 +187,13 @@ u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 			}
 			else
 			{
+				// ⚠ A SIZE THAT DOES NOT FIT IS NOT A CHUNK TO STEP OVER. A block of another format (a base
+				// written before the configuration's layout changed) reads as a header with any number in
+				// it; stepped over, the reader landed past its own end and stayed there (advance only
+				// ASSERTS), and the next read walked off the page — the designer died opening an old base
+				// (2026-09-27). Not the chunk sought, and nothing after it can be trusted: not found.
+				if (dwSize > (u64)elapsed())
+					break;
 				advance(dwSize);
 			}
 		}
@@ -194,6 +201,7 @@ u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 		if (!success)
 		{
 			m_last_pos = 0;
+			seek(length());   // at its end, as a search that read everything leaves it — and not past it
 			return 0;
 		}
 	}

@@ -114,6 +114,7 @@ void ibListSettingsPanel::BuildPages()
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	ibStyleSettingsTabs(notebook);
 	// ⭐ TABS ARE GATED BY WHAT THE HOST ASKED FOR, and by nothing else. A DESCRIPTION forbids no
 	// part of itself: every one of them is there to be written. The gate used to ask a MODEL for
 	// its Features — and a window opened without one got `Features{}`, flags zero, which reads as
@@ -122,7 +123,7 @@ void ibListSettingsPanel::BuildPages()
 	// THE QUERY TAB IS A DEVELOPER TOOL — writing the source query is configuring the form, not
 	// using it; an end user opening "Filter" has no business being offered it.
 	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode())
-		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true);
+		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
 
 	// ⭐ THE TWO SHARED EDITORS. Built, not written: the composer's window builds the very same
 	// pair over its own buffer, which is the whole point of them living one level up.
@@ -139,17 +140,18 @@ void ibListSettingsPanel::BuildPages()
 		// author marked inaccessible is hidden from them — applied, never shown. The designer's
 		// road (no setting handed in, the description edited directly) sees everything.
 		m_filterEditor->SetAuthoring(m_settings == nullptr);
-		notebook->AddPage(m_filterEditor, _("Filter"), notebook->GetPageCount() == 0);
+		notebook->AddPage(m_filterEditor, _("Filter"), notebook->GetPageCount() == 0, ibSettingsTabArt(ibSettingsTab::Filter));
 	}
 	if ((m_pages & Page_Sort) != 0) {
 		m_sortEditor = new ibSortEditor(notebook, &EditedSettings().m_sort, m_fieldSource.get());
 		m_sortEditor->SetOnChanged([this] { MarkModified(); });
-		notebook->AddPage(m_sortEditor, _("Sort"), notebook->GetPageCount() == 0);
+		notebook->AddPage(m_sortEditor, _("Sort"), notebook->GetPageCount() == 0, ibSettingsTabArt(ibSettingsTab::Sort));
 	}
 	// …and the list's OWN fold, which the composer does not share: its structure is a tree of
 	// levels, not a flat ordered list (Max, 2026-08-20).
 	if ((m_pages & Page_Group) != 0)
-		notebook->AddPage(BuildGroupPage(notebook), _("Group"), notebook->GetPageCount() == 0);
+		notebook->AddPage(BuildGroupPage(notebook), _("Group"), notebook->GetPageCount() == 0,
+			ibSettingsTabArt(ibSettingsTab::Grouping));
 
 	mainSizer->Add(notebook, 1, wxEXPAND);
 	SetSizer(mainSizer);

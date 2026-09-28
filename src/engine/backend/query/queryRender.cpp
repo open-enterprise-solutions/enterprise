@@ -172,7 +172,7 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 
 	case ibQueryAstExprKind::Cast:
 		return Kw(ibQueryKeyword::Cast) + wxT("(") + (expr.m_arg ? RenderExpr(*expr.m_arg) : wxString())
-			+ wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + Join(expr.m_path, wxT(".")) + wxT(")");
+			+ wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + ibRenderQueryCastTarget(expr) + wxT(")");
 
 	// ⭐ A SCALAR CALL, WRITTEN BACK AS IT WAS READ. This renderer feeds a PARSER — the constructor's
 	// tabs round-trip every expression through it — so a kind it does not know does not merely look
@@ -635,6 +635,7 @@ static wxString RenderLinkSection(const ibQueryPackage& package, int firstLink)
 		return wxEmptyString;
 
 	wxString out = Kw(ibQueryKeyword::Link) + wxT(" ") + head;
+	bool wroteOne = false;
 
 	// THE WHOLE SECTION, which is every relation sharing this head from here on — that is what one
 	// statement stands for, and what one `LINK` in the text says.
@@ -656,9 +657,12 @@ static wxString RenderLinkSection(const ibQueryPackage& package, int firstLink)
 
 		out += wxT("\n\t") + kind + Kw(ibQueryKeyword::Join) + wxT(" ") + link.m_right
 		     + wxT(" ") + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*link.m_on);
+		wroteOne = true;
 	}
 
-	return out;
+	// ⚠ A HEAD WITH NO RELATION WRITTEN IS NOT A SENTENCE — `LINK Sales` alone is refused on the way back.
+	// Its rows are still being filled; the statement says nothing until one of them is complete.
+	return wroteOne ? out : wxString();
 }
 
 wxString ibRenderQueryPackage(const ibQueryPackage& package)
@@ -671,18 +675,24 @@ wxString ibRenderQueryPackage(const ibQueryPackage& package)
 	wxString out;
 	for (std::size_t i = 0; i < package.m_statements.size(); i++) {
 		const ibQueryAstStatement& statement = package.m_statements[i];
+		wxString text;
+		if (statement.IsDrop())
+			text = Kw(ibQueryKeyword::Drop) + wxT(" ") + statement.m_dropTemp;
+		else if (statement.IsLink())
+			text = RenderLinkSection(package, statement.m_linkIndex);
+		else if (statement.m_select)
+			text = RenderSelect(*statement.m_select, 0);
+		// A statement with nothing to say — a link section still being filled — writes nothing at all,
+		// separator included: an empty place between two `;` reads back as "expected SELECT".
+		if (text.IsEmpty())
+			continue;
 		// THE SEPARATOR ON A LINE OF ITS OWN. A `;` hanging off the end of the last line of one
 		// statement reads as part of that statement; standing alone between them it reads as what it
 		// is — the boundary. The statements are many lines each, so the boundary has to be as easy
 		// to find as they are.
-		if (i > 0)
+		if (!out.IsEmpty())
 			out += wxT("\n;\n");
-		if (statement.IsDrop())
-			out += Kw(ibQueryKeyword::Drop) + wxT(" ") + statement.m_dropTemp;
-		else if (statement.IsLink())
-			out += RenderLinkSection(package, statement.m_linkIndex);
-		else if (statement.m_select)
-			out += RenderSelect(*statement.m_select, 0);
+		out += text;
 	}
 
 	return out;
@@ -691,6 +701,21 @@ wxString ibRenderQueryPackage(const ibQueryPackage& package)
 wxString ibRenderQueryExpr(const ibQueryAstExpr& expr)
 {
 	return RenderExpr(expr);
+}
+
+// A primitive's qualifiers follow its name as they were written — a number as itself, a word (the date's
+// composition) bare, since it was read as one: `Number(15, 2)`, `Date(Date)`.
+wxString ibRenderQueryCastTarget(const ibQueryAstExpr& cast)
+{
+	wxString qualifiers;
+	for (const ibQueryAstExprPtr& q : cast.m_args) {
+		if (!q) continue;
+		qualifiers += qualifiers.IsEmpty() ? wxT("(") : wxT(", ");
+		qualifiers += q->m_kind == ibQueryAstExprKind::Literal && q->m_literal.GetType() == ibValueTypes::TYPE_STRING
+			? q->m_literal.GetString() : RenderExpr(*q);
+	}
+	if (!qualifiers.IsEmpty()) qualifiers += wxT(")");
+	return Join(cast.m_path, wxT(".")) + qualifiers;
 }
 
 ibQueryAstExprPtr ibQueryColumnFromPath(const wxString& dottedPath)

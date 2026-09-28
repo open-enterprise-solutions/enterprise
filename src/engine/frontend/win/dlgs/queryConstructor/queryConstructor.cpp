@@ -85,6 +85,9 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	text->IndicatorSetStyle(kQueryParameterIndicator, wxSTC_INDIC_TEXTFORE);
 	text->IndicatorSetForeground(kQueryParameterIndicator,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Preprocessor).foreColor);
+	// A WORD OF THE LANGUAGE BY ITS PLACE wears the keyword's colour — it is one there, and only there.
+	text->IndicatorSetStyle(kQueryPlacedWordIndicator, wxSTC_INDIC_TEXTFORE);
+	text->IndicatorSetForeground(kQueryPlacedWordIndicator, keyword.foreColor);
 
 	// AND RE-MARKED AS IT IS TYPED. Marking only where the text is set programmatically leaves a
 	// parameter plain until something else happens to refill the pane — the colour arrives late,
@@ -92,18 +95,87 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	// follows it, because an indicator is not restored by the lexer.
 	text->Bind(wxEVT_STC_CHANGE, [text](wxStyledTextEvent& event) {
 		event.Skip();
-		ibMarkQueryParameters(text);
+		ibMarkQueryText(text);
 	});
+}
+
+// ⭐ THE WORDS ONLY A PLACE MAKES THE LANGUAGE'S — read off the ENGINE'S tokens, so the pane and the parser
+// agree on what a word is. `Date` is a type after the AS of a CAST (and a qualifier inside its brackets:
+// `Date(Date)`), and a field everywhere else; `YEAR` is a call with a bracket after it and a name without
+// one. The C lexer colours by the word alone and cannot tell the two apart, so these are marked here.
+//
+// A text the lexer refuses — a string still being typed — marks no words: the parameters above still stand.
+static void MarkPlacedWords(wxStyledTextCtrl* text)
+{
+	text->SetIndicatorCurrent(kQueryPlacedWordIndicator);
+	text->IndicatorClearRange(0, text->GetTextLength());
+
+	std::vector<ibQueryToken> tokens;
+	try {
+		ibQueryLexer lexer;
+		tokens = lexer.Tokenize(text->GetText());
+	}
+	catch (const ibBackendException&) {
+		return;
+	}
+
+	// The lexer counts CHARACTERS and Scintilla BYTES — a Cyrillic name before the word is two bytes a letter.
+	auto mark = [text](const ibQueryToken& token) {
+		const int from = text->PositionRelative(0, static_cast<int>(token.m_col));
+		const int to   = text->PositionRelative(from, static_cast<int>(token.m_text.length()));
+		if (from >= 0 && to > from)
+			text->IndicatorFillRange(from, to - from);
+	};
+	auto word = [](const ibQueryToken& token) {
+		return token.m_kind == ibQueryTokenKind::Ident || token.m_kind == ibQueryTokenKind::Keyword;
+	};
+
+	std::vector<bool> castBracket;   // one entry per open bracket: is it a CAST's own
+	for (size_t i = 0; i < tokens.size(); ++i) {
+		const ibQueryToken& token = tokens[i];
+		const bool bracketNext = i + 1 < tokens.size() && tokens[i + 1].IsPunct(wxT('('));
+		if (token.IsPunct(wxT('('))) {
+			castBracket.push_back(i > 0 && tokens[i - 1].IsKeyword(ibQueryKeyword::Cast));
+			continue;
+		}
+		if (token.IsPunct(wxT(')'))) {
+			if (!castBracket.empty())
+				castBracket.pop_back();
+			continue;
+		}
+		// A CALL — a name the scalar table knows, with its bracket.
+		if (token.m_kind == ibQueryTokenKind::Ident && bracketNext
+		    && ibFindQueryScalarFn(token.m_text.Upper()) != ibQueryScalarFn::None) {
+			mark(token);
+			continue;
+		}
+		// A TYPE — what follows the AS of a CAST: its dotted name, and the words among its qualifiers.
+		if (token.IsKeyword(ibQueryKeyword::As) && !castBracket.empty() && castBracket.back()) {
+			size_t j = i + 1;
+			for (; j < tokens.size() && (word(tokens[j]) || tokens[j].IsPunct(wxT('.'))); ++j)
+				if (word(tokens[j]))
+					mark(tokens[j]);
+			if (j < tokens.size() && tokens[j].IsPunct(wxT('('))) {
+				for (++j; j < tokens.size() && !tokens[j].IsPunct(wxT(')')); ++j)
+					if (word(tokens[j]))
+						mark(tokens[j]);
+				if (j < tokens.size())
+					++j;   // past the qualifiers' own `)`, so the CAST's bracket stays open
+			}
+			i = j - 1;
+		}
+	}
 }
 
 // MARK EVERY `&name` IN THE PANE. Called after the text is set — the indicator has to be re-applied
 // then, because the text it marked is gone. Scanning here rather than asking the lexer keeps this
 // independent of which lexer the pane uses; the rule is the language's own and fits in one line of
 // prose: an ampersand followed by a name.
-void ibMarkQueryParameters(wxStyledTextCtrl* text)
+void ibMarkQueryText(wxStyledTextCtrl* text)
 {
 	if (text == nullptr)
 		return;
+	MarkPlacedWords(text);
 
 	// WALKED IN SCINTILLA'S OWN POSITIONS, which are BYTES. Scanning a wxString instead would put
 	// the mark left of the word the moment a parameter is named in Cyrillic, because two bytes go
@@ -152,7 +224,11 @@ void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, co
 	// `wxART_LIST_VIEW` and it answers with nothing, MSW has no 16x16 stock bitmap for them either,
 	// and the tool draws as a blank square. That is why the "nested table" button was invisible:
 	// it was there, with no picture on it, and a toolbar of blanks is a toolbar you cannot read.
-	const wxSize size = FromDIP(wxSize(16, 16));
+	//
+	// ⚠ AT NORMAL DPI. A bundle's size is its size at 100 %, and the display scales it; asked for
+	// FromDIP it came back twice as large at 200 %, which the context menu shows (it wears the same
+	// bundle, see AttachContextMenu) — the bar hid it, being sized on its own.
+	const wxSize size(16, 16);
 	wxBitmapBundle bitmap = wxArtProvider::GetBitmapBundle(artId, wxART_FRONTEND, size);
 	if (!bitmap.IsOk())
 		bitmap = wxArtProvider::GetBitmapBundle(artId, wxASCII_STR(wxART_MENU), size);
@@ -171,7 +247,7 @@ void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, co
 
 	// …AND THE BAR REMEMBERS ITS VERBS. That is what lets the right-click offer the same ones without
 	// a second list written by hand — see AttachContextMenu.
-	m_barVerbs[bar].push_back({ label, handler });
+	m_barVerbs[bar].push_back({ label, bitmap, handler });
 }
 
 // THE RIGHT-CLICK OFFERS WHAT THE TOOLBAR OFFERS — the same verbs, in the same order, from the SAME
@@ -197,7 +273,9 @@ void ibDialogQueryConstructor::AttachContextMenu(wxWindow* target, wxToolBar* ba
 		for (const Verb& verb : verbs->second) {
 			const int id = wxWindow::NewControlId();
 			ids.push_back(id);
-			menu.Append(id, verb.m_label);
+			wxMenuItem* item = menu.Append(id, verb.m_label);
+			if (verb.m_picture.IsOk())
+				item->SetBitmap(verb.m_picture);
 		}
 		menu.Bind(wxEVT_MENU, [&verbs, &ids](wxCommandEvent& event) {
 			for (size_t i = 0; i < ids.size(); ++i)
@@ -305,14 +383,9 @@ static std::vector<wxString> ibSplitLevelFields(const wxString& text)
 
 static void ibDropTotalsFromPackage(ibQueryPackage& package)
 {
-	for (ibQueryAstStatement& statement : package.m_statements) {
-		if (!statement.m_select)
-			continue;
-		statement.m_select->m_totalsBy.clear();
-		statement.m_select->m_totalsAggregates.clear();
-		statement.m_select->m_totalsOverall = false;
-		statement.m_select->m_hasTotals = false;
-	}
+	for (ibQueryAstStatement& statement : package.m_statements)
+		if (statement.m_select)
+			ibQueryDropTotals(*statement.m_select);
 }
 ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
                                                    const ibMetaData* metaData, bool readOnly, int exclude)
@@ -387,8 +460,15 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 		// A DELIBERATE move is remembered; one made by a refill is not. Without the guard the window
 		// would "choose" whatever a rebuild happened to land on, and the tab a person picked would be
 		// forgotten by the very event that lost it.
-		if (!m_filling && e.GetSelection() != wxNOT_FOUND)
+		if (!m_filling && e.GetSelection() != wxNOT_FOUND) {
 			m_wantedTab = m_notebook->GetPageText(static_cast<size_t>(e.GetSelection()));
+			// …and a tab about the whole result edits the STATEMENT: a branch picked on another tab
+			// would otherwise receive the order or the totals of the union (ibQueryTabIsWholeResult).
+			if (ibQueryTabIsWholeResult(m_wantedTab) && m_unionBranch != -1) {
+				m_unionBranch = -1;
+				FillAll();
+			}
+		}
 		ShowBranchStrip();
 		e.Skip();
 	});
@@ -403,30 +483,38 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// The LAST field is the exclusion bit — which flag of the host's mask turns this tab off. Every
 	// tab carries one, so a host that owns a setting itself (a composition's totals, a list's
 	// grouping) says so with a flag rather than with a new parameter here.
-	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), true,  false, false, false, ibQueryExclude_Tables });
-	m_pages.push_back({ BuildLinksPage(m_notebook),      _("Links"),             true,  true,  false, false, ibQueryExclude_Links });
-	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          true,  false, false, false, ibQueryExclude_Grouping });
-	m_pages.push_back({ BuildConditionsPage(m_notebook), _("Conditions"),        true,  false, false, false, ibQueryExclude_Conditions });
-	m_pages.push_back({ BuildAdvancedPage(m_notebook),   _("Advanced"),          false, false, false, false, ibQueryExclude_Advanced });
+	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), wxART_TABLE,      true,  false, false, false, ibQueryExclude_Tables });
+	m_pages.push_back({ BuildLinksPage(m_notebook),      _("Links"),             wxART_LINKS,      true,  true,  false, false, ibQueryExclude_Links });
+	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          wxART_GROUPING,   true,  false, false, false, ibQueryExclude_Grouping });
+	m_pages.push_back({ BuildConditionsPage(m_notebook), _("Conditions"),        wxART_FILTER,     true,  false, false, false, ibQueryExclude_Conditions });
+	m_pages.push_back({ BuildAdvancedPage(m_notebook),   _("Advanced"),          wxART_ADVANCED,   false, false, false, false, ibQueryExclude_Advanced });
 	// UNIONS / ALIASES — one tab, because it is one question. An output field's NAME is what a union
 	// lines its branches up BY, so the place that shows the line-up is the place the name is typed;
 	// the tab is called both things because it genuinely is both.
-	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  true,  false, false, false, ibQueryExclude_Unions });
+	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  wxART_UNIONS,     true,  false, false, false, ibQueryExclude_Unions });
 	// ⭐ ORDER IS REFUSED FOR A TEMP TABLE TOO, exactly as Totals is below it (Max): what is
 	// materialised under a name is ROWS, and a table keeps no order — sorting on the way into storage
 	// is work thrown away in the same breath. The parser refuses it, so the tab goes rather than
 	// being left to write text the engine will reject.
-	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             true,  false, false, true,  ibQueryExclude_Order });
+	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             wxART_SORT,       true,  false, false, true,  ibQueryExclude_Order });
 	// Totals is refused for a statement that makes a temp table — the parser says so, so the tab
 	// goes rather than being left to write text the engine rejects. A HOST may exclude it as well.
-	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            true,  false, false, true,  ibQueryExclude_Totals });
-	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             true,  false, true,  false, ibQueryExclude_Index });
-	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),       false, false, false, false, ibQueryExclude_Batch });
+	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            wxART_TOTALS,     true,  false, false, true,  ibQueryExclude_Totals });
+	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             wxART_INDEX,      true,  false, true,  false, ibQueryExclude_Index });
+	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),       wxART_QUERY_BATCH, false, false, false, false, ibQueryExclude_Batch });
 	// ⭐ …AND ONE TIER UP: links between the results the package has NAMED. Not a query tab — it is
 	// about the package, like the batch beside it — and it appears only once there are two names to
 	// relate. It shares the exclusion bit of the batch: a host that has no package has no results
 	// to link either.
-	m_pages.push_back({ BuildSelectionLinksPage(m_notebook), _("Selection links"), false, false, false, false, ibQueryExclude_Batch, true });
+	m_pages.push_back({ BuildSelectionLinksPage(m_notebook), _("Selection links"), wxART_SELECTION_LINKS, false, false, false, false, ibQueryExclude_Batch, true });
+	// A TAB WEARS ITS PICTURE, and keeps it when it is taken off and put back: the notebook holds one
+	// picture per entry of m_pages, and a page is inserted with its entry's place (SyncNotebookPages).
+	{
+		wxWithImages::Images pictures;
+		for (const Page& page : m_pages)   // a bundle's size is at normal DPI — no FromDIP
+			pictures.push_back(wxArtProvider::GetBitmapBundle(page.m_picture, wxART_FRONTEND, wxSize(16, 16)));
+		m_notebook->SetImages(pictures);
+	}
 	SyncNotebookPages();
 	upper->Add(m_notebook, 1, wxEXPAND | wxALL, FromDIP(6));
 
@@ -545,7 +633,7 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = MakeToolBar(panel);
-	AddTool(bar, _("Add query"), wxART_ADD,    [this](wxCommandEvent& e) { OnAddStatement(e); });
+	AddTool(bar, _("Add query"), wxART_ADD_QUERY, [this](wxCommandEvent& e) { OnAddStatement(e); });
 	AddTool(bar, _("Delete"),    wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveStatement(e); });
 	bar->AddSeparator();
 	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveStatement(-1); });
@@ -646,10 +734,14 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	wxToolBar* middleBar = MakeToolBar(middlePane);
 	// A NESTED TABLE IS A TABLE OF THIS QUERY, so it is added where the query's tables are — and it
 	// opens THIS SAME window one level down over the inner select.
-	AddTool(middleBar, _("Nested table"), wxART_ADD,
+	AddTool(middleBar, _("Nested table"), wxART_ADD_NESTED,
 		[this](wxCommandEvent& e) { OnAddNestedTable(e); });
-	AddTool(middleBar, _("Edit nested"), wxART_EDIT,
+	AddTool(middleBar, _("Edit nested"), wxART_EDIT_NESTED,
 		[this](wxCommandEvent& e) { OnEditNestedTable(e); });
+	// …AND A TABLE WITH NO ROWS YET — handed in, or the manager's — described by its fields' types
+	// (queryTempTableDialog.h).
+	AddTool(middleBar, _("Temporary table description"), wxART_TEMP_TABLE,
+		[this](wxCommandEvent& e) { OnDescribeTempTable(e); });
 	AddTool(middleBar, _("Delete"), wxART_DELETE,
 		[this](wxCommandEvent& e) { OnRemoveTable(e); });
 	middleBar->Realize();
@@ -663,10 +755,20 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		| wxTR_TWIST_BUTTONS | wxTR_EDIT_LABELS);
 	m_tables->Bind(wxEVT_TREE_BEGIN_LABEL_EDIT, &ibDialogQueryConstructor::OnTableAliasEditBegin, this);
 	m_tables->Bind(wxEVT_TREE_END_LABEL_EDIT,   &ibDialogQueryConstructor::OnTableAliasEditEnd, this);
-	// AND THE SAME VERBS ON A RIGHT-CLICK. A rename is something you reach for ON the thing, so the
-	// menu is where the hand already is; it raises the tree's own label editor, so there is one
-	// renaming mechanism and not a dialog beside it.
+	// AND THE TABLE'S VERBS ON A RIGHT-CLICK — add, delete, rename, replace, its parameters. The rename there
+	// opens a window with the name in it (Max, 2026-09-28); the label and the window end in one RenameTable.
 	m_tables->Bind(wxEVT_TREE_ITEM_MENU, &ibDialogQueryConstructor::OnTableContextMenu, this);
+	// Alt+Shift+Del deletes the table under the cursor, as the menu says. Asked of the window, since a tree
+	// does not see every Alt combination itself.
+	Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent& event) {
+		if (event.GetKeyCode() == WXK_DELETE && event.AltDown() && event.ShiftDown() && !event.ControlDown()
+		    && FindFocus() == m_tables) {
+			wxCommandEvent unused;
+			OnRemoveTable(unused);
+			return;
+		}
+		event.Skip();
+	});
 	m_tables->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddField(e); });
 	m_tables->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogQueryConstructor::OnTableBeginDrag, this);
 	m_tables->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogQueryConstructor::OnFieldTreeExpanding, this);
@@ -693,7 +795,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 	right->Add(new wxStaticText(rightPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
 	wxToolBar* rightBar = MakeToolBar(rightPane);
-	AddTool(rightBar, _("Expression"), wxART_ADD,       [this](wxCommandEvent& e) { OnAddFieldExpression(e); });
+	AddTool(rightBar, _("Expression"), wxART_ADD_EXPRESSION, [this](wxCommandEvent& e) { OnAddFieldExpression(e); });
 	// EDIT THE CURRENT FIELD — the arbitrary-expression editor, over the field standing here. The
 	// same window the conditions, the joins and the totals open; there is one of it in this dialog.
 	AddTool(rightBar, _("Edit"),       wxART_EDIT, [this](wxCommandEvent& e) { OnEditFieldExpression(e); });
@@ -803,12 +905,12 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	// A LINK IS MADE HERE TOO, not only by adding a table. Joining a table that is already in the
 	// query — or writing a second condition between the same pair — had no verb at all: the only
 	// way to get a link was to add a source, which is a different act with a different meaning.
-	AddTool(bar, _("Add link"),  wxART_NEW,    [this](wxCommandEvent& e) { OnAddLink(e); });
+	AddTool(bar, _("Add link"),  wxART_ADD_LINK, [this](wxCommandEvent& e) { OnAddLink(e); });
 	// A SECOND LINK IS USUALLY THE FIRST ONE WITH A NAME CHANGED. Copying it onto the next unlinked
 	// table and editing the cell is one gesture where retyping the whole condition was several.
 	AddTool(bar, _("Copy link"), wxASCII_STR(wxART_COPY),
 		[this](wxCommandEvent& e) { OnCopyLink(e); });
-	AddTool(bar, _("Condition"), wxART_EDIT,   [this](wxCommandEvent& e) { OnEditLink(e); });
+	AddTool(bar, _("Condition"), wxART_LINK_CONDITION, [this](wxCommandEvent& e) { OnEditLink(e); });
 	AddTool(bar, _("Delete"),    wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveLink(e); });
 	bar->Realize();
 	bottom->Add(bar, 0, wxEXPAND);
@@ -897,7 +999,7 @@ wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 	wxBoxSizer* box = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = MakeToolBar(page);
-	AddTool(bar, _("Add link"), wxART_NEW,    [this](wxCommandEvent& e) { OnSelectionLinkAdd(e); });
+	AddTool(bar, _("Add link"), wxART_ADD_LINK, [this](wxCommandEvent& e) { OnSelectionLinkAdd(e); });
 	AddTool(bar, _("Delete"),   wxART_DELETE, [this](wxCommandEvent& e) { OnSelectionLinkRemove(e); });
 	bar->Realize();
 	box->Add(bar, 0, wxEXPAND);
@@ -1230,7 +1332,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(rightPane);
-	AddTool(bar, _("Add"),    wxART_ADD,       [this](wxCommandEvent& e) { OnAddCondition(e); });
+	AddTool(bar, _("Add"),    wxART_ADD_CONDITION, [this](wxCommandEvent& e) { OnAddCondition(e); });
 	AddTool(bar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditCondition(e); });
 	AddTool(bar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveCondition(e); });
 	bar->Realize();
@@ -1417,7 +1519,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(rightPane);
-	AddTool(bar, _("Direction"), wxART_EDIT, [this](wxCommandEvent& e) { OnToggleOrderDirection(e); });
+	AddTool(bar, _("Direction"), wxART_DIRECTION, [this](wxCommandEvent& e) { OnToggleOrderDirection(e); });
 	bar->AddSeparator();
 	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveOrder(-1); });
 	AddTool(bar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveOrder(+1); });
@@ -1532,7 +1634,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// ⭐⭐ ADD A SEPARATOR — a NODE the groupings are hung on. Without one the tab behaves exactly as
 	// it always has (one hidden node, one ladder); with one, the levels added after it land on it,
 	// and a report reads each node as a selection of its own.
-	AddTool(dimBar, _("Add separator"), wxART_NEW, [this](wxCommandEvent& e) { OnAddTotalsSplit(e); });
+	AddTool(dimBar, _("Add separator"), wxART_ADD_SPLIT, [this](wxCommandEvent& e) { OnAddTotalsSplit(e); });
 	dimBar->AddSeparator();
 	AddTool(dimBar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditTotalsDimension(e); });
 	AddTool(dimBar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveTotalsLine(e); });
@@ -2229,7 +2331,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	wxPanel* leftPane = new wxPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(leftPane);
-	AddTool(bar, _("Add branch"),       wxART_ADD,    [this](wxCommandEvent& e) { OnAddUnionBranch(e); });
+	AddTool(bar, _("Add branch"),       wxART_ADD_BRANCH, [this](wxCommandEvent& e) { OnAddUnionBranch(e); });
 	// No copy picture in the product's set (artProvider.cpp serves add/edit/delete/up/down/sort), so
 	// this one falls through to its word — which AddTool now handles rather than drawing a blank.
 	AddTool(bar, _("Duplicate branch"), wxASCII_STR(wxART_COPY),
@@ -2318,6 +2420,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	});
 	m_unionFields->AssociateModel(m_unionFieldModel);
 	ibDataViewEditOnActivate(m_unionFields);   // the Alias cell — the one place an output field is named
+	AttachContextMenu(m_unionFields, fieldBar);
 	right->Add(m_unionFields, 1, wxEXPAND | wxALL, FromDIP(3));
 	rightPane->SetSizer(right);
 

@@ -481,13 +481,15 @@ TEST(QueryParameterTable, ItIsMARKED_InTheTextAndSurvivesTheRoundTrip)
 	EXPECT_TRUE(again->m_from.m_parameter);
 }
 
-TEST(QueryParameterTable, ItGoesInToATemporaryTableAndOnlyThere)
+TEST(QueryParameterTable, ItIsReadWhereverATableIs)
 {
-	// The discipline, refused at the parse: a value table lives in RAM, so every statement that
-	// names it directly stitches the read in memory AGAIN. Materialised once, it is a table the
-	// engine can promote and join server-side.
-	EXPECT_THROW(Parse(wxT("SELECT Article FROM &GoodsTable")), ibBackendException);
+	// The ampersand says where the rows come from, and nothing else: an ordinary select reads a value table as
+	// readily as a temporary table's statement does — and a bare name is the temporary table, not the parameter.
+	EXPECT_NO_THROW(Parse(wxT("SELECT Article FROM &GoodsTable")));
 	EXPECT_NO_THROW(Parse(wxT("SELECT * INTO Goods FROM &GoodsTable")));
+	EXPECT_TRUE(Parse(wxT("SELECT G.Article FROM Catalog.Products AS P INNER JOIN &GoodsTable AS G ON G.Article = P.Ref"))
+		->m_joins.front().m_source.m_parameter);
+	EXPECT_FALSE(Parse(wxT("SELECT Article FROM Goods"))->m_from.m_parameter);
 }
 
 // ===========================================================================

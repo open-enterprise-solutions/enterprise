@@ -41,6 +41,14 @@ void ibQueryLinkModel::SetContent(ibQuerySelect* select, std::vector<wxString> t
 	Reset(static_cast<unsigned int>(m_rows.size()));
 }
 
+void ibQueryLinkModel::ForgetJoin(size_t joinIndex)
+{
+	if (joinIndex < m_pending.size())
+		m_pending.erase(m_pending.begin() + static_cast<long>(joinIndex));
+	if (joinIndex < m_freehand.size())
+		m_freehand.erase(m_freehand.begin() + static_cast<long>(joinIndex));
+}
+
 size_t ibQueryLinkModel::JoinIndexOf(unsigned int row) const
 {
 	return row < m_rows.size() ? m_rows[row] : static_cast<size_t>(-1);

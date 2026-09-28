@@ -226,6 +226,11 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 						return ibValue(varValue.GetString());
 					return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
 				}
+				// …and a Boolean reads the value as one, as its three siblings do. It fell through to the empty
+				// Boolean below, so a 1 written into a Boolean field — or `CAST(1 AS Boolean)` — was `False`.
+				else if (vt == ibValueTypes::TYPE_BOOLEAN) {
+					return ibValue(varValue.GetBoolean());
+				}
 			}
 
 			return source != nullptr

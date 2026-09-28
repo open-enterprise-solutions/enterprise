@@ -1521,3 +1521,76 @@ TEST(QueryL4Parser, TotalsAggregateOverAPartitionIsRefused)
 	                       "TOTALS SUM(Amount) OVER (PARTITION BY Item) BY Item")),
 	             ibBackendException);
 }
+
+// ===========================================================================
+// CAST TO A PRIMITIVE — the type a temporary table's field is described by, written in the text.
+// ===========================================================================
+
+#include "backend/typeDescription.h"
+
+// The qualifiers ride in the text and come back as the type they say.
+TEST(QueryL4Parser, CastToAPrimitiveReadsItsQualifiers)
+{
+	auto sel = Parse(wxT("SELECT CAST(T.Qty AS Number(15, 2)) AS Qty, CAST(T.Name AS String(50)) AS Name, "
+	                     "CAST(T.Day AS Date(Date)) AS Day, CAST(T.Flag AS Boolean) AS Flag, "
+	                     "CAST(T.Note AS String) AS Note INTO Goods FROM &Goods AS T"));
+	ASSERT_EQ(sel->m_projections.size(), 5u);
+	std::vector<ibTypeDescription> types(5);
+	for (size_t i = 0; i < 5; ++i)
+		ASSERT_TRUE(ibQueryCastType(*sel->m_projections[i].m_expr, types[i])) << i;
+
+	EXPECT_TRUE(types[0].ContainType(ibValueTypes::TYPE_NUMBER));
+	EXPECT_EQ(types[0].GetPrecision(), 15);
+	EXPECT_EQ(types[0].GetScale(), 2);
+	EXPECT_TRUE(types[1].ContainType(ibValueTypes::TYPE_STRING));
+	EXPECT_EQ(types[1].GetLength(), 50);
+	EXPECT_TRUE(types[2].ContainType(ibValueTypes::TYPE_DATE));
+	EXPECT_EQ(types[2].GetDateFraction(), ibDateFractions_Date);
+	EXPECT_TRUE(types[3].ContainType(ibValueTypes::TYPE_BOOLEAN));
+	EXPECT_EQ(types[4].GetLength(), 0);   // no qualifier limits nothing
+}
+
+// A narrowing CAST is not a primitive one — the reading says so rather than guessing a type.
+TEST(QueryL4Parser, CastToATableIsNotAPrimitive)
+{
+	auto sel = Parse(wxT("SELECT CAST(Recorder AS Document.Order) AS R FROM AccumulationRegister.Stock"));
+	ibTypeDescription type;
+	EXPECT_FALSE(ibQueryCastType(*sel->m_projections[0].m_expr, type));
+}
+
+TEST(QueryL4Parser, CastQualifiedWronglyIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(40)) FROM Catalog.X")), ibBackendException);        // too many digits
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(5, 6)) FROM Catalog.X")), ibBackendException);      // scale beyond them
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS String(Day)) FROM Catalog.X")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Date(Month)) FROM Catalog.X")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Boolean(1)) FROM Catalog.X")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Ref AS Document.Order(1)) FROM Catalog.X")), ibBackendException);
+}
+
+TEST(QueryRender, CastToAPrimitiveRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT CAST(T.Qty AS Number(15, 2)) AS Qty, CAST(T.Name AS String(50)) AS Name, "
+	                    "CAST(T.Day AS Date(Time)) AS Day, CAST(T.Flag AS Boolean) AS Flag INTO Goods FROM &Goods AS T"));
+	ExpectRoundTrip(wxT("SELECT Code FROM Catalog.X WHERE CAST(Code AS Number(10)) > 5"));
+}
+
+// ⭐ THE WINDOW'S DIRECTION — a type made into a CAST, written, read back: the same type.
+TEST(QueryRender, ATypeMadeIntoACastComesBackFromTheText)
+{
+	std::vector<ibTypeDescription> types;
+	types.emplace_back(g_valueNumberCLSID, ibTypeDescription::ibTypeData(12, 3));
+	types.emplace_back(g_valueStringCLSID, ibTypeDescription::ibTypeData(static_cast<unsigned short>(25)));
+	types.emplace_back(g_valueDateCLSID, ibTypeDescription::ibTypeData(ibDateFractions_Date));
+	types.emplace_back(g_valueBooleanCLSID);
+	for (const ibTypeDescription& type : types) {
+		ibQueryParser parser;
+		const ibQueryAstExprPtr cast = ibQueryMakeCast(parser.ParseExpression(wxT("T.Field")), type);
+		ASSERT_NE(cast, nullptr);
+		const wxString written = ibRenderQueryExpr(*cast);
+		ibTypeDescription back;
+		ASSERT_TRUE(ibQueryCastType(*parser.ParseExpression(written), back)) << written.ToStdString();
+		EXPECT_TRUE(back.EqualType(type.GetFirstClsid(), type)) << written.ToStdString();
+	}
+	// A composite has no CAST to say it.
+	EXPECT_EQ(ibQueryMakeCast(nullptr, ibTypeDescription(std::vector<ibClassID>{ g_valueNumberCLSID, g_valueStringCLSID })), nullptr);
+}

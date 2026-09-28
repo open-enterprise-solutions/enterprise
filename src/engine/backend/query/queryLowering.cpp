@@ -9,6 +9,7 @@
 #include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
 #include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
+#include "queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
 #include "backend/diagnostics/journal.h"  // ibJournal — the technology journal
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
@@ -287,10 +288,12 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	// because a temp table has no metaclass to name: it is what the previous statement left.
 	// Asked FIRST and asked of the auxiliary registry, so a package reads the way it was written.
 	if (src.m_name.size() == 1) {
-		if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(src.m_name[0]))
-			return tmp;
+		// (`&Goods` is never the package's `Goods` — the ampersand names the parameter, below.)
+		if (!src.m_parameter)
+			if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(src.m_name[0]))
+				return tmp;
 
-		// ⭐ …OR A TABLE HANDED IN AS A PARAMETER. `FROM Goods` where `Goods` is a bound value table:
+		// ⭐ …OR A TABLE HANDED IN AS A PARAMETER. `FROM &Goods` where `Goods` is a bound value table:
 		// the table is DECLARED OUTSIDE and passed in, which is the other kind of temp table and the
 		// one a caller controls. `SELECT … INTO Sales` makes one; this one arrives already full.
 		//
@@ -302,14 +305,39 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 		// ⚠ Owned for the whole run: the wrap must outlive the door's terminal call, and a source
 		// resolved once is read many times. The map is keyed by name so two mentions of the same
 		// parameter are ONE source rather than two snapshots of it.
-		const auto bound = params.find(src.m_name[0]);
+		//
+		// 🛑 …AND THE WRAP IS OF THIS TABLE, not of this name. Keyed by the name alone, the first table ever bound
+		// to `Goods` on a thread answered for `&Goods` for the rest of that thread's life: a later query handed
+		// another table read the old one's columns and its ROWS, without a word (2026-09-28 — a bench joining its
+		// own `&Goods` was told its `Item` column did not exist, because the table in hand was yesterday's). So the
+		// table wrapped is kept beside the wrap and asked each time: another table — or the same one reshaped —
+		// makes a new wrap. Within one run the table is the same, so the source the door already holds stays put.
+		//
+		// ⭐ ONLY WHERE THE AMPERSAND SAYS SO. `&Goods` is the temporary table whose rows come from the parameter;
+		// `Goods` is the temporary table of that name — the package's, or the manager's — and a parameter that
+		// happens to share the name is not asked (Max, 2026-09-28: the ampersand is where the rows come from).
+		const auto bound = src.m_parameter ? params.find(src.m_name[0]) : params.end();
 		if (bound != params.end()) {
-			static thread_local std::map<wxString, std::shared_ptr<ibTempTableQueryable>> s_boundTables;
-			auto& wrap = s_boundTables[src.m_name[0]];
-			if (!wrap)
-				wrap = std::make_shared<ibTempTableQueryable>(bound->second);
-			if (!wrap->GetColumns().empty())
-				return wrap.get();
+			struct ibBoundTable {
+				const ibValueModelTable*              m_table = nullptr;
+				unsigned int                          m_columns = 0;
+				ibValue                               m_value;   // keeps the table the wrap reads alive
+				std::shared_ptr<ibTempTableQueryable> m_wrap;
+			};
+			static thread_local std::map<wxString, ibBoundTable> s_boundTables;
+			ibValueModelTable* table = nullptr;
+			bound->second.ConvertToValue(table);
+			const unsigned int columns = table != nullptr && table->GetColumnCollection() != nullptr
+				? table->GetColumnCollection()->GetColumnCount() : 0;
+			ibBoundTable& held = s_boundTables[src.m_name[0]];
+			if (!held.m_wrap || held.m_table != table || held.m_columns != columns) {
+				held.m_table   = table;
+				held.m_columns = columns;
+				held.m_value   = bound->second;
+				held.m_wrap    = std::make_shared<ibTempTableQueryable>(bound->second);
+			}
+			if (!held.m_wrap->GetColumns().empty())
+				return held.m_wrap.get();
 			// A parameter that is NOT a table vends no columns. Fall through and let the ordinary
 			// "a source must be <Kind>.<Name>" verdict be given — naming the real mistake rather
 			// than "this table has no columns", which would send the author looking at the wrong end.
@@ -329,14 +357,22 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	for (size_t i = 2; i < src.m_name.size(); ++i)
 		name += wxT(".") + src.m_name[i];
 
-	// The AUXILIARY per-query registry FIRST: a transient (RAM / temp) source the composer
-	// registered under a unique local name. It IS a complete L3 queryable — return it directly,
-	// bypassing the metaobject factory (which carries no descriptor for it). (temp-table feature)
-	if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(name))
-		return tmp;
-
 	// Resolve through the config the query runs ON BEHALF OF — see ibSourceMetaDataScope::GetFactory for the order.
 	ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
+
+	// The AUXILIARY per-query registry: a transient (RAM / temp) source the composer registered under a
+	// unique local name (`Temp.t0`). It IS a complete L3 queryable — return it directly, bypassing the
+	// metaobject factory (which carries no descriptor for it). (temp-table feature)
+	//
+	// 🛑 …ASKED ONLY WHERE THE FACTORY HAS NO SUCH OBJECT. The registry is keyed by the object's name alone
+	// and holds the package's temporary tables too, so asked first it answered `Catalog.Goods` with the
+	// package's own `Goods` temporary table — a join of the two read the temporary table twice and the
+	// catalog's `Ref` was "unknown" (2026-09-28, a bench putting `&Goods` INTO `Goods`).
+	const bool configurationHasIt = factory != nullptr && factory->HasNamespace(ns)
+		&& factory->FindDescriptor(ns, name) != nullptr;
+	if (!configurationHasIt)
+		if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(name))
+			return tmp;
 	if (factory == nullptr) {
 		ThrowQueryException(0, 0, _("the query engine is not available (no application data)"));
 		return nullptr;
@@ -855,19 +891,11 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 			return cols;
 		cols = root;
 
-		// ⚠ A PRIMITIVE TARGET IS REFUSED, and the message says why rather than "unknown table".
-		//
-		// `CAST(Code AS Number)` is a CONVERSION, and this is a NARROWING — two different things that
-		// share a word. Narrowing needs no work at the door: the value already IS of that type, the
-		// cast only says which. Converting needs an operation the door does not have (its expression
-		// IR is Column / Const / Arith / Case / PeriodTrunc), and it would have to exist in BOTH the
-		// SQL provider and the RAM one, in every dialect, with the rounding and the failure mode
-		// spelled out. That is its own piece of work, and pretending otherwise here would mean a
-		// query that parses and then answers something nobody chose.
+		// ⚠ A WALK NEEDS A TABLE, and a one-word target is not one. `CAST(Code AS Number)` CONVERTS — a value
+		// answered over the row (CastTargetType, the AsType question) — and a number has no fields to walk into.
 		if (cast.m_path.size() == 1) {
 			ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
-				_("CAST narrows a reference to one of its types (%s), it does not convert values: "
-				  "'%s' is not a table"),
+				_("a walk after CAST continues into a table a reference points at (%s); '%s' has no fields"),
 				wxT("Catalog.Products"), cast.m_path[0]));
 			return cols;
 		}
@@ -1033,6 +1061,42 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		}
 	}
 	return cols;
+}
+
+// ⭐ THE REFERENCE TYPE OF A TABLE NAMED IN THE TEXT — `x REFS Catalog.Goods`, `CAST(x AS Catalog.Goods)`: resolved
+// as a FROM resolves it, and typed by the table's own empty reference. 0 = no reference points at that table; the
+// caller says so in its own words.
+ibClassID ReferenceTypeOfTable(const std::vector<wxString>& path)
+{
+	ibQuerySource target;
+	target.m_name = path;
+	const ibBackendQueryable* const q = ResolveSource(target, std::map<wxString, ibValue>());
+	const ibValueMetaObjectGenericData* const meta = q != nullptr ? q->GetSourceMetaObject() : nullptr;
+	ibValue emptyRef;
+	if (meta == nullptr || !meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef))
+		return 0;
+	return emptyRef.GetClassType();
+}
+
+// ⭐ WHAT A CAST BRINGS ITS VALUE TO, standing as a value rather than rooting a walk: a primitive with its
+// qualifiers (ibQueryCastType — the reading the parser checked), or the reference type of the table it names.
+ibTypeDescription CastTargetType(const ibQueryAstExpr& cast)
+{
+	ibTypeDescription type;
+	if (ibQueryCastType(cast, type))
+		return type;
+	wxString named;
+	for (const wxString& segment : cast.m_path)
+		named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+	if (cast.m_path.size() < 2)
+		ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
+			_("CAST takes a primitive type (Number(15, 2), String(50), Date, Boolean) or a table a reference points at (%s); '%s' is neither"),
+			wxT("Catalog.Products"), named));
+	const ibClassID reference = ReferenceTypeOfTable(cast.m_path);
+	if (reference == 0)
+		ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
+			_("CAST takes a table a reference can point at; '%s' is not one"), named));
+	return ibTypeDescription(reference);
 }
 
 // The queryable that owns the FIRST segment of a path — the dot-walk root. Mirrors ResolvePath's
@@ -1569,8 +1633,9 @@ bool IsComputedExprAst(const ibQueryAstExpr& e)
 	// `THEN (Qty > 100)` and `WHERE (x REFS T) = TRUE`, and every one of them was refused at the run —
 	// "unsupported projection expression", "unsupported expression in a computed column", "expected a
 	// column" — three places each missing the same answer (2026-09-28). Given here, it is given to all.
+	// A CAST STANDING AS A VALUE is one too — `CAST(Qty AS Number(15, 2))`; one rooting a walk is a Column.
 	return e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case
-	    || e.m_kind == ibQueryAstExprKind::ScalarCall || IsConditionAst(e);
+	    || e.m_kind == ibQueryAstExprKind::ScalarCall || e.m_kind == ibQueryAstExprKind::Cast || IsConditionAst(e);
 }
 
 // Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / projection: a single DB source
@@ -1995,15 +2060,8 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 				_("REFS takes a type: <Kind>.<Name>, or a family of them (CatalogRef, AnyRef); '%s' is neither"), e.m_path.front()));
 		}
 
-		ibQuerySource target;
-		target.m_name = e.m_path;
-		const ibBackendQueryable* q = ResolveSource(target, std::map<wxString, ibValue>());
-		if (q == nullptr)
-			return nullptr;   // ResolveSource has already raised, in its own words
-
-		const ibValueMetaObjectGenericData* meta = q->GetSourceMetaObject();
-		ibValue emptyRef;
-		if (meta == nullptr || !meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef) || emptyRef.GetClassType() == 0) {
+		const ibClassID reference = ReferenceTypeOfTable(e.m_path);
+		if (reference == 0) {
 			wxString named;
 			for (const wxString& segment : e.m_path)
 				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
@@ -2011,7 +2069,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 				_("REFS takes a table a reference can point at, or a family of them (CatalogRef, AnyRef); '%s' is neither"), named));
 		}
 
-		return ibQueryPredicate::RefType(cols.back(), emptyRef.GetClassType(), e.m_negated, cols);
+		return ibQueryPredicate::RefType(cols.back(), reference, e.m_negated, cols);
 	}
 
 	case ibQueryAstExprKind::Column: {
@@ -2266,6 +2324,22 @@ bool ReadDatePartOf(ibQueryScalarFn fn, ibDatePart& part)
 	}
 }
 
+// The value a question is put to (PRESENTATION, VALUETYPE, a CAST) may be a WALK — see ibValueAskWalk: its leaf
+// stands in the tree, and the walk is left for the projection to bring into the row.
+ibQueryColumnExprPtr AskedOfValue(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& a,
+                                  const std::map<wxString, ibValue>& params)
+{
+	if (t_valueAskWalks != nullptr && a.m_kind == ibQueryAstExprKind::Column
+	    && (a.m_path.size() > 1 || (a.m_arg && a.m_arg->m_kind == ibQueryAstExprKind::Cast))) {
+		const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, a);
+		if (cols.size() > 1) {
+			t_valueAskWalks->push_back({ cols.back(), cols, &a });
+			return ibQueryColumnExpr::Col(cols.back());
+		}
+	}
+	return BuildColumnExprFromAst(sources, a, params);
+}
+
 ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
@@ -2273,20 +2347,7 @@ ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& 
 	auto arg = [&](size_t i) {
 		return BuildColumnExprFromAst(sources, *e.m_args[i], params);
 	};
-	// The argument of a question put to the value may be a WALK — see ibValueAskWalk: its leaf stands in the tree,
-	// and the walk is left for the projection to bring into the row.
-	auto askedOf = [&]() -> ibQueryColumnExprPtr {
-		const ibQueryAstExpr& a = *e.m_args[0];
-		if (t_valueAskWalks != nullptr && a.m_kind == ibQueryAstExprKind::Column
-		    && (a.m_path.size() > 1 || (a.m_arg && a.m_arg->m_kind == ibQueryAstExprKind::Cast))) {
-			const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, a);
-			if (cols.size() > 1) {
-				t_valueAskWalks->push_back({ cols.back(), cols, &a });
-				return ibQueryColumnExpr::Col(cols.back());
-			}
-		}
-		return arg(0);
-	};
+	auto askedOf = [&]() { return AskedOfValue(sources, *e.m_args[0], params); };
 
 	ibDatePart part = ibDatePart::Year;
 	if (ReadDatePartOf(e.m_scalar, part))
@@ -2427,6 +2488,13 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	// not one per place that needed one.
 	case ibQueryAstExprKind::ScalarCall:
 		return BuildScalarCallFromAst(sources, e, params);
+
+	// ⭐ A CAST STANDING AS A VALUE — the fourth question put to the value (ibValueAsType): answered over the row
+	// that came back, by both roads alike, with its input projected like PRESENTATION's.
+	case ibQueryAstExprKind::Cast:
+		if (!e.m_arg)
+			ThrowQueryException(e.m_line, e.m_col, _("CAST takes the value it brings to a type"));
+		return ibQueryColumnExpr::AsType(AskedOfValue(sources, *e.m_arg, params), CastTargetType(e));
 
 	// ⭐⭐ A FOLD INSIDE AN EXPRESSION — declared as the aggregate it is, and referred to by name.
 	//
@@ -2679,6 +2747,10 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 	case ibQueryAstExprKind::Func:
 		return TypeOfFold(e.m_func, e.m_arg ? TypeOfExpr(sources, *e.m_arg, params) : ibTypeDescription());
 
+	// A CAST says its type — that is what it is written for.
+	case ibQueryAstExprKind::Cast:
+		return CastTargetType(e);
+
 	// A condition asked for its value answers with a Boolean — certain from its kind alone.
 	case ibQueryAstExprKind::Compare:
 	case ibQueryAstExprKind::Logical:
@@ -2746,15 +2818,13 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 // — so it takes a snapshot of exactly those three, owned by the schema itself, through the same
 // `m_ownedCol` a synthetic totals measure already uses. Where the column belongs to the METADATA
 // nothing is copied: it outlives the schema by construction.
-// ⭐ DISTINCT, ANSWERED WHERE THE OUTPUTS ARE. A statement whose output is a question put to the finished
-// row (`VALUETYPE(x)`) cannot be deduplicated by the engine that never sees that output. So the rows are
-// read here, every output taken the way its reader takes it, the duplicates of the whole visible row dropped
-// (first one kept, order kept), `top` applied to what remains — and the schema is told to read each output as
-// a plain cell of the table this returns.
-ibDataQueryResult DedupeOverRow(ibDataQueryResult rows, std::vector<OutputColumn>& schema, long top)
+// THE ROWS AS THE AUTHOR SEES THEM — every output taken the way its reader takes it, into a table keyed by the
+// output's column; `cols` says which columns those are, in the schema's order. What DedupeOverRow and SortOverRow
+// both stand on.
+ibQueryRamTable ReadVisibleRows(ibDataQueryResult& rows, const std::vector<OutputColumn>& schema,
+                                std::vector<const ibBackendQueryColumn*>& cols)
 {
 	ibQueryRamTable read;
-	std::vector<const ibBackendQueryColumn*> cols;
 	for (const OutputColumn& oc : schema) {
 		if (oc.m_col == nullptr)
 			continue;
@@ -2772,6 +2842,29 @@ ibDataQueryResult DedupeOverRow(ibDataQueryResult rows, std::vector<OutputColumn
 			read.SetCell(row, oc.m_col->GetColumnId(), value);
 		}
 	}
+	return read;
+}
+
+// …and the schema told that the table it reads now holds each output as a plain cell.
+void ReadPlainly(std::vector<OutputColumn>& schema)
+{
+	for (OutputColumn& oc : schema) {
+		if (oc.m_col == nullptr)
+			continue;
+		oc.m_byAlias = false;
+		oc.m_objectPrefix.Clear();
+	}
+}
+
+// ⭐ DISTINCT, ANSWERED WHERE THE OUTPUTS ARE. A statement whose output is a question put to the finished
+// row (`VALUETYPE(x)`) cannot be deduplicated by the engine that never sees that output. So the rows are
+// read here, every output taken the way its reader takes it, the duplicates of the whole visible row dropped
+// (first one kept, order kept), `top` applied to what remains — and the schema is told to read each output as
+// a plain cell of the table this returns.
+ibDataQueryResult DedupeOverRow(ibDataQueryResult rows, std::vector<OutputColumn>& schema, long top)
+{
+	std::vector<const ibBackendQueryColumn*> cols;
+	ibQueryRamTable read = ReadVisibleRows(rows, schema, cols);
 
 	ibQueryRamTable unique = ibQueryComposer::DedupeRows(read, cols);
 	if (top > 0 && unique.RowCount() > top) {
@@ -2786,12 +2879,7 @@ ibDataQueryResult DedupeOverRow(ibDataQueryResult rows, std::vector<OutputColumn
 		unique = std::move(first);
 	}
 
-	for (OutputColumn& oc : schema) {
-		if (oc.m_col == nullptr)
-			continue;
-		oc.m_byAlias = false;
-		oc.m_objectPrefix.Clear();
-	}
+	ReadPlainly(schema);
 	return ibDataQueryResult(std::move(unique), nullptr);
 }
 
@@ -3213,6 +3301,80 @@ const ibQueryAstExprPtr& SortTargetOf(const ibQuerySelect& ast, const ibQueryAst
 	return written;
 }
 
+// THE OUTPUT AN ORDER KEY NAMES — by the name the selection gave it (SortTargetOf) or written out as its
+// expression; empty when the key sorts by something the query does not select.
+wxString OrderedOutputName(const ibQuerySelect& ast, const ibQueryAstExprPtr& key)
+{
+	const ibQueryAstExprPtr& target = SortTargetOf(ast, key);
+	if (!target)
+		return wxString();
+	const wxString written = ibRenderQueryExpr(*target);
+	for (const ibQueryProjection& p : ast.m_projections)
+		if (p.m_expr && (p.m_expr == target || ibRenderQueryExpr(*p.m_expr) == written))
+			return ibQueryOutputName(p);
+	return wxString();
+}
+
+// …and whether one of the keys names an output answered over the finished row — then no engine can sort.
+bool SortsOverRow(const ibQuerySelect& ast, const std::vector<ibQueryColumnSelect>& overRow)
+{
+	for (const ibQueryOrderItem& o : ast.m_orderBy) {
+		const wxString name = OrderedOutputName(ast, o.m_expr);
+		if (!name.IsEmpty() && std::any_of(overRow.begin(), overRow.end(),
+		        [&name](const ibQueryColumnSelect& over) { return over.m_alias.CmpNoCase(name) == 0; }))
+			return true;
+	}
+	return false;
+}
+
+// ⭐ ORDER BY AN OUTPUT ANSWERED OVER THE FINISHED ROW — `ORDER BY Qty` over `CAST(G.Qty AS Number(15, 2)) AS Qty`,
+// a PRESENTATION, a VALUETYPE. No engine sees such an output, so none can sort by it: the rows are read here as the
+// author sees them (ReadVisibleRows), sorted by EVERY key the query names — so the order written holds together —
+// with the comparison every sort in memory uses (RamSortCompareKey), and `top` applied after. A key that names no
+// output cannot be read off the finished row, and is refused in words rather than dropped.
+ibDataQueryResult SortOverRow(ibDataQueryResult rows, std::vector<OutputColumn>& schema, const ibQuerySelect& ast, long top)
+{
+	std::vector<std::pair<const ibBackendQueryColumn*, bool>> keys;
+	for (const ibQueryOrderItem& o : ast.m_orderBy) {
+		const wxString name = OrderedOutputName(ast, o.m_expr);
+		const auto output = std::find_if(schema.begin(), schema.end(), [&name](const OutputColumn& oc) {
+			return oc.m_col != nullptr && !name.IsEmpty() && oc.m_name.CmpNoCase(name) == 0;
+		});
+		if (output == schema.end())
+			ThrowQueryException(o.m_expr ? o.m_expr->m_line : 0, o.m_expr ? o.m_expr->m_col : 0, wxString::Format(
+				_("ORDER BY '%s' beside a value computed over the finished row: sort by fields the query selects"),
+				o.m_expr ? ibRenderQueryExpr(*o.m_expr) : wxString()));
+		keys.emplace_back(output->m_col, o.m_ascending);
+	}
+
+	std::vector<const ibBackendQueryColumn*> cols;
+	ibQueryRamTable read = ReadVisibleRows(rows, schema, cols);
+	std::vector<long> order(static_cast<size_t>(read.RowCount()));
+	for (size_t i = 0; i < order.size(); ++i)
+		order[i] = static_cast<long>(i);
+	std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
+		for (const std::pair<const ibBackendQueryColumn*, bool>& key : keys) {
+			const int c = ibQueryComposer::RamSortCompareKey(read.GetCell(a, key.first->GetColumnId()),
+			                                                 read.GetCell(b, key.first->GetColumnId()), key.second);
+			if (c != 0)
+				return c < 0;
+		}
+		return false;
+	});
+
+	ibQueryRamTable sorted;
+	for (const ibBackendQueryColumn* c : cols)
+		sorted.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+	const size_t taken = top > 0 ? std::min(order.size(), static_cast<size_t>(top)) : order.size();
+	for (size_t i = 0; i < taken; ++i) {
+		const long row = sorted.AppendRow();
+		for (const ibBackendQueryColumn* c : cols)
+			sorted.SetCell(row, c->GetColumnId(), read.GetCell(order[i], c->GetColumnId()));
+	}
+	ReadPlainly(schema);
+	return ibDataQueryResult(std::move(sorted), nullptr);
+}
+
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
 // (1 = single source, >1 = JOIN) drives column resolution. explicitProjection (a subquery's inner
@@ -3610,7 +3772,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					// The rest answer with what the expression answers (a type value, a fold's figure)
 					// and say nothing they cannot vouch for.
 					oc.m_type    = (built->m_kind == ibQueryColumnExprKind::ValueAsk
-					                && built->m_valueAsk != ibQueryValueAsk::ValueType)
+					                && (built->m_valueAsk == ibQueryValueAsk::Presentation
+					                    || built->m_valueAsk == ibQueryValueAsk::RefPresentation))
 						? ibTypeDescription(g_valueStringCLSID)
 						: TypeOfExpr(sources, e, params);
 					giveIdentity(oc);
@@ -3867,7 +4030,12 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// s.m_col == the leaf), so ORDER BY a reference field is allowed there too — the physical path SQL-joins
 	// it instead, but either way the sort keys on the leaf column.
 	const bool allowOrderDotWalk = allowDotWalk || computedPrimary;
+	// ⭐ AN ORDER NO ENGINE CAN GIVE is not asked of one: when a key names an output answered over the finished row,
+	// the whole ORDER is applied once the outputs are known (SortOverRow), every key together.
+	const bool sortedOverRow = outComputedOverRow != nullptr && SortsOverRow(ast, *outComputedOverRow);
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
+		if (sortedOverRow)
+			break;
 		const ibQueryAstExpr& oe = *SortTargetOf(ast, o.m_expr);
 		// ORDER BY <expression> — a CASE / arithmetic ("sort by a condition") or a bare constant (value(...) /
 		// &parameter): lower it to an EXPRESSION sort. Single DB source only (like the computed WHERE side); a
@@ -3881,7 +4049,13 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				ThrowQueryException(oe.m_line, oe.m_col, _("ORDER BY an expression over a computed source is not yet supported: sort by a column"));
 			if (IsComputedExprAst(oe))
 				GateComputedExpr(sources, oe);
-			b.OrderByExpr(BuildColumnExprFromAst(sources, oe, params), o.m_ascending);
+			ibQueryColumnExprPtr sortBy = BuildColumnExprFromAst(sources, oe, params);
+			// A value answered over the row that the query does not select has nothing to be sorted by here: no
+			// engine can compute it, and the finished row does not hold it.
+			if (ExprIsAnsweredHere(sortBy.get()))
+				ThrowQueryException(oe.m_line, oe.m_col, wxString::Format(
+					_("ORDER BY %s: select it, and sort by its name"), ibRenderQueryExpr(oe)));
+			b.OrderByExpr(std::move(sortBy), o.m_ascending);
 			continue;
 		}
 		// ⭐⭐ A PATH THAT WAS GROUPED BY CAN BE SORTED BY. The gate above forbids a reference walk in
@@ -5427,6 +5601,28 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		CheckSelectNames(named, params);
 	}
 
+	// ⭐ A CAST'S TYPE IS A NAME TOO — a primitive, or a table a reference points at — and one that is neither is
+	// said here, where the text is judged, in the words the run would use (CastTargetType). It needs no source,
+	// so it is asked before the check may fall silent over tables it cannot see: a temporary table described by
+	// CASTs reads a table handed in, which is exactly such a source.
+	std::function<void(const ibQueryAstExprPtr&)> checkCasts = [&checkCasts](const ibQueryAstExprPtr& e) {
+		if (!e)
+			return;
+		if (e->m_kind == ibQueryAstExprKind::Cast)
+			CastTargetType(*e);
+		ibQueryForEachChild(*e, [&checkCasts](const ibQueryAstExprPtr& child) { checkCasts(child); });
+	};
+	for (const ibQueryProjection& projection : ast.m_projections)
+		checkCasts(projection.m_expr);
+	checkCasts(ast.m_where);
+	checkCasts(ast.m_having);
+	for (const ibQueryAstExprPtr& key : ast.m_groupBy)
+		checkCasts(key);
+	for (const ibQueryAstJoin& join : ast.m_joins)
+		checkCasts(join.m_on);
+	for (const ibQueryOrderItem& item : ast.m_orderBy)
+		checkCasts(item.m_expr);
+
 	std::vector<ibSourceBinding> sources;
 	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/true, /*tolerateOpaque=*/true)) {
 		// ⚠ SILENCE IS FOR "CANNOT VERIFY", NOT FOR "NOTHING TO VERIFY AGAINST".
@@ -6911,7 +7107,12 @@ void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
 	// AND HERE IT STOPS. PopulateBuilder is where names become columns and the output schema is
 	// decided; the terminal below it (Execute / SelectAggregate) is where rows are read. Describing
 	// is the first half without the second.
-	PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false, sourceConditions);
+	//
+	// ⚠ AN OUTPUT ANSWERED OVER THE ROW IS DESCRIBED TOO — `CAST(T.Qty AS Number(15, 2))`, `PRESENTATION(x)`. With
+	// nowhere to put it the projection refused it as unreadable, and a composition or a dynamic list over such a
+	// query had no columns at all. Collected here and dropped: nothing is read, so nothing asks it anything.
+	std::vector<ibQueryColumnSelect> answeredOverRow;
+	PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false, sourceConditions, &answeredOverRow);
 	DetachSchemaFromRunSources(outSchema, subOwners);   // the description leaves; the sources do not
 }
 
@@ -6988,18 +7189,25 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 		return false;
 	}();
 
+	// …and an ORDER BY naming such an output: PopulateBuilder left the order out, so the rows are sorted once the
+	// outputs are known (SortOverRow) — and TOP waits for the sort, as it waits for the dedupe.
+	const bool sortOverRow = !computedOverRow.empty() && SortsOverRow(ast, computedOverRow);
+	const long topBeforeSort = sortOverRow ? 0 : ast.m_top;
+
 	if (aggregate) {
 		// SELECT TOP n + GROUP BY — the door's aggregate-terminal row limit: the DB / co-located
 		// paths render the dialect LIMIT, the RAM fold truncates after grouping.
-		if (ast.m_top > 0 && !dedupeOverRow && !refoldOverRow)
+		if (ast.m_top > 0 && !dedupeOverRow && !refoldOverRow && !sortOverRow)
 			b.Top(ast.m_top);
 		ibDataQueryResult aggregated = b.SelectAggregate();
 		if (!computedOverRow.empty())
 			aggregated.SetComputedOverRow(std::move(computedOverRow));
 		if (refoldOverRow)
-			aggregated = RefoldOverRow(std::move(aggregated), outSchema, ast, ast.m_top);
+			aggregated = RefoldOverRow(std::move(aggregated), outSchema, ast, topBeforeSort);
 		else if (dedupeOverRow)
-			aggregated = DedupeOverRow(std::move(aggregated), outSchema, ast.m_top);
+			aggregated = DedupeOverRow(std::move(aggregated), outSchema, topBeforeSort);
+		if (sortOverRow)
+			aggregated = SortOverRow(std::move(aggregated), outSchema, ast, ast.m_top);
 		DetachSchemaFromRunSources(outSchema, subOwners);   // the schema leaves, sharing what it names
 		return aggregated;
 	}
@@ -7008,17 +7216,19 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	// page — the smaller positive count wins (0 = unbounded on either side). With a
 	// caller-owned page cache the door reuses the rendered SQL, rebinding the anchor.
 	ibReadPageRequest page = pageIn;
-	if (ast.m_top > 0 && !dedupeOverRow && (page.m_count <= 0 || ast.m_top < page.m_count))
+	if (ast.m_top > 0 && !dedupeOverRow && !sortOverRow && (page.m_count <= 0 || ast.m_top < page.m_count))
 		page.m_count = ast.m_top;
 	// FOR UPDATE rides the page request — the dialect appends its own row-lock clause
 	// (FOR UPDATE / WITH LOCK) from there. Nothing new below L2: the driver half was built.
 	if (ast.m_forUpdate)
 		page.m_lockForUpdate = true;
-	ibDataQueryResult rows = cache != nullptr && !dedupeOverRow ? b.Execute(page, *cache, signature) : b.Execute(page);
+	ibDataQueryResult rows = cache != nullptr && !dedupeOverRow && !sortOverRow ? b.Execute(page, *cache, signature) : b.Execute(page);
 	if (!computedOverRow.empty())
 		rows.SetComputedOverRow(std::move(computedOverRow));
 	if (dedupeOverRow)
-		rows = DedupeOverRow(std::move(rows), outSchema, ast.m_top);
+		rows = DedupeOverRow(std::move(rows), outSchema, topBeforeSort);
+	if (sortOverRow)
+		rows = SortOverRow(std::move(rows), outSchema, ast, ast.m_top);
 	DetachSchemaFromRunSources(outSchema, subOwners);   // the schema leaves, sharing what it names
 	return rows;
 }

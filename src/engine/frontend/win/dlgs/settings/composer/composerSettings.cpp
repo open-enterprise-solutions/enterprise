@@ -1584,14 +1584,16 @@ void ibComposerSettingsPanel::BuildPanel()
 		AddOutput();
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	ibStyleSettingsTabs(notebook);
 	if (appData->DesignerMode()) {
-		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true);
-		notebook->AddPage(BuildResourcePage(notebook), _("Resources"), false);
+		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+		notebook->AddPage(BuildResourcePage(notebook), _("Resources"), false, ibSettingsTabArt(ibSettingsTab::Resources));
 		// PARAMETERS between what is READ and what is FOLDED: they are part of the reading — the query
 		// asks for them — but they are filled in, not written, so they get a page of their own.
-		notebook->AddPage(BuildParameterPage(notebook), _("Parameters"), false);
+		notebook->AddPage(BuildParameterPage(notebook), _("Parameters"), false, ibSettingsTabArt(ibSettingsTab::Parameters));
 	}
-	notebook->AddPage(BuildOutputPage(notebook), _("Output"), notebook->GetPageCount() == 0);
+	notebook->AddPage(BuildOutputPage(notebook), _("Output"), notebook->GetPageCount() == 0,
+		ibSettingsTabArt(ibSettingsTab::Output));
 
 	mainSizer->Add(notebook, 1, wxALL | wxEXPAND, FromDIP(6));
 
@@ -2938,7 +2940,7 @@ void ibComposerSettingsPanel::SyncGroupingPage()
 	if (wanted == shown)
 		return;
 	if (wanted) {
-		m_settingsTabs->InsertPage(0, m_groupingPage, _("Grouping"), true);
+		m_settingsTabs->InsertPage(0, m_groupingPage, _("Grouping"), true, ibSettingsTabArt(ibSettingsTab::Grouping));
 		m_groupingPage->Show();
 	}
 	else {
@@ -2969,7 +2971,7 @@ void ibComposerSettingsPanel::SyncParameterPage()
 	if (wanted == shown)
 		return;
 	if (wanted) {
-		m_settingsTabs->InsertPage(0, m_readerParameterPage, _("Parameters"), true);
+		m_settingsTabs->InsertPage(0, m_readerParameterPage, _("Parameters"), true, ibSettingsTabArt(ibSettingsTab::Parameters));
 		m_readerParameterPage->Show();
 		if (m_parameterModel != nullptr)
 			m_parameterModel->ResetFromList();
@@ -3018,6 +3020,7 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	// it is not, and the cast that got it in there was the proof (Max, 2026-08-20: "two different
 	// worlds").
 	wxNotebook* tabs = m_settingsTabs = new wxNotebook(pane, wxID_ANY);
+	ibStyleSettingsTabs(tabs);
 
 	// ⭐ THE GROUPING'S OWN FIELDS — first, because it is what a grouping IS before it is anything
 	// else: it may be made of SEVERAL elements (Max), grouped by their tuple, and this is where
@@ -3027,7 +3030,7 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	// hold — "what grouping could there be here" (Max) — so it is taken off the notebook rather
 	// than left standing empty, which reads as a page that is broken.
 	m_groupingPage = BuildGroupingPage(tabs);
-	tabs->AddPage(m_groupingPage, _("Grouping"), true);
+	tabs->AddPage(m_groupingPage, _("Grouping"), true, ibSettingsTabArt(ibSettingsTab::Grouping));
 
 	// ⭐⭐ …AND THE READER'S PARAMETERS, HERE — beside the selected fields and the filter, because a
 	// value the reader fills in is one of the things they SET, exactly like those. It stands FIRST of
@@ -3054,12 +3057,12 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	//
 	// The other page said what MAY be reached, had no reader on the run path at all, and cost a
 	// parameter on every verb of this window to tell the two apart.
-	tabs->AddPage(BuildFieldSetPage(tabs), _("Selected fields"), false);
+	tabs->AddPage(BuildFieldSetPage(tabs), _("Selected fields"), false, ibSettingsTabArt(ibSettingsTab::SelectedFields));
 
 	m_filterEditor = new ibFilterEditor(tabs, &EditedSettings().m_filter, m_fieldSource.get());
-	tabs->AddPage(m_filterEditor, _("Filter"), false);
+	tabs->AddPage(m_filterEditor, _("Filter"), false, ibSettingsTabArt(ibSettingsTab::Filter));
 	m_sortEditor = new ibSortEditor(tabs, &EditedSettings().m_sort, m_fieldSource.get());
-	tabs->AddPage(m_sortEditor, _("Sort"), false);
+	tabs->AddPage(m_sortEditor, _("Sort"), false, ibSettingsTabArt(ibSettingsTab::Sort));
 
 	// ⭐ THESE TWO EDIT A BUFFER, so nothing they do reaches the composition until this window is
 	// accepted — but the CHANGE is a fact the moment it is made (Max, 2026-08-20: "we changed the

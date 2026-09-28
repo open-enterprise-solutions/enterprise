@@ -95,6 +95,26 @@ wxString ibDialogQueryConstructor::ChooseField(const wxString& title)
 //  Fill — AST -> tabs
 // ===========================================================================
 
+// EVERY GRID OF THE WINDOW, in one list — what a refill keeps the place of (FillAll) and what OK writes the
+// open cell of (FinishCellEditing). A grid added tomorrow joins both by joining this.
+std::vector<ibDataViewCtrl*> ibDialogQueryConstructor::Grids() const
+{
+	return { m_fields, m_links, m_conditions, m_grouping, m_aggregates, m_order,
+	         m_indexFields, m_totalsAggregates, m_totalsDimensions, m_unions, m_unionFields,
+	         m_selectionLinks };
+}
+
+// ⚠ THE CELL STILL OPEN IS WRITTEN BEFORE THE WINDOW ANSWERS. A cell whose editor is a list and a "..."
+// in one panel (the link condition, a totals expression) loses the focus from the list, not from the
+// panel, when OK is pressed — the grid never hears the edit end and the window closes over it. The
+// temporary table's window lost a type that way (2026-09-28).
+void ibDialogQueryConstructor::FinishCellEditing()
+{
+	for (ibDataViewCtrl* grid : Grids())
+		if (grid != nullptr)
+			grid->FinishEditing();
+}
+
 void ibDialogQueryConstructor::FillAll()
 {
 	// ONE FRAME. Every edit refills every tab — that is what keeps the views from drifting — but
@@ -107,6 +127,11 @@ void ibDialogQueryConstructor::FillAll()
 	// the flag.)
 	Freeze();
 	SetEvtHandlerEnabled(false);
+
+	// The statement the tabs are on may be gone — a LINK statement goes when its last relation does
+	// (ibQueryResectionLinks) — so the choice is kept inside the package before anything reads it.
+	if (!m_package.m_statements.empty() && m_statement >= m_package.m_statements.size())
+		m_statement = m_package.m_statements.size() - 1;
 
 	// ⚠ NOTHING THAT DOES NOT RESOLVE IS THROWN AWAY HERE ANY MORE.
 	//
@@ -144,13 +169,9 @@ void ibDialogQueryConstructor::FillAll()
 	// other time" (Max, 2026-08-27, on a filled link row): the click after an edit spends itself
 	// re-selecting the row the Reset deselected, and only the one after that edits. A grid missing
 	// from here has no symptom of its own; it inherits this one.
-	ibDataViewCtrl* const grids[] = {
-		m_fields, m_links, m_conditions, m_grouping, m_aggregates, m_order,
-		m_indexFields, m_totalsAggregates, m_totalsDimensions, m_unions, m_unionFields,
-		m_selectionLinks,
-	};
+	const std::vector<ibDataViewCtrl*> grids = Grids();
 	std::vector<ibDataViewItem> kept;
-	kept.reserve(WXSIZEOF(grids));
+	kept.reserve(grids.size());
 	for (ibDataViewCtrl* grid : grids)
 		kept.push_back(grid != nullptr ? grid->GetSelection() : ibDataViewItem());
 
@@ -170,7 +191,7 @@ void ibDialogQueryConstructor::FillAll()
 	m_filling = false;
 	FillPreview();
 
-	for (size_t i = 0; i < WXSIZEOF(grids); ++i) {
+	for (size_t i = 0; i < grids.size(); ++i) {
 		if (grids[i] == nullptr || !kept[i].IsOk())
 			continue;
 		const ibDataViewVirtualListModel* model =
@@ -340,9 +361,20 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 	// another, and paying for ten teardowns to do it is visible. The page order is fixed (it is
 	// m_pages' order, and `wanted` is a subset in the same order), so pages only ever appear or
 	// disappear — never move — which is exactly the case an insert/remove walk handles.
+	//
+	// ⚠ FIRST WHAT GOES, THEN WHAT COMES. The walk used to only insert and trim the tail, so a page leaving
+	// from the MIDDLE (a temporary table's Index, when the next statement has Order and Totals instead) was
+	// never taken out: the inserts landed before it and every page after it, the one being looked at
+	// included, was taken down and put back — the flicker of switching statements on Query batch
+	// (Max, 2026-09-28). Removed first, the pages that stay are never touched.
 	{
 		wxWindowUpdateLocker hold(m_notebook);
 
+		for (size_t i = m_notebook->GetPageCount(); i-- > 0;) {
+			wxWindow* const shown = m_notebook->GetPage(i);
+			if (std::none_of(wanted.begin(), wanted.end(), [shown](const Page* page) { return page->m_window == shown; }))
+				m_notebook->RemovePage(i);
+		}
 		size_t at = 0;
 		for (const Page* page : wanted) {
 			if (at < m_notebook->GetPageCount() && m_notebook->GetPage(at) == page->m_window) {
@@ -350,11 +382,9 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 				continue;   // already in place
 			}
 			page->m_window->Show();
-			m_notebook->InsertPage(at, page->m_window, page->m_title);
+			m_notebook->InsertPage(at, page->m_window, page->m_title, false, static_cast<int>(page - m_pages.data()));
 			++at;
 		}
-		while (m_notebook->GetPageCount() > at)
-			m_notebook->RemovePage(m_notebook->GetPageCount() - 1);
 	}
 
 	// The tab that was showing, if it is still one of them — by TITLE, because the page window a
@@ -411,30 +441,35 @@ wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
 }
 
 
-// THE MIRROR OF THE COLLECT ABOVE: rewrite the source a path starts on. Same walk, same rule about
+// EVERY EXPRESSION UNDER ONE, as the engine's own walk reaches it (ibQueryForEachOperand: the arguments
+// of a call included, the words of a call left out), plus the keys of a window, which that walk does not
+// carry. The rename and the collect below read this one list. They used to spell the children out each
+// for itself, both missed the arguments of a call, and renaming a table left `YEAR(Old.Date)` behind.
+// A nested query is not walked: its tables are its own.
+static void ibQueryVisitExprs(const ibQueryAstExprPtr& expr, const std::function<void(ibQueryAstExpr&)>& visit)
+{
+	if (!expr)
+		return;
+	visit(*expr);
+	ibQueryForEachOperand(*expr, [&visit](const ibQueryAstExprPtr& child) { ibQueryVisitExprs(child, visit); });
+	if (expr->m_over) {
+		for (const ibQueryAstExprPtr& key : expr->m_over->m_partitionBy)
+			ibQueryVisitExprs(key, visit);
+		for (const ibQueryOrderItem& item : expr->m_over->m_orderBy)
+			ibQueryVisitExprs(item.m_expr, visit);
+	}
+}
+
+// THE MIRROR OF THE COLLECT BELOW: rewrite the source a path starts on. Same walk, same rule about
 // which paths name a source (a Column's, and only a Column's) — so the two can never disagree about
 // what counts as a reference.
 static void ibQueryRenameMentioned(const ibQueryAstExprPtr& expr, const wxString& from, const wxString& to)
 {
-	if (!expr)
-		return;
-
-	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty()
-	    && expr->m_path.front().IsSameAs(from, false))
-		expr->m_path.front() = to;
-
-	ibQueryRenameMentioned(expr->m_arg,  from, to);
-	ibQueryRenameMentioned(expr->m_lhs,  from, to);
-	ibQueryRenameMentioned(expr->m_rhs,  from, to);
-	ibQueryRenameMentioned(expr->m_low,  from, to);
-	ibQueryRenameMentioned(expr->m_high, from, to);
-	ibQueryRenameMentioned(expr->m_else, from, to);
-	for (const ibQueryAstExprPtr& item : expr->m_list)
-		ibQueryRenameMentioned(item, from, to);
-	for (const auto& branch : expr->m_cases) {
-		ibQueryRenameMentioned(branch.first,  from, to);
-		ibQueryRenameMentioned(branch.second, from, to);
-	}
+	ibQueryVisitExprs(expr, [&from, &to](ibQueryAstExpr& node) {
+		if (node.m_kind == ibQueryAstExprKind::Column && !node.m_path.empty()
+		    && node.m_path.front().IsSameAs(from, false))
+			node.m_path.front() = to;
+	});
 }
 
 // RENAMING A TABLE CARRIES ITS REFERENCES. An alias is what the rest of the query calls that table
@@ -462,9 +497,20 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 		ibQueryRenameMentioned(key, from, to);
 	for (ibQueryTotalAggregate& aggregate : select.m_totalsAggregates)
 		ibQueryRenameMentioned(aggregate.m_expr, from, to);
-	for (ibQueryTotalDim& dimension : select.m_totalsBy)
-		for (ibQueryTotalField& field : dimension.m_fields)
-			ibQueryRenameMentioned(field.m_expr, from, to);
+	// Every level — the hidden node's and every SPLIT node's — and the bounds of a period series.
+	const auto renameLevels = [&from, &to](std::vector<ibQueryTotalDim>& levels) {
+		for (ibQueryTotalDim& dimension : levels)
+			for (ibQueryTotalField& field : dimension.m_fields) {
+				ibQueryRenameMentioned(field.m_expr, from, to);
+				if (field.m_periods) {
+					ibQueryRenameMentioned(field.m_periods->m_from, from, to);
+					ibQueryRenameMentioned(field.m_periods->m_to, from, to);
+				}
+			}
+	};
+	renameLevels(select.m_totalsBy);
+	for (ibQueryTotalSplit& split : select.m_totalsSplits)
+		renameLevels(split.m_levels);
 	// The JOIN CONDITIONS name both sides — renaming one of them is exactly what this is for.
 	for (ibQueryAstJoin& join : select.m_joins)
 		ibQueryRenameMentioned(join.m_on, from, to);
@@ -489,24 +535,10 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 // are its own business and are not collected here.
 static void ibQueryCollectMentioned(const ibQueryAstExprPtr& expr, std::set<wxString>& out)
 {
-	if (!expr)
-		return;
-
-	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty())
-		out.insert(expr->m_path.front().Lower());
-
-	ibQueryCollectMentioned(expr->m_arg,  out);
-	ibQueryCollectMentioned(expr->m_lhs,  out);
-	ibQueryCollectMentioned(expr->m_rhs,  out);
-	ibQueryCollectMentioned(expr->m_low,  out);
-	ibQueryCollectMentioned(expr->m_high, out);
-	ibQueryCollectMentioned(expr->m_else, out);
-	for (const ibQueryAstExprPtr& item : expr->m_list)
-		ibQueryCollectMentioned(item, out);
-	for (const auto& branch : expr->m_cases) {
-		ibQueryCollectMentioned(branch.first,  out);
-		ibQueryCollectMentioned(branch.second, out);
-	}
+	ibQueryVisitExprs(expr, [&out](ibQueryAstExpr& node) {
+		if (node.m_kind == ibQueryAstExprKind::Column && !node.m_path.empty())
+			out.insert(node.m_path.front().Lower());
+	});
 }
 
 // Same walk as the rename above, so the two cannot disagree about what counts as a reference.
@@ -515,6 +547,15 @@ static bool ibQueryMentions(const ibQueryAstExprPtr& expr, const wxString& sourc
 	std::set<wxString> named;
 	ibQueryCollectMentioned(expr, named);
 	return named.find(source.Lower()) != named.end();
+}
+
+void queryctor::ibQueryDropTotals(ibQuerySelect& select)
+{
+	select.m_hasTotals = false;
+	select.m_totalsAggregates.clear();
+	select.m_totalsBy.clear();
+	select.m_totalsOverall = false;
+	select.m_totalsSplits.clear();
 }
 
 // ⭐⭐ EVERY BRANCH SELECTS THE SAME FIELDS — the dialog makes that true rather than complaining.
@@ -744,15 +785,30 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
 			[&](const ibQueryOrderItem& o) { return mentions(o.m_expr); }),
 		select.m_orderBy.end());
-	for (ibQueryTotalDim& dimension : select.m_totalsBy)
-		dimension.m_fields.erase(
-			std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
-				[&](const ibQueryTotalField& f) { return mentions(f.m_expr); }),
-			dimension.m_fields.end());
-	select.m_totalsBy.erase(
-		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
-			[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
-		select.m_totalsBy.end());
+	// The levels go field by field, and a level left with none goes — on the hidden node and on every
+	// SPLIT node alike.
+	const auto dropLevels = [&](std::vector<ibQueryTotalDim>& levels) {
+		for (ibQueryTotalDim& dimension : levels)
+			dimension.m_fields.erase(
+				std::remove_if(dimension.m_fields.begin(), dimension.m_fields.end(),
+					[&](const ibQueryTotalField& f) { return mentions(f.m_expr); }),
+				dimension.m_fields.end());
+		levels.erase(
+			std::remove_if(levels.begin(), levels.end(),
+				[](const ibQueryTotalDim& d) { return d.m_fields.empty(); }),
+			levels.end());
+	};
+	dropLevels(select.m_totalsBy);
+	bool anyLevel = !select.m_totalsBy.empty();
+	for (ibQueryTotalSplit& split : select.m_totalsSplits) {
+		dropLevels(split.m_levels);
+		anyLevel = anyLevel || !split.m_levels.empty();
+	}
+	// Totals are counted PER LEVEL — with none left and no OVERALL they have nothing to be counted on,
+	// and `TOTALS …` with no BY is refused on the way back. The same rule the Totals tab keeps when
+	// its last level is removed.
+	if (select.m_hasTotals && !anyLevel && !select.m_totalsOverall)
+		ibQueryDropTotals(select);
 
 	// AND THE LINKS THAT NAMED IT. The join ENTRY of the departed table is erased by the verb (it IS
 	// the table); what is cleared here is a link written on ANOTHER table that mentioned this one —
@@ -880,14 +936,19 @@ static wxString KindOfSource(const ibQuerySource& source)
 
 void ibDialogQueryConstructor::FillSourceTree()
 {
+	FillCatalogue(m_sourceTree, /*withFields*/ true);
+}
+
+void ibDialogQueryConstructor::FillCatalogue(wxTreeCtrl* tree, bool withFields)
+{
 	// The catalogue is the biggest list in the window and the one rebuilt most often (it changes
 	// whenever a statement is added, moved or re-kinded). Rebuilding it visibly is most of the
 	// flicker there is.
-	wxWindowUpdateLocker hold(m_sourceTree);
-	m_sourceTree->DeleteAllItems();
-	TreeIcons icons = PrepareIcons(m_sourceTree);
+	wxWindowUpdateLocker hold(tree);
+	tree->DeleteAllItems();
+	TreeIcons icons = PrepareIcons(tree);
 
-	const wxTreeItemId root = m_sourceTree->AddRoot(wxEmptyString);
+	const wxTreeItemId root = tree->AddRoot(wxEmptyString);
 
 	// THE CATALOGUE IS A WALK. The top level is whatever kinds the factory actually holds, so a
 	// metatype registered tomorrow appears here with nothing edited in this file.
@@ -899,7 +960,7 @@ void ibDialogQueryConstructor::FillSourceTree()
 		auto it = groups.find(kind);
 		if (it == groups.end()) {
 			const int icon = KindIcon(icons, kind);
-			it = groups.emplace(kind, m_sourceTree->AppendItem(root, kind, icon, icon)).first;
+			it = groups.emplace(kind, tree->AppendItem(root, kind, icon, icon)).first;
 		}
 
 		wxString leaf;
@@ -908,8 +969,10 @@ void ibDialogQueryConstructor::FillSourceTree()
 		// The TABLE carries its metatype's icon too — that is what tells a catalog from a document
 		// at a glance, which is the whole reason a picture is here.
 		const int icon = KindIcon(icons, kind);
-		const wxTreeItemId table = m_sourceTree->AppendItem(root == it->second ? root : it->second,
+		const wxTreeItemId table = tree->AppendItem(root == it->second ? root : it->second,
 			leaf, icon, icon, new ibQueryTreeNode(source.m_path, false));
+		if (!withFields)
+			continue;
 
 		// AND ITS FIELDS, so a field can be dragged straight from the catalogue into the query —
 		// which is what "you can drag any field you can see" means. Filled now rather than lazily:
@@ -920,7 +983,7 @@ void ibDialogQueryConstructor::FillSourceTree()
 		// out of the catalogue means "read this table and select this field", so the row has to know
 		// which table that is, at every level of the unfold.
 		for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
-			ibQueryAddFieldNode(m_sourceTree, table, field, FieldIcon(icons, field), -1, wxEmptyString, source.m_path);
+			ibQueryAddFieldNode(tree, table, field, FieldIcon(icons, field), -1, wxEmptyString, source.m_path);
 	}
 
 	// AND THE PACKAGE'S OWN TEMP TABLES, at the bottom beside the metaobject sources — because a
@@ -948,15 +1011,17 @@ void ibDialogQueryConstructor::FillSourceTree()
 		wxTreeItemId tables;
 		auto groupFor = [&]() {
 			if (!tables.IsOk())
-				tables = m_sourceTree->AppendItem(root, _("Temporary tables"), tempIcon, tempIcon);
+				tables = tree->AppendItem(root, _("Temporary tables"), tempIcon, tempIcon);
 			return tables;
 		};
 
 		for (const ibQueryConstructorSource& temp : temps) {
 			if (temp.m_namedResult)
 				continue;   // a selection, not a table — see above
-			const wxTreeItemId table = m_sourceTree->AppendItem(groupFor(), temp.m_presentation,
+			const wxTreeItemId table = tree->AppendItem(groupFor(), temp.m_presentation,
 				tempIcon, tempIcon, new ibQueryTreeNode(temp.m_path, true));
+			if (!withFields)
+				continue;
 
 			// AND ITS FIELDS, exactly as a permanent table gets them above. A temp table was the
 			// one source in this tree that stood as a childless leaf, so it could be added to the
@@ -966,9 +1031,9 @@ void ibDialogQueryConstructor::FillSourceTree()
 			ibQuerySource asSource;
 			asSource.m_name = temp.m_path;
 			for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
-				ibQueryAddFieldNode(m_sourceTree, table, field, FieldIcon(icons, field), -1, wxEmptyString, temp.m_path);
+				ibQueryAddFieldNode(tree, table, field, FieldIcon(icons, field), -1, wxEmptyString, temp.m_path);
 		}
-		if (tables.IsOk()) m_sourceTree->Expand(tables);
+		if (tables.IsOk()) tree->Expand(tables);
 	}
 }
 
@@ -1058,10 +1123,14 @@ void ibDialogQueryConstructor::ExpandStars()
 {
 	const ibSourceMetaDataScope resolveAgainst(m_metaData);
 
-	const std::function<void(ibQuerySelect&)> expand = [&](ibQuerySelect& select) {
+	// ⚠ EACH STATEMENT ASKS AS ITSELF. A temporary table is visible only to the statements after the one
+	// that makes it, and the fields were asked as the statement the tabs happened to be on (the first,
+	// when the window opens) — so a later statement's `*` over a temporary table found no fields and
+	// stayed a star.
+	const std::function<void(ibQuerySelect&, size_t)> expand = [&](ibQuerySelect& select, size_t statement) {
 		for (const ibQuerySelectPtr& branch : select.m_unions)
 			if (branch)
-				expand(*branch);
+				expand(*branch, statement);
 
 		if (!select.m_selectAll || !select.m_projections.empty())
 			return;
@@ -1070,28 +1139,34 @@ void ibDialogQueryConstructor::ExpandStars()
 		for (const ibQueryAstJoin& join : select.m_joins)
 			sources.push_back(&join.m_source);
 
+		std::vector<ibQueryProjection> listed;
 		for (const ibQuerySource* source : sources) {
 			if (source == nullptr || (source->m_name.empty() && !source->m_subquery))
 				continue;
 			for (const ibQueryConstructorField& field :
-			         m_model.GetQualifiedFields(*source, m_package, m_statement)) {
+			         m_model.GetQualifiedFields(*source, m_package, statement)) {
 				ibQueryProjection projection;
 				try {
 					ibQueryParser parser;
 					projection.m_expr = parser.ParseExpression(field.m_name);
 				}
-				catch (const ibBackendException&) { continue; }
-				if (projection.m_expr)
-					select.m_projections.push_back(projection);
+				// ⚠ A FIELD THAT CANNOT BE WRITTEN KEEPS THE STAR. Skipped, it would have left the query
+				// selecting one column fewer than the `*` it replaced — silently, on opening the window.
+				catch (const ibBackendException&) { return; }
+				if (!projection.m_expr)
+					return;
+				listed.push_back(std::move(projection));
 			}
 		}
-		if (!select.m_projections.empty())
-			select.m_selectAll = false;   // it lists them now; the star has been spent
+		if (listed.empty())
+			return;
+		select.m_projections = std::move(listed);
+		select.m_selectAll = false;   // it lists them now; the star has been spent
 	};
 
-	for (ibQueryAstStatement& statement : m_package.m_statements)
-		if (statement.m_select)
-			expand(*statement.m_select);
+	for (size_t s = 0; s < m_package.m_statements.size(); ++s)
+		if (m_package.m_statements[s].m_select)
+			expand(*m_package.m_statements[s].m_select, s);
 }
 
 void ibDialogQueryConstructor::FillFieldSources()
@@ -1512,7 +1587,20 @@ void ibDialogQueryConstructor::FillUnions()
 	// taught — see SyncNotebookPages).
 	const unsigned int wanted = 1 + m_unionFieldModel->BranchCount();   // the name column + a branch each
 	if (m_unions != nullptr && m_unionFields->GetColumnCount() != wanted) {
+		// Let go by the tree, the columns are ours to free (ibDataViewColumnGroup::ClearColumns) — and the grid
+		// forgets every pointer it kept to them as it lets go (WXColumnTreeChanged). Kept while a cell of theirs
+		// is being edited: its editor still belongs to one of them.
+		std::vector<ibDataViewColumn*> old;
+		for (unsigned int i = 0; i < m_unionFields->GetColumnCount(); ++i)
+			old.push_back(m_unionFields->GetColumn(i));
+		const bool editing = std::any_of(old.begin(), old.end(), [](const ibDataViewColumn* column) {
+			return column != nullptr && column->GetRenderer() != nullptr && column->GetRenderer()->GetEditorCtrl() != nullptr;
+		});
+		if (editing)
+			old.clear();
 		m_unionFields->GetRootColumnGroup()->ClearColumns();
+		for (ibDataViewColumn* column : old)
+			delete column;
 		// CALLED WHAT IT IS. The header said "Field name", so a person looking for the aliases saw a
 		// column of names identical to the branch columns and concluded there were none. It is the
 		// ALIAS — the output field's name — and it is typed into.
@@ -1562,7 +1650,7 @@ void ibDialogQueryConstructor::FillPreview()
 	const bool wasFilling = m_filling;
 	m_filling = true;
 	m_preview->SetText(ibRenderQueryPackage(m_package));
-	ibMarkQueryParameters(m_preview);   // the marks go with the text they marked
+	ibMarkQueryText(m_preview);   // the marks go with the text they marked
 	m_filling = wasFilling;
 	ShowEngineVerdict();
 }

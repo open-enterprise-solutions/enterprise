@@ -228,4 +228,9 @@ BACKEND_API ibValue ibTypeValueOf(const ibClassID& clsid);
 BACKEND_API ibValue ibTypeValueByName(const wxString& typeName);
 BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
 
+// ⭐ A VALUE AS A TYPE — what `CAST(x AS …)` answers, through the same door for the same reason. A primitive is
+// CONVERTED as a typed field converts what is written into it (AdjustValue: `Number(15, 2)` rounds, `String(10)`
+// cuts); a reference is NARROWED — it is of the type named or it is NULL, never an empty reference nobody wrote.
+BACKEND_API ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type);
+
 #endif // __DB_TABLE_PROVIDER_H__

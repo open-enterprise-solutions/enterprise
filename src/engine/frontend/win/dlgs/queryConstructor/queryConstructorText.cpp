@@ -188,7 +188,9 @@ void ibDialogQueryConstructor::OnOpenSelection(wxCommandEvent&)
 	if (parenthesised)
 		text = text.Mid(1, text.length() - 2).Trim(true).Trim(false);
 
-	if (!ibShowQueryConstructor(this, text, m_metaData, m_readOnly) || !CanEdit())
+	// The host's exclusions come along: a fragment of a query whose totals the host owns does not grow a
+	// Totals tab of its own because it was opened from a selection.
+	if (!ibShowQueryConstructor(this, text, m_metaData, m_readOnly, m_exclude) || !CanEdit())
 		return;
 
 	long from = 0, to = 0;
@@ -208,6 +210,9 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 		EndModal(wxID_CANCEL);   // nothing was edited; nothing is handed back
 		return;
 	}
+
+	// A cell still open is part of what the author wrote — written into the query before anything reads it.
+	FinishCellEditing();
 
 	// Whatever is in the text pane is what the user means — take it first, so a hand-edit that was
 	// never followed by a click on another control is not thrown away.
@@ -281,9 +286,15 @@ void ibDialogQueryConstructor::SetSubQueryMode()
 
 	// FOR UPDATE goes with it — it holds a STATEMENT's rows, and a sub-query is not one. Hidden
 	// rather than greyed, because a disabled control says "not now" while this is "not here".
-	// (The kind and its name live on the strip, so they left with it.)
 	if (m_forUpdate != nullptr)
 		m_forUpdate->Hide();
+
+	// …and so does the statement's KIND, which lives on the Advanced page, not on the strip — a note
+	// here used to say it left with the strip, and it stayed. A nested query is none of the four: INTO
+	// made the outer text unreadable ("INTO inside a nested table"), DROP left no select and the edit
+	// was dropped without a word. The box goes whole, its name field with it.
+	if (m_queryKind != nullptr && m_queryKind->GetParent() != nullptr)
+		m_queryKind->GetParent()->Hide();
 
 	Layout();
 }
@@ -305,7 +316,8 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 	// empty query, or leave the text alone. Refusing outright would be worse: the query would be
 	// unopenable with no way forward from inside the window.
 	ibQueryPackage package;
-	if (!queryText.Trim(true).Trim(false).IsEmpty()) {
+	// Asked of a copy: Trim works in place, and the caller's text is theirs until OK hands a new one back.
+	if (!wxString(queryText).Trim(true).Trim(false).IsEmpty()) {
 		wxString complaint;
 		try {
 			ibQueryParser parser;
@@ -344,7 +356,10 @@ bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select, const
 	// editor that would have to be kept in step with this one.
 	ibQueryPackage package;
 	ibQueryAstStatement statement;
-	statement.m_select = select ? select : std::make_shared<ibQuerySelect>();
+	// ⚠ A COPY, handed back only on OK. The window edits the query it is given in place — and it edits
+	// it the moment it opens, too (a `*` is expanded, unnamed fields are named) — so given the caller's
+	// own select, Cancel undid nothing: the nested table or the branch kept every change.
+	statement.m_select = select ? ibQueryRewrite::Clone(*select) : std::make_shared<ibQuerySelect>();
 	package.m_statements.push_back(statement);
 
 	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude);

@@ -44,6 +44,17 @@ TEST(TypeQualifiers, NoQualifierLimitsNothing)
 		<< "an unqualified string is not cut";
 }
 
+// A Boolean reads the value as one, as a number, a date and a string do — it was the empty Boolean, whatever came.
+TEST(TypeQualifiers, ABooleanReadsTheValueAsOne)
+{
+	const ibTypeDescription boolean(g_valueBooleanCLSID);
+	EXPECT_TRUE(AdjustedTo(boolean, ibValue(1)).GetBoolean());
+	EXPECT_FALSE(AdjustedTo(boolean, ibValue(0)).GetBoolean());
+	EXPECT_TRUE(AdjustedTo(boolean, ibValue(wxString(wxT("True")))).GetBoolean());
+	EXPECT_EQ(AdjustedTo(boolean, ibValue()).GetType(), ibValueTypes::TYPE_BOOLEAN) << "an empty value is still the empty Boolean";
+	EXPECT_FALSE(AdjustedTo(boolean, ibValue()).GetBoolean());
+}
+
 TEST(TypeQualifiers, TheDesignersDefaultsStillMeanWhatTheyDid)
 {
 	// A new attribute's defaults are a column width in the database; they are not what a script meant by

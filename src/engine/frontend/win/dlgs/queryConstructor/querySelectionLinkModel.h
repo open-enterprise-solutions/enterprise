@@ -28,6 +28,19 @@
 
 #include <functional>
 
+// ⭐ THE LINKS AND THE STATEMENTS THAT STAND FOR THEM, kept in the one shape the renderer and the parser
+// agree on: a `LINK` statement per HEAD, pointing at the first of its relations, which follow it without a
+// gap (ibQueryAstStatement::m_linkIndex, RenderLinkSection). The parser builds that shape; a row added in
+// the window did not — it went into the package's list and no statement stood for it, so the text never
+// wrote it and OK lost it.
+//
+// Which statement each link belongs to, as the renderer reads it; -1 for none.
+FRONTEND_API std::vector<int> ibQueryLinkOwners(const ibQueryPackage& package);
+// …and the shape put back after an edit, given `owners` for the links AS THEY NOW ARE: a link that left
+// its head's section joins its new head's (or opens one at the end of the package once it is complete
+// enough to write), a statement left with nothing goes, and a row still being filled waits unwritten.
+FRONTEND_API void ibQueryResectionLinks(ibQueryPackage& package, std::vector<int> owners);
+
 class ibQuerySelectionLinkModel : public ibDataViewVirtualListModel
 {
 public:

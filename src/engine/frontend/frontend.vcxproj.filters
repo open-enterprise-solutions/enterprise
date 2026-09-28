@@ -100,6 +100,9 @@
     <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryTempTableDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\userItem.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -1163,6 +1166,9 @@
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryTempTableDialog.h">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="syntaxHelper\helpChooserDialog.h">

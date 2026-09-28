@@ -17,6 +17,7 @@
 #include "backend/query/queryRender.h"
 #include "backend/query/queryKeywords.h"
 #include "backend/backend_exception.h"
+#include "backend/typeDescription.h"     // a CAST to a primitive, read as the type it converts to
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -147,7 +148,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	ibStyleQueryText(m_text);
 	if (existing) {
 		m_text->SetText(ibRenderQueryExpr(*existing));
-		ibMarkQueryParameters(m_text);
+		ibMarkQueryText(m_text);
 	}
 	// A DROP LANDS WHERE IT WAS DROPPED. The field travels as its own text, so the drop needs only
 	// to put the caret under the mouse and write it — no payload format of our own.
@@ -329,6 +330,26 @@ void ibDialogQueryExpression::FillLanguageTree()
 	// CAST written whole, for the same reason CASE is: what a person forgets is the `AS`, not the word.
 	leaf(other, Kw(ibQueryKeyword::Cast) + wxT("( ") + Kw(ibQueryKeyword::As) + wxT(" )"),
 		Kw(ibQueryKeyword::Cast) + wxT("( ") + Kw(ibQueryKeyword::As) + wxT(" )"));
+	// …AND A CAST THAT CONVERTS, one per primitive, with the qualifiers a person usually wants written in —
+	// by the one writer of such a CAST (ibQueryMakeCast), over the words the language reads.
+	{
+		const wxTreeItemId casts = m_language->AppendItem(other, _("CAST to a primitive type"));
+		ibQueryParser parser;
+		for (const wxString& word : ibQueryCastPrimitiveWords()) {
+			ibTypeDescription type;
+			if (!ibQueryCastType(*parser.ParseExpression(Kw(ibQueryKeyword::Cast) + wxT("(x ") + Kw(ibQueryKeyword::As)
+				+ wxT(" ") + word + wxT(")")), type))
+				continue;
+			if (type.ContainType(ibValueTypes::TYPE_NUMBER)) type.SetNumber(15, 2);
+			if (type.ContainType(ibValueTypes::TYPE_STRING)) type.SetString(50);
+			const ibQueryAstExprPtr cast = ibQueryMakeCast(nullptr, type);
+			if (!cast)
+				continue;
+			const wxString text = Kw(ibQueryKeyword::Cast) + wxT("( ") + Kw(ibQueryKeyword::As) + wxT(" ")
+				+ ibRenderQueryCastTarget(*cast) + wxT(")");
+			leaf(casts, text, text);
+		}
+	}
 	leaf(other, ibQueryScalarFnText(ibQueryScalarFn::Type) + wxT("()"),
 		ibQueryScalarFnText(ibQueryScalarFn::Type) + wxT("()"));
 	leaf(other, wxT("DATETIME(y, m, d)"), ibQueryScalarFnText(ibQueryScalarFn::DateTime) + wxT("(, , )"));
@@ -457,7 +478,7 @@ wxString ibDialogQueryExpression::GetText() const
 void ibDialogQueryExpression::SetText(const wxString& text)
 {
 	m_text->SetText(text);
-	ibMarkQueryParameters(m_text);
+	ibMarkQueryText(m_text);
 	m_text->GotoPos(m_text->GetLastPosition());   // the caret lands where the writing continues
 	m_text->SetFocus();
 }
@@ -569,12 +590,20 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 				walk(*e.m_lhs);
 			break;
 
-		case ibQueryAstExprKind::Cast:
-			if (e.m_path.size() < 2)
-				complaint = _("CAST narrows to a type: CAST(<field> AS <Kind>.<Name>)");
+		// A CAST names a primitive — `Number(15, 2)`, `String(50)`, `Date`, `Boolean`, read by the parser that
+		// already checked its qualifiers — or a type as REFS does. One bare word that is neither is the mistake.
+		case ibQueryAstExprKind::Cast: {
+			ibTypeDescription primitive;
+			if (e.m_path.size() < 2 && !ibQueryCastType(e, primitive)) {
+				wxString words;
+				for (const wxString& word : ibQueryCastPrimitiveWords())
+					words += (words.IsEmpty() ? wxString() : wxT(", ")) + word;
+				complaint = wxString::Format(_("CAST takes a primitive type (%s) or a type: CAST(<field> AS <Kind>.<Name>)"), words);
+			}
 			else if (e.m_arg)
 				walk(*e.m_arg);
 			break;
+		}
 
 		default:
 			// Everything else is structure: walk whatever it holds.

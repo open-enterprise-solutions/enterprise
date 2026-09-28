@@ -98,6 +98,20 @@ void ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, 
 // any OTHER reason stays where it is and the engine speaks about it.
 void ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source);
 
+// THE TABS ABOUT THE WHOLE RESULT — its order, its totals, its index. A union has ONE of each, written
+// after the last branch (or on the statement that materialises it), so no branch has its own: the
+// strip is not offered on them, and moving onto one of them puts the tabs back on the statement. Asked
+// of a branch, an ORDER BY or a TOTALS was written in the middle of the union and refused on the way back.
+inline bool ibQueryTabIsWholeResult(const wxString& tab)
+{
+	return tab == _("Order") || tab == _("Totals") || tab == _("Index");
+}
+
+// THE TOTALS GO WHOLE — the flag, the figures, the levels, OVERALL and every SPLIT node. Taken apart in
+// three places, and each of them forgot the nodes: a SPLIT left behind wrote `TOTALS … SPLIT …` with
+// nothing before it, which the parser refuses.
+void ibQueryDropTotals(ibQuerySelect& select);
+
 // ⭐⭐ A UNION IS PADDED, NOT REFUSED. Every branch ends up selecting the same fields, in the same
 // order; a branch that has no column for one of them selects an EMPTY value under that name.
 // Applied on the way out of the dialog, so the query it hands back is one the engine can read.

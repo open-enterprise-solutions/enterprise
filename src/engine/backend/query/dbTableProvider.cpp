@@ -1445,6 +1445,16 @@ bool ibTypeValueClsid(const ibValue& value, ibClassID& outClsid)
 	return true;
 }
 
+ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type)
+{
+	if (type.GetClsidCount() == 1 && ibValue::GetVTByID(type.GetFirstClsid()) < ibValueTypes::TYPE_REFFER)
+		return ibValueTypeDescription::AdjustValue(type, value);
+	if (type.ContainType(value.GetClassType()))
+		return value;
+	ibValue absent; absent.SetType(ibValueTypes::TYPE_NULL);
+	return absent;
+}
+
 ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* queryable,
                                                    const ibQueryCondition& c,
                                                    const wxString& mainQual,
@@ -1501,8 +1511,14 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		// compare to the value, or to the other expression when the right side names a field too.
 		// Checked BEFORE the null-column branch: an expr condition carries m_col == null but is NOT
 		// a row-key lookup.
-		return ibBinOp(op, BuildColumnExpr(queryable, c.m_expr, mainQual),
-			c.m_valueExpr ? BuildColumnExpr(queryable, c.m_valueExpr, mainQual) : ibConst(c.m_value));
+		const ibQueryExprPtr lhs = BuildColumnExpr(queryable, c.m_expr, mainQual);
+		const ibQueryExprPtr rhs = c.m_valueExpr ? BuildColumnExpr(queryable, c.m_valueExpr, mainQual) : ibConst(c.m_value);
+		// ⚠ A VALUE ANSWERED OVER THE ROW HAS NO SQL — `PRESENTATION(x)`, `CAST(x AS Number(15, 2))` (ValueAsk): the
+		// server cannot be asked for it, and a comparison with nothing on one side is not a statement.
+		if (lhs == nullptr || rhs == nullptr)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				_("a condition over PRESENTATION, VALUETYPE or a CAST cannot be sent to the database: select the value, and filter in a query around it"));
+		return ibBinOp(op, lhs, rhs);
 	}
 	if (c.m_col == nullptr) {
 		// Row-key condition — a lookup by the row's own key (uuid, the identity tail), never

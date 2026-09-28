@@ -5,6 +5,10 @@
 #include "queryParser.h"
 
 #include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
+#include "backend/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
+
+#include <algorithm>
+#include <iterator>
 
 namespace {
 
@@ -15,7 +19,122 @@ bool IsAggregateKw(const ibQueryToken& t)
 	return t.m_kind == ibQueryTokenKind::Keyword && ibIsAggregateKeyword(t.m_keyword);
 }
 
+// ⭐ THE PRIMITIVES A CAST CONVERTS TO, named as the value registry names them — the `Number` a script writes in
+// `New TypeDescription("Number")`, not a second vocabulary kept here.
+const ibValueTypes s_castPrimitives[] = {
+	ibValueTypes::TYPE_NUMBER, ibValueTypes::TYPE_STRING, ibValueTypes::TYPE_DATE, ibValueTypes::TYPE_BOOLEAN };
+
+// …and a date's composition, as the word that qualifies `Date(…)`.
+const std::pair<ibDateFractions, const wxChar*> s_dateFractions[] = {
+	{ ibDateFractions_Date, wxT("Date") }, { ibDateFractions_Time, wxT("Time") }, { ibDateFractions_DateTime, wxT("DateTime") } };
+
+// The primitive a Cast names, with its qualifiers. False = the target is not a primitive (a narrowing CAST).
+// True with `wrong` set = a primitive qualified in a way it cannot be, said in words the parser raises.
+//
+// No qualifier limits nothing, as for a type a script names (ibValueTypeDescription::Unqualified): a Number
+// is not rounded, a String not cut, a Date keeps its time.
+bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxString& wrong)
+{
+	if (cast.m_kind != ibQueryAstExprKind::Cast || cast.m_path.size() != 1)
+		return false;
+	const ibValueTypes* const vt = std::find_if(std::begin(s_castPrimitives), std::end(s_castPrimitives),
+		[&cast](ibValueTypes t) { return cast.m_path.front().IsSameAs(ibValue::GetNameObjectFromVT(t), false); });
+	if (vt == std::end(s_castPrimitives))
+		return false;
+
+	std::vector<unsigned int> numbers;
+	std::vector<wxString>     words;
+	for (const ibQueryAstExprPtr& q : cast.m_args) {
+		if (!q || q->m_kind != ibQueryAstExprKind::Literal)
+			continue;
+		if (q->m_literal.GetType() == ibValueTypes::TYPE_NUMBER) numbers.push_back(static_cast<unsigned int>(q->m_literal.GetNumber().ToUInt()));
+		else                                                     words.push_back(q->m_literal.GetString());
+	}
+
+	ibQualifierNumber number(0, 0);
+	ibQualifierDate   date(ibDateFractions_DateTime);
+	ibQualifierString text(0);
+	switch (*vt) {
+	case ibValueTypes::TYPE_NUMBER:
+		if (!words.empty() || numbers.size() > 2 || (!numbers.empty() && (numbers[0] == 0 || numbers[0] > MAX_PRECISION_NUMBER))
+		    || (numbers.size() == 2 && numbers[1] > numbers[0]))
+			wrong = wxString::Format(_("a Number is qualified by its digits and the digits after the point: Number(15, 2), at most %d digits"),
+				MAX_PRECISION_NUMBER);
+		else if (!numbers.empty())
+			number = ibQualifierNumber(static_cast<unsigned char>(numbers[0]), static_cast<unsigned char>(numbers.size() > 1 ? numbers[1] : 0));
+		break;
+	case ibValueTypes::TYPE_STRING:
+		if (!words.empty() || numbers.size() > 1 || (!numbers.empty() && numbers[0] > MAX_LENGTH_STRING))
+			wrong = wxString::Format(_("a String is qualified by its length: String(50), at most %d; none for an unlimited one"),
+				MAX_LENGTH_STRING);
+		else if (!numbers.empty())
+			text = ibQualifierString(static_cast<unsigned short>(numbers[0]));
+		break;
+	case ibValueTypes::TYPE_DATE: {
+		const auto fraction = words.size() == 1
+			? std::find_if(std::begin(s_dateFractions), std::end(s_dateFractions),
+				[&words](const std::pair<ibDateFractions, const wxChar*>& f) { return words[0].IsSameAs(f.second, false); })
+			: std::end(s_dateFractions);
+		if (!numbers.empty() || words.size() > 1 || (words.size() == 1 && fraction == std::end(s_dateFractions)))
+			wrong = _("a Date is qualified by what it holds: Date(Date), Date(Time) or Date(DateTime)");
+		else if (fraction != std::end(s_dateFractions))
+			date = ibQualifierDate(fraction->first);
+		break;
+	}
+	default:
+		if (!cast.m_args.empty())
+			wrong = _("a Boolean takes no qualifier");
+		break;
+	}
+	type = ibTypeDescription(ibValue::GetIDByVT(*vt), ibTypeDescription::ibTypeData(number, date, text));
+	return true;
+}
+
 } // namespace
+
+wxArrayString ibQueryCastPrimitiveWords()
+{
+	wxArrayString words;
+	for (const ibValueTypes vt : s_castPrimitives)
+		words.Add(ibValue::GetNameObjectFromVT(vt));
+	return words;
+}
+
+bool ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type)
+{
+	wxString wrong;
+	return ReadCastPrimitive(cast, type, wrong) && wrong.IsEmpty();
+}
+
+ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type)
+{
+	if (type.GetClsidCount() != 1)
+		return nullptr;
+	const ibValueTypes vt = ibValue::GetVTByID(type.GetFirstClsid());
+	if (std::find(std::begin(s_castPrimitives), std::end(s_castPrimitives), vt) == std::end(s_castPrimitives))
+		return nullptr;
+
+	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
+	cast->m_arg  = std::move(value);
+	cast->m_path = { ibValue::GetNameObjectFromVT(vt) };
+	auto qualify = [&cast](const ibValue& q) {
+		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		literal->m_literal = q;
+		cast->m_args.push_back(literal);
+	};
+	// Only what limits something is written: `Number`, `String` and `Date` alone limit nothing (ReadCastPrimitive).
+	if (vt == ibValueTypes::TYPE_NUMBER && type.GetPrecision() > 0) {
+		qualify(ibValue(ibNumber(type.GetPrecision())));
+		if (type.GetScale() > 0) qualify(ibValue(ibNumber(type.GetScale())));
+	}
+	else if (vt == ibValueTypes::TYPE_STRING && type.GetLength() > 0)
+		qualify(ibValue(ibNumber(type.GetLength())));
+	else if (vt == ibValueTypes::TYPE_DATE && type.GetDateFraction() != ibDateFractions_DateTime) {
+		for (const std::pair<ibDateFractions, const wxChar*>& f : s_dateFractions)
+			if (f.first == type.GetDateFraction()) qualify(ibValue(wxString(f.second)));
+	}
+	return cast;
+}
 
 //////////////////////////////////////////////////////////////////////
 // token cursor helpers
@@ -385,32 +504,12 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 			ThrowQueryException(at, _("INDEX BY needs INTO: only a temporary table this statement makes can be indexed"));
 	}
 
-	// ⭐ A TABLE HANDED IN GOES INTO A TEMPORARY TABLE, AND ONLY THERE. `FROM &Goods` is legal in a
-	// statement that writes `INTO`, and nowhere else:
-	//
-	//     SELECT * INTO Goods FROM &GoodsTable;      -- materialise it, once
-	//     SELECT … FROM Catalog.Products JOIN Goods … -- and from here it is an ordinary table
-	//
-	// The reason is not ceremony. A value table lives in RAM: every query that names it directly
-	// forces the read to be stitched in memory, and it is stitched AGAIN for every statement that
-	// mentions it. Materialised once into a temp table, it is a table the engine can promote and
-	// JOIN server-side — so the discipline is what makes the rest of the package fast, and the
-	// refusal is what stops somebody paying the RAM cost five times without knowing.
-	//
-	// Refused HERE, at the parse, so the constructor's live check says it the moment it is typed.
-	{
-		auto handedIn = [](const ibQuerySource& source) { return source.m_parameter; };
-		bool usesParameter = handedIn(sel->m_from);
-		for (const ibQueryAstJoin& join : sel->m_joins)
-			usesParameter = usesParameter || handedIn(join.m_source);
-		for (const ibQuerySelectPtr& branch : sel->m_unions)
-			if (branch)
-				usesParameter = usesParameter || handedIn(branch->m_from);
-
-		if (usesParameter && sel->m_intoTemp.IsEmpty())
-			ThrowQueryException(Cur(), _("a table passed in as a parameter can only be read INTO a temporary table: "
-			              "write `SELECT * INTO <name> FROM &<parameter>` first, then read that name"));
-	}
+	// ⭐ A TABLE HANDED IN IS A TABLE LIKE ANY OTHER — `FROM &Goods` reads a value table given as a parameter,
+	// in a temporary table's statement or in an ordinary select alike; `FROM Goods`, with no ampersand, reads
+	// the temporary table of that name, made earlier in the package or held by the temporary tables manager.
+	// The ampersand says where the rows come from, as it does for any other value (Max, 2026-09-28). It used
+	// to be refused outside `INTO`, so that a value table read by several statements was put away once;
+	// that stays the author's choice to make, and the text still says it: `SELECT * INTO Goods FROM &Goods`.
 
 	// FOR UPDATE — last, because it qualifies the whole statement: the rows this select
 	// returned are HELD until the transaction ends.
@@ -1601,7 +1700,30 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 	ExpectKw(ibQueryKeyword::As, wxT("AS in CAST"));
 	// THE TARGET TYPE, as the language names a source: `Document.Order`. Written the same way a FROM
 	// writes it, because it IS the same thing — the table whose fields the walk continues into.
+	const ibQueryToken& typeAt = Cur();
 	cast->m_path = ParseDottedName();
+	// …OR A PRIMITIVE, WITH ITS QUALIFIERS: `Number(15, 2)`, `String(50)`, `Date(Date)`. Kept as literals in
+	// m_args in written order — a number as the number, a word as its text — and read by ibQueryCastType.
+	if (AcceptPunct(wxT('('))) {
+		do {
+			const ibQueryToken& q = Cur();
+			if (q.m_kind != ibQueryTokenKind::Number && q.m_kind != ibQueryTokenKind::Ident
+			    && q.m_kind != ibQueryTokenKind::Keyword)
+				ThrowQueryException(q, _("expected a number or a word qualifying the cast type"));
+			auto qualifier = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+			qualifier->m_line = q.m_line; qualifier->m_col = q.m_col;
+			qualifier->m_literal = q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibValue(q.m_text);
+			cast->m_args.push_back(qualifier);
+			++m_pos;
+		} while (AcceptPunct(wxT(',')));
+		ExpectPunct(wxT(')'), wxT("')' after the qualifiers of the cast type"));
+	}
+	wxString wrong;
+	ibTypeDescription primitive;
+	if (!ReadCastPrimitive(*cast, primitive, wrong) && !cast->m_args.empty())
+		wrong = _("only a primitive type is qualified: Number(15, 2), String(50), Date(Date)");
+	if (!wrong.IsEmpty())
+		ThrowQueryException(typeAt, wrong);
 	ExpectPunct(wxT(')'), wxT("')' after the cast type"));
 
 	// ⚠ THE DOT IS CONSUMED, not merely looked at. Peeking and then calling ParseDottedName left the

@@ -158,6 +158,7 @@ private:
 	{
 		wxWindow* m_window = nullptr;
 		wxString  m_title;
+		wxString  m_picture;   // the tab's art id (client wxART_FRONTEND)
 		bool      m_queryPage = false;
 		// A tab that has nothing to say with one table. A join is a relation BETWEEN two sources,
 		// so with one there is not an empty list to look at — there is no such thing yet.
@@ -251,6 +252,10 @@ private:
 
 	// ---- the source tree (left pane of the Tables tab) -------------------
 	void FillSourceTree();
+	// THE CATALOGUE into any tree — kinds, their tables, the temporary tables made before this statement, each
+	// with its picture. The left pane unfolds every table into its fields; the table picker stops at the table
+	// (PickTable), so the two show one catalogue the same way.
+	void FillCatalogue(class wxTreeCtrl* tree, bool withFields);
 
 	// ---- verbs ----------------------------------------------------------
 	void OnAddStatement(wxCommandEvent&);
@@ -271,6 +276,9 @@ private:
 	void OnStatementSelected(class ibDataViewEvent&);
 	void OnBranchSelected(wxBookCtrlEvent&);   // the union-branch tabs down the right edge
 	void OnBatchSelected(wxBookCtrlEvent&);    // the batch-statement tabs, one level further out
+	void ShowStatement();                      // the tabs over m_statement, refilled as one frame
+	std::vector<class ibDataViewCtrl*> Grids() const;   // every grid of the window, one list
+	void FinishCellEditing();                  // …and the cell open in any of them, written (OK)
 	void ShowBranchStrip();                    // both strips: hidden where switching makes no sense
 
 	// A TABLE'S ALIAS IS ITS LABEL, edited in the tree. `FROM Catalog.Products AS p` is what the
@@ -278,9 +286,23 @@ private:
 	// refuses the edit — its name is the metadata's, not the author's.
 	void OnTableAliasEditBegin(wxTreeEvent&);
 	void OnTableAliasEditEnd(wxTreeEvent&);
-	void OnTableContextMenu(wxTreeEvent&);   // add / nested / rename / delete / parameters, on the table itself
+	void OnTableContextMenu(wxTreeEvent&);   // add / delete / rename / replace / parameters, on the table itself
 	// THE TABLE THE CURSOR STANDS ON — null on a field row or an empty selection.
 	struct ibQuerySource* SelectedSource() const;
+	// A TABLE'S NEW NAME, from wherever it was typed (the rename window, the label): checked, numbered when
+	// taken, and every path written against the old one follows it.
+	void RenameTable(struct ibQuerySource& source, wxString alias);
+	void OnRenameTable(wxCommandEvent&);    // the rename window over the table under the cursor
+	void OnReplaceTable(wxCommandEvent&);   // another table in its place — its name kept, what it lacks dropped
+	void OnAddPickedTable(wxCommandEvent&); // a table chosen from the list, added to the query
+	// A TABLE FROM THE CATALOGUE, chosen in a list — for the verbs of the Tables pane, which act without the
+	// catalogue beside them. False = nothing chosen.
+	bool PickTable(const wxString& title, std::vector<wxString>& path);
+	// A TABLE WITH NO ROWS YET, DESCRIBED (queryTempTableDialog.h) — a table of THIS query: edited when the
+	// cursor stands on one, added otherwise.
+	void OnDescribeTempTable(wxCommandEvent&);
+	// …is this one — handed in (`&Goods`), or a temporary table no earlier statement makes (the manager's)?
+	bool IsDescribedTable(const struct ibQuerySource& source) const;
 	// VIRTUAL TABLE PARAMETERS — one row per parameter the SOURCE declares, in its order. Offered
 	// only where a source declares any, and it decides both the rows and what a condition may name.
 	void OnTableParameters(wxCommandEvent&);
@@ -606,10 +628,11 @@ private:
 
 	// EVERY VERB A TOOLBAR CARRIES, remembered as it is added — so the right-click can offer exactly
 	// the same ones without a second list. A menu written out beside a toolbar is a copy, and the day
-	// a verb is added to one the two disagree.
+	// a verb is added to one the two disagree. The picture too: the same verb wears the same one in both.
 	struct Verb
 	{
 		wxString                             m_label;
+		wxBitmapBundle                       m_picture;
 		std::function<void(wxCommandEvent&)> m_handler;
 	};
 	std::map<class wxToolBar*, std::vector<Verb>> m_barVerbs;
@@ -749,10 +772,14 @@ FRONTEND_API void ibStyleQueryText(class wxStyledTextCtrl* text);
 // The indicator `&name` is painted with. An INDICATOR and not a style, because the lexer owns the
 // styles and repaints them; indicators are drawn on top and survive re-lexing.
 constexpr int kQueryParameterIndicator = 8;
+// …and the one a word of the language is painted with where only its PLACE says it is one: `Date` after the
+// AS of a CAST is a type, `YEAR` before a bracket a call — and `Doc.Date` stays a field.
+constexpr int kQueryPlacedWordIndicator = 9;
 
-// MARK EVERY `&name` — call after the pane's text changes, since the marks go with the text they
-// marked. A parameter is a value handed in from outside, and reading exactly like a column of the
-// query is how somebody spends a while wondering why "that field" cannot be found.
-FRONTEND_API void ibMarkQueryParameters(class wxStyledTextCtrl* text);
+// MARK WHAT THE LEXER CANNOT — call after the pane's text changes, since the marks go with the text they
+// marked. Every `&name`: a parameter is a value handed in from outside, and reading exactly like a column
+// of the query is how somebody spends a while wondering why "that field" cannot be found. And every word
+// that is the language's by its place (kQueryPlacedWordIndicator), read off the engine's own tokens.
+FRONTEND_API void ibMarkQueryText(class wxStyledTextCtrl* text);
 
 #endif // __QUERY_CONSTRUCTOR_DLG_H__

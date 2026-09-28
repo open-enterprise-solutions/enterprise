@@ -49,6 +49,8 @@
 #include "queryLexer.h"
 #include "queryAST.h"
 
+#include <wx/arrstr.h>
+
 class BACKEND_API ibQueryParser
 {
 public:
@@ -156,5 +158,20 @@ private:
 		return i < m_toks.size() && m_toks[i].IsPunct(ch);
 	}
 };
+
+struct ibTypeDescription;
+
+// ⭐⭐ CAST TO A PRIMITIVE — `CAST(x AS Number(15, 2))`, `String(50)`, `Date(Date)`, `Boolean` — CONVERTS the value,
+// where `CAST(x AS Document.Order)` narrows a reference. The target is named as the value registry names the type;
+// its qualifiers ride in the Cast's m_args, in written order.
+//
+// Both directions of the one reading, so what a window writes is what the lowering reads:
+//   · ibQueryCastType — the type a Cast converts to; false = no primitive target (the narrowing road);
+//   · ibQueryMakeCast — the Cast bringing `value` to `type`; null for a type that is not one primitive.
+BACKEND_API bool              ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type);
+BACKEND_API ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type);
+// …and the words those primitives are written as, in the order a list offers them — for a palette, a cell's
+// drop-down: whatever offers a CAST's type asks here rather than keeping its own four words.
+BACKEND_API wxArrayString     ibQueryCastPrimitiveWords();
 
 #endif

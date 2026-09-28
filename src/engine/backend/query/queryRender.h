@@ -52,6 +52,9 @@ BACKEND_API wxString ibRenderQueryPackage(const ibQueryPackage& package);
 // One expression on its own — for a constructor's filter row, an editable cell,
 // or a diagnostic that wants to name the offending term.
 BACKEND_API wxString ibRenderQueryExpr(const ibQueryAstExpr& expr);
+// …and a CAST's target alone, as it is written after AS — `Number(15, 2)`, `Catalog.Goods`: what a cell
+// that holds a type shows, in the words the text uses.
+BACKEND_API wxString ibRenderQueryCastTarget(const ibQueryAstExpr& cast);
 
 // THE NAME A PROJECTION IS READ BACK BY — its alias, else the leaf of its column path; EMPTY when
 // it has no natural name (an expression, a literal, an aggregate before it is aliased).

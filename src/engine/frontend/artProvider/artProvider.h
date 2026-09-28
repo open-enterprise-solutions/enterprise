@@ -95,6 +95,40 @@
 // is a source with no metatype behind it, so it carries its own picture rather than borrowing one.
 #define wxART_NESTED_QUERY			wxART_MAKE_ART_ID(wxART_NESTED_QUERY)
 
+// THE CONSTRUCTORS' VERBS (client wxART_FRONTEND): one picture per verb, so a bar of "Add" tools no longer
+// wears the same green plus five times. What the verb makes, with the plus when it adds one and the pencil
+// when it edits one.
+#define wxART_ADD_QUERY				wxART_MAKE_ART_ID(wxART_ADD_QUERY)
+#define wxART_ADD_NESTED			wxART_MAKE_ART_ID(wxART_ADD_NESTED)
+#define wxART_EDIT_NESTED			wxART_MAKE_ART_ID(wxART_EDIT_NESTED)
+#define wxART_REPLACE_TABLE			wxART_MAKE_ART_ID(wxART_REPLACE_TABLE)
+#define wxART_ADD_EXPRESSION		wxART_MAKE_ART_ID(wxART_ADD_EXPRESSION)
+#define wxART_ADD_LINK				wxART_MAKE_ART_ID(wxART_ADD_LINK)
+#define wxART_LINK_CONDITION		wxART_MAKE_ART_ID(wxART_LINK_CONDITION)
+#define wxART_ADD_CONDITION			wxART_MAKE_ART_ID(wxART_ADD_CONDITION)
+#define wxART_DIRECTION				wxART_MAKE_ART_ID(wxART_DIRECTION)
+#define wxART_ADD_SPLIT				wxART_MAKE_ART_ID(wxART_ADD_SPLIT)
+#define wxART_ADD_BRANCH			wxART_MAKE_ART_ID(wxART_ADD_BRANCH)
+#define wxART_ADD_JOIN				wxART_MAKE_ART_ID(wxART_ADD_JOIN)
+#define wxART_COUNT_ROWS			wxART_MAKE_ART_ID(wxART_COUNT_ROWS)
+
+// THE TABS (client wxART_FRONTEND) — the settings windows' (a composer's and a list's) and the query
+// constructor's; the same tab wears the same picture everywhere. The query tab wears wxART_QUERY_CONSTRUCTOR
+// and the order wxART_SORT; a composer's resources and a query's totals are one sum, wxART_TOTALS.
+#define wxART_TOTALS				wxART_MAKE_ART_ID(wxART_TOTALS)
+#define wxART_PARAMETERS			wxART_MAKE_ART_ID(wxART_PARAMETERS)
+#define wxART_OUTPUT				wxART_MAKE_ART_ID(wxART_OUTPUT)
+#define wxART_SELECTED_FIELDS		wxART_MAKE_ART_ID(wxART_SELECTED_FIELDS)
+#define wxART_FILTER				wxART_MAKE_ART_ID(wxART_FILTER)
+#define wxART_GROUPING				wxART_MAKE_ART_ID(wxART_GROUPING)
+#define wxART_TABLE					wxART_MAKE_ART_ID(wxART_TABLE)
+#define wxART_LINKS					wxART_MAKE_ART_ID(wxART_LINKS)
+#define wxART_SELECTION_LINKS		wxART_MAKE_ART_ID(wxART_SELECTION_LINKS)
+#define wxART_ADVANCED				wxART_MAKE_ART_ID(wxART_ADVANCED)
+#define wxART_UNIONS				wxART_MAKE_ART_ID(wxART_UNIONS)
+#define wxART_INDEX					wxART_MAKE_ART_ID(wxART_INDEX)
+#define wxART_QUERY_BATCH			wxART_MAKE_ART_ID(wxART_QUERY_BATCH)
+
 // The code editor's context menu: the constructors beside the query's (client wxART_FRONTEND), a breakpoint's
 // condition (wxART_DEBUG), select all (wxART_DOC_MODULE).
 #define wxART_TRANSLATION_CONSTRUCTOR	wxART_MAKE_ART_ID(wxART_TRANSLATION_CONSTRUCTOR)

@@ -68,6 +68,11 @@ public:
 	// switch off refuses rather than mangling the condition into a shape it does not have.
 	bool IsArbitrary(unsigned int row) const;
 
+	// A ROW GOES WITH ITS SWITCH. The switches are kept by index, so removing a row by writing the list
+	// back shorter (SetRows) left every switch after it one row too low: the row below the removed one
+	// became "arbitrary" because the removed one was.
+	void RemoveRow(unsigned int row);
+
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
 	// Where the ENGINE'S complaint goes when a condition typed into a cell does not parse. The model
 	// does not judge the text and does not reword what it is told — it hands the message on.

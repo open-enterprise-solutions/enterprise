@@ -22,6 +22,7 @@
 #include "frontend/win/editor/codeEditor/codeEditor.h"
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"
 #include "frontend/win/dlgs/queryConstructor/queryCaseDialog.h"
+#include "frontend/win/dlgs/queryConstructor/querySelectionLinkModel.h"   // ibQueryResectionLinks
 #include "backend/query/queryRender.h"
 #include "backend/query/queryParser.h"
 
@@ -318,4 +319,78 @@ TEST_F(QueryCaseFix, SomethingThatIsNotACaseOpensEmptyAndBuildsNothing)
 	// window opens empty. And an empty builder hands back NOTHING rather than `CASE END`, which the
 	// parser refuses.
 	EXPECT_TRUE(RoundTrip(wxT("Qty + 1")).IsEmpty());
+}
+
+// ===========================================================================
+//  Links between named selections — kept in the shape the text is written in
+// ===========================================================================
+
+// ⭐ A LINK ADDED IN THE WINDOW IS WRITTEN — once it is complete enough to be. The row went into the
+// package's list and no LINK statement stood for it, so the text never carried it and OK lost it.
+TEST(QueryConstructorSelectionLinks, ALinkAddedInTheWindowIsWrittenAndReadBack)
+{
+	ibQueryParser parser;
+	ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT Partner, Amount ONTO Sales FROM Document.Sales;")
+		wxT("SELECT Partner, Amount ONTO Plan FROM Document.Plan"));
+	ASSERT_EQ(package.m_statements.size(), 2u);
+
+	// The row the window adds is empty: it stands for nothing yet, and writes nothing.
+	std::vector<int> owners = ibQueryLinkOwners(package);
+	package.m_links.push_back(ibQueryPackageLink());
+	owners.push_back(-1);
+	ibQueryResectionLinks(package, owners);
+	EXPECT_EQ(package.m_statements.size(), 2u);
+	EXPECT_EQ(package.m_links.size(), 1u) << "the row stays in the grid, waiting to be filled";
+	EXPECT_FALSE(ibRenderQueryPackage(package).Contains(wxT("LINK")));
+
+	// Filled in, it becomes a statement at the end of the package — and the text reads back.
+	owners = ibQueryLinkOwners(package);
+	package.m_links[0].m_left  = wxT("Sales");
+	package.m_links[0].m_right = wxT("Plan");
+	package.m_links[0].m_on    = parser.ParseExpression(wxT("Sales.Partner = Plan.Partner"));
+	ibQueryResectionLinks(package, owners);
+	ASSERT_EQ(package.m_statements.size(), 3u);
+	EXPECT_TRUE(package.m_statements[2].IsLink());
+
+	const wxString text = ibRenderQueryPackage(package);
+	EXPECT_TRUE(text.Contains(wxT("LINK Sales"))) << text.ToStdString();
+	const ibQueryPackage again = parser.ParsePackage(text);
+	ASSERT_EQ(again.m_links.size(), 1u);
+	EXPECT_EQ(again.m_links[0].m_right, wxT("Plan"));
+
+	// Removed, it takes its statement with it — and the text has no LINK left.
+	owners = ibQueryLinkOwners(package);
+	package.m_links.erase(package.m_links.begin());
+	owners.erase(owners.begin());
+	ibQueryResectionLinks(package, owners);
+	EXPECT_EQ(package.m_statements.size(), 2u);
+	EXPECT_FALSE(ibRenderQueryPackage(package).Contains(wxT("LINK")));
+}
+
+// A second relation from the same selection joins its section, so the text says the head once.
+TEST(QueryConstructorSelectionLinks, ASecondRelationOfOneHeadJoinsItsSection)
+{
+	ibQueryParser parser;
+	ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
+		wxT("SELECT Partner ONTO Plan FROM Document.Plan;")
+		wxT("SELECT Partner ONTO Stock FROM Document.Stock;")
+		wxT("LINK Sales JOIN Plan ON Sales.Partner = Plan.Partner"));
+	ASSERT_EQ(package.m_statements.size(), 4u);
+
+	std::vector<int> owners = ibQueryLinkOwners(package);
+	ibQueryPackageLink second;
+	second.m_left  = wxT("Sales");
+	second.m_right = wxT("Stock");
+	second.m_on    = parser.ParseExpression(wxT("Sales.Partner = Stock.Partner"));
+	package.m_links.push_back(second);
+	owners.push_back(-1);
+	ibQueryResectionLinks(package, owners);
+
+	EXPECT_EQ(package.m_statements.size(), 4u) << "no second LINK statement for the same head";
+	const wxString text = ibRenderQueryPackage(package);
+	const ibQueryPackage again = parser.ParsePackage(text);
+	EXPECT_EQ(again.m_links.size(), 2u) << text.ToStdString();
+	EXPECT_EQ(again.m_statements.size(), 4u);
 }

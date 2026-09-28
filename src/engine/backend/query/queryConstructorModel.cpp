@@ -5,6 +5,9 @@
 #include "queryConstructorModel.h"
 
 #include "queryRender.h"                 // ibRenderQueryExpr — an unaliased projection is named by its own text
+#include "queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
+#include "queryable.h"                   // ibBackendQueryable::GetSourceMetaObject — a table's own reference type
+#include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference
 #include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (no config open)
 #include "backend/metaData.h"            // ibMetaData::GetSourceFactory — the config the query runs on behalf of
 #include "backend/srcDataObject.h"       // ibSourceDataObject::ibSourceExplorer — what a source answers its fields with
@@ -68,6 +71,14 @@ static ibQueryConstructorField FieldOfExplorer(const ibSourceDataObject::ibSourc
 	field.m_icon           = node.GetSourceIcon();   // the column's own picture, asked not deduced
 	field.m_available      = node.GetColumn() == nullptr || node.GetColumn()->IsAvailable();
 	return field;
+}
+
+// …AND A FIELD WHOSE TYPE A CAST SAYS — typed and walkable the same way, from the type the CAST names.
+static void TypeByCast(const ibQueryConstructorModel& model, const ibQueryAstExpr& cast, ibQueryConstructorField& field)
+{
+	field.m_type           = model.TypeOfCast(cast);
+	field.m_referenceClsid = SingleReferenceOf(field.m_type.GetClsidList());
+	field.m_reference      = HasReference(field.m_type.GetClsidList());
 }
 
 ibQueryConstructorModel::ibQueryConstructorModel(const ibMetaData* metaData)
@@ -336,6 +347,10 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 				return available;
 			};
 			field.m_available = readsAvailable(*projection.m_expr);
+			// ⭐ A CAST SAYS ITS TYPE, and a temporary table described by CASTs over a table handed in as a
+			// parameter has typed fields before that parameter holds a row — the next statement walks by them.
+			if (projection.m_expr->m_kind == ibQueryAstExprKind::Cast)
+				TypeByCast(*this, *projection.m_expr, field);
 		}
 		out.push_back(std::move(field));
 	}
@@ -363,6 +378,33 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 	if (source.m_name.empty())
 		return {};
 
+	// ⭐ A TABLE HANDED IN (`FROM &Goods`) — or a temporary table no statement of this package makes, which the
+	// temporary tables manager brings when the query runs — has no rows while the query is written: its fields
+	// are what the select READING it says of them (FieldsTakenFrom). That select is found by the source itself,
+	// which is one of its nodes; nothing else could answer before the query runs.
+	auto described = [&]() -> std::vector<ibQueryConstructorField> {
+		auto reads = [&source](const ibQuerySelect& select) {
+			if (&select.m_from == &source)
+				return true;
+			for (const ibQueryAstJoin& join : select.m_joins)
+				if (&join.m_source == &source)
+					return true;
+			return false;
+		};
+		for (const ibQueryAstStatement& statement : package.m_statements) {
+			if (!statement.m_select)
+				continue;
+			if (reads(*statement.m_select))
+				return stamp(FieldsTakenFrom(*statement.m_select, source));
+			for (const ibQuerySelectPtr& branch : statement.m_select->m_unions)
+				if (branch && reads(*branch))
+					return stamp(FieldsTakenFrom(*branch, source));
+		}
+		return {};
+	};
+	if (source.m_parameter)
+		return described();
+
 	// A TEMP TABLE is a bare name: find the statement that MADE it and read its projections. Same
 	// answer as a nested table's, and for the same reason — a select is what defines both.
 	if (source.m_name.size() == 1) {
@@ -378,7 +420,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 				// BEFORE it, which is also what stops a temp table resolving through itself.
 				return stamp(FieldsOfSelect(*statement.m_select, package, i - 1));
 		}
-		return {};
+		return described();   // made by nobody here — the manager's, described where it is read
 	}
 
 	ibQueryableFactory* factory = Factory();
@@ -522,6 +564,66 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceBranch
 	}
 
 	return out;
+}
+
+ibQueryAstExprPtr ibQueryConstructorModel::CastTo(ibQueryAstExprPtr value, const ibTypeDescription& type) const
+{
+	if (ibQueryAstExprPtr primitive = ibQueryMakeCast(value, type))
+		return primitive;
+	const std::vector<ibQueryConstructorField> branches =
+		type.GetClsidCount() == 1 ? GetReferenceBranches(type) : std::vector<ibQueryConstructorField>();
+	if (branches.size() != 1)
+		return value;
+	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
+	cast->m_arg = std::move(value);
+	const wxString& table = branches.front().m_name;   // `Catalog.Goods`
+	cast->m_path = { table.BeforeFirst(wxT('.')), table.AfterFirst(wxT('.')) };
+	return cast;
+}
+
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsTakenFrom(const ibQuerySelect& reader,
+                                                                               const ibQuerySource& source) const
+{
+	const wxString table = ibQuerySourceName(source);
+	std::vector<ibQueryConstructorField> out;
+	for (const ibQueryProjection& projection : reader.m_projections) {
+		const ibQueryAstExprPtr& e = projection.m_expr;
+		const bool cast = e && e->m_kind == ibQueryAstExprKind::Cast;
+		const ibQueryAstExprPtr& column = cast ? e->m_arg : e;
+		if (!column || column->m_kind != ibQueryAstExprKind::Column || column->m_arg || column->m_path.size() != 2
+		    || !column->m_path.front().IsSameAs(table, false))
+			continue;
+		const wxString& name = column->m_path.back();
+		if (std::any_of(out.begin(), out.end(), [&name](const ibQueryConstructorField& f) { return f.m_name.IsSameAs(name, false); }))
+			continue;
+		ibQueryConstructorField field;
+		field.m_name = field.m_presentation = name;
+		field.m_source = ibQuerySourceLabel(source);
+		if (cast)
+			TypeByCast(*this, *e, field);
+		out.push_back(std::move(field));
+	}
+	return out;
+}
+
+ibTypeDescription ibQueryConstructorModel::TypeOfCast(const ibQueryAstExpr& cast) const
+{
+	ibTypeDescription type;
+	if (ibQueryCastType(cast, type))
+		return type;
+	type = ibTypeDescription();
+	if (cast.m_kind != ibQueryAstExprKind::Cast || cast.m_path.size() < 2)
+		return type;
+	ibQueryableFactory* const factory = Factory();
+	wxString name = cast.m_path[1];
+	for (size_t i = 2; i < cast.m_path.size(); ++i)
+		name += wxT(".") + cast.m_path[i];
+	const ibBackendQueryable* const table = factory != nullptr ? factory->Resolve(cast.m_path[0], name) : nullptr;
+	const ibValueMetaObjectGenericData* const meta = table != nullptr ? table->GetSourceMetaObject() : nullptr;
+	ibValue emptyRef;
+	if (meta != nullptr && meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef) && emptyRef.GetClassType() != 0)
+		type.SetDefaultMetaType(emptyRef.GetClassType());
+	return type;
 }
 
 // EVERY ALTERNATIVE OF A TYPE, MERGED BY NAME — see the note on the declaration. The merge is the

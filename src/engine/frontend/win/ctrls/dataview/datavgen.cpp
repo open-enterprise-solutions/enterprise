@@ -7458,9 +7458,10 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	// expander column's content x; the per-row indent + expander width are added at the draw site below.
 	int grpCaptionColX = 0;
 	{
-		const unsigned int expIdx = GetColumnIndex(expander);
-		for (unsigned int c = 0; c < expIdx; c++) {
-			ibDataViewColumn* cc = GetColumn(c);
+		// SIGNED, as the answer is: wxNOT_FOUND read as unsigned is four billion columns to walk (WXColumnTreeChanged).
+		const int expIdx = GetColumnIndex(expander);
+		for (int c = 0; c < expIdx; c++) {
+			ibDataViewColumn* cc = GetColumn(static_cast<unsigned int>(c));
 			if (cc != nullptr && !cc->IsHidden())
 				grpCaptionColX += cc->GetWidth();
 		}
