@@ -49,8 +49,6 @@
 #endif
 #endif
 
-class ibStringStore;     // the text itself — fstring.cpp
-
 // --- ibString ---------------------------------------------------------------
 
 class BACKEND_API ibString
@@ -301,10 +299,11 @@ private:
 	}
 	static void Free(Shared* shared) noexcept;    // the last owner went: the text is destroyed — fstring.cpp
 
-	// A write goes to a text this string owns alone (Own copies it first when anybody else holds it).
-	const ibStringStore& Text() const noexcept;   // to READ: the text held, or the one empty text
-	ibStringStore& Own();                         // to WRITE: the text made this string's own
-	static ibString Adopt(ibStringStore&& text);  // a finished text, handed to a new string
+	// A write goes to a text this string owns alone, with room for `room` characters at least: Own copies it
+	// first when anybody else holds it, and grows it when it has no room. SetLength says how much was written.
+	std::wstring_view View() const noexcept;      // to READ: the characters held — nothing for the empty string
+	wchar_t* Own(size_t room = 0);                // to WRITE: the characters, made this string's own
+	void SetLength(size_t length) noexcept;       // …and how many of them there are now
 
 	Shared* m_impl = nullptr;   // nullptr = the empty string: no text, nothing allocated
 };

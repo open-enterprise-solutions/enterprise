@@ -810,6 +810,26 @@ TEST(SpreadsheetCompose, AnOutputPrintsItsOwnName)
 	ibSpreadsheetComposeDriver driver(doc.get());
 
 	ibCompositionOutputInfo info;
+	info.m_schema      = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
+	info.m_rowLevels   = 1;
+	info.m_name        = wxT("By partner");
+	info.m_outputCount = 2;   // one of two blocks: the name tells them apart
+	driver.OnOutputBegin(info);
+	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(wxT("Alpha")), ibValue(100) });
+	driver.OnOutputEnd(true);
+
+	EXPECT_EQ(wxT("By partner"), doc->GetCellValue(0, 0));   // the caption, above its header
+	EXPECT_EQ(wxT("Partner"),    doc->GetCellValue(1, 0));
+}
+
+// …and the ONE output of a report prints no name: there is no other block to tell it from, and the
+// report's title already says what it is — a lone `ByWarehouse` over the figures was noise (2026-09-28).
+TEST(SpreadsheetCompose, ALoneOutputPrintsNoName)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	ibCompositionOutputInfo info;
 	info.m_schema    = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
 	info.m_rowLevels = 1;
 	info.m_name      = wxT("By partner");
@@ -817,8 +837,7 @@ TEST(SpreadsheetCompose, AnOutputPrintsItsOwnName)
 	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(wxT("Alpha")), ibValue(100) });
 	driver.OnOutputEnd(true);
 
-	EXPECT_EQ(wxT("By partner"), doc->GetCellValue(0, 0));   // the caption, above its header
-	EXPECT_EQ(wxT("Partner"),    doc->GetCellValue(1, 0));
+	EXPECT_EQ(wxT("Partner"), doc->GetCellValue(0, 0));   // the header first — no caption above it
 }
 
 // ⭐⭐ A COLUMN AXIS DEEPER THAN ONE LEVEL GETS SUBTOTAL COLUMNS. Warehouse then Month: a figure per
