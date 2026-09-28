@@ -145,6 +145,20 @@ const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() con
 	return m_ownerProperty != nullptr ? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
 }
 
+// The same walk the dot makes (WalkSource: the head gates to the form's attribute, the hops walk its explorer),
+// asked the one question more it answers on the way.
+bool ibVariantDataSource::IsSourceAvailable() const
+{
+	const std::vector<ibSourceHop>& path = m_sourceDesc.GetPath();
+	if (m_ownerProperty == nullptr || path.size() < 2)
+		return true;
+	ibBackendFormAttributeValue* holder = m_ownerProperty->FindSourceHolder(m_sourceDesc.GetFirst());
+	const ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+	const ibBackendSourceColumn* leaf = nullptr;
+	bool available = true;
+	return source == nullptr || !source->WalkColumns(path, 1, leaf, nullptr, nullptr, nullptr, &available) || available;
+}
+
 ////////////////////////////////////////////////////////////////////////////
 
 void ibVariantDataSource::RefreshTypeFromSource() const

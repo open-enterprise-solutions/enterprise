@@ -174,6 +174,53 @@ TEST(QueryConstructorModel, WithNoConfigTheCatalogueIsEmptyRatherThanAFailure)
 }
 
 // ===========================================================================
+//  WHERE A WRITTEN PATH STARTS — one rule for every holder of fields (WalkPath): the query's own
+//  sources, a composer's source, a settings window's list. They used to find the start each in its
+//  own way, and a line the settings window listed could be one the run left out.
+// ===========================================================================
+
+namespace {
+
+ibQueryConstructorField Field(const wxString& name, bool available = true)
+{
+	ibQueryConstructorField field;
+	field.m_name      = name;
+	field.m_available = available;
+	return field;
+}
+
+} // namespace
+
+TEST(QueryConstructorModel, APathStartsAtTheLongestPrefixAFieldIsNamed)
+{
+	// A linked package names its fields with the selection in front — `Sales.Qty` is ONE field, and
+	// reading its first segment alone would find `Sales`, a different one.
+	ibQueryConstructorModel model(nullptr);
+	const std::vector<ibQueryConstructorField> fields = { Field(wxT("Sales")), Field(wxT("Sales.Qty"), false) };
+	const ibQueryConstructorField leaf = model.WalkPath(fields, { wxT("Sales"), wxT("Qty") });
+	EXPECT_EQ(wxT("Sales.Qty"), leaf.m_name);
+	EXPECT_FALSE(leaf.m_available) << "the field the path names answers, not its first segment";
+}
+
+TEST(QueryConstructorModel, APathNoFieldStartsIsNoVerdict)
+{
+	// Silence, never a guess: a name the holder does not have is not hidden — it is not this question.
+	ibQueryConstructorModel model(nullptr);
+	const ibQueryConstructorField leaf = model.WalkPath({ Field(wxT("Qty")) }, { wxT("Amount") });
+	EXPECT_TRUE(leaf.m_name.IsEmpty());
+	EXPECT_TRUE(leaf.m_available);
+}
+
+TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
+{
+	// What the walk KNEW stands: a hop past a hidden field that nothing resolves (here there is no
+	// configuration to walk into) does not bring the hidden field back.
+	ibQueryConstructorModel model(nullptr);
+	const ibQueryConstructorField leaf = model.WalkPath({ Field(wxT("Warehouse"), false) }, { wxT("Warehouse"), wxT("Code") });
+	EXPECT_FALSE(leaf.m_available);
+}
+
+// ===========================================================================
 //  The temp-table store — WHO keeps a temp table alive.
 //
 //  The question the store answers is not about queries but about ownership: without a holder a

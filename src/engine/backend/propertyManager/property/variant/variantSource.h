@@ -61,6 +61,10 @@ public:
 	// path) rather than a single direct column. Cheap — just the path length.
 	bool IsDotWalk() const { return m_sourceDesc.IsDotWalk(); }
 
+	// Every hop of the binding may be shown (functional options) — the leaf and each reference before it. Unbound,
+	// a whole-attribute binding or a broken path lands on no field and is not this question's: true.
+	bool IsSourceAvailable() const;
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ibVariantDataAttributeSource* CloneSourceAttribute(const ibMetaID& id) const { return new ibVariantDataAttributeSource(m_ownerProperty, id); }

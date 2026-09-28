@@ -132,6 +132,7 @@ public:
 		wxString GetPhysicalName() const override;
 		ibMetaID GetColumnId()     const override;
 		ibTypeDescription& GetTypeDesc() const override;
+		bool     IsAvailable()     const override;   // the PointInTime attribute's too — and so its sequence's
 
 		// Where it lies: nowhere of its own — in the PERIOD, then in the RECORDER.
 		std::vector<ibColumnSlot> DescribeLayout() const override;

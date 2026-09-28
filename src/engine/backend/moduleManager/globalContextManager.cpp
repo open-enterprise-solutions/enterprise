@@ -103,7 +103,8 @@ enum
 	enCalculationRegisters,
 	enSequences,
 	enScheduledJobs,
-	enSessionParameters
+	enSessionParameters,
+	enFunctionalOptions
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -131,6 +132,9 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// The configuration's own declared parameters of this session. Read anywhere,
 	// written only by the session module (metaSessionParameterObject.h).
 	helper.AppendProp(wxT("SessionParameters"));
+	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
+	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
+	helper.AppendProp(wxT("FunctionalOptions"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
@@ -194,6 +198,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enSessionParameters:
 		pvarPropVal = new ibValueSessionParameters(m_metaData);
+		return true;
+	case enFunctionalOptions:
+		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaFunctionalOptionCLSID, m_metaData);
 		return true;
 	}
 

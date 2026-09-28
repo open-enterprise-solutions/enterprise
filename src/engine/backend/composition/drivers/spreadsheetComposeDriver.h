@@ -187,6 +187,7 @@ private:
 	// What THIS output is called — its caption over its own block. Empty for an output nobody named,
 	// and then nothing is printed: a blank caption line would read as a row that failed.
 	wxString                    m_outputName;
+	size_t                      m_outputCount = 1;   // how many outputs the run draws (ibCompositionOutputInfo)
 	std::vector<wxString>       m_headerLines;
 	int                         m_columnCount = 0;
 	int                         m_rowsWritten = 0;

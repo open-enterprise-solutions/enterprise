@@ -7,6 +7,7 @@
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
 #include "backend/metaCollection/partial/commonObject.h"   // the owners an attribute asks: generic data, a hierarchy
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — the column's IsAvailable
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -59,6 +60,13 @@ const ibTranslateString& ibValueMetaObjectAttributeBase::GetFormat() const
 {
 	static const ibTranslateString s_none;
 	return s_none;
+}
+
+// The field itself, or the object it stands in, may belong to a part of the system this base does not use —
+// and so may every object its type can hold, which takes the field with them.
+bool ibValueMetaObjectAttributeBase::IsAvailable() const
+{
+	return ibFunctionalOptionGate::IsAvailable(this) && ibFunctionalOptionGate::IsTypeAvailable(GetMetaData(), GetTypeDesc());
 }
 
 // WHAT A VALUE HERE MAY BE — the type factory's answer (backend_type.cpp: a characteristic stands for its

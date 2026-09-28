@@ -5157,3 +5157,43 @@ msgstr ""
 #: src/engine/backend/metaCollection/metaEventHandlerObjectMenu.cpp:11
 msgid "Open handler module"
 msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:35
+msgid "Functional options"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+msgid "Visibility"
+msgstr ""
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "User visibility"
+msgstr ""
+
+#: src/engine/frontend/visualView/ctrl/control.h
+msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "Initial value"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+msgid "The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "Requires"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+msgid "The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."
+msgstr ""
+
+#: src/engine/backend/system/value/valueSpreadsheet.cpp:430
+msgid "Cells are counted from 0 - a row or a column cannot be negative"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
+msgid "Open functional option composition"
+msgstr ""

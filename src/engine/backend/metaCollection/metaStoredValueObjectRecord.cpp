@@ -3,8 +3,10 @@
 //	Description : constants - db
 ////////////////////////////////////////////////////////////////////////////
 
-#include "constant.h"
+#include "metaStoredValueObject.h"
 #include "backend/metaData.h"
+#include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — the write door's transaction
+#include "backend/query/columnLayout.h"              // ibFieldSuffix — the value column's type tag, read as it lies
 #include "backend/system/systemManager.h"
 
 #include "backend/appData.h"
@@ -20,7 +22,7 @@
 // from ever disagreeing about what the field is called.
 const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const
 {
-	const ibValueMetaObjectConstant::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
+	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
 	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column->GetQueryColumn() : nullptr;
 }
 // The metaobject behind this source — the guid and the metaID are READ OFF IT (see
@@ -40,7 +42,7 @@ std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColum
 //*                           constant value                            *
 //***********************************************************************
 
-ibValuePtr<ibValueRecordDataObjectConstant> ibValueMetaObjectConstant::CreateRecordDataObjectValue() const
+ibValuePtr<ibValueRecordDataObjectConstant> ibValueMetaObjectStoredValue::CreateRecordDataObjectValue() const
 {
 	ibValueRecordDataObjectConstant* pDataRef = nullptr;
 	if (auto* cc = m_metaData->GetCompileCache()) {
@@ -100,7 +102,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	return true;
 }
 
-ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject)
+ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectStoredValue* metaObject)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
 	m_objModified(false), m_metaObject(metaObject)
 {
@@ -268,7 +270,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 
 	if (!appData->DesignerMode()) {
 
-		ibDatabaseQueryBuilder dbq;   // L2 door for the open / table-exists gate (no raw ibDatabaseLayer)
+		ibDatabaseQueryBuilder dbq;   // L2 door for the open gate (no raw ibDatabaseLayer)
 		if (!dbq.IsOpen())
 			ibBackendCoreException::Error(_("Database is not open!"));
 
@@ -278,31 +280,48 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 			return false;
 		}
 
-		const wxString& tableName = m_metaObject->GetPhysicalTableName();
-		if (dbq.TableExists(tableName)) {
-			// Read the single sys_const row through the L3 door — the constant IS the
-			// queryable (its table) AND the column (its value). The FB FIRST / others
-			// LIMIT fork and the raw field concat are gone; the value comes from the
-			// L3 selection (GetValue), then AdjustValue as before.
-			try {
-				ibDataQueryBuilder q;
-				q.From(m_metaObject->GetQueryable());
-				ibReadPageRequest page;
-				page.m_count = 1;
-				ibDataQueryResult selection = q.Execute(page);
-				if (selection.Next())
-					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject->GetValueColumn()->GetQueryColumn()));
-				else
-					ret = m_metaObject->CreateValue();
-			}
-			catch (...) {}
-		}
+		ret = m_metaObject->ReadStoredValue();
 	}
 	else {
 		ret = m_metaObject->AdjustValue();
 	}
 
 	return ret;
+}
+
+ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
+{
+	ibDatabaseQueryBuilder dbq;   // L2 door for the table-exists gate (no raw ibDatabaseLayer)
+	if (dbq.TableExists(GetPhysicalTableName())) {
+		// Read the single sys_const row through the L3 door — the constant IS the
+		// queryable (its table) AND the column (its value). The FB FIRST / others
+		// LIMIT fork and the raw field concat are gone; the value comes from the
+		// L3 selection (GetValue).
+		try {
+			ibDataQueryBuilder q;
+			q.From(GetQueryable());
+			ibReadPageRequest page;
+			page.m_count = 1;
+			ibDataQueryResult selection = q.Execute(page);
+
+			// ⚠ NOTHING WRITTEN is told by the value column's TYPE TAG, read AS IT LIES: 0 until the first write
+			// stores the value's own type (a column added after the row was defaults to 0 too). Read through the
+			// column, an untagged cell comes back as its type's EMPTY (columnLayout.cpp, the tag's `default`
+			// arm) — a Boolean's False — so a never-switched functional option read as switched off
+			// (measured 2026-09-27: `FunctionalOptions.X.Get()` answered False with nothing ever written).
+			if (selection.Next()) {
+				const ibBackendColumnRawDB tag(GetValueColumn()->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Discriminator),
+					ibBackendColumnRawDB::RawType::Number);
+				const ibValue written = selection.GetValue(tag);
+				if (written.GetType() == ibValueTypes::TYPE_NUMBER && written.GetInteger() != 0)
+					return AdjustValue(selection.GetValue(GetValueColumn()->GetQueryColumn()));
+			}
+		}
+		catch (...) {}
+	}
+
+	// No table, no row, no tag: a fresh value of this kind (a constant's type's empty, an option's initial value).
+	return CreateValue();
 }
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
@@ -418,6 +437,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	}
 
 	scope.SafeCommitTransaction();
+
+	m_metaObject->OnAfterValueWrite();
 
 	if (valueForm != nullptr) valueForm->NotifyChange(GetValue());
 

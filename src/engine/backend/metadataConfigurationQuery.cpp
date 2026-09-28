@@ -96,7 +96,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 //*                                          ConfigSaveMetadata                                    *
 //**************************************************************************************************
 
-#include "metaCollection/partial/constant.h"
+#include "metaCollection/metaStoredValueObject.h"   // the shared sys_const table every stored value lives in
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot — the Storage builds it (ContributeTables) and hands it to the builder
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,7 +162,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 			GetRestructureInfo().AppendInfo(_("Create new database"));
 
-			if (!ibValueMetaObjectConstant::DeleteConstantSQLTable()) {
+			if (!ibValueMetaObjectStoredValue::DeleteConstantSQLTable()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 				db_query->RollBack(); return false;
 #else
@@ -178,7 +178,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 #endif
 			}
 
-			if (!ibValueMetaObjectConstant::CreateConstantSQLTable()) {
+			if (!ibValueMetaObjectStoredValue::CreateConstantSQLTable()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 				db_query->RollBack(); return false;
 #else

@@ -3,6 +3,7 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "backend/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
 #include "backend/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::AnyUnavailable — IsAvailable
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -87,6 +88,13 @@ std::vector<ibBackendFormAttributeValue*> ibPropertySource::GetSourceList() cons
 
 bool ibPropertySource::IsEmptyProperty() const {
 	return get_cell_variant<ibVariantDataSource>()->IsEmptySource();
+}
+
+bool ibPropertySource::IsAvailable() const {
+	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
+	if (owner == nullptr || !ibFunctionalOptionGate::AnyUnavailable(owner->GetMetaData()))
+		return true;
+	return get_cell_variant<ibVariantDataSource>()->IsSourceAvailable();
 }
 
 ////////////////////////////////////////////////////////////////////////

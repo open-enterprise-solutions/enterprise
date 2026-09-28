@@ -48,6 +48,9 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 {
 	m_members.Bind(this, &ibValueModelTable::FillMembers);
 	// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual bind.)
+	// It knows the columns it reads from the start (see ibValueTabularSectionDataObjectBase); a value table
+	// belongs to no configuration, so there is none to hand it.
+	Storage().SetColumns(m_tableColumnCollection);
 }
 
 // ⭐ A COPY IS THE SAME COLUMNS AND THE SAME ROWS, AND NOTHING SHARED. It was `new ibValueModelTable(*this)`,

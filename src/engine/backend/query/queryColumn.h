@@ -146,6 +146,13 @@ public:
 	// gates on THIS instead of poking the metaobject.
 	virtual bool IsAllowed() const { return true; }
 
+	// Is the column AVAILABLE in this base — a functional option's question, and NOT IsAllowed. A column
+	// that is not allowed is not there; one that is not available is there, read and written like any
+	// other, and only the interface does not offer it (functionalOptionGate.h). A plain column always is;
+	// a metaobject attribute asks its metaobject. Last in the class: a virtual added in the middle moves
+	// every slot after it for whatever was built before it.
+	virtual bool IsAvailable() const { return true; }
+
 	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is
 	// the plain ATTRIBUTE picture from the icon library, so every column is dressed even when it
 	// stands behind no metaobject (a view's column, a temp table's); a column that IS a metaobject

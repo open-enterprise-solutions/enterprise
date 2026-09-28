@@ -10,8 +10,10 @@
 #include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
 #include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
+#include "backend/query/queryConstructorModel.h"   // WalkPath — where a written path starts, and its hops by type
+#include "backend/query/queryRender.h"             // ibQueryColumnFromPath — a written path as its hops
 
-#include <map>   // what each field name of a composite field may be, united across its targets
+#include <map>  // what each field name of a composite field may be, united across its targets
 #include <set>   // …and which names have already been put up, so a shared one goes up once
 
 #include <wx/dialog.h>
@@ -116,9 +118,11 @@ static wxTreeItemId AppendFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent
 // A field this tree can offer at all: a tabular section binds no condition, and a value kept WHOLE
 // (a schedule, a type description) is one BLOB field that SQL compares in no way — a condition on it
 // could never be lowered into the query, so it is not offered rather than offered and then failing.
+// Nor is a field the functional options of this base make unavailable — asked of the node's own column.
 static bool ibFieldIsOfferable(const ibSourceDataObject::ibSourceExplorer* col)
 {
-	return col != nullptr && !col->IsTableSection() && ibIsComparableType(col->GetTypeValueDesc());
+	return col != nullptr && !col->IsTableSection() && ibIsComparableType(col->GetTypeValueDesc())
+		&& (col->GetColumn() == nullptr || col->GetColumn()->IsAvailable());
 }
 
 static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
@@ -268,6 +272,8 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 	// Nothing to walk — flat fields, but a reference-typed one still gets its [+].
 	for (const ibSettingsPlainField& field : m_plain) {
+		if (!field.m_available)
+			continue;   // known, so a line on it is recognised — and not offered
 		ibSourceFieldNode* data = new ibSourceFieldNode();
 		data->m_path     = field.m_name;
 		data->m_leafId   = field.m_id;
@@ -318,6 +324,40 @@ wxTreeItemId ibSettingsFieldTree::FindByPath(wxTreeCtrl* tree, const wxString& p
 		parent = found;
 	}
 	return parent != tree->GetRootItem() ? parent : wxTreeItemId();
+}
+
+// ⭐ THE SAME QUESTION THE TREE ASKS OF A FIELD BEFORE PUTTING IT UP (ibFieldIsOfferable), asked of a
+// path already written — and walked the way a composition's run walks it, so a line this window lists is
+// one the run prints: from the fields this tree was given (where the path starts, a linked package's
+// `Sales.Qty` included), then each hop by its TYPE. A start nobody here knows answers yes — not knowing is
+// no verdict, and what the source no longer has is pruned elsewhere.
+bool ibSettingsFieldTree::IsAvailable(const wxString& path) const
+{
+	// THE PATH AS HOPS — laid out the way the query carries it, not by hand.
+	const ibQueryAstExprPtr column = path.IsEmpty() ? nullptr : ibQueryColumnFromPath(path);
+	if (!column || column->m_path.empty())
+		return true;   // a line with no field yet is a line being written
+
+	// The fields this tree was given, each with its type and whether the options leave it.
+	std::vector<ibQueryConstructorField> fields;
+	const auto give = [&fields](const wxString& name, const ibTypeDescription& type, bool available) {
+		ibQueryConstructorField field;
+		field.m_name      = name;
+		field.m_type      = type;
+		field.m_available = available;
+		fields.push_back(std::move(field));
+	};
+	if (m_source != nullptr) {
+		const ibSourceDataObject::ibSourceExplorer* explorer = m_source->GetSourceExplorer();
+		for (unsigned int i = 0; explorer != nullptr && i < explorer->GetHelperCount(); ++i)
+			if (const ibSourceDataObject::ibSourceExplorer* node = explorer->GetHelper(i))
+				give(node->GetSourceName(), node->GetTypeValueDesc(), node->GetColumn() == nullptr || node->GetColumn()->IsAvailable());
+	}
+	else {
+		for (const ibSettingsPlainField& plain : m_plain)
+			give(plain.m_name, plain.m_type, plain.m_available);
+	}
+	return ibQueryConstructorModel(GetMetaData()).WalkPath(fields, column->m_path).m_available;
 }
 
 void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const

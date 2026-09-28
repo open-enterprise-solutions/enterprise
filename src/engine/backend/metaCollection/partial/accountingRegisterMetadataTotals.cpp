@@ -2002,14 +2002,14 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, no);
 			if (kinds.empty() && kindSlot != nullptr)
 				columns.push_back(ibTempColumn(name + wxT("Kind"), name + wxT("Kind"),
-				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(kindSlot->GetMetaID())));
+				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(kindSlot->GetMetaID())).StandsFor(kindSlot));
 
 			// What the slot HOLDS (GetTypeValueDesc), not what it declares: the declaration is the chart's
 			// characteristic, one class no value carries, and a column of this table is a plain column with
 			// no chart to expand it through — typed by the declaration, it could not be opened in a field
 			// picker, offered no value to filter by, and adjusted every counterparty poured into it to
 			// nothing (2026-09-15).
-			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())));
+			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())).StandsFor(slot));
 		}
 	};
 	addBreakdown(/*creditSide*/ false, kindsDr, /*corr*/ false);
@@ -2074,7 +2074,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, suffix), FigureField(resource, suffix),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(figure, credit)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
 	};
 
 	// A figure with NO side — one row is a pair of accounts, so there is one number and nothing to
@@ -2083,7 +2083,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, figure), FigureField(resource, figure),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegFigureCaption(figure)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
 	};
 
 	// ⭐⭐ BALANCED OR NOT, A FIGURE IS REPORTED — what the flag decides is how many numbers it is.

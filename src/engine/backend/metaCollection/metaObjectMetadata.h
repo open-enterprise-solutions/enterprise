@@ -46,6 +46,7 @@ public:
 			clsid == g_metaScheduledJobCLSID ||
 			clsid == g_metaEventHandlerCLSID ||
 			clsid == g_metaSessionParameterCLSID ||
+			clsid == g_metaFunctionalOptionCLSID ||
 			clsid == g_metaCommonAttributeCLSID ||
 			clsid == g_metaPictureCLSID ||
 			clsid == g_metaLanguageCLSID ||

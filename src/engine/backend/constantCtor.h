@@ -8,7 +8,7 @@ class ibCtorMetaValueTypeConstantObject :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
+	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectStoredValue* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
 		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
@@ -26,7 +26,7 @@ public:
 
 protected:
 	ibClassID m_classType;
-	ibValueMetaObjectConstant* m_metaObject;
+	ibValueMetaObjectStoredValue* m_metaObject;
 };
 
 #define registerConstObject()\
@@ -39,7 +39,7 @@ class ibCtorMetaValueTypeConstantManager :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
+	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectStoredValue* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
 		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
@@ -54,7 +54,7 @@ public:
 
 protected:
 	ibClassID m_classType;
-	ibValueMetaObjectConstant* m_metaObject;
+	ibValueMetaObjectStoredValue* m_metaObject;
 };
 
 #define registerConstManager()\

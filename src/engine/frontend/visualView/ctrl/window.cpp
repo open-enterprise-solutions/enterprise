@@ -54,11 +54,13 @@ void ibValueWindow::UpdateWindow(ibFrontendWindow* window)
 	
 	// A source-bound control with NO source picked is never rendered — in the DESIGNER too, so it is
 	// plainly visible (by its absence on the canvas) that such a control is unusable until bound; it is
-	// still reachable through the object tree + inspector to pick a source. IsSourceMissing is a base
+	// still reachable through the object tree + inspector to pick a source. IsUnbound is a base
 	// virtual — false for plain windows, overridden by the source controls — so no cross-cast is needed.
+	// Nor is an element that is NOT AVAILABLE (control.h): the functional options of this base switch it off,
+	// by the field it stands on or by the options it names itself. Two questions, asked side by side.
 	// For a composite (tablebox) the SAME gate hides the whole chrome wrapper in UpdateWithLayers; here it
 	// hides a plain control's widget.
-	window->Show(m_propertyVisible->GetValueAsBoolean() && !IsSourceMissing());
+	window->Show(m_propertyVisible->GetValueAsBoolean() && IsAvailable() && !IsUnbound());
 	window->SetToolTip(m_propertyTooltip->GetValueAsTranslateString());
 
 #ifndef OES_USE_WEB
@@ -254,7 +256,8 @@ void ibValueWindowComposite::UpdateWithLayers(wxObject* wxobject, ibVisualHost* 
 		// A source-bound composite (tablebox) with NO source hides its WHOLE chrome wrapper — the inner
 		// widget + toolbar fold in with the parent (the inner's own UpdateWindow only hid the inner,
 		// leaving an empty chrome). Hidden in the designer too, so an unbound tablebox is plainly unusable.
-		chrome->Show(!IsSourceMissing());
+		// An unavailable one (control.h) goes the same way.
+		chrome->Show(IsAvailable() && !IsUnbound());
 		return;
 	}
 #else 

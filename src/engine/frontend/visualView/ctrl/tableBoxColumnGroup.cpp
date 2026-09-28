@@ -120,7 +120,7 @@ void ibValueModelTableBoxColumnGroup::OnUpdated(wxObject* wxobject, ibFrontendWi
 	group->SetKind(GetGrouping());
 	group->SetTitleShown(m_propertyShowTitle->GetValueAsBoolean());
 	group->SetAlignment((wxAlignment)m_propertyHeaderAlign->GetValueAsEnum());
-	group->SetHidden(!m_propertyVisible->GetValueAsBoolean());
+	group->SetHidden(!m_propertyVisible->GetValueAsBoolean() || !IsAvailable());
 
 	// The geometry the group decides (row bands, header depth) is the CONTROL's to
 	// re-derive — the group is only data. The control is asked OF THE GROUP.

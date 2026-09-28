@@ -754,7 +754,7 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 	m_toolbar->Bind(wxEVT_TOOL, &ibFilterEditor::OnFilterGroupSelected, this, kFilterCmdGroup);
 	m_toolbar->Bind(wxEVT_TOOL, &ibFilterEditor::OnFilterUngroup, this, kFilterCmdUngroup);
 
-	m_model = new ibFilterTreeModel();
+	m_model = new ibFilterTreeModel(m_fieldSource);
 	m_model->SetFilter(m_filter);
 	m_view->AssociateModel(m_model);
 	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibFilterEditor::OnContextMenu, this);
@@ -1143,8 +1143,15 @@ static ibFilterPath ibMoveSelectedFilterChild(ibFilterTreeModel* model, ibDataVi
 		return ibFilterPath();   // the root line has nowhere to move within
 
 	const size_t idx = path.back();
-	const int target = static_cast<int>(idx) + delta;
-	if (idx >= owner->size() || target < 0 || target >= static_cast<int>(owner->size()))
+	if (idx >= owner->size())
+		return ibFilterPath();
+	// THE NEXT LINE THE TREE LISTS is the one traded with — a line applied and not shown keeps its
+	// place, so one press always moves what the person sees.
+	int target = static_cast<int>(idx) + delta;
+	while (target >= 0 && target < static_cast<int>(owner->size())
+		&& !model->IsListed((*owner)[static_cast<size_t>(target)]))
+		target += delta;
+	if (target < 0 || target >= static_cast<int>(owner->size()))
 		return ibFilterPath();   // already at that end
 
 	std::swap((*owner)[idx], (*owner)[static_cast<size_t>(target)]);

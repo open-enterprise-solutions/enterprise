@@ -2,6 +2,10 @@
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument
+#include "backend/metaCollection/metaGroups.h"              // what a group is called, and where it stands
+
+#include <algorithm>
+#include <vector>
 
 #define ICON_SIZE 16
 
@@ -90,8 +94,9 @@ wxTreeItemId ibCommonAttributeCompositionEditor::GroupFor(const ibClassID& clsid
 	if (found != m_groups.end())
 		return found->second;
 
-	// FROM THE TYPE REGISTRY — the icon and the caption a metatype registered for itself.
-	// No table of names here to drift from the designer tree's.
+	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption) — the
+	// one the configuration tree shows. The registered NAME stood here, as it once did in the role and
+	// section editors: a branch read "AccountingRegister" where the tree reads "Accounting registers".
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
 	if (typeCtor == nullptr)
 		return m_treeMETADATA;
@@ -100,8 +105,9 @@ wxTreeItemId ibCommonAttributeCompositionEditor::GroupFor(const ibClassID& clsid
 	wxASSERT(imageList);
 	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 
-	const wxTreeItemId group = m_compositionCtrl->AppendItem(
-		m_treeMETADATA, typeCtor->GetClassName(), imageIndex, imageIndex, nullptr);
+	const wxString caption = ibMetaGroupCaption(clsid);
+	const wxTreeItemId group = m_compositionCtrl->AppendItem(m_treeMETADATA,
+		caption.IsEmpty() ? typeCtor->GetClassName() : caption, imageIndex, imageIndex, nullptr);
 
 	m_groups.emplace(clsid, group);
 	return group;
@@ -143,14 +149,24 @@ void ibCommonAttributeCompositionEditor::FillData()
 	// ASKED, NOT LISTED. Every metaobject that says it can carry one appears, under a
 	// group named by its own metatype — so this editor never needs to learn about a
 	// metatype that arrives later, and never offers one that cannot hold a column.
+	// …AND IN THE ORDER THE CONFIGURATION IS READ IN — sorted by the group's declared place
+	// (ibMetaGroupOrder), as the role and section editors do; a stable sort leaves each group's own
+	// objects as the metadata gives them.
+	std::vector<ibValueMetaObject*> allowed;
 	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
 		if (object == nullptr || object->IsDeleted())
 			continue;
 		if (!object->IsCompositionAllowed())
 			continue;
-
-		AppendItem(GroupFor(object->GetClassType()), object);
+		allowed.push_back(object);
 	}
+	std::stable_sort(allowed.begin(), allowed.end(),
+		[](const ibValueMetaObject* a, const ibValueMetaObject* b) {
+			return ibMetaGroupOrder(a->GetClassType()) < ibMetaGroupOrder(b->GetClassType());
+		});
+
+	for (ibValueMetaObject* object : allowed)
+		AppendItem(GroupFor(object->GetClassType()), object);
 
 	m_compositionCtrl->ExpandAll();
 }

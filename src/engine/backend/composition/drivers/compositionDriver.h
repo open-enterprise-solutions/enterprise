@@ -53,6 +53,9 @@ struct ibCompositionOutputInfo
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	wxString                                   m_name;   // what the output is called, when it is
+	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
+	// and a run of one has nothing to tell apart (ibSpreadsheetComposeDriver::WriteOutputCaption).
+	size_t                                     m_outputCount = 1;
 
 	// ⭐⭐ WHAT EACH COLUMN IS CALLED, one entry per schema column. The QUERY names its columns so
 	// they can be read back — uniquely, one word, sometimes qualified to stay apart (`CountNumber`

@@ -237,6 +237,16 @@ struct ibDotWalkColumn
 	wxString                                 m_alias;   // output name (read via GetColumn)
 };
 
+// ⭐ A WALK MAY BE SHOWN WHILE EVERY HOP OF IT MAY BE (functional options, IsAvailable) — a hop the options
+// take away takes what stands behind it too. Asked of a dot-walk's path and of a resolved column path alike.
+inline bool ibIsWalkAvailable(const std::vector<const ibBackendQueryColumn*>& path)
+{
+	for (const ibBackendQueryColumn* hop : path)
+		if (hop != nullptr && !hop->IsAvailable())
+			return false;
+	return true;
+}
+
 // One page request — universal across read modes. The caller fills the fields
 // its mode needs; the rest stay defaulted.
 struct ibReadPageRequest

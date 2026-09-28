@@ -1579,7 +1579,12 @@ start_label:
 				}
 
 				if (pVariable2->HasRetVal(lMethodNum)) {
-					pVariable2->CallAsFunc(lMethodNum, *pRetValue, cRunContext.m_pRefLocVars, realParamCount);
+					// ⭐ A METHOD THAT ANSWERED NOTHING ANSWERS UNDEFINED — never the previous call's value. This slot is
+					// the one calls write their answers into; a method that returned false without writing it left
+					// whatever the call before had put there, and the script read that as THIS call's answer
+					// (SpreadsheetDocument.Area past a table's end repeated its last figure, 2026-09-28).
+					if (!pVariable2->CallAsFunc(lMethodNum, *pRetValue, cRunContext.m_pRefLocVars, realParamCount))
+						*pRetValue = ibValue();
 				}
 				else {
 					// `x = SomeProcedure()` — caught by LOOKING AT THE NEXT OPCODE:

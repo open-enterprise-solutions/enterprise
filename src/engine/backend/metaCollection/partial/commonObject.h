@@ -91,61 +91,10 @@ class BACKEND_API ibValueRecordSetObject;
 
 #include "backend/metaCollection/genericData.h"   // ibFormTypeList + ibValueMetaObjectGenericData (extracted so srcDataObject.h gets the covariant GenericData* return)
 
-// The metaobject-coupled SOURCE-DESCRIPTOR templates — moved here from queryableFactory.h so the L4 factory header
-// stays metadata-agnostic (base descriptor + factory only) and these live WITH the metaobjects that instantiate them.
-// The base ibQueryableSourceDescriptor + ibValue / ibBackendQueryable / ibSourceExplorer / command signatures come in
-// via queryableFactory.h (included above).
-
-// The QUERY descriptor — the query-identity HALF, TEMPLATED on the queryable type TQueryable + the metaobject type
-// TMeta. It CONTAINS the metaobject's queryable (built from it) AND carries the L4 source identity (GetNamespace /
-// GetName / CreateQueryable). This is ALL a pure QUERY source needs — a constant is registered only so From(constant)
-// resolves; it is NEVER shown as a list, so it leaves the command + row surface at the base's neutral defaults.
-template <typename TQueryable, typename TMeta>
-class ibMetaQueryDescriptor : public ibQueryableSourceDescriptor
-{
-public:
-	explicit ibMetaQueryDescriptor(TMeta* meta) : m_meta(meta), m_queryable(meta) {}
-
-	wxString GetNamespace() const override { return ibValue::GetNameObjectFromID(m_meta->GetClassType()); }
-	wxString GetName() const override { return m_meta->GetName(); }
-	const ibBackendQueryable* CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/) override { return &m_queryable; }
-
-	// The contained queryable — the metaobject's GetQueryable() forwards here (stable for the object's life).
-	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }
-
-	// WHAT COLUMNS THIS SOURCE HAS — forwarded to the metaobject, which is the only one that knows.
-	//
-	// ⚠ THIS BELONGS TO THE QUERY HALF, not to the command one. It used to live on
-	// ibMetaCommandDescriptor, so every source that is ONLY queryable — a constant, first among
-	// them — answered the base's empty default: it appeared in a catalogue as a table with no
-	// fields, could be added to a query and offered nothing to select. Asking what a source holds
-	// has nothing to do with whether it can be shown as a list.
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override {
-		m_meta->FillSourceExplorer(explorer);
-	}
-
-	// Restore ROW-KEY from a row's identity VALUE — read the source's PRIMARY-KEY columns off it (the SAME columns
-	// the fetch stamps into a node's m_rowKey, so the restore stub matches). UNIVERSAL via the source hop gate: a
-	// record's reference yields its self-reference, a register's record-manager decomposes into its composite key.
-	// Empty value / no PK columns → the base fallback (the value IS the key).
-	std::vector<ibValue> GetRowKeyByValue(const ibValue& value) const override {
-		ibSourceDataObject* src = nullptr;
-		if (value.IsEmpty() || !value.ConvertToValue(src) || src == nullptr)
-			return ibQueryableSourceDescriptor::GetRowKeyByValue(value);
-		std::vector<ibValue> rowKey;
-		for (const ibBackendQueryColumn* kc : m_queryable.GetPrimaryKeyColumns()) {
-			if (kc == nullptr) continue;
-			ibValue v;
-			src->GetValueBySourceHop(ibSourceHop{ kc->GetColumnId() }, v);
-			rowKey.push_back(v);
-		}
-		return rowKey.empty() ? ibQueryableSourceDescriptor::GetRowKeyByValue(value) : rowKey;
-	}
-
-protected:
-	TMeta*     m_meta;        // for name / clsid + to build the queryable (non-const, like the old `this`)
-	TQueryable m_queryable;   // the contained queryable (ibRecordQueryable / ibRegisterDataQueryable / ibConstantQueryable / …)
-};
+// The metaobject-coupled SOURCE-DESCRIPTOR templates live WITH the metaobjects that instantiate them, so the L4
+// factory header stays metadata-agnostic. The QUERY half is shared with the stored values beside genericData.h
+// (metaQueryDescriptor.h); the LIST half below needs the record machinery and stays here.
+#include "backend/metaCollection/metaQueryDescriptor.h"
 
 // The full SOURCE descriptor — a LIST source (record / register): the query descriptor PLUS the command + row surface,
 // each call FORWARDED to the metaobject (which the descriptor knows by type). The metaobject carries the real
@@ -1075,6 +1024,7 @@ public:
 		wxString GetPhysicalName() const override;
 		ibMetaID GetColumnId()     const override;
 		ibTypeDescription& GetTypeDesc() const override;
+		bool     IsAvailable()     const override;   // the moment attribute's too — and so its document's
 
 		// WHERE IT LIES: nowhere of its own — in the DATE, then in the REFERENCE. Answering with their
 		// layouts is what makes the existing mechanisms work on it: a sort emits date, then identifier
@@ -2946,6 +2896,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			virtual const ibFormatString& GetColumnFormat() const {
 				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
 			}
+			virtual bool IsColumnAvailable() const override { return m_metaAttribute->IsAvailable(); }
 
 			// The attribute the column is.
 			const ibValueMetaObjectAttributeBase* GetAttribute() const { return m_metaAttribute; }

@@ -103,12 +103,12 @@ bool ibValueSizer::ReadData(const ibDataNode& node)
 {
 	m_propertyMinSize->SetNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
 
-	return ibValueFrame::ReadData(node);
+	return ibValueControl::ReadData(node);
 }
 
 bool ibValueSizer::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyMinSize->GetName(), m_propertyMinSize->GetNodeValue());
 
-	return ibValueFrame::WriteData(node);
+	return ibValueControl::WriteData(node);
 }

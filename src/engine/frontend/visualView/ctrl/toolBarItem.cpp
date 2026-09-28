@@ -10,6 +10,23 @@
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
 
+#ifndef OES_USE_WEB
+// Where a child goes on its bar: the siblings before it that the bar holds. A tool the functional options
+// make unavailable is not on the bar, so its place among the form's children can run past the bar's end.
+static int ibToolBarPosition(ibAuiToolBar* toolbar, const ibValueFrame* child)
+{
+	const ibValueFrame* parent = child->GetParent();
+	int position = 0;
+	for (unsigned int i = 0; i < parent->GetChildCount(); i++) {
+		const ibValueFrame* sibling = parent->GetChild(i);
+		if (sibling->GetControlID() == child->GetControlID())
+			break;
+		if (toolbar->FindTool(sibling->GetControlID()) != nullptr)
+			position++;
+	}
+	return position;
+}
+#endif
 
 //***********************************************************************************
 //*                           ibValueToolBarItem                               *
@@ -40,6 +57,7 @@ wxObject* ibValueToolBarItem::Create(ibFrontendWindow* /*wxparent*/, ibVisualHos
 
 	ibWebToolBarItem* item = new ibWebToolBarItem(caption, GetControlID());
 	item->Enable(m_propertyEnabled->GetValueAsBoolean());
+	item->Show(IsAvailable());
 	return item;
 #else
 	// Desktop: wxAuiToolBar::AddTool fires in OnCreated below with
@@ -57,6 +75,11 @@ void ibValueToolBarItem::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparen
 #else
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(wxparent);
 	wxASSERT(toolbar);
+
+	// A tool the functional options make unavailable is not put on its bar at all.
+	if (!IsAvailable())
+		return;
+
 	wxAuiToolBarItem* toolItem = toolbar->AddTool(GetControlID(),
 		m_propertyTitle->GetValueAsTranslateString(),
 		m_propertyPicture->GetValueAsBitmap(),
@@ -139,6 +162,7 @@ void ibValueToolBarItem::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	item->SetHasPicture(hasPic);
 	item->SetPictureDataUri(pictureUri);
 	item->Enable(m_propertyEnabled->GetValueAsBoolean());
+	item->Show(IsAvailable());
 #else
 	(void)wxobject;
 	(void)visualHost;
@@ -154,18 +178,17 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 	wxASSERT(toolbar);
 
 	wxAuiToolBarItem* toolItem = toolbar->FindTool(GetControlID());
-	ibValueFrame* parentControl = GetParent(); int idx = wxNOT_FOUND;
-
-	for (unsigned int i = 0; i < parentControl->GetChildCount(); i++) {
-		ibValueFrame* child = parentControl->GetChild(i);
-		if (m_controlId == child->GetControlID()) {
-			idx = i;
-			break;
-		}
-	}
+	const int idx = ibToolBarPosition(toolbar, this);
 
 	if (toolItem != nullptr)
 		toolbar->DestroyTool(GetControlID());
+
+	if (!IsAvailable()) {
+		toolbar->Realize();
+		toolbar->Refresh();
+		toolbar->Update();
+		return;
+	}
 
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
 		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
@@ -304,7 +327,9 @@ ibValueToolBarSeparator::ibValueToolBarSeparator() : ibValueControl()
 wxObject* ibValueToolBarSeparator::Create(ibFrontendWindow* /*wxparent*/, ibVisualHost* /*visualHost*/)
 {
 #ifdef OES_USE_WEB
-	return new ibWebToolBarSeparator(GetControlID());
+	ibWebToolBarSeparator* separator = new ibWebToolBarSeparator(GetControlID());
+	separator->Show(IsAvailable());
+	return separator;
 #else
 	return new ibNoObject;
 #endif
@@ -317,6 +342,11 @@ void ibValueToolBarSeparator::OnCreated(wxObject* wxobject, ibFrontendWindow* wx
 #else
 	ibAuiToolBar* toolbar = dynamic_cast<ibAuiToolBar*>(visualHost->GetWxObject(GetParent()));
 	wxASSERT(toolbar);
+
+	// Not available: not put on the bar, the way an unavailable tool is not.
+	if (!IsAvailable())
+		return;
+
 	wxAuiToolBarItem* toolItem = toolbar->AddSeparator();
 	toolItem->SetId(GetControlID());
 
@@ -337,16 +367,11 @@ void ibValueToolBarSeparator::OnUpdated(wxObject* wxobject, ibFrontendWindow* wx
 	wxASSERT(toolbar);
 
 	wxAuiToolBarItem* toolItem = toolbar->FindTool(GetControlID());
-	ibValueFrame* m_parentControl = GetParent(); int idx = wxNOT_FOUND;
-
-	for (unsigned int i = 0; i < m_parentControl->GetChildCount(); i++)
-	{
-		ibValueFrame* child = m_parentControl->GetChild(i);
-		if (m_controlId == child->GetControlID()) { idx = i; break; }
-	}
+	const int idx = ibToolBarPosition(toolbar, this);
 
 	if (toolItem) { toolbar->DestroyTool(GetControlID()); }
-	toolbar->InsertSeparator(idx, GetControlID());
+	if (IsAvailable())
+		toolbar->InsertSeparator(idx, GetControlID());
 
 	toolbar->Realize();
 	if (!appData->DesignerMode() || !visualHost->IsDesignerHost())

@@ -86,6 +86,12 @@ struct ibQueryConstructorField
 	// own, and a shell that draws them holds no list of kinds. Null only for a field standing
 	// behind no column at all — the drawer then uses its default picture.
 	wxIcon m_icon;
+	// WHETHER A PERSON IS OFFERED IT — asked of the COLUMN too (ibBackendSourceColumn::IsAvailable), so
+	// the functional options of the base answer, and a dot-walk is available only while every hop is.
+	// The query constructor does not read it: a query is written against the schema, which options leave
+	// alone. The settings pickers and a composition's run do, since what they offer or print is what a
+	// person may see.
+	bool m_available = true;
 };
 
 class BACKEND_API ibQueryConstructorModel
@@ -198,6 +204,20 @@ public:
 	// An unresolvable path yields an EMPTY field: silence, never a guess.
 	ibQueryConstructorField FieldOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
 	                                    const ibQueryPackage& package, size_t beforeStatement) const;
+	// …AND THE HOPS OF IT, from a field already in hand — each segment found among the fields of the one
+	// before, a reference walked by its TYPE (GetReferenceFields: the target's descriptor, no value made).
+	// The leaf answers with its type and with whether EVERY hop is available (functional options).
+	// FieldOfPath runs it once it has found where a path starts; a host that holds the start itself (a
+	// setting over a known source) runs it directly. A hop nothing answers yields an EMPTY field that keeps
+	// only what the walk knew up to there — silence, never a guess.
+	ibQueryConstructorField WalkFrom(const ibQueryConstructorField& from, const std::vector<wxString>& hops) const;
+	// …AND WHERE A WRITTEN PATH STARTS among the fields a holder already has: the LONGEST prefix one of them is
+	// named — a linked package names its fields with the selection in front (`Sales.Qty`), so the first
+	// segment alone is not always one — and the rest walked from it (WalkFrom). One rule for every holder of
+	// fields: the query's own sources (FieldOfPath), a composer's source, a settings window's list. A path
+	// none of them starts yields an EMPTY field — silence, and no verdict on it.
+	ibQueryConstructorField WalkPath(const std::vector<ibQueryConstructorField>& fields,
+	                                 const std::vector<wxString>& path) const;
 	// WHAT IT REFERS TO — 0 when the leaf is not a single-target reference.
 	ibClassID ReferenceOfPath(const ibQuerySelect& select, const std::vector<wxString>& path,
 	                          const ibQueryPackage& package, size_t beforeStatement) const;

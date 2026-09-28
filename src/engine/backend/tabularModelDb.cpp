@@ -58,7 +58,9 @@ void ibValueModelCursor::EnsureSnapshot() const
 
 		// Mirror the persistent GROUPING onto the snapshot composer — RunStoragePage builds the group tree IN RAM
 		// (the SQL read dropped it). Filter/sort are baked into the materialised order, so the snapshot composer
-		// keeps none → ComputeOrder returns the rows in their SQL order.
+		// keeps none → ComputeOrder returns the rows in their SQL order. Its paths are walked in the same
+		// configuration (ibDataRamComposer::IsAvailable).
+		m_snapshotComposer.SetMetaData(composer.GetMetaData());
 		m_snapshotComposer.PutGroups(savedGroups);
 
 		// One DETAIL copy node per row (same shape as the DB detail fetch), adopted (silent) into the snapshot.

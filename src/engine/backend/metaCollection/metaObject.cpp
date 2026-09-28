@@ -117,6 +117,12 @@ void ibValueMetaObject::DoSetInterface(const ibMetaID& id, const bool& val)
 	m_metaData->Modify(true);
 }
 #pragma endregion
+#pragma region functional_option_h
+void ibValueMetaObject::DoSetFunctionalOption(const ibMetaID& id, const bool& val)
+{
+	m_metaData->Modify(true);
+}
+#pragma endregion
 #pragma region role_h 
 void ibValueMetaObject::DoSetRight(const ibRole* role, const bool& val)
 {

@@ -272,7 +272,7 @@ const ibArg& ArgHelp()
 const ibArg& ArgProperties()
 {
 	static const ibArg s_a(wxT("properties"), ibArg::Kind::Node,
-		ibMcpText("Properties to set on the new object, by name - {\"FormType\": \"Object form\"}. "
+		ibMcpText("Properties to set on the new object, by name - {\"FormType\": \"FormObject\"}. "
 			  "Each is placed the way metadata_set places it, so a property with a closed set "
 			  "takes one of its words. The answer lists every property the object has, with what "
 			  "each accepts, so one call is enough to learn the rest. Passing any of these also "
@@ -1133,6 +1133,26 @@ public:
 
 			if (!refused.empty())
 				result.AddField(wxT("refused"), ibDataValue::Array(refused));
+		}
+
+		// ⚠ A FORM WITH NO KIND IS NOT FINISHED — and announced, it puts the designer's form wizard in front
+		// of a person in the middle of a tool call (2026-09-28: `FormType: "Object form"`, a word no form
+		// has, taken from this tool's own example). So it is refused here, before anything is told of it,
+		// with the words its owner offers.
+		if (ibValueMetaObjectForm* form = created->ConvertToType<ibValueMetaObjectForm>()) {
+			if (form->GetTypeForm() == wxNOT_FOUND) {
+				wxString words;
+				if (ibValueMetaObjectGenericData* owner = parent != nullptr
+						? parent->ConvertToType<ibValueMetaObjectGenericData>() : nullptr) {
+					const ibFormTypeList kinds = owner->GetFormType();
+					for (unsigned int idx = 0; idx < kinds.GetItemCount(); idx++)
+						words += (words.IsEmpty() ? wxString() : wxString(wxT(", "))) + kinds.GetItemName(idx);
+				}
+				metaData->RemoveMetaObject(created, parent);
+				refusal = wxString::Format(ibMcpText("A form is made with its kind - properties: {\"FormType\": ...}, "
+					"one of: %s. Nothing was created."), words);
+				return false;
+			}
 		}
 
 		// ⚠ AND THE STEP THAT STANDS BESIDE THE DIALOG. For a form, choosing the kind and BUILDING

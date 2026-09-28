@@ -33,6 +33,7 @@ public:
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
 		// The wrapped column already tells the declaration from what a value may be — pass it on.
 		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
+		virtual bool IsColumnAvailable() const override { return m_col == nullptr || m_col->IsAvailable(); }
 	private:
 		const ibBackendQueryColumn* m_col;
 	};
@@ -64,7 +65,8 @@ class ibQuerySchemaColumns : public ibValueModelCursor::ibValueModelColumnCollec
 public:
 	class ColInfo : public ibValueModelColumnInfo {
 	public:
-		ColInfo(wxString name, const ibBackendQueryColumn* col) : m_name(std::move(name)), m_col(col) {}
+		ColInfo(wxString name, const ibBackendQueryColumn* col, bool walkAvailable = true)
+			: m_name(std::move(name)), m_col(col), m_walkAvailable(walkAvailable) {}
 		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
 		// THE QUERY'S NAME FOR IT, not the underlying column's. `Owner.Code AS Supplier` is called
 		// `Supplier` here and nowhere else — that is the whole point of writing the query.
@@ -72,14 +74,19 @@ public:
 		virtual wxString GetColumnCaption() const override { return m_name; }
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
 		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
+		// The column's own answer, asked live — AND what the query knew of the road to it: a walk read
+		// through its real LEAF hands over that leaf, which answers for itself alone
+		// (OutputColumn::m_available).
+		virtual bool IsColumnAvailable() const override { return m_walkAvailable && (m_col == nullptr || m_col->IsAvailable()); }
 	private:
 		wxString                    m_name;
 		const ibBackendQueryColumn* m_col;
+		bool                        m_walkAvailable;
 	};
 
 	explicit ibQuerySchemaColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) {
 		for (const ibQueryLowering::OutputColumn& oc : schema)
-			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col));
+			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col, oc.m_available));
 	}
 	virtual ~ibQuerySchemaColumns() { for (auto* c : m_cols) delete c; }
 

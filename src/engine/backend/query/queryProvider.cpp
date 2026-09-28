@@ -377,11 +377,14 @@ namespace {
 class ibSubqueryAggColumn final : public ibBackendColumnRawDB
 {
 public:
-	ibSubqueryAggColumn(const wxString& alias, ibMetaID id)
-		: ibBackendColumnRawDB(alias, RawType::Number), m_id(id) {}
+	// `available` — whether what it folds may be shown (functional options), taken when it is made.
+	ibSubqueryAggColumn(const wxString& alias, ibMetaID id, bool available)
+		: ibBackendColumnRawDB(alias, RawType::Number), m_id(id), m_available(available) {}
 	ibMetaID GetColumnId() const override { return m_id; }
+	bool IsAvailable() const override { return m_available; }
 private:
 	ibMetaID m_id;
+	bool     m_available;
 };
 
 // ⭐⭐ A COLUMN OF THE INNER QUERY, SEEN UNDER ITS OUTPUT NAME.
@@ -403,23 +406,29 @@ public:
 	// wrapper's own column, which dies with that wrapper (see ibSubqueryQueryable::OwnsColumnStorage),
 	// while this alias is read for as long as the outer query runs. That is what crashed on 2026-08-19
 	// — `GetTypeDesc` through a freed column (0xdddddddd) while a report was being composed.
-	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id)
+	// `available` — what the road to `from` adds: a dot-walk's hops before its leaf (one of them hidden and
+	// the leaf goes with it).
+	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id, bool available = true)
 		: m_alias(alias)
 		, m_physical(from != nullptr ? from->GetPhysicalName() : alias)
 		, m_type(from != nullptr ? from->GetTypeDesc() : ibTypeDescription())
-		, m_id(id) {}
+		, m_id(id)
+		, m_available(available && (from == nullptr || from->IsAvailable())) {}
 
 	wxString GetName() const override { return m_alias; }
 	wxString GetPhysicalName() const override { return m_physical; }
 	// The TYPE is the column's own — an alias renames, it does not re-type — taken at construction.
 	ibTypeDescription& GetTypeDesc() const override { return m_type; }
 	ibMetaID GetColumnId() const override { return m_id; }
+	// …and so is whether it may be shown (functional options), for the same reason: taken, not pointed at.
+	bool IsAvailable() const override { return m_available; }
 
 private:
 	wxString                  m_alias;
 	wxString                  m_physical;
 	mutable ibTypeDescription m_type;   // GetTypeDesc returns a non-const ref (engine-wide signature)
 	ibMetaID                  m_id;
+	bool                      m_available;
 };
 
 // A COMPUTED projection of the inner query — `a * b`, a CASE — seen from outside under its alias.
@@ -431,21 +440,24 @@ private:
 class ibSubqueryExprColumn final : public ibBackendQueryColumn
 {
 public:
-	ibSubqueryExprColumn(const wxString& alias, ibMetaID id) : m_alias(alias), m_id(id) {}
 	// …and WITH a type where the schema knows one — an aggregate over a typed column, a constant
-	// projection. Empty stays "unknown"; what is known travels.
-	ibSubqueryExprColumn(const wxString& alias, ibMetaID id, const ibTypeDescription& type)
-		: m_alias(alias), m_type(type), m_id(id) {}
+	// projection. Empty stays "unknown"; what is known travels. `available` — whether what it is
+	// computed from may be shown (functional options), taken when it is made: it keeps no inputs.
+	ibSubqueryExprColumn(const wxString& alias, ibMetaID id, const ibTypeDescription& type = ibTypeDescription(),
+	                     bool available = true)
+		: m_alias(alias), m_type(type), m_id(id), m_available(available) {}
 
 	wxString GetName() const override { return m_alias; }
 	wxString GetPhysicalName() const override { return m_alias; }
 	ibTypeDescription& GetTypeDesc() const override { return m_type; }
 	ibMetaID GetColumnId() const override { return m_id; }
+	bool IsAvailable() const override { return m_available; }
 
 private:
 	wxString                  m_alias;
 	mutable ibTypeDescription m_type;   // empty = unknown; GetTypeDesc returns a non-const ref
 	ibMetaID                  m_id;
+	bool                      m_available;
 };
 
 // One pushed-down outer condition against a materialised RAM cell — the aggregate
@@ -474,6 +486,20 @@ bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 		return false;
 	}
 	return false;
+}
+
+// (defined below — a derived nested query asks it which columns a computed projection reads)
+void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<void(const ibBackendQueryColumn*)>& add);
+
+// A computed input may be shown (functional options) while every column it reads may be. Asked when a nested
+// table's column is made: the column keeps no inputs of its own.
+bool IsColumnExprAvailable(const ibQueryColumnExpr* e)
+{
+	bool available = true;
+	GatherColumnExprColumns(e, [&available](const ibBackendQueryColumn* input) {
+		available = available && (input == nullptr || input->IsAvailable());
+	});
+	return available;
 }
 } // namespace
 
@@ -522,7 +548,11 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		// stepping over the ids passed through (mintId, above). Four lists mint through one counter
 		// (aggregates, aliased selections, dot-walks, computed), so none of them needs a band of its own.
 		for (const ibDataQueryBuilder::AggregateItem& a : aggs) {
-			auto col = std::make_shared<ibSubqueryAggColumn>(a.m_alias, mintId());
+			// …available while what it folds is: every hop of its walk, its column, what its expression reads.
+			// COUNT(*) folds rows and reads none.
+			const bool available = ibIsWalkAvailable(a.m_path) && (a.m_col == nullptr || a.m_col->IsAvailable())
+				&& IsColumnExprAvailable(a.m_expr.get());
+			auto col = std::make_shared<ibSubqueryAggColumn>(a.m_alias, mintId(), available);
 			m_ownedColumns.push_back(col);
 			m_columns.push_back(col.get());
 			m_readFrom.push_back(nullptr);
@@ -576,7 +606,9 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 	for (const ibDotWalkColumn& walk : m_inner->GetDotWalks()) {
 		if (walk.m_alias.IsEmpty() || walk.m_path.empty() || walk.m_path.back() == nullptr)
 			continue;
-		auto col = std::make_shared<ibSubqueryAliasColumn>(walk.m_alias, walk.m_path.back(), mintId());
+		// Every hop of the walk answers for the leaf — one the options take away takes the leaf with it.
+		auto col = std::make_shared<ibSubqueryAliasColumn>(walk.m_alias, walk.m_path.back(), mintId(),
+			ibIsWalkAvailable(walk.m_path));
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
@@ -595,7 +627,8 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 	for (const ibQueryColumnSelect& computed : m_inner->GetSelectExprs()) {
 		if (computed.m_alias.IsEmpty())
 			continue;
-		auto col = std::make_shared<ibSubqueryExprColumn>(computed.m_alias, mintId());
+		auto col = std::make_shared<ibSubqueryExprColumn>(computed.m_alias, mintId(), ibTypeDescription(),
+			IsColumnExprAvailable(computed.m_expr.get()));
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
@@ -641,9 +674,12 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		if (out.m_owned)
 			m_ownedColumns.push_back(out.m_owned);
 
-		// THE SIMPLE CASE: a real column that already answers to this name IS the published column.
+		// THE SIMPLE CASE: a real column that already answers to this name IS the published column —
+		// unless the schema knows it may not be shown while the column says it may (a walk's leaf):
+		// then it is published through a thin column that says so.
 		if (out.m_alias.IsEmpty() && out.m_objectPrefix.IsEmpty()
-		    && out.m_col != nullptr && out.m_col->GetName() == out.m_name) {
+		    && out.m_col != nullptr && out.m_col->GetName() == out.m_name
+		    && out.m_available == out.m_col->IsAvailable()) {
 			m_columns.push_back(out.m_col);
 			m_readFrom.push_back(out.m_col);
 			m_readAlias.push_back(wxEmptyString);
@@ -657,9 +693,9 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		// a reference with no type is not a reference — the outer query could not walk into it.
 		std::shared_ptr<ibBackendQueryColumn> col = out.m_col != nullptr
 			? std::static_pointer_cast<ibBackendQueryColumn>(
-			      std::make_shared<ibSubqueryAliasColumn>(out.m_name, out.m_col, mintedId))
+			      std::make_shared<ibSubqueryAliasColumn>(out.m_name, out.m_col, mintedId, out.m_available))
 			: std::static_pointer_cast<ibBackendQueryColumn>(
-			      std::make_shared<ibSubqueryExprColumn>(out.m_name, mintedId, out.m_type));
+			      std::make_shared<ibSubqueryExprColumn>(out.m_name, mintedId, out.m_type, out.m_available));
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(out.m_col);

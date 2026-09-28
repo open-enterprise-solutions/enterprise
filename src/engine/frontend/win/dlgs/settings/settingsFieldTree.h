@@ -38,6 +38,9 @@ struct ibSettingsPlainField {
 	wxString          m_name;
 	ibMetaID          m_id = wxNOT_FOUND;
 	ibTypeDescription m_type;
+	// The column's own answer (functional options): an unavailable field is known to the tree — a line
+	// standing on it is recognised — and not put up.
+	bool              m_available = true;
 };
 
 class ibSettingsFieldTree {
@@ -88,6 +91,12 @@ public:
 	wxTreeItemId FindByPath(wxTreeCtrl* tree, const wxString& path) const;
 	void SelectByPath(wxTreeCtrl* tree, const wxString& path) const;
 
+	// ⭐ WHETHER THE FIELD A PATH REACHES IS AVAILABLE — the question the tree asks of every field before
+	// putting it up, asked of a path already written, so what a picker offers and which lines a list lists
+	// are one answer. Every hop answers. A line on an unavailable field is not listed, stays in the
+	// settings and keeps working.
+	bool IsAvailable(const wxString& path) const;
+
 	// WIRE the two behaviours every field tree has: unfold a reference lazily, and
 	// drag a field out (dropping on the right-hand pane adds it — the dropped field
 	// is GetDragItem()). The host binds what it does with a double-click itself,
@@ -115,6 +124,31 @@ private:
 	std::function<bool(const wxString& path)> m_isResource;
 
 	wxTreeItemId m_dragItem;   // field being dragged from a tree
+};
+
+// ⭐ THE LINES A VIEW LISTS of an ordered list of settings (a sort, a grouping), row by row: row N of
+// the view is line At(N) of the description — the filter tree's IsListed, for a flat list. A line on a
+// field the options of the base take away is not listed and stays in the description, applied — hidden,
+// never removed. A move trades places with the next LISTED line, so a hidden one keeps its own place.
+class ibSettingsListedLines {
+public:
+
+	template <class Lines>
+	void Read(const Lines& lines, const ibSettingsFieldTree* fields) {
+		m_listed.clear();
+		for (size_t i = 0; i < lines.size(); ++i)
+			if (fields == nullptr || fields->IsAvailable(lines[i].m_path))
+				m_listed.push_back(i);
+	}
+
+	unsigned int Count() const { return static_cast<unsigned int>(m_listed.size()); }
+
+	// The line row `row` (0-based) is; past the end, (size_t)-1 — which every caller already reads as
+	// "no such line" by its bounds check.
+	size_t At(size_t row) const { return row < m_listed.size() ? m_listed[row] : (size_t)-1; }
+
+private:
+	std::vector<size_t> m_listed;
 };
 
 #endif // __SETTINGS_FIELD_TREE_H__

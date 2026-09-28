@@ -213,6 +213,7 @@ wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { r
 wxString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
 ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId() const { return m_owner->GetPointInTime()->GetColumnId(); }
 ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_owner->GetPointInTime()->GetTypeDesc(); }
+bool ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable() const { return m_owner->GetPointInTime()->IsAvailable(); }
 
 bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& fieldName,
 	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const

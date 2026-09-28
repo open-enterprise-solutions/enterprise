@@ -553,7 +553,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
 		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
-		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()));
+		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()).StandsFor(res));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {

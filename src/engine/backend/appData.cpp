@@ -433,14 +433,16 @@ ibApplicationData::~ibApplicationData()
 	// reach starts going away.
 	if (m_mcpServer) m_mcpServer->Stop();
 
-	// 1. activeMetaData — OnDestroy may save state, close compile
+	// 1. Stop the registry — submits Remove@Urgent for every session
+	//    still in m_own, drains the queue, joins the worker. sys_session
+	//    DELETEs + OnDisconnect listeners fire before pool dies. Right after
+	//    what runs on the sessions — a job's session is cancelled by its
+	//    manager, not by the registry — and before the metadata goes.
+	if (m_sessionRegistry) m_sessionRegistry->Stop();
+
+	// 2. activeMetaData — OnDestroy may save state, close compile
 	//    caches, run cascading detach; those paths still want db_query.
 	if (m_activeMetaData) m_activeMetaData->OnDestroy();
-
-	// 2. Stop the registry — submits Remove@Urgent for every session
-	//    still in m_own, drains the queue, joins the worker. sys_session
-	//    DELETEs + OnDisconnect listeners fire before pool dies.
-	if (m_sessionRegistry) m_sessionRegistry->Stop();
 
 	// 3. Plugins see Destroy() while the host is still alive. The
 	//    registry's vector clears here too — but m_pluginManager's
@@ -828,6 +830,25 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 
 		wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + wxT("lang"));
 		wxLocale::AddCatalogLookupPathPrefix(fn.GetPath() + wxFILE_SEP_PATH + wxT("lang"));
+
+		// …AND, FOR A RUN FROM THE BUILD TREE, THE SOURCE'S OWN `lang` ABOVE THE EXECUTABLE — the walk-up the
+		// syntax helper makes for its corpus (helpService.cpp; bin/Win32/Debug is three levels under it). The
+		// build does not copy the catalogs beside the binaries (the nightly packages do), so a process started
+		// anywhere but the source root found none and spoke English engine words between the configuration's
+		// own: a document read "… 00000000003 from 06.07.2026" in a Russian session (2026-09-28).
+		{
+			wxFileName walk(fn.GetPath(), wxEmptyString);
+			for (int level = 0; level < 6; ++level) {
+				const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH + wxT("lang");
+				if (wxFileName::DirExists(candidate)) {
+					wxLocale::AddCatalogLookupPathPrefix(candidate);
+					break;
+				}
+				if (walk.GetDirCount() == 0)
+					break;
+				walk.RemoveLastDir();
+			}
+		}
 #if defined(__WXOSX__) || defined(__APPLE__)
 		// On macOS, also check outside .app bundle
 		wxFileName bundleLang(fn.GetPath());

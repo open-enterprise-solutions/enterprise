@@ -31,6 +31,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
+#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — the all-functions list
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"   // the section's groups, in the desktop's order
@@ -1526,6 +1527,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 	struct GroupSpec { ibClassID clsid; const char* name; };
 	const GroupSpec specs[] = {
 		{ g_metaConstantCLSID,                    "Constants" },
+		{ g_metaFunctionalOptionCLSID,            "Functional options" },   // a stored value too, beside the constants
 		{ g_metaCatalogCLSID,                     "Catalogs" },
 		{ g_metaDocumentCLSID,                    "Documents" },
 		{ g_metaDataProcessorCLSID,               "Data processors" },
@@ -1553,7 +1555,8 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 		}
 		nlohmann::json items = nlohmann::json::array();
 		for (auto obj : activeMetaData->GetAnyArrayObject(s.clsid)) {
-			if (obj == nullptr || obj->IsDeleted()) continue;
+			// …nor a part of the system a functional option has switched off (functionalOptionGate.h).
+			if (obj == nullptr || obj->IsDeleted() || !ibFunctionalOptionGate::IsAvailable(obj)) continue;
 			nlohmann::json it;
 			it["id"]      = (int)obj->GetMetaID();
 			it["name"]    = std::string(obj->GetName().utf8_str());

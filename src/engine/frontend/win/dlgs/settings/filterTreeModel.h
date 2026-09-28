@@ -7,6 +7,8 @@
 #include <map>
 #include <vector>
 
+class ibSettingsFieldTree;   // asked which lines are shown — see GetFirstFetch
+
 ////////////////////////////////////////////////////////////////////////////
 // The filter as a TREE, for the settings form
 ////////////////////////////////////////////////////////////////////////////
@@ -101,7 +103,8 @@ private:
 
 class ibFilterTreeModel : public ibDataViewModel {
 public:
-	ibFilterTreeModel() = default;
+	// `fields` — the tree the editor picks from, asked which lines are shown (never owned here).
+	explicit ibFilterTreeModel(const ibSettingsFieldTree* fields = nullptr) : m_fields(fields) {}
 
 	// THE FILTER THIS TREE SHOWS — borrowed, never owned. It belongs to the
 	// description the window is editing, which is a copy of the model's own; that
@@ -113,6 +116,11 @@ public:
 	// True is the designer, where those lines are written; false is a reader, whom they are hidden
 	// from while still being applied. The enumeration below is the only place it is asked.
 	void SetAuthoring(bool authoring) { m_authoring = authoring; }
+
+	// ⭐ WHETHER THE TREE LISTS THIS LINE — one answer for both reasons a line is applied and not shown:
+	// marked **Inaccessible** (to a reader), or a condition on a field the options of the base take away.
+	// The enumeration below lists by it, and a move steps over what it leaves out.
+	bool IsListed(const ibFilterNodeDescription& node) const;
 
 	// A STRUCTURAL change inside the SAME tree (added, deleted, moved, grouped).
 	// The rows survive it — they are keyed by path — so this re-reads the shape
@@ -173,6 +181,7 @@ private:
 	static wxString KeyOf(const ibFilterPath& path);
 
 	ibFilterDescription* m_filter = nullptr;
+	const ibSettingsFieldTree* m_fields = nullptr;   // which fields are available — see GetFirstFetch
 	bool m_authoring = true;   // see SetAuthoring — the designer sees the inaccessible lines
 	// Keyed by the PATH, not by an address: a node lives in a vector, and adding a
 	// sibling moves every one of them. The path is what a row IS.

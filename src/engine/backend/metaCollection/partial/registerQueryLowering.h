@@ -1485,10 +1485,10 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	return spreads
 		? ibTempColumn(name, attribute->GetPhysicalName(),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnIcon())
+		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnIcon()).StandsFor(attribute)
 		: ibTempColumn(name, ibRegValueField(attribute),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnIcon());
+		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnIcon()).StandsFor(attribute);
 }
 
 // ============================================================================

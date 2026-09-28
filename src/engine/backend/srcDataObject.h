@@ -407,9 +407,11 @@ public:
 	// (optional) accumulates the dotted display name. `outLeafIsTable` / `outContainerIsTable` (optional)
 	// report the leaf's own table-ness and whether the container it sits in is a table (then the leaf is
 	// that table's per-row COLUMN) — the facts a control-class choice needs but `leaf` (null for a section)
-	// cannot carry.
+	// cannot carry. `outAvailable` (optional) — every hop may be shown (functional options): a reference the
+	// options take away takes the field behind it too, so the leaf alone does not answer.
 	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
-		wxString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr) const;
+		wxString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr,
+		bool* outAvailable = nullptr) const;
 
 protected:
 	

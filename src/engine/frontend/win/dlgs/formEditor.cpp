@@ -113,6 +113,11 @@ void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& pare
 		}
 	}
 	else {
+		// An element the functional options of this base make unavailable is not offered to be re-arranged
+		// or shown again: it is not the user's to bring back (control.h, IsAvailable).
+		if (!is_root && !obj->IsAvailable())
+			return;
+
 		wxTreeItemId new_parent;
 		ibDialogFormEditorObjectTreeItemData* item_data = new ibDialogFormEditorObjectTreeItemData(obj);
 		if (is_root) {

@@ -319,16 +319,6 @@ int ibAppEnterprise::OnExit()
 	ibValueOLE::ReleaseComObjects();
 #endif
 
-	// Tear every session down through the session manager BEFORE
-	// wxApp::OnExit. registry->Stop() submits Remove@Urgent for each
-	// session in m_own and drains the queue — OnDisconnect listeners
-	// fire while the wx event loop is still alive, so any frame-Destroy
-	// scheduled from there gets dispatched. Without this the event
-	// loop dies first and the Destroy events stay queued. Idempotent —
-	// ~ibApplicationData calls Stop again best-effort.
-	if (auto* registry = ibApplicationData::GetSessionRegistry())
-		registry->Stop();
-
 	bool success_exit = wxApp::OnExit();
 
 	appDataDestroy();

@@ -1260,7 +1260,7 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataS
 				const wxString name = resource->GetName() + ibCalcSchedulePeriodName(period);
 				columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), period),
 					ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
-					ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
+					ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
 			}
 		}
 	});

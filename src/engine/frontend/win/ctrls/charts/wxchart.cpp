@@ -25,8 +25,7 @@
 #include "wxchartmultitooltip.h"
 
 wxChart::wxChart()
-    : m_needsFit(true),
-    m_activeElements(new wxVector<const wxChartsElement*>())
+    : m_needsFit(true)
 {
 }
 
@@ -43,7 +42,8 @@ void wxChart::Draw(wxGraphicsContext &gc)
 
 void wxChart::ActivateElementsAt(const wxPoint &point)
 {
-    m_activeElements = GetActiveElements(point);
+    m_activePoint = point;
+    m_hasActivePoint = true;
 }
 
 void wxChart::Fit()
@@ -60,22 +60,29 @@ void wxChart::Fit()
 
 void wxChart::DrawTooltips(wxGraphicsContext &gc)
 {
-    if (m_activeElements->size() == 1)
+    if (!m_hasActivePoint)
+    {
+        return;
+    }
+
+    // The elements under the mouse NOW — see m_activePoint.
+    const wxSharedPtr<wxVector<const wxChartsElement*>> activeElements = GetActiveElements(m_activePoint);
+    if (activeElements->size() == 1)
     {
         // If only one element is active draw a normal tooltip
-        wxChartTooltip tooltip((*m_activeElements)[0]->GetTooltipPosition(),
-            (*m_activeElements)[0]->GetTooltipProvider()->GetTooltipText());
+        wxChartTooltip tooltip((*activeElements)[0]->GetTooltipPosition(),
+            (*activeElements)[0]->GetTooltipProvider()->GetTooltipText());
         tooltip.Draw(gc);
     }
-    else if (m_activeElements->size() > 1)
+    else if (activeElements->size() > 1)
     {
         // If more than one element is active draw a multi-tooltip
-        wxChartMultiTooltip multiTooltip((*m_activeElements)[0]->GetTooltipProvider()->GetTooltipTitle(),
+        wxChartMultiTooltip multiTooltip((*activeElements)[0]->GetTooltipProvider()->GetTooltipTitle(),
             GetCommonOptions().GetMultiTooltipOptions());
-        for (size_t j = 0; j < m_activeElements->size(); ++j)
+        for (size_t j = 0; j < activeElements->size(); ++j)
         {
-            wxChartTooltip tooltip((*m_activeElements)[j]->GetTooltipPosition(),
-                (*m_activeElements)[j]->GetTooltipProvider());
+            wxChartTooltip tooltip((*activeElements)[j]->GetTooltipPosition(),
+                (*activeElements)[j]->GetTooltipProvider());
             multiTooltip.AddTooltip(tooltip);
         }
         multiTooltip.Draw(gc);

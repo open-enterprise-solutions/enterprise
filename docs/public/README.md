@@ -41,5 +41,6 @@ Add a row to the table below when you add a document, so this folder can be read
 | Document | What it holds |
 |---|---|
 | [event-handlers.md](event-handlers.md) | Event handlers: one event of many objects handled in one module, the call order, the composite rule, the manager events |
+| [functional-options.md](functional-options.md) | Functional options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |

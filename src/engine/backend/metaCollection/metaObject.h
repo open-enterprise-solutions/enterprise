@@ -13,6 +13,7 @@
 
 #include "backend/interfaceHelper.h"
 #include "backend/compositionHelper.h"
+#include "backend/functionalOptionHelper.h"
 #include "backend/roleHelper.h"
 
 #include "backend/createRequest.h"   // what ProcessChoice is asked with: mode, condition, form
@@ -45,6 +46,10 @@ constexpr ibClassID g_metaEventHandlerCLSID = metadata_to_clsid("MD_EHND");   //
 // here beside the jobs because that is where it sits in the tree: configuration-level, no data
 // of its own, set once per session by the session module (docs/private/access-policy-rls.md).
 constexpr ibClassID g_metaSessionParameterCLSID = metadata_to_clsid("MD_SPRM");
+// A FUNCTIONAL OPTION — a Boolean stored value that also decides what the interface offers: one value per base,
+// and the objects and fields it governs. Switched off, they stay in the metadata and in every query, and are
+// simply not available (metaFunctionalOptionObject.h).
+constexpr ibClassID g_metaFunctionalOptionCLSID = metadata_to_clsid("MD_FOPT");
 
 constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 constexpr ibClassID g_metaSectionCLSID = metadata_to_clsid("MD_SSYST");
@@ -249,7 +254,7 @@ class BACKEND_API ibValueMetaObject :
 	public ibValueDynamicMembers,
 
 	public ibPropertyObjectHelper<ibValueMetaObject>,
-	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject {
+	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject, public ibFunctionalOptionObject {
 	public:
 
 	// WHAT THIS METATYPE HAS — one set of flags, declared by the class itself.
@@ -503,6 +508,11 @@ public:
 
 	// (May this object be part of a composition? — ibCompositionObject::IsCompositionAllowed,
 	// compositionHelper.h. The question lives with the mechanism that asks it.)
+
+	// MAY THIS BELONG TO A FUNCTIONAL OPTION — whatever the command interface may offer (a list, a command,
+	// a form), since what an option hides is what the interface shows. A field and a table say yes for
+	// themselves (they are what a form binds to); an option says no.
+	virtual bool IsFunctionalOptionAllowed() const override { return IsInterfaceAllowed(); }
 
 	// DOES THIS SHOW UP UNDER ITS OWNER? Not a new rule — FilterChild above already knows:
 	// a child the owner does not accept is one it never created and cannot host, so it has
@@ -761,6 +771,10 @@ protected:
 
 #pragma region interface_h
 	virtual void DoSetInterface(const ibMetaID& id, const bool& val = true) override;
+#pragma endregion
+
+#pragma region functional_option_h
+	virtual void DoSetFunctionalOption(const ibMetaID& id, const bool& val = true) override;
 #pragma endregion
 
 #pragma region role_h

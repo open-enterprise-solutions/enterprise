@@ -3896,6 +3896,10 @@ m_objModified(false), m_selected(false),
 m_keyValues(uniqueKey.IsOk() ? ibRowMetaValues(uniqueKey) : ibRowMetaValues()), m_metaObject(metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
+	// The composer knows what it reads from the start — the columns, and the register's configuration (see
+	// ibValueTabularSectionDataObjectBase).
+	Storage().SetColumns(m_recordColumnCollection);
+	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelStorage(),
@@ -3904,6 +3908,8 @@ m_objModified(true), m_selected(false),
 m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
+	Storage().SetColumns(m_recordColumnCollection);   // as above
+	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibComposerNode* node = source.GetViewData<ibComposerNode>(source.GetItem(row));
 		wxASSERT(node);

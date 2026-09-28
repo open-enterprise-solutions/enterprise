@@ -2462,8 +2462,9 @@ public:
 	// Takes the ORDINARY id the door minted and stamps its own kind on it inside — exactly the way a
 	// clsid separates a reference from an object from a manager (clsid.h). The caller hands a plain
 	// number and knows nothing about the layout; the class is what knows which kind it is.
-	ibSyntheticOutputColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id)
-		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)) {}
+	// `available` — whether what it is computed from may be shown (IsExprAvailable), taken when it is minted.
+	ibSyntheticOutputColumn(const wxString& name, const ibTypeDescription& type, ibMetaID id, bool available = true)
+		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)), m_available(available) {}
 
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_name; }
@@ -2472,12 +2473,34 @@ public:
 	// COMPUTED: it exists in the result and nowhere else — minted for an output that has no column
 	// behind it, and read back by its alias.
 	Kind               GetColumnKind()   const override { return Kind::Computed; }
+	bool               IsAvailable()     const override { return m_available; }
 
 private:
 	wxString                  m_name;
 	mutable ibTypeDescription m_type;   // mutable: GetTypeDesc() is const and returns a non-const ref
 	ibMetaID                  m_id;
+	bool                      m_available;
 };
+
+void CollectColumns(const ibQueryAstExprPtr& e, std::vector<const ibQueryAstExpr*>& out);   // below, with the check
+
+// ⭐ WHETHER A COMPUTED OUTPUT MAY BE SHOWN — every column it reads, every hop of every walk, available in this
+// base (functional options, ibBackendSourceColumn::IsAvailable). One of them taken away and the result goes with
+// it: a value computed from a hidden field would show that field under another name. A name this select does not
+// resolve is not this question — the lowering refuses it on its own terms.
+bool IsExprAvailable(const std::vector<ibSourceBinding>& sources, const ibQueryAstExprPtr& e)
+{
+	std::vector<const ibQueryAstExpr*> columns;
+	CollectColumns(e, columns);
+	for (const ibQueryAstExpr* column : columns) {
+		std::vector<const ibBackendQueryColumn*> path;
+		try { path = ResolvePath(sources, *column); }
+		catch (const ibBackendException&) { continue; }
+		if (!ibIsWalkAvailable(path))
+			return false;
+	}
+	return true;
+}
 
 // ⭐ A NUMBER WHOSE SCALE NOBODY CAN STATE — precision 0, the type system's "no limit": nothing is rounded to
 // it (valueType.cpp) and it is shown with the digits it has. What arithmetic and an average answer with. A bare
@@ -3158,10 +3181,11 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// EVERY OUTPUT IS A COLUMN. Where a branch below found a real one (a plain read, or a non-scalar
 	// dot-walk leaf reassembled by prefix) it stands; where the value is read BY ALIAS and nothing
 	// backs it, one is minted — so the output has an identity and a type like any other column.
+	// …and says whether it may be shown — what it is read or computed from (OutputColumn::m_available).
 	auto giveIdentity = [&nextOutputId](OutputColumn& oc) {
 		if (oc.m_col != nullptr)
 			return;
-		auto column = std::make_shared<ibSyntheticOutputColumn>(oc.m_name, oc.m_type, nextOutputId());
+		auto column = std::make_shared<ibSyntheticOutputColumn>(oc.m_name, oc.m_type, nextOutputId(), oc.m_available);
 		oc.m_col      = column.get();
 		oc.m_ownedCol = column;
 	};
@@ -3192,6 +3216,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				OutputColumn oc;
 				oc.m_name = c->GetName();
 				oc.m_type = c->GetTypeDesc();   // the column IS the output: its type travels whichever way it is read
+				oc.m_available = c->IsAvailable();   // …and so does whether it may be shown: the star, materialised
 				if (explicitProjection) { b.Select(c, c->GetName()); oc.m_alias = c->GetName(); oc.m_byAlias = true; }
 				else                    { oc.m_col = c; }
 				giveIdentity(oc);
@@ -3205,6 +3230,9 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			const wxString alias = OutputNameFor(ast, p, idx++);
 			OutputColumn oc;
 			oc.m_name = alias;
+			// Whether it may be shown, whichever branch below reads it: every column the expression reads,
+			// every hop of every walk — a walk read through its real LEAF included, which answers for itself.
+			oc.m_available = IsExprAvailable(sources, p.m_expr);
 
 			// ⭐⭐ A WINDOWED CALL IS A PROJECTED EXPRESSION, NOT AN AGGREGATE. `SUM(x) OVER (…)` folds
 			// nothing away — it returns a value on every row — so it goes into the selection as a
@@ -3938,6 +3966,7 @@ std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, c
 		if (c == nullptr) continue;
 		b.Select(c, c->GetName());
 		OutputColumn oc; oc.m_name = c->GetName(); oc.m_alias = c->GetName(); oc.m_byAlias = true;
+		oc.m_available = c->IsAvailable();   // the first branch's column carries its own answer
 		outSchema.push_back(oc);
 	}
 
@@ -4027,6 +4056,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 			out.m_name  = c->GetName();
 			out.m_alias = c->GetName();   // the stack selects each column under its own name
 			out.m_type  = c->GetTypeDesc();
+			out.m_available = c->IsAvailable();
 			published.push_back(out);
 		}
 		std::shared_ptr<ibSubqueryQueryable> wrapped =
@@ -4074,6 +4104,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 		out.m_objectPrefix = oc.m_objectPrefix;
 		out.m_type         = oc.m_type;
 		out.m_owned        = oc.m_ownedCol;   // …and its storage, when the schema minted the column
+		out.m_available    = oc.m_available;  // …and whether what it reads may be shown — not its leaf's word alone
 		published.push_back(out);
 	}
 
@@ -5970,7 +6001,8 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 	for (size_t i = 0; i < schema.size(); ++i) {
 		const ibMetaID id = static_cast<ibMetaID>(i + 1);
 		ids.push_back(id);
-		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc());
+		// …with whether what it was made from may be shown, which the table keeps: its rows outlive the select.
+		table.AddColumn(id, schema[i].m_name, schema[i].GetTypeDesc(), wxString(), schema[i].m_available);
 	}
 
 	while (result.Next()) {
@@ -7095,6 +7127,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			b.GroupBy(leaf);
 			OutputColumn oc; oc.m_name = leaf->GetName(); oc.m_col = leaf;
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a server-paged grouping level IS a dimension
+			oc.m_available = leaf->IsAvailable();
 			outSchema.clear(); outSchema.push_back(oc);
 
 			// The figures, in the order they were written — read back exactly as the fold's are: by the
@@ -7378,6 +7411,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			                           : (viaAlias && !dimWritten.IsEmpty()) ? dimWritten
 			                                                                 : leaf->GetName();
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a TOTALS BY level
+			oc.m_available = ibIsWalkAvailable(pathCols);           // every hop of its path answers for it
 			// WHICH level it belongs to — several fields of one level all carry the same number, so
 			// a printer can put them side by side instead of counting columns as if they were levels.
 			// 🛑 IT USED TO BE POINTER ARITHMETIC — `&d - &ast.m_totalsBy.front()`. That held only while
@@ -7439,7 +7473,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				const bool scalarLeaf = ScalarRawType(leaf, rt);
 				if (!multiSource && !scalarLeaf) {
 					const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId));
-					auto synth = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++);
+					// Every hop of the walk answers for the dimension — one the options take away, and it goes.
+					auto synth = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++,
+						ibIsWalkAvailable(pathCols));
 					level.m_fields.push_back(b.DeclareDimDotWalk(pathCols, synth.get(), alias, dim));
 					oc.m_col = synth.get(); oc.m_ownedCol = synth;
 				}
@@ -7759,6 +7795,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 		OutputColumn oc; oc.m_name = outName;
 		oc.m_role = ibQueryLowering::ibColumnRole::Measure;   // a TOTALS aggregate — the report's resource
+		oc.m_available = IsExprAvailable(sources, agg);       // …available while what it folds is
 		// ⭐ ITS OWN TYPE, not its column's: m_col is what it FOLDS, and a count of amounts is not an amount.
 		oc.m_type = TypeOfFold(agg->m_func, argType);
 		if (col != nullptr) { oc.m_col = col; oc.m_ownedCol = owned; }   // real OR synthetic column — keyed by metaID
@@ -7802,6 +7839,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			OutputColumn oc;
 			oc.m_name = name;
 			oc.m_role = ibQueryLowering::ibColumnRole::Detail;
+			oc.m_available = IsExprAvailable(sources, p.m_expr);
 
 			if (p.m_expr->m_kind == ibQueryAstExprKind::Column) {
 				const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *p.m_expr);

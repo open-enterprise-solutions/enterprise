@@ -5,6 +5,7 @@
 #include "backend/propertyManager/property/propertyChartOfCharacteristicTypes.h"
 #include "backend/propertyManager/property/propertyChartOfCalculationTypes.h"
 #include "backend/propertyManager/property/propertyAccountingKind.h"
+#include "backend/propertyManager/property/propertyFunctionalOptions.h"
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -42,6 +43,9 @@ public:
 		// the property with and simply left it out: a register's resource showed `Balance` alone, and the
 		// kinds could be set from a script and nowhere else (Max saw it in the designer, 2026-09-16).
 		ibPropertyRegistry::Register([](ibPropertyAccountingKind* prop) -> wxPGProperty* { return ibCreateChartBindingProperty(prop); });
+		// ⭐ THE FUNCTIONAL OPTIONS an element of a form is available under, and the one an option requires — the
+		// same act: pick out of the options the configuration declares.
+		ibPropertyRegistry::Register([](ibPropertyFunctionalOptions* prop) -> wxPGProperty* { return ibCreateChartBindingProperty(prop); });
 	}
 }g_chartBindingLoader;
 

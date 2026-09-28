@@ -29,6 +29,7 @@ const wxString kTagPredefined  = wxT("NodePredefined");
 const wxString kTagInterface   = wxT("Interface");
 const wxString kTagRoles       = wxT("Roles");
 const wxString kTagComposition = wxT("Composition");
+const wxString kTagFunctionalOptions = wxT("FunctionalOptions");
 
 } // namespace
 
@@ -72,6 +73,12 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 		return false;
 	node.SetValue(kTagComposition, compositionWriter.buffer());
 
+	// functional options — the switches this object belongs to, beside the other two sets
+	ibWriterMemory functionalOptionWriter;
+	if (!SaveFunctionalOptions(functionalOptionWriter))
+		return false;
+	node.SetValue(kTagFunctionalOptions, functionalOptionWriter.buffer());
+
 	return WriteData(node);
 }
 
@@ -108,6 +115,12 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	if (compositionBuf.GetDataLen()) {
 		ibReaderMemory reader(compositionBuf);
 		if (!LoadComposition(reader))
+			return false;
+	}
+	wxMemoryBuffer functionalOptionBuf = node.GetValue<wxMemoryBuffer>(kTagFunctionalOptions);
+	if (functionalOptionBuf.GetDataLen()) {
+		ibReaderMemory reader(functionalOptionBuf);
+		if (!LoadFunctionalOptions(reader))
 			return false;
 	}
 

@@ -38,23 +38,33 @@ enum { eGroupField = 1, eGroupKind };
 // ---- Group model — virtual list over the dialog's BUFFER group list (Field). ----
 class ibListSettingsPanel::ibGroupModel : public ibDataViewVirtualListModel {
 	ibListSettingsPanel* m_dialog;
+	ibSettingsListedLines m_listed;   // which lines the rows are — a line on an unavailable field is not listed
 public:
 	explicit ibGroupModel(ibListSettingsPanel* dialog) : ibDataViewVirtualListModel(), m_dialog(dialog) {}
 	ibGroupDescription* GetGroup() const { return m_dialog->GetGroupList(); }
-	void ResetFromList() { ibGroupDescription* g = GetGroup(); Reset(g != nullptr ? (unsigned int)g->m_lines.size() : 0u); }
+	void ResetFromList() {
+		m_listed = ibSettingsListedLines();
+		if (const ibGroupDescription* g = GetGroup())
+			m_listed.Read(g->m_lines, m_dialog->m_fieldSource.get());
+		Reset(m_listed.Count());
+	}
+	// The line a row is — see ibSettingsListedLines.
+	size_t LineAt(size_t row) const { return m_listed.At(row); }
+	unsigned int GetListedCount() const { return m_listed.Count(); }
 	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
 		ibGroupDescription* g = GetGroup();
 		if (g == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer
 		// (a Reset lands after the paint is queued) — reading past the end crashed
 		// on repaint.
-		if (row >= g->m_lines.size())
+		const size_t at = LineAt(row);
+		if (at >= g->m_lines.size())
 			return;
 		if (col == eGroupField)
-			variant = g->m_lines[row].m_path;
+			variant = g->m_lines[at].m_path;
 		else if (col == eGroupKind)
 			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(
-				g->m_lines[row].m_kind).GetString();
+				g->m_lines[at].m_kind).GetString();
 	}
 	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
 };
@@ -182,7 +192,7 @@ void ibListSettingsPanel::BindFieldSource()
 	if (m_schema != nullptr && m_schema->HasQuery()) {
 		std::vector<ibSettingsPlainField> plain;
 		for (const ibQueryConstructorField& field : ibQueryFieldsOfText(m_schema->m_query, metaData))
-			plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type });
+			plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available });
 		m_fieldSource->SetPlainFields(std::move(plain), metaData);
 		return;
 	}
@@ -553,11 +563,11 @@ void ibListSettingsPanel::OnListContextMenu(ibDataViewEvent&)
 	PopupMenu(&menu);
 }
 
-// A virtual-list row id is 1-based.
+// A virtual-list row id is 1-based, and the row shows the line the model maps it to.
 size_t ibListSettingsPanel::GroupIndexAt(const ibDataViewItem& row) const
 {
 	const size_t id = reinterpret_cast<size_t>(row.GetID());
-	return id > 0 ? id - 1 : (size_t)-1;
+	return id > 0 && m_groupModel != nullptr ? m_groupModel->LineAt(id - 1) : (size_t)-1;
 }
 
 // Add the chosen available field to the grouping list (BUFFER + model refresh).
@@ -568,9 +578,10 @@ void ibListSettingsPanel::AddGroupForField(const wxTreeItemId& item)
 	if (!field || g == nullptr)
 		return;
 	g->Append(field->GetPath(), ibQueryDimUnfold::Elements);
-	if (m_groupModel != nullptr)
+	if (m_groupModel != nullptr) {
 		m_groupModel->ResetFromList();
-	ibSelectLastSettingsRow(m_groupView, g->m_lines.size());
+		ibSelectLastSettingsRow(m_groupView, m_groupModel->GetListedCount());
+	}
 }
 
 void ibListSettingsPanel::OnGroupAdd(wxCommandEvent&)
@@ -579,9 +590,10 @@ void ibListSettingsPanel::OnGroupAdd(wxCommandEvent&)
 	if (g == nullptr)
 		return;
 	g->Append(wxEmptyString, ibQueryDimUnfold::Elements);
-	if (m_groupModel != nullptr)
+	if (m_groupModel != nullptr) {
 		m_groupModel->ResetFromList();
-	ibSelectLastSettingsRow(m_groupView, g->m_lines.size());
+		ibSelectLastSettingsRow(m_groupView, m_groupModel->GetListedCount());
+	}
 }
 void ibListSettingsPanel::OnGroupFieldActivated(wxTreeEvent& e) { AddGroupForField(e.GetItem()); }
 
@@ -595,10 +607,10 @@ void ibListSettingsPanel::OnGroupRemove(wxCommandEvent&)
 		return;
 	// ONE LINE LEAVES, the rest keep their order — which is the meaning of a
 	// grouping list, so rebuilding the whole thing to drop one row is never right.
-	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || index > g->m_lines.size())
+	const size_t index = GroupIndexAt(sel);
+	if (index >= g->m_lines.size())
 		return;
-	g->m_lines.erase(g->m_lines.begin() + (index - 1));
+	g->m_lines.erase(g->m_lines.begin() + index);
 	if (m_groupModel != nullptr)
 		m_groupModel->ResetFromList();
 }
@@ -611,15 +623,15 @@ void ibListSettingsPanel::MoveGroupLine(int delta)
 	const ibDataViewItem& sel = m_groupView->GetSelection();
 	if (!sel.IsOk())
 		return;
-	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
-	if (index == 0 || index > g->m_lines.size())
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based ROW
+	if (m_groupModel == nullptr || index == 0 || index > m_groupModel->GetListedCount())
 		return;
 	const int target = static_cast<int>(index - 1) + delta;
-	if (target < 0 || target >= static_cast<int>(g->m_lines.size()))
+	if (target < 0 || target >= static_cast<int>(m_groupModel->GetListedCount()))
 		return;   // already at that end
-	std::swap(g->m_lines[index - 1], g->m_lines[static_cast<size_t>(target)]);
-	if (m_groupModel != nullptr)
-		m_groupModel->ResetFromList();
+	// Traded with the next LISTED line — a hidden one keeps its place.
+	std::swap(g->m_lines[m_groupModel->LineAt(index - 1)], g->m_lines[m_groupModel->LineAt(static_cast<size_t>(target))]);
+	m_groupModel->ResetFromList();
 	const size_t moved = (size_t)((int)index + delta);
 	m_groupView->Select(ibDataViewItem(reinterpret_cast<void*>(moved)));
 }
@@ -768,6 +780,7 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, ibValueModel* mode
 				field.m_name = col->GetColumnName();
 				field.m_id   = static_cast<ibMetaID>(col->GetColumnID());
 				field.m_type = col->GetColumnTypeValue();
+				field.m_available = col->IsColumnAvailable();
 				fields.push_back(std::move(field));
 			}
 		}

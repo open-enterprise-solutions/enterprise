@@ -26,6 +26,7 @@ struct ibQueryRamColumn
 	wxString          m_name;
 	ibTypeDescription m_type;
 	wxString          m_caption;   // what the column is shown as (a register's figure: `<resource> Balance`); empty = its name
+	bool              m_available = true;   // whether what it was made from may be shown (functional options) — a temp table's column answers by it
 };
 
 class BACKEND_API ibQueryRamTable
@@ -46,7 +47,8 @@ public:
 	ibQueryRamTable& operator=(const ibQueryRamTable&) = delete;
 
 	void AddColumn(ibMetaID id, const wxString& name, const ibTypeDescription& type,
-	               const wxString& caption = wxString())      { m_columns.push_back({ id, name, type, caption }); }
+	               const wxString& caption = wxString(), bool available = true)
+	                                                          { m_columns.push_back({ id, name, type, caption, available }); }
 	const std::vector<ibQueryRamColumn>& Columns() const { return m_columns; }
 
 	// Room for a cell per declared column, made once — the cells then land without growing the row.

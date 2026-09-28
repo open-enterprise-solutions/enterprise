@@ -30,8 +30,14 @@
 #include "mcp/mcpDesignerMessages.h"
 #include "mainFrame/mainFrameDesigner.h"
 
-#include <wx/dialog.h>       // what a modal IS — window_dismiss looks for these among the top windows
+#include <wx/dialog.h>       // what a modal IS
 #include <wx/modalhook.h>    // …and wx tells us the moment one opens, whoever opened it
+#ifdef __WXMSW__
+#include <wx/msw/wrapwin.h>  // EnumThreadWindows / PostMessage — a native box is closed as a window of this thread
+#endif
+
+#include <algorithm>         // std::find — a closed modal leaves the standing list
+#include <iterator>          // std::next — …found from the top
 
 namespace {
 
@@ -227,24 +233,57 @@ MCP_TOOL_REGISTER(ibMcpToolMessagesRead);
 // "yes" on their behalf to a question nobody read would be a different thing entirely — and the
 // questions the platform asks modally are the ones with consequences ("apply?", "delete?"). What
 // this is for is the boxes that only report, and the way out of a frozen session.
+// THE MODALS STANDING RIGHT NOW, in the order they opened — the last is on top. Kept by the hook at the
+// bottom of this file, which sees every modal there is (a native message box included), and read by
+// window_dismiss: the list the server refuses calls by (ibMcpBusyWith) and the list this tool offers to
+// close are ONE list. They were two — the tool walked wx's top-level windows, which a native box is not
+// among — and a 'Designer Error' box held every call off while window_dismiss said nothing stood
+// (2026-09-28).
+static std::vector<wxDialog*>& StandingModals()
+{
+	static std::vector<wxDialog*> s_standing;
+	return s_standing;
+}
+
+#ifdef __WXMSW__
+// A NATIVE BOX HAS NO wx WINDOW TO END — it is the system's own dialog in the system's own loop. It is found
+// among this thread's windows by its caption and answered the way Esc answers it.
+struct ibNativeModalSearch {
+	wxString m_title;
+	HWND     m_found = nullptr;
+};
+
+static BOOL CALLBACK ibFindNativeModal(HWND hwnd, LPARAM data)
+{
+	ibNativeModalSearch& search = *reinterpret_cast<ibNativeModalSearch*>(data);
+	wchar_t kind[16] = {};
+	::GetClassNameW(hwnd, kind, 16);
+	if (!::IsWindowVisible(hwnd) || wxString(kind) != wxT("#32770"))
+		return TRUE;
+	wchar_t caption[512] = {};
+	::GetWindowTextW(hwnd, caption, 512);
+	if (!search.m_title.IsEmpty() && search.m_title != wxString(caption))
+		return TRUE;
+	search.m_found = hwnd;
+	return FALSE;
+}
+
+static bool ibCloseNativeModal(const wxString& title)
+{
+	ibNativeModalSearch search;
+	search.m_title = title;
+	::EnumThreadWindows(::GetCurrentThreadId(), ibFindNativeModal, reinterpret_cast<LPARAM>(&search));
+	if (search.m_found == nullptr)
+		return false;
+	::PostMessageW(search.m_found, WM_COMMAND, IDCANCEL, 0);
+	return true;
+}
+#endif
+
 class ibMcpToolWindowDismiss : public ibMcpTool {
 
-	// The dialogs standing right now, top first. wxTopLevelWindows holds every frame and dialog
-	// there is; a dialog that is not shown is not in anybody's way.
-	static std::vector<wxDialog*> Standing()
-	{
-		std::vector<wxDialog*> dialogs;
-
-		for (wxWindowList::compatibility_iterator node = wxTopLevelWindows.GetFirst();
-			 node != nullptr; node = node->GetNext()) {
-
-			if (wxDialog* dialog = dynamic_cast<wxDialog*>(node->GetData()))
-				if (dialog->IsShown())
-					dialogs.push_back(dialog);
-		}
-
-		return dialogs;
-	}
+	// The dialogs standing right now, in the order they opened — see StandingModals.
+	static std::vector<wxDialog*> Standing() { return StandingModals(); }
 
 public:
 
@@ -301,17 +340,20 @@ public:
 		const bool everyOne = ArgAll().Flag(params);
 		std::vector<ibDataValue> closed;
 
-		// TOP FIRST. wxTopLevelWindows keeps the newest last, and the newest is the one on top —
-		// which is also the only one the person can interact with.
+		// TOP FIRST. The newest opened last, and the newest is the one on top — which is also the only
+		// one the person can interact with.
 		for (auto it = dialogs.rbegin(); it != dialogs.rend(); ++it) {
 
 			wxDialog* dialog = *it;
 			closed.push_back(ibDataValue::String(dialog->GetTitle()));
 
-			if (dialog->IsModal())
+			// A dialog wx draws is ended as its own Cancel ends it; a native one is the system's box.
+			if (dialog->GetHandle() != nullptr && dialog->IsShown())
 				dialog->EndModal(wxID_CANCEL);
+#ifdef __WXMSW__
 			else
-				dialog->Close(true);
+				ibCloseNativeModal(dialog->GetTitle());
+#endif
 
 			if (!everyOne)
 				break;
@@ -346,12 +388,18 @@ protected:
 
 	int Enter(wxDialog* dialog) override
 	{
+		if (dialog != nullptr)
+			StandingModals().push_back(dialog);
 		ibMcpBusyEnter(dialog != nullptr ? dialog->GetTitle() : wxString());
 		return wxID_NONE;   // …and it is only WATCHING: the dialog opens exactly as it would have
 	}
 
 	void Exit(wxDialog* dialog) override
 	{
+		std::vector<wxDialog*>& standing = StandingModals();
+		const auto found = std::find(standing.rbegin(), standing.rend(), dialog);
+		if (found != standing.rend())
+			standing.erase(std::next(found).base());
 		ibMcpBusyLeave();
 	}
 };

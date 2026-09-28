@@ -439,6 +439,31 @@ configuration root, `SetSessionParameters`), and writable nowhere else — a wri
 raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
 ([docs/private/session-parameters.md](docs/private/session-parameters.md)).
 
+**`FunctionalOption`** (Common, `MD_FOPT`) is a stored value like a constant — both derive
+`ibValueMetaObjectStoredValue` (`metaCollection/metaStoredValueObject.h`; the constant adds `Type` and
+`FillCheck`) — Boolean, one value per base, kept in `sys_const`, that also decides what the interface
+SHOWS. Membership lives on the MEMBER, like a section's (`ibFunctionalOptionObject`,
+`functionalOptionHelper.h`); opening an option shows them as a check tree, as a section or a common
+attribute does (MCP: `option_include`). Switched off, its members are **not available** — a third state
+beside deleted and disabled, and deliberately NOT `IsAllowed`: the metadata, the schema and every query
+stay as they are. ONE VERB everywhere: `IsAvailable()` — the gate `ibFunctionalOptionGate`
+(`functionalOption/functionalOptionGate.h`), a column (`ibBackendSourceColumn`; a model's column in its family's
+words, `ibValueModelColumnInfo::IsColumnAvailable`),
+a binding (asked of the columns it walks through, never of a path's numbers: the first hop is a form-local id),
+a form element (its own *User visibility → Functional options* AND its parent's answer; "no source picked"
+is the other question, `IsUnbound`), a settings path (`ibSettingsFieldTree::IsAvailable`; a quick filter
+asks the composer) and the composers' own (`ibDataComposer::IsAvailable` — L5-1 over its source's fields,
+L5-2 over its storage's columns) — the path laid out as hops by `ibQueryColumnFromPath`, walked by
+`ibQueryConstructorModel::WalkPath` (the longest prefix a field is named, then `WalkFrom` by type).
+Synthetic columns carry it (AND over what they are made of, `ibIsWalkAvailable` for a walk): a register
+view's column `StandsFor` its attribute, an alias forwards, a nested query's and a computed output's take
+it when made. A user's setting on an unavailable field STAYS: a grouping or a selected field on it is not
+printed (`ApplyAvailableStructure`, `GetAvailableGroupDesc`, `SelectedFor`), a filter or a sort still applies. The
+designer sees everything it EDITS; a composer answers as the application wherever it runs (it opens
+`ibFunctionalOptionGate::AsApplication` itself — in the designer the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
+was ever written (read from the value column's raw type tag — the decoded value of an untagged cell is
+its type's empty, a False). Reached as `FunctionalOptions.<Name>.Get()` ([docs/public/functional-options.md](docs/public/functional-options.md)).
+
 Six further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
 `ExternalReport`, `Composer` (2026-08-20, `MD_CMPS` — a **data composer declared inside a report**,
 beside its forms and templates: what to read and how to fold it. The report names one of them

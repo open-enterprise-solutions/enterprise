@@ -585,8 +585,8 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQu
 			resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), credit ? 2 : 1),
 			// …and the caption, from the same pair the name is built from.
 			ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
-			// …and the picture of what it is a figure OF — its resource.
-			ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()));
+			// …and the picture of what it is a figure OF — its resource, and what it stands for.
+			ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
 	};
 
 	for (const auto resource : GetResourceArrayObject()) {

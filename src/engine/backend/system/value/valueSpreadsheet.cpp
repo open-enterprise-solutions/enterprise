@@ -413,32 +413,34 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 }
 
 #include <wx/tokenzr.h>
+#include "backend/backend_exception.h"
 
 bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (lMethodNum == eArea) {
 
-		const ibSpreadsheetCellDescription* cell = m_spreadsheetDoc->GetSpreadsheetDesc().GetCell(
-			paParams[0]->GetInteger(), lSizeArray > 1 ? paParams[1]->GetInteger() : 0);
-
-		if (cell != nullptr) {
-			pvarRetValue = new ibValueSpreadsheetDocumentArea(
-				m_spreadsheetDoc, paParams[0]->GetInteger(), lSizeArray > 1 ? paParams[1]->GetInteger() : 0);
-			return true;
-		}
-
-		return false;
+		// ⭐ A CELL, WHEREVER IT IS — a document has no edge: a cell past what is filled in reads empty and
+		// takes what is written into it (the description makes it on the first write). This answered only for
+		// cells that already existed and said nothing for the rest — and "nothing" was the previous call's
+		// value: reading a composed report cell by cell repeated its last figure past the table's end
+		// (2026-09-28).
+		const int row = paParams[0]->GetInteger();
+		const int col = lSizeArray > 1 ? paParams[1]->GetInteger() : 0;
+		if (row < 0 || col < 0)
+			ibBackendCoreException::Error(_("Cells are counted from 0 - a row or a column cannot be negative"));
+		pvarRetValue = new ibValueSpreadsheetDocumentArea(m_spreadsheetDoc, row, col);
+		return true;
 	}
 	else if (lMethodNum == eRange) {
 
-		if (paParams[0]->GetInteger() > m_spreadsheetDoc->GetNumberRows())
-			return false;
-
-		else if (paParams[1]->GetInteger() > m_spreadsheetDoc->GetNumberCols())
-			return false;
-
+		// ⭐ A REGION, WHEREVER IT IS — past what is filled in it holds nothing, so an end beyond the content is
+		// the content's own end (no empty cells made for it), and the answer is always a document. Two refusals
+		// stood here, heard by nobody (the return slot kept the call before), and the second checked the row END
+		// against the number of COLUMNS.
+		const int rowEnd = wxMin(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
+		const int colEnd = lSizeArray > 3 ? wxMin(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
 		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetArea(
-			paParams[0]->GetInteger(), paParams[1]->GetInteger(), lSizeArray > 2 ? paParams[2]->GetInteger() : -1, lSizeArray > 3 ? paParams[3]->GetInteger() : -1));
+			paParams[0]->GetInteger(), rowEnd, lSizeArray > 2 ? paParams[2]->GetInteger() : -1, colEnd));
 
 		return true;
 	}
@@ -482,8 +484,6 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 
 	return false;
 }
-
-#include "backend/backend_exception.h"
 
 bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
