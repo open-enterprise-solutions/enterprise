@@ -986,7 +986,7 @@ Two parallel translation surfaces exist; do not confuse them:
 
 ```
 # Regenerate the template from current sources (uses Poedit's gettext tools).
-xgettext --from-code=UTF-8 --keyword=_ --keyword=wxTRANSLATE \
+xgettext --from-code=UTF-8 --keyword=_ --keyword=wxTRANSLATE --keyword=RuntimeError \
          --keyword=wxPLURAL:1,2 --language=C++ --no-wrap \
          --output=locale/open_es.pot --files-from=<list-of-cpp-files>
 

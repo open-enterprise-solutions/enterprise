@@ -169,6 +169,26 @@ IB_NOINLINE void Raise(int code, const ibValue& value)
 	ibBackendCoreException::Error(code, value.GetString());
 }
 
+// The same entry for a message that has NO code: the template itself is the argument. Written as
+// `Error(_("…"), …)` in a case, its translation and its formatted arguments sat in Execute's own frame —
+// MSVC gives every temporary of the function a slot of its own whatever case it is in, so these held 1.6 KB
+// of a 5.6 KB frame, paid on every script call (the /FAs listing, 2026-09-28). The call site now carries
+// only the literal's address.
+//
+// ⚠ TRANSLATED HERE, WHEN IT IS SAID — which is why these are not codes. The code table
+// (gs_listErrorString) is filled by `_()` when the module loads, before any catalog, so a message moved
+// there would reach a translated screen in English. The literal is marked with wxTRANSLATE, which the
+// catalog sweep reads as it reads `_` (localization.md; fileKind.cpp does the same).
+template <class... Args>
+IB_NOINLINE void RaiseText(const char* text, Args&&... args)
+{
+	ibBackendCoreException::Error(wxGetTranslation(wxTRANS_INPUT_STR(text)), std::forward<Args>(args)...);   // what `_()` expands to
+}
+
+// …and at the call site in one word: `RuntimeError("…", args)` is RaiseText with its literal marked for the
+// catalog. The sweep reads it by name (--keyword=RuntimeError, localization.md), as it reads `_`.
+#define RuntimeError(text, ...) RaiseText(wxTRANSLATE(text), ##__VA_ARGS__)
+
 
 IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
 							  ibValue** pRefLocVars,
@@ -1025,9 +1045,9 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 
 #ifdef DEBUG
 	if (pContext == nullptr) {
-		ibBackendCoreException::Error(_("No execution context defined!"));
+		RuntimeError("No execution context defined!");
 		if (m_pByteCode == nullptr)
-			ibBackendCoreException::Error(_("No execution code set!"));
+			RuntimeError("No execution code set!");
 	}
 #endif
 
@@ -1268,7 +1288,7 @@ start_label:
 			}
 			case OPER_FOR:
 				if (cvariable1.m_typeClass != ibValueTypes::TYPE_NUMBER)
-					ibBackendCoreException::Error(_("Only variables with type can be used to organize the loop \"number\""));
+					RuntimeError("Only variables with type can be used to organize the loop \"number\"");
 				// PAST THE BOUND, not equal to it — and the difference is two defects.
 				//
 				// `==` meant the body ran for [from, to) while the language reference
@@ -1317,9 +1337,8 @@ start_label:
 					// (`Documents.Orders`) is the one people reach for in `from o in …`, and it holds no
 					// rows — the rows of the database are walked through `Data.Documents.Orders`.
 					if (!newIterator)
-						ibBackendCoreException::Error(
-							_("A value of type '%s' cannot be walked - it has no rows to go through. The rows of the database "
-							  "are walked through Data (Data.Catalogs.Goods, Data.Documents.Orders), not through a manager."),
+						RuntimeError("A value of type '%s' cannot be walked - it has no rows to go through. The rows of the database "
+						             "are walked through Data (Data.Catalogs.Goods, Data.Documents.Orders), not through a manager.",
 							variable2.GetClassName());
 					CopyValue(variable3, ibValue(new ibValueIterator(std::move(newIterator))));
 				}
@@ -1892,7 +1911,7 @@ start_label:
 			case OPER_RET:
 				if (index1 != DEF_VAR_NORET) {
 					if (pvarRetValue == nullptr)
-						ibBackendCoreException::Error(_("Cannot set return value in procedure!"));
+						RuntimeError("Cannot set return value in procedure!");
 					CopyValue(*pvarRetValue, cvariable1);
 				}
 			case OPER_ENDFUNC:
@@ -1937,7 +1956,20 @@ start_label:
 				// is the natural "ibRunContext updated as commands run"
 				// model that the AOT-friendly self-describing tape design
 				// requires (see project_bytecode_tape_design memory).
-				pContext->m_currentFunction = m_pByteCode->FindFunctionByEntry(lCodeLine);
+				//
+				// BY THE INDEX THE COMPILER STAMPED (m_param4 — EmitFunctionBody), not by walking the
+				// module's functions for this entry line: that walk ran on every call, 176 bytes a step,
+				// and a function declared after a hundred others paid +31 ns for it (RuntimeBench.CallCost,
+				// 2026-09-28). Taken only when it names THIS entry; a tape without it — written before the
+				// stamp, or a list rearranged since — walks as before, and can never land on another function.
+				{
+					const std::vector<ibByteCode::ibByteFunction>& functions = m_pByteCode->m_listFunc;
+					const long entryIndex = (long)index4;
+					pContext->m_currentFunction =
+						entryIndex >= 0 && entryIndex < (long)functions.size() && (long)functions[entryIndex] == lCodeLine
+							? &functions[entryIndex]
+							: m_pByteCode->FindFunctionByEntry(lCodeLine);
+				}
 
 				// `Cached` — DECIDED HERE, and here only.
 				//
@@ -2031,7 +2063,7 @@ start_label:
 				    endIp >= (long)m_pByteCode->m_listCode.size() ||
 				    funcIdx < 0 || funcIdx >= (long)m_pByteCode->m_listFunc.size())
 				{
-					ibBackendCoreException::Error(_("Cannot create function value (invalid lambda operands)"));
+					RuntimeError("Cannot create function value (invalid lambda operands)");
 				}
 				ibValueFunction* newFn = new ibValueFunction(m_pByteCode, funcIdx);
 				// Cache m_needsHeapFrame from the bytecode fn once at
@@ -2103,7 +2135,7 @@ start_label:
 				ibValueFunction* fn = AsFunction(cvariable4);
 				const ibByteCode::ibByteFunction* bfn = fn ? fn->GetFunction() : nullptr;
 				if (bfn == nullptr)
-					ibBackendCoreException::Error(_("Cannot call: value is not a callable function"));
+					RuntimeError("Cannot call: value is not a callable function");
 
 				const ibByteCode* pLocalByteCode = fn->GetParentBc();
 				const long lambdaParamCount = (long)bfn->m_listParam.size();
@@ -2113,11 +2145,9 @@ start_label:
 				// Arg-count validation — too many is a hard error;
 				// too few is OK iff missing tail has defaults (checked
 				// in phase 2 below).
-				if (callerArgCount > lambdaParamCount) {
-					ibBackendCoreException::Error(
-						_("Too many arguments to function value: passed %ld, expected at most %ld"),
+				if (callerArgCount > lambdaParamCount)
+					RuntimeError("Too many arguments to function value: passed %ld, expected at most %ld",
 						callerArgCount, lambdaParamCount);
-				}
 
 				// Heap-promote the lambda's frame when its body captures
 				// from yet-deeper enclosing fns. Read the flag directly
@@ -2185,9 +2215,7 @@ start_label:
 						}
 					}
 					else {
-						ibBackendCoreException::Error(
-							_("Lambda call: malformed argument tape (expected OPER_SET/SETCONST at param %ld)"),
-							i);
+						RuntimeError("Lambda call: malformed argument tape (expected OPER_SET/SETCONST at param %ld)", i);
 					}
 				}
 
@@ -2195,19 +2223,13 @@ start_label:
 				// defaults on the lambda's m_listParam (same structure
 				// named-function calls read from at PushCallFunction).
 				for (long i = callerArgCount; i < lambdaParamCount; i++) {
-					if (i >= (long)bfn->m_listParam.size()) {
-						ibBackendCoreException::Error(
-							_("Lambda call: m_listParam shorter than paramCount at param %ld"), i);
-					}
+					if (i >= (long)bfn->m_listParam.size())
+						RuntimeError("Lambda call: m_listParam shorter than paramCount at param %ld", i);
 					const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
-					if (puDef.m_numArray == DEF_VAR_SKIP) {
-						const wxString& nm = (i < (long)bfn->m_listParam.size())
-							? bfn->m_listParam[i].m_strName
-							: wxString::Format(wxT("p%ld"), i);
-						ibBackendCoreException::Error(
-							_("Missing required argument '%s' to function value"),
-							nm);
-					}
+					// The parameter's own name: the line above has already refused an index past the list.
+					if (puDef.m_numArray == DEF_VAR_SKIP)
+						RuntimeError("Missing required argument '%s' to function value",
+							bfn->m_listParam[i].m_strName);
 					CopyValue(pNewCtx->m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
 				}
 
@@ -2255,11 +2277,9 @@ start_label:
 				// question, so a family that grows later needs no edit in the
 				// interpreter. This used to be a chain of special cases; it is one call.
 				const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(array2);
-				if (typeCtor == nullptr || !typeCtor->AllowValue(variable1.GetClassType())) {
-					ibBackendCoreException::Error(
-						_("Type mismatch: a value of type '%s' does not fit the declared type '%s'"),
+				if (typeCtor == nullptr || !typeCtor->AllowValue(variable1.GetClassType()))
+					RuntimeError("Type mismatch: a value of type '%s' does not fit the declared type '%s'",
 						variable1.GetClassName(), ibValue::GetNameObjectFromID(array2));
-				}
 				break;
 			}
 				//Operators for working with typed data
