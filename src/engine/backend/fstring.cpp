@@ -353,6 +353,17 @@ void ibString::SetUtf8(const char* p, size_t n)
 		chars[len++] = static_cast<wchar_t>(cp);
 	}
 	SetLength(len);
+	// …and a text of characters longer than a byte has room for its BYTES: Cyrillic twice what it takes, CJK
+	// three times, for as long as the string lives - and a string a parser made lives in the value it built.
+	// When the characters fit a smaller block, they move to one: once, only for such a text (an ASCII text has
+	// as many characters as bytes and never moves), and only when the smaller block is a smaller allocation.
+	if (len < n) {
+		const size_t exact = Impl::BytesFor(len);
+		const int c = ibFStringPool::detail::ClassOf(exact);
+		const size_t block = c < 0 ? exact : ibFStringPool::detail::kClasses[c];
+		if (block < Impl::BytesFor(Impl::Of(m_impl)->m_cap))
+			*this = ibString(chars, len);
+	}
 }
 
 ibString ibString::FromUTF8(const char* s, size_t n)

@@ -13,9 +13,13 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <vector>
 #include <wx/debug.h>   // wxSetAssertHandler — the Format refusal test
+#if defined(_MSC_VER) && defined(_DEBUG)
+#include <crtdbg.h>     // _CrtMemCheckpoint — what a decoded string keeps, counted on the debug heap
+#endif
 #include "backend/fstring.h"
 
 namespace {
@@ -53,6 +57,28 @@ TEST(IbString, FromWcharLiteral) {
     ibString s(L"abc");
     EXPECT_TRUE(s.ToWxString() == wxT("abc"));
     EXPECT_EQ(s.ToStdWString(), std::wstring(L"abc"));
+}
+
+// A text decoded from UTF-8 got room for its BYTES - Cyrillic two to a character - and kept it for as long as it
+// lived; a parsed document keeps every string it read. It keeps the room its characters take now. Counted on the
+// debug heap, which the test and backend share (both /MDd): 10 000 characters of `Ж` held in more than their own
+// room plus a header is the room of 20 000.
+TEST(IbString, AStringDecodedFromUtf8KeepsTheRoomOfItsCharacters) {
+#if defined(_MSC_VER) && defined(_DEBUG)
+	std::string utf8;
+	for (int i = 0; i < 10000; ++i)
+		utf8 += "\xD0\x96";
+	_CrtMemState before, after, held;
+	_CrtMemCheckpoint(&before);
+	const ibString text = ibString::FromUTF8(utf8.data(), utf8.size());
+	_CrtMemCheckpoint(&after);
+	_CrtMemDifference(&held, &before, &after);
+	ASSERT_EQ(text.length(), 10000u);
+	EXPECT_EQ(text[9999], static_cast<wchar_t>(0x0416));
+	EXPECT_LT(held.lSizes[_NORMAL_BLOCK], static_cast<size_t>(10000 * sizeof(wchar_t) + 256));
+#else
+	GTEST_SKIP() << "the room is counted on the MSVC debug heap";
+#endif
 }
 
 TEST(IbString, Utf8RoundTrip) {
