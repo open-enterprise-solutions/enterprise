@@ -64,8 +64,8 @@ namespace
 //   - `negative` is the sign bit. Zero is canonicalised as not-negative.
 //   - `exp` is the base-10 exponent. Value = (negative ? -1 : 1) * |limbs| * 10^exp.
 //
-// Algorithms are textbook schoolbook implementations (Add/Sub/Mul) and base-2
-// long-division for Div. No dependency on ttmath here — bit packing of the
+// Algorithms are textbook schoolbook implementations (Add/Sub/Mul) and Knuth's
+// algorithm D, limb by limb, for Div. No dependency on ttmath here — bit packing of the
 // inline tier and these routines are everything ibNumber uses.
 
 struct ibNumber::BigImpl
@@ -188,20 +188,28 @@ struct ibNumber::BigImpl
 		return static_cast<uint32_t>(rem);
 	}
 
-	// v <<= 1 (unsigned shift left by one bit). Grows by one limb if MSB carries out.
-	static void ShiftLeft1Mag(std::vector<uint32_t>& v)
+	// v % s, v untouched. s != 0.
+	static uint32_t ModMagSmall(const std::vector<uint32_t>& v, uint32_t s) noexcept
 	{
-		uint32_t carry = 0;
-		for (size_t i = 0; i < v.size(); ++i) {
-			uint32_t newCarry = v[i] >> 31;
-			v[i] = (v[i] << 1) | carry;
-			carry = newCarry;
-		}
-		if (carry) v.push_back(carry);
+		uint64_t rem = 0;
+		for (size_t i = v.size(); i-- > 0; )
+			rem = ((rem << 32) | v[i]) % s;
+		return static_cast<uint32_t>(rem);
 	}
 
-	// q = a / b, r = a % b. Base-2 long division — O(bits(a) * limbs).
-	// Sufficient for our scale (typical mantissa under a few hundred digits).
+	// v += 1, in place.
+	static void IncrementMag(std::vector<uint32_t>& v)
+	{
+		for (uint32_t& limb : v)
+			if (++limb != 0) return;
+		v.push_back(1u);
+	}
+
+	// q = a / b, r = a % b. Knuth's algorithm D (TAOCP 4.3.1) on 32-bit limbs: one quotient LIMB per
+	// step, estimated from the remainder's top two limbs and corrected at most twice. The base-2
+	// division it replaces took one step per BIT and allocated a new remainder on every set bit —
+	// 10^6/7 at fifteen places was ~70 steps, ~35 allocations and 2.3 us. A one-limb divisor (a
+	// price divided by a quantity) is a single pass of DivMagSmall.
 	static void DivModMag(const std::vector<uint32_t>& a,
 	                      const std::vector<uint32_t>& b,
 	                      std::vector<uint32_t>& q,
@@ -209,33 +217,75 @@ struct ibNumber::BigImpl
 	{
 		q.clear();
 		r.clear();
-		if (IsZeroMag(b)) {
+		size_t n = b.size();
+		while (n > 0 && b[n - 1] == 0) --n;
+		if (n == 0) {
 			throw std::runtime_error("ibNumber: division by zero");
 		}
-		if (CmpMag(a, b) < 0) { r = a; TrimMag(r); return; }
+		size_t m = a.size();
+		while (m > 0 && a[m - 1] == 0) --m;
 
-		// Find topmost set bit in a.
-		size_t topLimb = a.size() - 1;
-		while (topLimb > 0 && a[topLimb] == 0) --topLimb;
-		int topBit = 31;
-		while (topBit >= 0 && (a[topLimb] & (1u << topBit)) == 0) --topBit;
-		const long long totalBits = static_cast<long long>(topLimb) * 32 + topBit + 1;
+		if (n == 1) {
+			q.assign(a.begin(), a.begin() + m);
+			const uint32_t rem = DivMagSmall(q, b[0]);
+			if (rem != 0) r.push_back(rem);
+			return;
+		}
+		if (m < n) { r.assign(a.begin(), a.begin() + m); return; }
 
-		q.assign((static_cast<size_t>(totalBits) + 31) / 32, 0u);
+		// D1: normalise — both shifted left until the divisor's top limb has its high bit set, which
+		// is what bounds the estimate below to at most two too large.
+		int s = 0;
+		while (((b[n - 1] << s) & 0x80000000u) == 0) ++s;
+		std::vector<uint32_t> vn(n), un(m + 1);
+		for (size_t i = n - 1; i > 0; --i)
+			vn[i] = static_cast<uint32_t>(((static_cast<uint64_t>(b[i]) << 32) | b[i - 1]) >> (32 - s));
+		vn[0] = b[0] << s;
+		un[m] = static_cast<uint32_t>(static_cast<uint64_t>(a[m - 1]) >> (32 - s));
+		for (size_t i = m - 1; i > 0; --i)
+			un[i] = static_cast<uint32_t>(((static_cast<uint64_t>(a[i]) << 32) | a[i - 1]) >> (32 - s));
+		un[0] = a[0] << s;
 
-		for (long long bit = totalBits - 1; bit >= 0; --bit) {
-			ShiftLeft1Mag(r);
-			if (a[bit / 32] & (1u << (bit % 32))) {
-				if (r.empty()) r.push_back(0);
-				r[0] |= 1u;
+		const uint64_t kBase = 1ull << 32;
+		q.assign(m - n + 1, 0u);
+		for (size_t j = m - n + 1; j-- > 0; ) {
+			// D3: the quotient limb estimated from the top two limbs, corrected by the third.
+			const uint64_t top = (static_cast<uint64_t>(un[j + n]) << 32) | un[j + n - 1];
+			uint64_t qhat = top / vn[n - 1];
+			uint64_t rhat = top % vn[n - 1];
+			while (qhat >= kBase || qhat * vn[n - 2] > ((rhat << 32) | un[j + n - 2])) {
+				--qhat;
+				rhat += vn[n - 1];
+				if (rhat >= kBase) break;
 			}
-			if (CmpMag(r, b) >= 0) {
-				r = SubMag(r, b);
-				const size_t qIdx = static_cast<size_t>(bit) / 32;
-				if (qIdx >= q.size()) q.resize(qIdx + 1, 0u);
-				q[qIdx] |= (1u << (bit % 32));
+			// D4: multiply and subtract.
+			int64_t borrow = 0;
+			for (size_t i = 0; i < n; ++i) {
+				const uint64_t p = qhat * vn[i];
+				const int64_t t = static_cast<int64_t>(un[i + j]) - borrow - static_cast<int64_t>(p & 0xFFFFFFFFu);
+				un[i + j] = static_cast<uint32_t>(t);
+				borrow = static_cast<int64_t>(p >> 32) - (t >> 32);
+			}
+			const int64_t t = static_cast<int64_t>(un[j + n]) - borrow;
+			un[j + n] = static_cast<uint32_t>(t);
+			q[j] = static_cast<uint32_t>(qhat);
+			// D6: the estimate was one too large — the divisor is added back.
+			if (t < 0) {
+				--q[j];
+				uint64_t carry = 0;
+				for (size_t i = 0; i < n; ++i) {
+					const uint64_t sum = static_cast<uint64_t>(un[i + j]) + vn[i] + carry;
+					un[i + j] = static_cast<uint32_t>(sum);
+					carry = sum >> 32;
+				}
+				un[j + n] += static_cast<uint32_t>(carry);
 			}
 		}
+		// D8: the remainder, shifted back.
+		r.resize(n);
+		for (size_t i = 0; i + 1 < n; ++i)
+			r[i] = static_cast<uint32_t>(((static_cast<uint64_t>(un[i + 1]) << 32) | un[i]) >> s);
+		r[n - 1] = un[n - 1] >> s;
 		TrimMag(q);
 		TrimMag(r);
 	}
@@ -304,12 +354,14 @@ struct ibNumber::BigImpl
 		negative = (IsZeroMag(limbs) ? false : resNeg);
 	}
 
-	// |this| *= 10^k (k >= 0). Uses 10^9 chunks (largest power of 10 fitting uint32).
+	// |this| *= 10^k (k >= 0). Uses 10^9 chunks (largest power of 10 fitting uint32), the rest in one.
 	void MulMagPow10(int32_t k)
 	{
 		if (k <= 0 || IsZeroMag(limbs)) return;
+		static const uint32_t kPow10[9] = { 1u, 10u, 100u, 1000u, 10000u, 100000u, 1000000u, 10000000u, 100000000u };
+		limbs.reserve(limbs.size() + static_cast<size_t>(k) / 9 + 1);   // 10^9 < 2^32: a limb per chunk covers it
 		while (k >= 9) { MulMagSmall(limbs, 1000000000u); k -= 9; }
-		while (k > 0) { MulMagSmall(limbs, 10u);          --k;   }
+		if (k > 0) MulMagSmall(limbs, kPow10[k]);
 	}
 
 	// ---- conversions -------------------------------------------------------------
@@ -475,11 +527,8 @@ namespace
 // divisions measures real digits and does not creep upward).
 void TrimFractionZeros(ibNumber::BigImpl& v)
 {
-	while (v.exp < 0 && !ibNumber::BigImpl::IsZeroMag(v.limbs)) {
-		std::vector<uint32_t> shorter = v.limbs;
-		if (ibNumber::BigImpl::DivMagSmall(shorter, 10u) != 0)
-			return;
-		v.limbs = std::move(shorter);
+	while (v.exp < 0 && !ibNumber::BigImpl::IsZeroMag(v.limbs) && ibNumber::BigImpl::ModMagSmall(v.limbs, 10u) == 0) {
+		ibNumber::BigImpl::DivMagSmall(v.limbs, 10u);
 		++v.exp;
 	}
 }
@@ -814,11 +863,10 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 	std::vector<uint32_t> quotient, remainder;
 	BigImpl::DivModMag(a.limbs, b.limbs, quotient, remainder);
 	if (!BigImpl::IsZeroMag(remainder)) {
-		std::vector<uint32_t> twice = remainder;
-		BigImpl::MulMagSmall(twice, 2u);
-		BigImpl::TrimMag(twice);        // CmpMag compares trimmed magnitudes
-		if (BigImpl::CmpMag(twice, b.limbs) >= 0)
-			quotient = BigImpl::AddMag(quotient, std::vector<uint32_t>{ 1u });
+		BigImpl::MulMagSmall(remainder, 2u);   // the remainder is not needed past this comparison
+		BigImpl::TrimMag(remainder);           // CmpMag compares trimmed magnitudes
+		if (BigImpl::CmpMag(remainder, b.limbs) >= 0)
+			BigImpl::IncrementMag(quotient);
 	}
 	a.limbs    = std::move(quotient);
 	a.negative = (BigImpl::IsZeroMag(a.limbs) ? false : resNeg);

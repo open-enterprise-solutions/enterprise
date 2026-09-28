@@ -255,13 +255,14 @@ void ibValue::Copy(const ibValue& cOld)
 	// takes, i.e. everything outside the interpreter: table cells, array elements,
 	// record fields.
 	//
+	// NUMBER ONTO NUMBER likewise assigns over itself: a heap-tier number is shared,
+	// an immediate one is a word — no Reset() and switch around one assignment.
+	//
 	// Read-only is excluded deliberately: writing through the tag would step over
 	// Reset()'s write-denied check, which is where that error is raised.
-	if (!m_bReadOnly &&
-		m_typeClass == ibValueTypes::TYPE_STRING &&
-		cOld.m_typeClass == ibValueTypes::TYPE_STRING) {
-		m_sData = cOld.m_sData;
-		return;
+	if (!m_bReadOnly && m_typeClass == cOld.m_typeClass) {
+		if (m_typeClass == ibValueTypes::TYPE_STRING) { m_sData = cOld.m_sData; return; }
+		if (m_typeClass == ibValueTypes::TYPE_NUMBER) { m_fData = cOld.m_fData; return; }
 	}
 
 	Reset();
