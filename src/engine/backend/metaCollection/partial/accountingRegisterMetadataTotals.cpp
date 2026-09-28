@@ -833,30 +833,12 @@ ibQueryPredicatePtr ConditionOnPass(const ibValueMetaObjectAccountingRegister* r
 		// ⭐ `IN HIERARCHY` HERE IS A SELECTION — the fold by it is the account argument's, which took the plain
 		// account names before this (SplitAccountCondition).
 		//
-		// On a surface in the database it goes down AS NAMED, one leaf per slot the kind stands in: the database
-		// provider has the server walk the subtree (BuildSubtreeIn — WITH RECURSIVE), in whichever table each
-		// named value belongs to — an analytics slot holds references of many — so a chart or a catalog is no
-		// longer read whole for every reading. A surface held in memory resolves it here into the subtree it
-		// stands for, read through the column on the movements (or the row a walk ends at), and the leaf is an
-		// IN: a filter over rows in memory cannot walk it (RefuseNamedHierarchy).
-		if (leaf.m_unfold != ibQueryDimUnfold::Elements && (source == nullptr || source->IsComputedInRam())) {
-			const ibBackendQueryable* owner = reg->GetQueryable();
-			const ibAcctConditionColumn onLines = ConditionColumnOn(reg, owner, shape, creditSide, kindsDr, kindsCr, head);
-			const ibBackendQueryColumn* column = onLines.m_column != nullptr ? onLines.m_column
-				: (!onLines.m_byKind.empty() ? onLines.m_byKind.front().second : nullptr);
-			for (size_t hop = 1; column != nullptr && walks && hop < leaf.m_path.size(); ++hop) {
-				owner  = owner->GetProvider().ResolveReferenceTarget(owner, column);
-				column = owner != nullptr ? owner->ResolveColumnByName(leaf.m_path[hop]->GetName()) : nullptr;
-			}
-			if (column == nullptr)
-				ibRegRefuseConditionColumn(head);
-			leaf.m_values = ibQueryHierarchyScope(owner, column, leaf.m_values, leaf.m_unfold).Accepted();
-			leaf.m_unfold = ibQueryDimUnfold::Elements;
-			leaf.m_op     = ibQueryFilterOp::In;
-		}
-		else if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+		// It goes down AS NAMED, one leaf per slot the kind stands in, and the side that filters the rows answers
+		// it: the database has the server walk the subtree (BuildSubtreeIn — WITH RECURSIVE), in whichever table
+		// each named value belongs to — an analytics slot holds references of many — so a chart or a catalog is
+		// not read whole for every reading.
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements)
 			leaf.m_op = ibQueryFilterOp::In;   // the values as named; the provider walks them, slot by slot
-		}
 
 		return over(head, /*nullWhereAbsent*/ false, [&](const ibBackendQueryColumn* column) {
 			ibQueryCondition here = leaf;

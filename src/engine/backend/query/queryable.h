@@ -185,20 +185,17 @@ struct ibQueryCondition
 	// ⭐⭐ HOW FAR DOWN THE VALUES REACH — and, when it is not `Elements`, m_values holds the values AS
 	// NAMED rather than the subtree they stand for.
 	//
-	// A condition that only SELECTS rows never needs this: the lowering resolves the subtree into
-	// values and hands over an ordinary `In`, which every provider renders. A condition handed to a
-	// SOURCE is the other case — an accounting register asked for accounts «in hierarchy» reports the
-	// subordinates UNDER the account that was named, and to fold like that it has to know which
-	// account was named and how far down was asked. Expanded first, that question is unanswerable:
-	// twenty accounts arrive and nothing says which one they roll into.
+	// A condition handed to a SOURCE needs it — an accounting register asked for accounts «in hierarchy»
+	// reports the subordinates UNDER the account that was named, and to fold like that it has to know which
+	// account was named and how far down was asked. Expanded first, that question is unanswerable: twenty
+	// accounts arrive and nothing says which one they roll into.
 	//
-	// ⚠ WHO MAY SEE A LEAF WITH THIS SET. A source that consumes the condition itself
-	// (ibQuerySourceParameter::m_consumedBySource), and — since 2026-09-29 — the DATABASE provider, which has
-	// the server walk the subtree (dbTableProvider BuildSubtreeIn, WITH RECURSIVE) or reads it there when the
-	// driver cannot. The lowering sends it on the ordinary road only for a plain field of a query whose every
-	// source is a database table; anything else is expanded at the lowering and arrives here as `Elements`.
-	// A filter over rows in memory refuses it in words (RefuseNamedHierarchy): compared as named, the values
-	// would lose every subordinate.
+	// And a condition that only SELECTS rows carries it too, down to whoever filters them (2026-09-29): the
+	// database provider has the server walk the subtree (dbTableProvider BuildSubtreeIn, WITH RECURSIVE) or
+	// reads it there when the driver cannot; the side that filters rows in memory reads it before any cell is
+	// compared (queryProvider SubtreeResolved). The lowering expands it itself only inside an EXPRESSION (a
+	// CASE's WHEN), which any side may evaluate. A cell that still meets one refuses in words
+	// (RefuseNamedHierarchy): compared as named, the values would lose every subordinate.
 	ibQueryDimUnfold            m_unfold = ibQueryDimUnfold::Elements;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference

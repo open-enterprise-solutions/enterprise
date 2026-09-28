@@ -26,6 +26,7 @@
 #include "columnLayout.h"                                             // ibSqlAliasOf — what the STATEMENT calls an output, vs what its author does
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
 #include "queryException.h"                                           // ibBackendQueryException — a named hierarchy refused over rows in memory
+#include "queryHierarchy.h"                                           // ibQueryHierarchyScope — «IN HIERARCHY» resolved where rows are filtered in memory
 
 #include "backend/diagnostics/journal.h"                              // ibJournal — the technology journal
 
@@ -82,6 +83,10 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 // ComputeRows over the computed source + dot-walk resolution + dot-walk WHERE (shared read/aggregate).
 ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
                                     std::vector<const ibBackendQueryColumn*>& present);
+// The spec with every «IN HIERARCHY» named on rows filtered here resolved into its subtree — defined below,
+// beside RefuseNamedHierarchy. `keep` holds the conditions the returned copy points at.
+ibDataQuerySpec WithSubtreesResolved(const ibDataQuerySpec& spec, const std::vector<const ibBackendQueryable*>& sources,
+                                     std::vector<ibQueryCondition>& keep);
 // Per-row RAM evaluation of a computed (arithmetic / CASE) expression — defined below; forward-declared
 // here so the computed read / WHERE / aggregate paths above can evaluate SELECT / WHERE / SUM expressions.
 // It takes a ROW, whoever holds it (a materialised table's row, a streaming cursor's current row): the
@@ -153,8 +158,12 @@ void ibComputedProvider::ReadReferences() const
 // L2. The flat conditions push into ComputeRows; the boolean predicate TREE, the ORDER BY
 // and the page row limit (TOP) apply on the materialised RAM rows HERE — without this they
 // would silently drop on a computed source.
-ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
+ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, const ibReadPageRequest& req)
 {
+	// Every row here is filtered in memory, so a hierarchy named in the conditions is resolved first.
+	std::vector<ibQueryCondition> resolved;
+	const ibDataQuerySpec spec = WithSubtreesResolved(given, { given.m_queryable }, resolved);
+
 	// ComputeRows + dot-walk resolution + dot-walk WHERE: plain conditions push into ComputeRows, a dot-walk
 	// Ref.Field condition joins the reference leaf and filters in RAM. `cols` receives the source columns +
 	// every joined leaf, so the DISTINCT / sort / limit rebuilds below keep them.
@@ -461,14 +470,94 @@ private:
 	bool                      m_available;
 };
 
-// «IN HIERARCHY» AS NAMED (ibQueryCondition::m_unfold) is the database provider's to walk — the lowering sends
-// it only where every source is a database table. Reaching a cell here, its values would be compared as named
-// and every subordinate lost, a total that looks right; refused in words instead.
+// «IN HIERARCHY» AS NAMED (ibQueryCondition::m_unfold) never reaches a cell: the side that filters rows in memory
+// resolves it first (SubtreeResolved, below). One that still does would be compared as named and every
+// subordinate lost, a total that looks right; refused in words instead.
 void RefuseNamedHierarchy(const ibQueryCondition& c)
 {
 	if (c.m_unfold != ibQueryDimUnfold::Elements)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 			_("IN HIERARCHY reached a filter over rows held in memory, which cannot walk the subtree"));
+}
+
+// ⭐⭐ THE SIDE THAT FILTERS THE ROWS ANSWERS THE WORD. The lowering hands «IN HIERARCHY» down as named on every
+// road to the door, and what it costs is decided by whoever filters: the database provider has the server walk
+// the subtree (BuildSubtreeIn — WITH RECURSIVE); rows filtered HERE get it read once per condition, through the
+// column the condition tests, and the leaf goes on as the plain IN every evaluator below already understands.
+// It used to be decided above, in three places of the lowering that each asked «is this source in memory?» —
+// a question for the source, asked by everyone who reads it.
+//
+// The subtree is read through the column's own table: the source that owns the column, or — when the field
+// stands at the end of a walk — the table the walk reaches, one provider hop per segment (the lowering's
+// OwnerOfPathLeaf takes the same hops).
+const ibBackendQueryable* OwnerOfNamedLeaf(const ibQueryCondition& c, const std::vector<const ibBackendQueryable*>& sources)
+{
+	const ibBackendQueryColumn* head = c.m_path.empty() ? c.m_col : c.m_path.front();
+	const ibBackendQueryable* owner = nullptr;
+	for (const ibBackendQueryable* source : sources)
+		if (source != nullptr && head != nullptr && source->OwnsColumn(head)) {
+			owner = source;
+			break;
+		}
+	if (owner == nullptr && !sources.empty())
+		owner = sources.front();   // the target is the column's either way — a source only lends the metadata to find it
+	for (size_t i = 0; owner != nullptr && i + 1 < c.m_path.size(); ++i) {
+		const ibBackendQueryable* const next = owner->GetProvider().ResolveReferenceTarget(owner, c.m_path[i]);
+		owner = next != nullptr ? next : ibDbTableProvider::CastTarget(c.m_path[i + 1]);   // …or the type a CAST named
+	}
+	return owner;
+}
+
+ibQueryCondition SubtreeResolved(ibQueryCondition c, const std::vector<const ibBackendQueryable*>& sources)
+{
+	if (c.m_unfold == ibQueryDimUnfold::Elements)
+		return c;
+	const ibBackendQueryable* owner = OwnerOfNamedLeaf(c, sources);
+	if (owner == nullptr || c.m_col == nullptr)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			_("IN HIERARCHY names a field whose own table this reading cannot find"));
+	c.m_values = ibQueryHierarchyScope(owner, c.m_col, c.m_values, c.m_unfold).Accepted();
+	c.m_unfold = ibQueryDimUnfold::Elements;
+	return c;
+}
+
+bool NamesSubtree(const ibQueryPredicate* p)
+{
+	if (p == nullptr)
+		return false;
+	if (p->m_kind == ibQueryPredicateKind::Leaf && p->m_leaf.m_unfold != ibQueryDimUnfold::Elements)
+		return true;
+	for (const ibQueryPredicatePtr& child : p->m_children)
+		if (NamesSubtree(child.get()))
+			return true;
+	return false;
+}
+
+ibQueryPredicatePtr SubtreeResolved(const ibQueryPredicatePtr& p, const std::vector<const ibBackendQueryable*>& sources)
+{
+	if (!NamesSubtree(p.get()))
+		return p;   // shared as it is — nothing in it to resolve
+	auto here = std::make_shared<ibQueryPredicate>(*p);
+	for (ibQueryPredicatePtr& child : here->m_children)
+		child = SubtreeResolved(child, sources);
+	if (here->m_kind == ibQueryPredicateKind::Leaf)
+		here->m_leaf = SubtreeResolved(here->m_leaf, sources);
+	return here;
+}
+
+ibDataQuerySpec WithSubtreesResolved(const ibDataQuerySpec& spec, const std::vector<const ibBackendQueryable*>& sources,
+                                     std::vector<ibQueryCondition>& keep)
+{
+	ibDataQuerySpec out = spec;
+	out.m_predicate = SubtreeResolved(spec.m_predicate, sources);
+	if (spec.m_conditions != nullptr
+	    && std::any_of(spec.m_conditions->begin(), spec.m_conditions->end(),
+	                   [](const ibQueryCondition& c) { return c.m_unfold != ibQueryDimUnfold::Elements; })) {
+		for (const ibQueryCondition& c : *spec.m_conditions)
+			keep.push_back(SubtreeResolved(c, sources));
+		out.m_conditions = &keep;
+	}
+	return out;
 }
 
 // One pushed-down outer condition against a materialised RAM cell — the aggregate
@@ -3310,10 +3399,16 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	}
 
 	// Materialise the computed leaf (its ctor filters are baked in; the door conditions IT owns are
-	// pushed down as compute filters) into a DB temp table.
+	// pushed down as compute filters) into a DB temp table. Its rows are filtered in memory first, so a
+	// hierarchy named on them is resolved here, once, for the compute filter and the temp alike.
+	std::vector<ibQueryCondition> conds;
 	std::vector<ibQueryCondition> computedConds;
-	for (const ibQueryCondition& c : *spec.m_conditions)
-		if (c.m_col != nullptr && computed->OwnsColumn(c.m_col)) computedConds.push_back(c);
+	for (const ibQueryCondition& c : *spec.m_conditions) {
+		const bool owned = c.m_col != nullptr && computed->OwnsColumn(c.m_col);
+		conds.push_back(owned ? SubtreeResolved(c, { computed }) : c);
+		if (owned)
+			computedConds.push_back(conds.back());
+	}
 	ibQueryRamTable rows = computed->ComputeRows(computedConds);
 
 	// SHOULD-gate (temp-db.md §7) with the exact materialised count; CAN lives in Materialise.
@@ -3354,7 +3449,7 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	};
 
 	outConds.clear();
-	for (const ibQueryCondition& c : *spec.m_conditions) { ibQueryCondition nc = c; nc.m_col = remap(c.m_col); outConds.push_back(nc); }
+	for (const ibQueryCondition& c : conds) { ibQueryCondition nc = c; nc.m_col = remap(c.m_col); outConds.push_back(nc); }
 	outSorts.clear();
 	for (const ibQuerySortItem& s : *spec.m_sorts)       { ibQuerySortItem ns = s; ns.m_col = remap(s.m_col); outSorts.push_back(ns); }
 	outSelects.clear();
@@ -3513,8 +3608,16 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	              root->m_kind == ibQueryNode::Kind::Union ? wxT("union") : wxT("join"));
 
 	ibQueryRamTable composed = Compose(spec, ReferencedColumns(spec));
-	if (spec.m_predicate)
-		composed = RamFilter(composed, spec.m_predicate.get());
+	if (spec.m_predicate) {
+		// The tree is answered over the stitched rows, so a hierarchy named in it is resolved through the
+		// leaves those rows came from — database tables included: none of them sees this filter.
+		std::vector<const ibQueryNode*> leaves;
+		CollectLeaves(root, leaves);
+		std::vector<const ibBackendQueryable*> sources;
+		for (const ibQueryNode* leaf : leaves)
+			sources.push_back(leaf->m_queryable);
+		composed = RamFilter(composed, SubtreeResolved(spec.m_predicate, sources).get());
+	}
 	return ProjectToAliases(std::move(composed), spec, page);   // the composed rows are handed on, not copied
 }
 
@@ -3652,8 +3755,11 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 // (door conditions pushed as compute filters), then the RAM GROUP-BY fold. Without this
 // override the base default would return the RAW rows — silently dropping the aggregation.
 // HAVING is not folded on the RAM path (the lowering gates it).
-ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
+ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& given)
 {
+	std::vector<ibQueryCondition> resolved;   // a named hierarchy, resolved as in ExecuteRead
+	const ibDataQuerySpec spec = WithSubtreesResolved(given, { given.m_queryable }, resolved);
+
 	// ComputeRows + dot-walk resolution + dot-walk WHERE: GROUP BY Ref.Field, SUM(Ref.Field) and WHERE
 	// Ref.Field = X over the computed source all resolve the reference leaves in RAM before the fold.
 	std::vector<const ibBackendQueryColumn*> cols;
@@ -3682,12 +3788,18 @@ ibDataQueryResult ibQueryComposer::ExecuteReadCached(const ibDataQuerySpec& spec
 	return ComposeMultiSource(spec, page);   // a join has no single rendered-SQL cache
 }
 
-ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
+ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& given)
 {
+	// A computed source is read in memory whichever road the aggregate then takes, so a hierarchy named on it
+	// is resolved ONCE, here, for the temp table and for the RAM fold alike (SubtreeResolved).
+	std::vector<ibQueryCondition> resolved;
+	const bool computedSource = IsSingleSource(given) && given.m_queryable != nullptr && given.m_queryable->IsComputedInRam();
+	const ibDataQuerySpec spec = computedSource ? WithSubtreesResolved(given, { given.m_queryable }, resolved) : given;
+
 	if (IsSingleSource(spec)) {
 		// Push to server: materialise the computed source into a DB temp table and run the aggregate as
 		// server-side SQL (GROUP BY / SUM(expr) / HAVING over a real table). On any miss -> the RAM fold.
-		if (spec.m_queryable != nullptr && spec.m_queryable->IsComputedInRam()) {
+		if (computedSource) {
 			std::vector<ibQueryCondition> pConds; std::vector<ibQuerySortItem> pSorts;
 			std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
 			std::vector<const ibBackendQueryColumn*>       pGroupBy;

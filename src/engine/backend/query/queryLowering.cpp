@@ -207,13 +207,18 @@ struct ibSourceBinding
 	std::shared_ptr<const ibBackendQueryable> m_hold;
 };
 
-// ⭐ `keepUnfold` — do NOT resolve `IN HIERARCHY` into the subtree it stands for; leave the values as
-// NAMED and put the word on the leaf. True only for a condition handed to a SOURCE, which folds by it
-// (queryable.h, ibQueryCondition::m_unfold). Everywhere else the subtree is expanded here, because a
-// provider renders `IN`, not a hierarchy.
+// ⭐⭐ WHO ANSWERS `IN HIERARCHY` decides how the word leaves the lowering — not what the query's sources are.
+//   Door   — a WHERE handed to the door: the values go AS NAMED, with the word on the leaf, and the side that
+//            filters the rows answers it — the database has the server walk the subtree (dbTableProvider
+//            BuildSubtreeIn), rows in memory get it read where they are filtered (queryProvider SubtreeResolved).
+//   Here   — a condition inside an EXPRESSION (a CASE's WHEN): whoever evaluates the expression — the server,
+//            the stitch, the result over its rows — is handed a list, so the subtree is read here.
+//   Source — a condition handed to a SOURCE, which folds by the word (queryable.h, ibQueryCondition::m_unfold).
+enum class ibHierarchyAnswer { Door, Here, Source };
+
 ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sources,
                                         const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
-                                        bool allowDotWalk, bool keepUnfold = false);   // defined below
+                                        bool allowDotWalk, ibHierarchyAnswer answer = ibHierarchyAnswer::Door);   // defined below
 
 // ⭐ THE NAMES ONE SELECT READS OF ONE OF ITS SOURCES — ibQueryReadColumns, taken from the text.
 //
@@ -475,7 +480,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	//
 	// Resolved against the source's CONDITION SCOPE, because the companion this call builds does not
 	// exist yet — the scope is its stable side (a register's movements), where those columns live
-	// anyway. And `keepUnfold`: the word travels with it, unexpanded, for the source to fold by.
+	// anyway. And the word travels with it, unexpanded, for the source to fold by (ibHierarchyAnswer::Source).
 	ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(ns, name);
 	const ibBackendQueryable* conditionScope = descriptor != nullptr ? descriptor->GetConditionScope() : nullptr;
 	std::vector<ibQueryPredicatePtr> consumed(declared.size());
@@ -492,7 +497,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			if (i < declared.size() && declared[i].m_consumedBySource && conditionScope != nullptr) {
 				const std::vector<ibSourceBinding> scope{ ibSourceBinding{ wxString(), conditionScope } };
 				consumed[i] = BuildWherePredicate(scope, *src.m_args[i], params,
-					/*allowDotWalk*/ true, /*keepUnfold*/ true);
+					/*allowDotWalk*/ true, ibHierarchyAnswer::Source);
 				anyConsumed = anyConsumed || consumed[i] != nullptr;
 				argVals.push_back(ibValue());
 				continue;
@@ -1762,7 +1767,7 @@ ibQueryCondition ComputedComparison(const std::vector<ibSourceBinding>& sources,
 // (no path leaf on those nodes yet). Used for single-source queries + co-located JOIN booleans.
 ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sources,
                                         const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params,
-                                        bool allowDotWalk, bool keepUnfold)
+                                        bool allowDotWalk, ibHierarchyAnswer answer)
 {
 	// A condition known before any row is read is one of the two answers (KnownBeforeRows).
 	if (const std::optional<bool> known = KnownBeforeRows(e, params))
@@ -1778,16 +1783,16 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		// account to fold under inside an AND — and a child built without it arrives expanded, so the
 		// source filters by twenty accounts and folds under none.
 		if (e.m_lhs && KnownBeforeRows(*e.m_lhs, params))
-			return BuildWherePredicate(sources, *e.m_rhs, params, allowDotWalk, keepUnfold);
+			return BuildWherePredicate(sources, *e.m_rhs, params, allowDotWalk, answer);
 		if (e.m_rhs && KnownBeforeRows(*e.m_rhs, params))
-			return BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, keepUnfold);
+			return BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, answer);
 		return ibQueryPredicate::Compose(
 			e.m_isOr ? ibQueryPredicateKind::Or : ibQueryPredicateKind::And,
-			BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, keepUnfold),
-			BuildWherePredicate(sources, *e.m_rhs, params, allowDotWalk, keepUnfold));
+			BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, answer),
+			BuildWherePredicate(sources, *e.m_rhs, params, allowDotWalk, answer));
 
 	case ibQueryAstExprKind::Not:
-		return ibQueryPredicate::Not(BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, keepUnfold));
+		return ibQueryPredicate::Not(BuildWherePredicate(sources, *e.m_lhs, params, allowDotWalk, answer));
 
 	case ibQueryAstExprKind::Compare: {
 		// ⭐ `VALUETYPE(x) = TYPE(Catalog.Counterparties)` IS `x REFS Catalog.Counterparties`, and it
@@ -1897,52 +1902,31 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		// Collect the IN values: either the literal list, or — for IN (subquery) — the (uncorrelated)
 		// inner SELECT's single output column, materialised eagerly into a value list.
 		std::vector<ibValue> values;
-		// ⭐⭐ HANDED TO A SOURCE, THE WORD SURVIVES INSTEAD OF BEING RESOLVED. The source folds by it —
-		// the subordinates report UNDER the account that was named — and a fold cannot be reconstructed
-		// from twenty expanded values, because nothing in them says which one they roll into.
-		if (keepUnfold && e.m_unfold != ibQueryDimUnfold::Elements) {
-			ibQueryCondition named;
-			named.m_col    = cols.back();
-			named.m_path   = cols.size() > 1 ? cols : std::vector<const ibBackendQueryColumn*>{};
-			named.m_op     = ibQueryFilterOp::In;
-			named.m_unfold = e.m_unfold;
-			named.m_values = ibQueryHierarchyNamedValues(
-				e.m_list.empty() ? ibValue() : EvalValue(*e.m_list.front(), params));
-			ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(named);
-			return e.m_negated ? ibQueryPredicate::Not(leaf) : leaf;
-		}
-
 		if (e.m_unfold != ibQueryDimUnfold::Elements) {
-			// ⭐⭐ «IN HIERARCHY» IS RESOLVED HERE AND NOWHERE BELOW. The named values are walked down
-			// to what is subordinate to them, and what leaves this function is the ordinary IN of the
-			// line above — so the door, the RAM evaluator and all four drivers keep the ONE set-valued
-			// operator they already render, and nothing under L4 learns a word it would have to expand
-			// with a read of its own. The operand is a single &parameter (the parser admits nothing
-			// else here), which may hold one value or a list of them.
-			//
+			// ⭐⭐ THE WORD LEAVES AS WHOEVER ANSWERS IT NEEDS IT (ibHierarchyAnswer). The operand is a single
+			// &parameter (the parser admits nothing else here), which may hold one value or a list of them.
+			const std::vector<ibValue> named =
+				ibQueryHierarchyNamedValues(e.m_list.empty() ? ibValue() : EvalValue(*e.m_list.front(), params));
+
 			// ⚠ THE SUBTREE IS READ THROUGH THE COLUMN, so the column's own source has to be known —
 			// and being unable to name it is an ERROR, not a quieter filter. Degrading to «in» here
 			// would answer a question nobody asked with a number that looks entirely right: the same
 			// rows, minus every subordinate. (A FLAT source is a different case and stays silent: the
 			// target is known, it simply records no parent, and «in hierarchy» over a flat list IS
-			// the list.)
-			const ibBackendQueryable* owner = OwnerOfPathLeaf(sources, *e.m_lhs, cols);
-			if (owner == nullptr)
+			// the list.) A source that folds by the word finds its own.
+			const ibBackendQueryable* owner = answer == ibHierarchyAnswer::Source ? nullptr
+				: OwnerOfPathLeaf(sources, *e.m_lhs, cols);
+			if (answer != ibHierarchyAnswer::Source && owner == nullptr)
 				ThrowQueryException(e.m_line, e.m_col, _("IN HIERARCHY needs a field whose own source is known - a reference column of a source this query reads"));
-			const std::vector<ibValue> named =
-				ibQueryHierarchyNamedValues(e.m_list.empty() ? ibValue() : EvalValue(*e.m_list.front(), params));
 
-			// ⭐⭐ …EXCEPT WHERE THE SERVER CAN WALK IT. A field of a query that reads only database tables goes
-			// down AS NAMED — at the end of a reference walk too: the reading's join chain hands the leaf over on
-			// the table it reached — and the provider has the server walk the subtree (BuildSubtreeIn — WITH
-			// RECURSIVE), or reads it there when the driver cannot. Resolved here, the target table was read
-			// WHOLE on every run and the subtree sent back as one parameter per value.
-			//
-			// A query that also reads something held in memory keeps the old road: its leaves may be answered
-			// over rows here, where only a list is understood.
-			const bool allInDatabase = std::all_of(sources.begin(), sources.end(),
-				[](const ibSourceBinding& b) { return b.m_q != nullptr && !b.m_q->IsComputedInRam(); });
-			if (allInDatabase) {
+			// ⭐⭐ HANDED ON, THE WORD SURVIVES INSTEAD OF BEING RESOLVED. A SOURCE folds by it — the subordinates
+			// report UNDER the account that was named — and a fold cannot be reconstructed from twenty expanded
+			// values, because nothing in them says which one they roll into. The DOOR hands it to the side that
+			// filters the rows: the server walks the subtree (at the end of a reference walk too — the reading's
+			// join chain hands the leaf over on the table it reached), rows in memory get it read where they are
+			// filtered. Resolved here on every road, the target table was read WHOLE on every run and the subtree
+			// sent back as one parameter per value.
+			if (answer != ibHierarchyAnswer::Here) {
 				ibQueryCondition asNamed;
 				asNamed.m_col    = cols.back();
 				asNamed.m_path   = cols.size() > 1 ? cols : std::vector<const ibBackendQueryColumn*>{};
@@ -2472,8 +2456,8 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	case ibQueryAstExprKind::Case: {
 		auto c = std::make_shared<ibQueryColumnExpr>();
 		c->m_kind = ibQueryColumnExprKind::Case;
-		for (const auto& wt : e.m_cases)
-			c->m_cases.emplace_back(BuildWherePredicate(sources, *wt.first, params, /*allowDotWalk*/false),
+		for (const auto& wt : e.m_cases)   // …answered by whoever evaluates the expression (ibHierarchyAnswer::Here)
+			c->m_cases.emplace_back(BuildWherePredicate(sources, *wt.first, params, /*allowDotWalk*/false, ibHierarchyAnswer::Here),
 			                        BuildColumnExprFromAst(sources, *wt.second, params));
 		if (e.m_else)
 			c->m_else = BuildColumnExprFromAst(sources, *e.m_else, params);
@@ -2494,9 +2478,9 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	case ibQueryAstExprKind::Refs: {
 		auto c = std::make_shared<ibQueryColumnExpr>();
 		c->m_kind = ibQueryColumnExprKind::Case;
-		c->m_cases.emplace_back(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false),
+		c->m_cases.emplace_back(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false, ibHierarchyAnswer::Here),
 		                        ibQueryColumnExpr::Const(ibValue(true)));
-		c->m_cases.emplace_back(ibQueryPredicate::Not(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false)),
+		c->m_cases.emplace_back(ibQueryPredicate::Not(BuildWherePredicate(sources, e, params, /*allowDotWalk*/false, ibHierarchyAnswer::Here)),
 		                        ibQueryColumnExpr::Const(ibValue(false)));
 		return c;
 	}

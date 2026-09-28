@@ -18,7 +18,7 @@
 #include "backend/query/tempTableQueryable.h" // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
 #include "backend/query/schemaSnapshot.h"     // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
 #include "backend/query/queryColumn.h"        // ibBackendQueryColumn::SyntheticId — a derived column's number
-#include "backend/query/queryHierarchy.h"     // ibQueryHierarchyScope — IN HIERARCHY in a reading's condition, resolved
+#include "backend/query/queryHierarchy.h"     // «IN HIERARCHY» — the words a reading's condition carries down (ibQueryDimUnfold)
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>   // std::find — the running grid names each figure once
@@ -1071,26 +1071,11 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 		const bool walks = !leaf.m_path.empty();
 		const ibBackendQueryColumn* column = find(walks ? leaf.m_path.front() : leaf.m_col);
 
-		// `IN HIERARCHY` on a surface in the database goes down AS NAMED — a walked field too, which rides as the
-		// EXISTS below and reaches the provider on the table it ends at: the database provider has the server
-		// walk the subtree (BuildSubtreeIn — WITH RECURSIVE) or reads it there when the driver cannot, so the
-		// target table is no longer read whole for every reading. A surface held in memory is resolved here into
-		// the subtree it stands for, read through the column the walk ends at — a filter over rows in memory
-		// cannot walk it (RefuseNamedHierarchy).
-		if (leaf.m_unfold != ibQueryDimUnfold::Elements && (source == nullptr || source->IsComputedInRam())) {
-			const ibBackendQueryable* owner = source;
-			const ibBackendQueryColumn* lhs = column;
-			for (size_t hop = 1; lhs != nullptr && walks && hop < leaf.m_path.size(); ++hop) {
-				owner = owner->GetProvider().ResolveReferenceTarget(owner, lhs);
-				lhs   = owner != nullptr ? owner->ResolveColumnByName(leaf.m_path[hop]->GetName()) : nullptr;
-			}
-			if (lhs == nullptr)
-				ibRegRefuseConditionColumn(leaf.m_col);
-			leaf.m_values = ibQueryHierarchyScope(owner, lhs, leaf.m_values, leaf.m_unfold).Accepted();
-			leaf.m_unfold = ibQueryDimUnfold::Elements;
-			leaf.m_op     = ibQueryFilterOp::In;
-		}
-		else if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
+		// `IN HIERARCHY` goes down AS NAMED — a walked field too, which rides as the EXISTS below and reaches the
+		// provider on the table it ends at — and the side that filters the rows answers it: the database has the
+		// server walk the subtree (BuildSubtreeIn — WITH RECURSIVE), rows in memory get it read where they are
+		// filtered (queryProvider SubtreeResolved). Not decided here: the reading does not own that question.
+		if (leaf.m_unfold != ibQueryDimUnfold::Elements) {
 			if (column == nullptr)
 				ibRegRefuseConditionColumn(leaf.m_col);
 			leaf.m_op = ibQueryFilterOp::In;   // the values as named; the provider walks them

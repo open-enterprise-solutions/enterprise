@@ -34,10 +34,12 @@
 // ⚠ NOT A CODE PREFIX. "Every account whose code starts with 60" is the tempting one-liner and it
 // is wrong: a code is a presentation somebody may re-number, the parent link is the fact.
 //
-// ⚠ THE SUBTREE IS RESOLVED INTO VALUES, not expressed as an operator the database has to
-// understand: what reaches the server is an ordinary IN, which every one of the four drivers renders
-// with no recursive CTE and no dialect that has to spell one. That is also why the language's
-// `IN HIERARCHY` takes a PARAMETER and never a subquery - the values have to be IN HAND first.
+// ⚠ THIS IS THE READ IN HAND, NOT THE ONLY ROAD. Since 2026-09-29 a condition that selects rows goes
+// down AS NAMED and the database has the server walk the subtree (dbTableProvider BuildSubtreeIn, WITH
+// RECURSIVE); this scope answers where the rows are filtered in memory (queryProvider SubtreeResolved),
+// where a driver cannot walk a tree (ODBC), inside an expression, and for the FOLD a source makes by the
+// word. The language's `IN HIERARCHY` takes a PARAMETER and never a subquery — the named values are the
+// roots of either walk, and they have to be in hand first.
 
 #include "backend/backend.h"          // BACKEND_API
 #include "backend/compiler/value.h"   // ibValue
