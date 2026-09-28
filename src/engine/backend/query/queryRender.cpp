@@ -707,12 +707,18 @@ wxString ibRenderQueryExpr(const ibQueryAstExpr& expr)
 // composition) bare, since it was read as one: `Number(15, 2)`, `Date(Date)`.
 wxString ibRenderQueryCastTarget(const ibQueryAstExpr& cast)
 {
+	// ⚠ Two returns, not `word ? GetString() : RenderExpr(…)`: an ibString and a wxString convert into
+	// each other, so the conditional has no type of its own — clang refuses it, MSVC picks one quietly.
+	const auto spell = [](const ibQueryAstExpr& q) -> wxString {
+		if (q.m_kind == ibQueryAstExprKind::Literal && q.m_literal.GetType() == ibValueTypes::TYPE_STRING)
+			return q.m_literal.GetString();
+		return RenderExpr(q);
+	};
 	wxString qualifiers;
 	for (const ibQueryAstExprPtr& q : cast.m_args) {
 		if (!q) continue;
 		qualifiers += qualifiers.IsEmpty() ? wxT("(") : wxT(", ");
-		qualifiers += q->m_kind == ibQueryAstExprKind::Literal && q->m_literal.GetType() == ibValueTypes::TYPE_STRING
-			? q->m_literal.GetString() : RenderExpr(*q);
+		qualifiers += spell(*q);
 	}
 	if (!qualifiers.IsEmpty()) qualifiers += wxT(")");
 	return Join(cast.m_path, wxT(".")) + qualifiers;

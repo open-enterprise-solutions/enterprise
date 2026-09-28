@@ -30,6 +30,14 @@ TEST(ValueTest, SizeofReport) {
     SUCCEED();
 }
 
+// THE COUNT SITS IN THE HOLE BEFORE THE UNION: vptr 8 + two bytes + 2 empty + the count 4 + the union 8.
+// Declared at the end of the class it took a word of its own and a value was 32 bytes on x64. Only the
+// 64-bit layout is pinned: a 32-bit one depends on how the ABI aligns the union's 8-byte member.
+TEST(ValueTest, TheCountSitsInThePaddingBeforeTheUnion) {
+    if (sizeof(void*) == 8)
+        EXPECT_EQ(sizeof(ibValue), 24u);
+}
+
 // ===========================================================================
 // One word for every kind — a string and a number live in the union
 // ===========================================================================

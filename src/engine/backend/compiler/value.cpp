@@ -75,28 +75,28 @@ BACKEND_API const ibValue wxEmptyValue;
 //**********************************************************************
 
 ibValue::ibValue()
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	DEBUG_VALUE_CREATE();
 }
 
 //copy constructor:
 ibValue::ibValue(const ibValue& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	Copy(varValue);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue&& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	Move(std::move(varValue));
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue* pValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_pRef(pValue), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(pValue)
 {
 	if (m_pRef != nullptr) {
 		m_typeClass = ibValueTypes::TYPE_REFFER;
@@ -106,7 +106,7 @@ ibValue::ibValue(ibValue* pValue)
 }
 
 ibValue::ibValue(ibBackendValue* pParam)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_pRef(pParam ? pParam->GetImplValueRef() : nullptr), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(pParam ? pParam->GetImplValueRef() : nullptr)
 {
 	if (m_pRef != nullptr) {
 		m_typeClass = ibValueTypes::TYPE_REFFER;
@@ -116,7 +116,7 @@ ibValue::ibValue(ibBackendValue* pParam)
 }
 
 ibValue::ibValue(const wxDateTime& cParam)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	const wxLongLong& llData = cParam.GetValue();
 	m_dData = llData.GetValue();
@@ -124,7 +124,7 @@ ibValue::ibValue(const wxDateTime& cParam)
 }
 
 ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	wxDateTime dataVal(nDay, (wxDateTime::Month)(nMonth - 1), nYear, nHour, nMinute, nSecond);
 	if (dataVal.IsValid()) {
@@ -138,7 +138,7 @@ ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned
 }
 
 ibValue::ibValue(ibValueTypes type, bool readOnly)
-	: m_typeClass(type), m_bReadOnly(readOnly), m_dData(0), m_refCount(0)
+	: m_typeClass(type), m_bReadOnly(readOnly), m_refCount(0), m_dData(0)
 {
 	switch (type)
 	{
@@ -164,7 +164,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 //Constructors by types:
 #define CVALUE_BYTYPE(v_parclass, v_type, v_value) \
 ibValue::ibValue (v_parclass cParam) \
-    : m_typeClass(v_type), m_bReadOnly(false), m_dData(0), m_refCount(0) \
+    : m_typeClass(v_type), m_bReadOnly(false), m_refCount(0), m_dData(0) \
 {\
 	v_value = cParam;\
 	DEBUG_VALUE_CREATE();\
@@ -184,28 +184,28 @@ CVALUE_BYTYPE(wxLongLong_t, ibValueTypes::TYPE_DATE, m_dData);
 // zeroed word itself. char* keeps the historical wxString(char*) conversion
 // (NOT ibString's UTF-8 path).
 ibValue::ibValue(const char* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wchar_t* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wxString& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime string functions)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_dData(0), m_refCount(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
 {
 	m_sData = std::move(cParam);
 	DEBUG_VALUE_CREATE();

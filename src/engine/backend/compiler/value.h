@@ -109,6 +109,14 @@ public:
 	//ATTRIBUTES:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
 	bool m_bReadOnly;          // 1 byte
+private:
+	// ⭐ THE COUNT FILLS THE HOLE BEFORE THE UNION. The two bytes above leave the rest of their word
+	// empty (the union is 8-aligned); declared at the end of the class the count took a word of its
+	// own there, so x64 paid 8 bytes of padding on every value: vptr 8 + 1 + 1 + 6 empty + union 8 +
+	// count 4 + 4 empty = 32. Here it is 8 + 1 + 1 + 2 + 4 + 8 = 24 (x86 stays 24 either way).
+	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory model. Never copied / moved:
+	// ibValue's copy/move ctors value-init it to 0, Copy/Move only touch the payload.
+	std::atomic<unsigned int> m_refCount;
 public:
 	// ⭐ ONE WORD FOR EVERY KIND. A string and a number live IN the union beside the pointers:
 	// each is one handle whose heap part (the text, a heap-tier BigImpl) counts its owners, so a
@@ -1776,16 +1784,6 @@ protected:
 	virtual bool DoDeserialize(const class ibDataNode& node);
 
 #pragma endregion
-private:
-	// NOTE: this sits at the END of the class, so under MSVC's declaration-order
-	// layout it occupies the TAIL word — the intended repack next to the two
-	// 1-byte scalars (to fill the hole before the 8-aligned union) never
-	// happened, and that hole is still padding. See docs/private/value-audit.md.
-	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory
-	// model; part of the incremental wxBase→std migration. Never copied /
-	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only
-	// touch the payload.
-	std::atomic<unsigned int> m_refCount;
 };
 
 // ---------------------------------------------------------------------------
