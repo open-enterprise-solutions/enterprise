@@ -361,12 +361,21 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	// validate it here so the common-tree blob stays self-describing (was the
 	// separate LoadHeader). Config keeps no version in the header (version lives in
 	// the common object's data).
+	//
+	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS — never a quiet false. Every caller hands in
+	// a blob it has already checked is not empty, so a missing header, a foreign sign or a missing
+	// configuration block means one thing: another format. Returned as false, the designer's start
+	// swallowed it and opened the DEFAULT configuration over an old base — an empty tree that one
+	// "Update database configuration" would have written over the real one (2026-09-28, a base of
+	// 2026-09-27). Raised, it reaches the start's message box and every menu's error window.
+	const auto unreadable = []() {
+		ibBackendCoreException::Error(_("This configuration is stored in a format this build cannot read: "
+			"it was written by an older or a different build. Nothing was loaded."));
+	};
 	{
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
-		if (!headerReader)
-			return false;
-		if (headerReader->r_u64() != sign_metadata)
-			return false;
+		if (!headerReader || headerReader->elapsed() < (int)sizeof(u64) || headerReader->r_u64() != sign_metadata)
+			unreadable();
 		wxString metaGuid;
 		headerReader->r_stringZ(metaGuid);
 	}
@@ -376,7 +385,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(clsid));
 
 	if (!readerMemory)
-		return false;
+		unreadable();
 
 	u64 meta_id = 0;
 	std::shared_ptr <ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
