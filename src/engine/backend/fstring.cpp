@@ -19,6 +19,9 @@
 #if defined(__APPLE__)
 #include <xlocale.h>     // newlocale / uselocale — Print's own UTF-8 locale
 #endif
+#if defined(_MSC_VER)
+#include <intrin.h>      // _BitScanReverse — the pool's class, counted
+#endif
 #include <new>
 #include <sstream>       // ToCDouble — the classic locale, whatever the process has set
 #include <stdexcept>     // std::out_of_range — insert past the end, as basic_string refused it
@@ -33,10 +36,30 @@ namespace detail {
 	constexpr int         kNum       = static_cast<int>(sizeof(kClasses) / sizeof(kClasses[0]));
 	constexpr std::size_t kCap       = 128;   // max cached blocks per class per thread
 
+	static_assert(kClasses[0] == 16, "ClassOf counts classes as powers of two from 16");
+
+	// The width of a number in bits — std::bit_width, which this C++17 tree does not have.
+	inline int BitWidth(std::size_t x) noexcept {
+		if (x == 0) return 0;
+#if defined(_MSC_VER)
+		unsigned long top;
+#  if defined(_WIN64)
+		_BitScanReverse64(&top, x);
+#  else
+		_BitScanReverse(&top, x);
+#  endif
+		return static_cast<int>(top) + 1;
+#else
+		return static_cast<int>(sizeof(unsigned long long) * 8) - __builtin_clzll(static_cast<unsigned long long>(x));
+#endif
+	}
+
+	// The class a block of this many bytes comes from (16 << class holds it), counted rather than searched:
+	// a string's making and its going both ask.
 	inline int ClassOf(std::size_t bytes) noexcept {
-		for (int i = 0; i < kNum; ++i)
-			if (bytes <= kClasses[i]) return i;
-		return -1;   // larger than the biggest class → straight to ::operator new
+		if (bytes <= kClasses[0]) return 0;
+		if (bytes > kClasses[kNum - 1]) return -1;   // larger than the biggest class → straight to ::operator new
+		return BitWidth(bytes - 1) - 4;               // 17..32 → 1, 33..64 → 2, … 2049..4096 → 8
 	}
 
 	struct Node { Node* next; };
