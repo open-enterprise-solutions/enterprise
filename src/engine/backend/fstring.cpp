@@ -65,8 +65,11 @@ namespace detail {
 	struct Node { Node* next; };
 
 	struct ThreadPool {
-		Node*         head[kNum]  = {};
-		std::size_t   count[kNum] = {};
+		// ⚠ NO INITIALIZERS: a thread_local of a trivial type is zeroed STATICALLY. `= {}` here gave the pool a
+		// constructor, and MSVC then asked a lazy-init guard at EVERY access — four of them in one free, seen in
+		// the disassembly (`cmp byte ptr [tls+0A0h],0 … call __dyn_tls_on_demand_init`, 2026-09-28).
+		Node*         head[kNum];
+		std::size_t   count[kNum];
 
 		// Hand every cached block back to the CRT. Shared by Drain() and, off Windows, by the
 		// destructor below.
@@ -114,20 +117,13 @@ namespace detail {
 
 } // namespace detail
 
-// What a block asked for this many bytes really holds: its class's size, or exactly this past the largest class.
-inline std::size_t Capacity(std::size_t bytes) noexcept {
-	const int c = detail::ClassOf(bytes == 0 ? 1 : bytes);
-	return c < 0 ? bytes : detail::kClasses[c];
-}
-
-inline void* Allocate(std::size_t bytes) {
-	if (bytes == 0) bytes = 1;
-	const int c = detail::ClassOf(bytes);
-	if (c < 0)
-		return ::operator new(bytes);
-	if (detail::Node* n = detail::t_pool.head[c]) {   // reuse a cached block
-		detail::t_pool.head[c] = n->next;
-		--detail::t_pool.count[c];
+// A block of class `c`: a cached one, or a fresh one of the class's full size. The caller has counted the class
+// already — the string's block asks it once, and knows then how much room it gets.
+inline void* AllocateClass(int c) {
+	detail::ThreadPool& pool = detail::t_pool;       // the thread's pool reached once
+	if (detail::Node* n = pool.head[c]) {            // reuse a cached block
+		pool.head[c] = n->next;
+		--pool.count[c];
 		return n;
 	}
 	return ::operator new(detail::kClasses[c]);       // fresh block, full class size
@@ -135,16 +131,14 @@ inline void* Allocate(std::size_t bytes) {
 
 inline void Deallocate(void* p, std::size_t bytes) noexcept {
 	if (p == nullptr) return;
-	if (bytes == 0) bytes = 1;
-	const int c = detail::ClassOf(bytes);
-	if (c < 0 || detail::t_pool.count[c] >= detail::kCap) {
-		::operator delete(p);                          // oversized, or cache full → return to OS
-		return;
-	}
+	const int c = detail::ClassOf(bytes == 0 ? 1 : bytes);
+	if (c < 0) { ::operator delete(p); return; }      // oversized → return to the OS
+	detail::ThreadPool& pool = detail::t_pool;
+	if (pool.count[c] >= detail::kCap) { ::operator delete(p); return; }   // cache full
 	detail::Node* n = static_cast<detail::Node*>(p);   // cache for reuse
-	n->next = detail::t_pool.head[c];
-	detail::t_pool.head[c] = n;
-	++detail::t_pool.count[c];
+	n->next = pool.head[c];
+	pool.head[c] = n;
+	++pool.count[c];
 }
 
 // Hands this thread's cached blocks back to the CRT. The cache exists to make string churn
@@ -175,10 +169,14 @@ struct ibString::Impl : ibString::Shared
 
 	static size_t BytesFor(size_t cap) noexcept { return sizeof(Shared) + (cap + 1) * sizeof(wchar_t); }
 
-	// Room for `cap` characters at least — and for as many more as the pool's block holds anyway.
+	// Room for `cap` characters at least — and for as many more as the pool's block holds anyway. The class is
+	// counted once: it says which block and how big it is.
 	static Impl* Make(size_t cap) {
-		const size_t bytes = ibFStringPool::Capacity(BytesFor(cap));
-		return new (ibFStringPool::Allocate(bytes)) Impl((bytes - sizeof(Shared)) / sizeof(wchar_t) - 1);
+		const size_t asked = BytesFor(cap);
+		const int c = ibFStringPool::detail::ClassOf(asked);
+		const size_t bytes = c < 0 ? asked : ibFStringPool::detail::kClasses[c];
+		void* const place = c < 0 ? ::operator new(bytes) : ibFStringPool::AllocateClass(c);
+		return new (place) Impl((bytes - sizeof(Shared)) / sizeof(wchar_t) - 1);
 	}
 	static Impl* Copy(const wchar_t* text, size_t len, size_t cap) {
 		Impl* const impl = Make(cap < len ? len : cap);
