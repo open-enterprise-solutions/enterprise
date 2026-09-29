@@ -6403,7 +6403,12 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 		objectReads.emplace(kv.first, std::make_pair(kv.second.m_prefix, kv.second.m_leaf));
 
 	ibSelector s(std::make_unique<ibResultRowCursor>(m_source, m_matColumns, std::move(objectReads)), mode);
-	s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);            // fold by the door's TotalBy config
+	// ⚠ …AND A DIRECT WALK IS NOT TOLD OF THE OVERALL ROW, because it folds nothing: its tree is the RECORDS, one flat
+	// layer under a root that holds no figure. Told of it, the walk visited that root and nothing else — a totals
+	// query read directly (`Select()`, `Unload()`) came back as ONE row with every column blank, over a register as
+	// over a value table (2026-09-29). The totals are the grouped walk's.
+	s.WithTotals(m_totalLevels, m_totalAggregates,
+	             m_totalsOverall && mode != ibSelectKind::ibSelectKind_Direct);   // fold by the door's TotalBy config
 	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
 	// ⚠ AND IT IS NOT FOLDED HERE. A selection is configured AFTER it is made — MakeChild adds
 	// ByParentRef / ByGroups / Aggregating to what this hands back — so folding at this point would
