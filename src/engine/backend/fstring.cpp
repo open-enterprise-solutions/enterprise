@@ -355,15 +355,13 @@ void ibString::SetUtf8(const char* p, size_t n)
 	SetLength(len);
 	// …and a text of characters longer than a byte has room for its BYTES: Cyrillic twice what it takes, CJK
 	// three times, for as long as the string lives - and a string a parser made lives in the value it built.
-	// When the characters fit a smaller block, they move to one: once, only for such a text (an ASCII text has
-	// as many characters as bytes and never moves), and only when the smaller block is a smaller allocation.
-	if (len < n) {
-		const size_t exact = Impl::BytesFor(len);
-		const int c = ibFStringPool::detail::ClassOf(exact);
-		const size_t block = c < 0 ? exact : ibFStringPool::detail::kClasses[c];
-		if (block < Impl::BytesFor(Impl::Of(m_impl)->m_cap))
-			*this = ibString(chars, len);
-	}
+	// A LONG one moves to a block of its own size, once: its block is past the pool (a plain allocation of
+	// exactly what was asked), so the room is real memory. A short one stays: inside the pool the slack is one
+	// size class at most and the block goes back to be reused, while the move is a second allocation and a
+	// copy on every decode - "Privet" x4 on a 4-byte wchar_t asks 256 bytes by its bytes and 128 by its
+	// characters, and moving it cost the decode about 30% (2026-09-29). An ASCII text never moves either.
+	if (len < n && Impl::BytesFor(Impl::Of(m_impl)->m_cap) > ibFStringPool::detail::kClasses[ibFStringPool::detail::kNum - 1])
+		*this = ibString(chars, len);
 }
 
 ibString ibString::FromUTF8(const char* s, size_t n)
