@@ -44,9 +44,9 @@
 # A run cancelled by a newer push (concurrency, below) still saves what it
 # compiled — so the run after it starts from that part, not from nothing.
 #
-# Not on Windows yet: MSVC's Debug writes debug info into a shared PDB (/Zi),
-# and ccache caches only objects that carry their own (/Z7) — that is a change
-# to the build's flags, not to this file.
+# ⭐ AND ON WINDOWS (2026-09-29), where it was never on: MSVC's Debug writes debug info into
+# a shared PDB (/Zi, CMake's default), and ccache caches only objects that carry their own
+# (/Z7) — so the job configures with /Z7, for itself only (see the note at its Configure).
 
 name: CI
 
@@ -213,6 +213,12 @@ jobs:
   build-windows:
     name: Build (Windows, x64 Debug)
     runs-on: windows-2022
+    # The compiler cache — see the note at the top of this file. The same five lines on every job that has it.
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1500M
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -230,11 +236,30 @@ jobs:
         with:
           arch: x64
 
+      # The runner image has no ccache; Chocolatey does, and puts it on the PATH the launcher above names.
+      - name: Install ccache
+        run: choco install ccache --no-progress -y
+
+      - name: Compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
+          restore-keys: ccache-${{ github.job }}-
+
       # Same driver set as the Linux jobs — see the note there. Firebird belongs ON here
       # in particular: it is the DEFAULT driver on the shipping platform, so leaving it
       # off meant the MSVC build never compiled the driver this product actually runs.
+      #
+      # ⚠ THE DEBUG INFO IN EACH OBJECT (/Z7), not in one PDB the compiles share (/Zi, CMake's own Debug default):
+      # ccache refuses /Zi as an unsupported option (argprocessing.cpp — "/Zi and /ZI are unsupported, but /Z7 is
+      # fine"), so every compile of this job was a miss by construction. Said for this job only: the flags are
+      # CMake's Debug defaults with the one letter changed, and a developer's own build keeps its /Zi.
+      # And wxWidgets without precompiled headers, as on Linux (the note at the top).
       - name: Configure
-        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+        run: >
+          cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+          -DwxBUILD_PRECOMP=OFF "-DCMAKE_C_FLAGS_DEBUG=/Z7 /Ob0 /Od /RTC1" "-DCMAKE_CXX_FLAGS_DEBUG=/Z7 /Ob0 /Od /RTC1"
 
       # Same target set as Linux — see the note there.
       - name: Build the test targets
@@ -263,6 +288,17 @@ jobs:
       # so if they only ever compile in one place, it has to be this one.
       - name: Build the applications
         run: cmake --build --preset windows-x64-debug
+
+      # Saved whatever the tests said, as on Linux.
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache -s -v; exit 0
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ github.sha }}
 
   # ---------------------------------------------------------------------------
   # PostgreSQL — the only job that talks to a REAL server.
