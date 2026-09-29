@@ -25,7 +25,9 @@
 // (`ResolveReferenceTarget`, the one metadata owner), the target vends its row key and its parent
 // column, and the whole parent map is read in ONE query. This is the same road `TOTALS BY x
 // HIERARCHY` already takes (`ibQueryComposer::BuildReferenceHierarchy`) — one mechanism, so a report
-// and a filter that both say "in hierarchy" cannot come to mean different things.
+// and a filter that both say "in hierarchy" cannot come to mean different things. A column that names
+// no catalog (a value table's, declared with no type) is refused in words: it is given a type (CAST),
+// not guessed from the values.
 //
 // ⚠ It was written the other way round first — from the VALUE: cast it to a reference, ask its
 // metaobject for a parent link, then one query PER NODE. That is a metadata cast in a tier that is

@@ -326,6 +326,7 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			struct ibBoundTable {
 				const ibValueModelTable*              m_table = nullptr;
 				unsigned int                          m_columns = 0;
+				const ibMetaData*                     m_metaData = nullptr;   // the config its references are read in
 				ibValue                               m_value;   // keeps the table the wrap reads alive
 				std::shared_ptr<ibTempTableQueryable> m_wrap;
 			};
@@ -334,12 +335,14 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 			bound->second.ConvertToValue(table);
 			const unsigned int columns = table != nullptr && table->GetColumnCollection() != nullptr
 				? table->GetColumnCollection()->GetColumnCount() : 0;
+			const ibMetaData* metaData = ibSourceMetaDataScope::Get();
 			ibBoundTable& held = s_boundTables[src.m_name[0]];
-			if (!held.m_wrap || held.m_table != table || held.m_columns != columns) {
-				held.m_table   = table;
-				held.m_columns = columns;
-				held.m_value   = bound->second;
-				held.m_wrap    = std::make_shared<ibTempTableQueryable>(bound->second);
+			if (!held.m_wrap || held.m_table != table || held.m_columns != columns || held.m_metaData != metaData) {
+				held.m_table    = table;
+				held.m_columns  = columns;
+				held.m_metaData = metaData;
+				held.m_value    = bound->second;
+				held.m_wrap     = std::make_shared<ibTempTableQueryable>(bound->second, metaData);
 			}
 			if (!held.m_wrap->GetColumns().empty())
 				return held.m_wrap.get();
@@ -3331,6 +3334,26 @@ bool SortsOverRow(const ibQuerySelect& ast, const std::vector<ibQueryColumnSelec
 	return false;
 }
 
+// …and whether a GROUP BY key is one of them — which the engine could only group by its input, so the groups are
+// folded again once the key is known (RefoldOverRow). Recognised as the key the author also SELECTS, compared as
+// text the way the grouping compares a computed key with a projection.
+bool GroupsOverRow(const ibQuerySelect& ast, const std::vector<ibQueryColumnSelect>& overRow)
+{
+	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
+		if (!g || !IsComputedExprAst(*g))
+			continue;
+		const wxString written = ibRenderQueryExpr(*g);
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (!p.m_expr || ibRenderQueryExpr(*p.m_expr) != written)
+				continue;
+			for (const ibQueryColumnSelect& over : overRow)
+				if (over.m_alias.CmpNoCase(ibQueryOutputName(p)) == 0)
+					return true;
+		}
+	}
+	return false;
+}
+
 // ⭐ ORDER BY AN OUTPUT ANSWERED OVER THE FINISHED ROW — `ORDER BY Qty` over `CAST(G.Qty AS Number(15, 2)) AS Qty`,
 // a PRESENTATION, a VALUETYPE. No engine sees such an output, so none can sort by it: the rows are read here as the
 // author sees them (ReadVisibleRows), sorted by EVERY key the query names — so the order written holds together —
@@ -4347,7 +4370,18 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// A FOLDING inner (GROUP BY, with or without aggregate projections) is fine: the wrapper reads the
 	// fold off the builder and ComputeRows runs SelectAggregate — the unpaged, full-spread read a
 	// grouped query needs. The outer's pushed-down conditions post-filter the materialised rows.
-	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions);
+	//
+	// ⭐ AN OUTPUT ANSWERED OVER THE FINISHED ROW — `CAST(V.Item AS Catalog.Goods)` over a value table, a
+	// PRESENTATION — is answered by the wrapper as the statement's result answers it: the inner read is told
+	// the list (ibSubqueryQueryable::SetComputedOverRow) and the column is read back by its name. It was
+	// refused here ("cannot be read back"), so the outer query could not filter by a column it had typed.
+	std::vector<ibQueryColumnSelect> overRow;
+	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+	// …but only READ: the statement road dedupes, re-folds and sorts by such an output once it is known
+	// (DedupeOverRow, RefoldOverRow, SortOverRow), and a nested query has no place to — refused, with the road that has.
+	if (!overRow.empty() && (sel.m_distinct || GroupsOverRow(sel, overRow) || SortsOverRow(sel, overRow)))
+		ThrowQueryException(0, 0, _("a nested query may not DISTINCT, group or order by an output computed over its "
+		                            "finished rows - put it INTO a temporary table first"));
 
 	// ibSubqueryQueryable copies the inner door (shares its owned raw columns via shared_ptr), so the
 	// local 'inner' may die here — the copy is self-sufficient. The wrapper itself lives in 'owner'.
@@ -4376,6 +4410,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// than a bare pointer. `owner` is simply the run's own share.
 	std::shared_ptr<ibSubqueryQueryable> wrapped =
 		std::make_shared<ibSubqueryQueryable>(inner, sel.m_top, published);
+	wrapped->SetComputedOverRow(std::move(overRow));
 	owner.push_back(wrapped);
 	return wrapped;
 }
@@ -6375,7 +6410,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
 
-		store.Put(ast.m_intoTemp, std::move(snapshot), indexed);
+		store.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's config's
 
 		// ⭐ AND INTO THE REGISTRY THE SCOPE IS OPEN OVER, so the next statement — and the query this
 		// was all prepared for — resolve the name straight to the table.
@@ -6852,7 +6887,7 @@ std::vector<ibQueryLowering::PackageResult> ibQueryLowering::ExecutePackage(
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
 
-		temps.Put(ast.m_intoTemp, std::move(snapshot), indexed);
+		temps.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's config's
 
 		// WHAT A CREATE-TEMP STATEMENT HANDS BACK: a RESULT of one column and one row, holding the
 		// number of records placed in the table — not a bare number.
@@ -7174,24 +7209,8 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	// TOP then counts the rows that remain.
 	const bool dedupeOverRow = ast.m_distinct && !computedOverRow.empty();
 
-	// …and a GROUP BY key answered over the finished row, which the engine could only group by its input —
-	// the groups are folded again once the key is known (RefoldOverRow). Recognised as the key the author
-	// also SELECTS, compared as text the way the grouping above compares a computed key with a projection.
-	const bool refoldOverRow = aggregate && !computedOverRow.empty() && [&]() {
-		for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
-			if (!g || !IsComputedExprAst(*g))
-				continue;
-			const wxString written = ibRenderQueryExpr(*g);
-			for (const ibQueryProjection& p : ast.m_projections) {
-				if (!p.m_expr || ibRenderQueryExpr(*p.m_expr) != written)
-					continue;
-				for (const ibQueryColumnSelect& over : computedOverRow)
-					if (over.m_alias.CmpNoCase(ibQueryOutputName(p)) == 0)
-						return true;
-			}
-		}
-		return false;
-	}();
+	// …and a GROUP BY key answered over the finished row (GroupsOverRow).
+	const bool refoldOverRow = aggregate && GroupsOverRow(ast, computedOverRow);
 
 	// …and an ORDER BY naming such an output: PopulateBuilder left the order out, so the rows are sorted once the
 	// outputs are known (SortOverRow) — and TOP waits for the sort, as it waits for the dedupe.

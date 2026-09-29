@@ -6,6 +6,7 @@
 
 #include "dataQueryBuilder.h"   // L3 door - the one read the whole walk needs
 #include "queryProvider.h"      // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
+#include "queryException.h"     // ibBackendQueryException - a column that names no catalog, refused in words
 
 namespace {
 
@@ -67,18 +68,32 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 	// tier that owns none. A COMPOSITE reference names several targets and gets a map from each — the
 	// keys carry their own type, so two charts cannot be confused for one another.
 	std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual> childrenOf;
+	const ibBackendQueryColumn* namesNoCatalog = nullptr;   // refused below, once a value is named under it
 	if (source != nullptr && column != nullptr) {
 		const ibBackendQueryProvider& provider = source->GetProvider();
+		std::vector<const ibBackendQueryable*> targets;
 		if (const ibBackendQueryable* single = provider.ResolveReferenceTarget(source, column))
-			ReadChildrenMap(single, childrenOf);
+			targets.push_back(single);
 		else
-			for (const ibBackendQueryable* target : provider.ResolveReferenceTargets(source, column))
-				ReadChildrenMap(target, childrenOf);
+			targets = provider.ResolveReferenceTargets(source, column);
+		for (const ibBackendQueryable* target : targets)
+			ReadChildrenMap(target, childrenOf);
+		if (targets.empty())
+			namesNoCatalog = column;
 	}
 
 	for (const ibValue& value : named) {
 		if (value.IsEmpty())
 			continue;
+
+		// ⚠ A COLUMN THAT NAMES NO CATALOG CANNOT BE WALKED — a value table's column declared with no type, a
+		// source that answers no configuration. Standing for the named values alone, it found not one row under
+		// a group and said nothing (2026-09-29); refused instead, with the way out: the column is given a type.
+		if (namesNoCatalog != nullptr)
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, wxString::Format(
+				_("IN HIERARCHY over '%s', which names no catalog - give the column a type: declare it on the table, "
+				  "or select CAST(%s AS Catalog.<Name>)"),
+				namesNoCatalog->GetName(), namesNoCatalog->GetName()));
 
 		// Descend from the named value. A node is expanded ONCE: a cycle in a parent link is a corrupt
 		// tree rather than a legitimate shape, and a reading is not the place to hang because of one.

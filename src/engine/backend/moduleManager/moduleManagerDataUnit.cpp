@@ -119,7 +119,7 @@ bool ibValueModuleManager::ibValueDataUnit::CallAsFunc(const long lMethodNum, ib
 		// The wrapper copies the table reference (the held ibValue keeps it alive);
 		// the Queryable OWNS the wrapper and shares it across chain links.
 		pvarRetValue = new ibValueQueryable(
-			std::make_shared<ibTempTableQueryable>(*paParams[0]), wxT("From"));
+			std::make_shared<ibTempTableQueryable>(*paParams[0], m_metaData), wxT("From"));
 		return true;
 	}
 	}

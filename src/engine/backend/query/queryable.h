@@ -1009,6 +1009,11 @@ public:
 	// (2026-08-20). A wrapper is not a metadata-free source: it is a query over one.
 	const ibMetaData* GetMetaData() const override;
 
+	// ⭐ THE OUTPUTS NO ENGINE CAN BE ASKED FOR — an expression answered over the finished row (a CAST that re-types a
+	// value, a PRESENTATION). Handed to every inner read, as the statement's own result is handed them
+	// (ibDataQueryResult::SetComputedOverRow), so a column published by name is answered when it is read.
+	void SetComputedOverRow(std::vector<ibQueryColumnSelect> columns) { m_computedOverRow = std::move(columns); }
+
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
 	std::vector<const ibBackendQueryColumn*> m_columns;   // exposed columns (select list / SELECT * / group keys + agg aliases)
@@ -1027,6 +1032,7 @@ private:
 	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;
 	bool m_aggregate = false;
 	long m_top = 0;
+	std::vector<ibQueryColumnSelect> m_computedOverRow;   // SetComputedOverRow
 };
 
 // ibBackendQueryColumn — the column counterpart, lives in queryColumn.h (included

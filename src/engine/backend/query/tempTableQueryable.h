@@ -94,7 +94,9 @@ public:
 	// Build from a pre-filled RAM table (an ibValue wrapping ibValueModelTable): derive
 	// the generic columns from its collection (name / id / type), each keyed by the SAME
 	// id the rows are stored at — so the RAM source reads every column by GetColumnId().
-	explicit ibTempTableQueryable(ibValue table) : m_table(std::move(table))
+	// `metaData` — the configuration its references belong to (see GetMetaData).
+	explicit ibTempTableQueryable(ibValue table, const ibMetaData* metaData = nullptr)
+		: m_table(std::move(table)), m_metaData(metaData)
 	{
 		ibValueModelTable* rows = nullptr;
 		if (m_table.ConvertToValue(rows) && rows != nullptr) {
@@ -180,8 +182,14 @@ public:
 	wxString GetQueryTableName() const override { return wxEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
+	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — handed in by whoever wraps the table (the query it is
+	// read by, the Data unit, the other side of a join). With none, a reference column could not say which
+	// catalog it points at, and «IN HIERARCHY» over it stood for the named values alone (2026-09-29).
+	const ibMetaData* GetMetaData() const override { return m_metaData; }
+
 private:
 	ibValue                                    m_table;     // owns the pre-filled rows
+	const ibMetaData*                          m_metaData = nullptr;
 	std::vector<std::unique_ptr<ibTempColumn>> m_columns;   // generic columns, keyed by source-id
 };
 

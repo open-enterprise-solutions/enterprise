@@ -34,6 +34,7 @@
 #include <vector>
 
 class ibBackendQueryable;
+class ibMetaData;
 
 class BACKEND_API ibQueryTempTableStore
 {
@@ -58,8 +59,11 @@ public:
 	// what an index IS, and a clause that only wrote itself into the text would be a control over
 	// nothing. Names the snapshot does not have are ignored — the statement that made the table
 	// decides its columns, and an index over a column it did not project is simply not there.
+	//
+	// `metaData` — the configuration the query ran on behalf of: the stored table answers it, so a reference
+	// in it can be followed to its catalog (a walk, «IN HIERARCHY»), as it can in the table it was read from.
 	void Put(const wxString& name, ibQueryRamTable&& rows,
-	         const std::vector<wxString>& indexedColumns = {});
+	         const std::vector<wxString>& indexedColumns = {}, const ibMetaData* metaData = nullptr);
 
 	// Release one table. False when the name is not there — the caller decides whether that is an
 	// error (in a package it is: a drop of something never made is a typo or a statement that

@@ -280,8 +280,23 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 
 	// SELECT DISTINCT over a computed source (subquery / slice) -- dedup by the output columns while keeping
 	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
+	//
+	// ⭐ THE OUTPUTS ARE WHAT Distinct() WAS TOLD — the author's fields, a walk's leaf among them — and the computed
+	// ones, as the database provider projects them under DISTINCT. The select list alone missed the walks: a walk
+	// is no select column, so `SELECT DISTINCT T.Item.Parent` over a source in memory kept every row (2026-09-29).
 	distinct.Resume();
-	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
+	std::vector<ibMetaID> distinctBy;
+	if (spec.m_distinct && spec.m_distinctBy != nullptr && !spec.m_distinctBy->empty()) {
+		for (const ibBackendQueryColumn* c : *spec.m_distinctBy)
+			if (c != nullptr)
+				distinctBy.push_back(c->GetColumnId());
+		for (const ibComputedExprColumn& e : exprCols)
+			distinctBy.push_back(e.GetColumnId());
+	}
+	else if (spec.m_distinct && spec.m_selectCols != nullptr)
+		for (const auto& sc : *spec.m_selectCols)
+			distinctBy.push_back(sc.first->GetColumnId());
+	if (!distinctBy.empty()) {
 		ibQueryRamTable deduped = RamTableOf(cols);
 		// A row identity is the SEQUENCE of its cells — see ibValueSeqHash (value.h).
 		// It used to be those cells folded into one string through GetHashKey and
@@ -290,9 +305,9 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 		std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seen;
 		for (long i = 0; i < rows.RowCount(); ++i) {
 			std::vector<ibValue> key;
-			key.reserve(spec.m_selectCols->size());
-			for (const auto& sc : *spec.m_selectCols)
-				key.push_back(rows.GetCell(i, sc.first->GetColumnId()));
+			key.reserve(distinctBy.size());
+			for (const ibMetaID id : distinctBy)
+				key.push_back(rows.GetCell(i, id));
 			if (!seen.insert(std::move(key)).second) continue;
 			AppendRowByCols(rows, i, deduped, cols);
 		}
@@ -855,6 +870,8 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 		// name. The outer's pushed-down conditions reference POST-aggregation output (HAVING
 		// semantics), so they apply as a RAM post-filter here, never on the inner WHERE.
 		ibDataQueryResult sel = m_inner->SelectAggregate();
+		if (!m_computedOverRow.empty())
+			sel.SetComputedOverRow(m_computedOverRow);   // an output answered over the row is answered when read
 		long emitted = 0;
 		std::vector<ibValue> rowVals(m_columns.size());
 		while (sel.Next()) {
@@ -912,6 +929,10 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	execute.Resume();
 	ibDataQueryResult sel = q.Execute(page);
 	execute.Pause();
+	// An output answered over the row is answered when it is read — and a result that answers one hands no
+	// table over (GetTable), so the rows go through readCell below.
+	if (!m_computedOverRow.empty())
+		sel.SetComputedOverRow(m_computedOverRow);
 
 	// ⭐ AN INNER QUERY THAT CAME BACK AS A TABLE IS TAKEN WHOLE — its rows re-keyed under the columns
 	// this query publishes, not read out cell by cell into a second table while the first one dies. Each
@@ -3250,10 +3271,14 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		if (it == buckets.end()) { keyOrder.push_back(key); buckets.emplace(std::move(key), std::vector<long>{ i }); }
 		else it->second.push_back(i);
 	}
-	if (spec.m_groupBy->empty() && rows > 0) {          // aggregate with no GROUP BY = one bucket
-		std::vector<long> all; all.reserve(static_cast<size_t>(rows));
-		for (long i = 0; i < rows; ++i) all.push_back(i);
-		buckets.emplace(std::vector<ibValue>(), all); keyOrder.push_back(std::vector<ibValue>());
+	// ⭐ AN AGGREGATE WITH NO GROUP BY IS ONE GROUP, over whatever rows there are — none included: SQL answers
+	// COUNT(*) over nothing with one row holding 0, not with no row. The loop above already filed every row
+	// under the empty key; this used to file them there AGAIN and list the key twice, so every such fold in
+	// memory came back as two identical rows (since 2026-06-09 — every check read the first), and over no rows
+	// it came back empty.
+	if (spec.m_groupBy->empty() && keyOrder.empty()) {
+		buckets.emplace(std::vector<ibValue>(), std::vector<long>());
+		keyOrder.push_back(std::vector<ibValue>());
 	}
 
 	// A computed key has no model column to take an id / name from, so it gets a synthetic id in its

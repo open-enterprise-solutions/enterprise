@@ -43,8 +43,8 @@ private:
 class ibTempStoreQueryable : public ibBackendQueryable
 {
 public:
-	ibTempStoreQueryable(ibQueryRamTable&& rows, const std::vector<wxString>& indexedColumns)
-		: m_rows(std::move(rows))
+	ibTempStoreQueryable(ibQueryRamTable&& rows, const std::vector<wxString>& indexedColumns, const ibMetaData* metaData)
+		: m_rows(std::move(rows)), m_metaData(metaData)
 	{
 		for (const ibQueryRamColumn& c : m_rows.Columns())
 			m_columns.push_back(std::make_unique<ibTempStoreColumn>(c.m_name, c.m_type, c.m_id, c.m_available));
@@ -152,8 +152,15 @@ public:
 	wxString GetQueryTableName() const override { return wxEmptyString; }
 	ibMetaID GetQueryTableId()   const override { return 0; }
 
+	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — the query's, handed in when the table is stored, as the
+	// named query takes it (ibCteQueryable). With none, a reference column could not say which catalog it
+	// points at, and «IN HIERARCHY» over it stood for the named values alone: not one row under the group
+	// was found, and nothing said so (2026-09-29).
+	const ibMetaData* GetMetaData() const override { return m_metaData; }
+
 private:
 	ibQueryRamTable                                  m_rows;
+	const ibMetaData*                                m_metaData = nullptr;
 	std::vector<std::unique_ptr<ibTempStoreColumn>>  m_columns;
 	// INDEXED BY: column id -> the value each row carries -> the rows carrying it.
 	std::map<ibMetaID, std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual>> m_indexes;
@@ -175,9 +182,9 @@ bool ibQueryTempTableStore::Has(const wxString& name) const
 }
 
 void ibQueryTempTableStore::Put(const wxString& name, ibQueryRamTable&& rows,
-                                const std::vector<wxString>& indexedColumns)
+                                const std::vector<wxString>& indexedColumns, const ibMetaData* metaData)
 {
-	auto table = std::make_unique<ibTempStoreQueryable>(std::move(rows), indexedColumns);
+	auto table = std::make_unique<ibTempStoreQueryable>(std::move(rows), indexedColumns, metaData);
 	m_sources[name] = table.get();
 	m_owned.push_back(std::move(table));
 }

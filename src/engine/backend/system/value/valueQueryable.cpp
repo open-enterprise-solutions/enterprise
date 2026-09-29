@@ -517,7 +517,8 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 	// RAM table is the OUTER (computed) leaf, the inner DB queryable is args[0]. The composer
 	// temp-promotes the computed outer and runs the join server-side. leftKey / rightKey /
 	// projection map 1:1 onto JoinPushDown's outer / inner / result-selector.
-	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver)), wxT("Join"));
+	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver), innerQV->GetQueryable()->GetMetaData()),
+	                         wxT("Join"));   // its references are read in the configuration of the side it joins
 	return wrapped.JoinPushDown(ret, args, n);
 }
 
