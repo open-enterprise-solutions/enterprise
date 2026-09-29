@@ -4303,6 +4303,68 @@ std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, c
 	return b0;
 }
 
+// Drain a finished selection into a snapshot — defined below, with the package that puts one INTO a temp table.
+ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result, const std::vector<OutputColumn>& schema);
+
+// ⭐⭐ A NESTED QUERY THE STATEMENT ROAD ANSWERS — when it DISTINCTs or groups by an output answered over its finished
+// rows (a CAST that re-types a value, a VALUETYPE). Those steps come after the read, where a statement's own result
+// takes them (DedupeOverRow, RefoldOverRow); a nested query read through a door has no such place. So its rows are the statement's: run as a query of its own when they are first READ — never while the
+// query around it is only described — and drained as a temp table is (DrainIntoSnapshot, columns numbered 1 on).
+class ibStatementRowsQueryable : public ibBackendQueryable
+{
+public:
+	ibStatementRowsQueryable(const ibQuerySelect& sel, const std::map<wxString, ibValue>& params,
+	                         const std::vector<OutputColumn>& schema, const ibMetaData* metaData)
+		: m_sel(std::make_shared<ibQuerySelect>(sel)), m_params(params), m_metaData(metaData)
+	{
+		for (size_t i = 0; i < schema.size(); ++i)
+			m_columns.push_back(std::make_shared<ibTempColumn>(schema[i].m_name, schema[i].GetTypeDesc(),
+			                                                   static_cast<ibMetaID>(i + 1)));
+	}
+
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> out;
+		for (const std::shared_ptr<ibTempColumn>& c : m_columns)
+			out.push_back(c.get());
+		return out;
+	}
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	{
+		for (const std::shared_ptr<ibTempColumn>& c : m_columns)
+			if (c->GetName().IsSameAs(name, false))
+				return c.get();
+		return nullptr;
+	}
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	{
+		for (const std::shared_ptr<ibTempColumn>& c : m_columns)
+			if (c.get() == col)
+				return true;
+		return false;
+	}
+
+	bool IsComputedInRam() const override { return true; }
+	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
+	const ibMetaData* GetMetaData() const override { return m_metaData; }   // the query's, as a temp table's
+	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibMetaID GetQueryTableId()    const override { return 0; }
+
+	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override
+	{
+		const ibSourceMetaDataScope configuration(m_metaData);
+		std::vector<OutputColumn> schema;
+		ibDataQueryResult read = ibQueryLowering::Execute(*m_sel, m_params, schema);
+		return DrainIntoSnapshot(read, schema);
+	}
+
+private:
+	std::shared_ptr<const ibQuerySelect>        m_sel;
+	std::map<wxString, ibValue>                 m_params;
+	const ibMetaData*                           m_metaData = nullptr;
+	std::vector<std::shared_ptr<ibTempColumn>>  m_columns;
+};
+
 std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& sel,
                                                 const std::map<wxString, ibValue>& params,
                                                 ibSubqueryOwner& owner)
@@ -4377,11 +4439,28 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// refused here ("cannot be read back"), so the outer query could not filter by a column it had typed.
 	std::vector<ibQueryColumnSelect> overRow;
 	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
-	// …but only READ: the statement road dedupes, re-folds and sorts by such an output once it is known
-	// (DedupeOverRow, RefoldOverRow, SortOverRow), and a nested query has no place to — refused, with the road that has.
-	if (!overRow.empty() && (sel.m_distinct || GroupsOverRow(sel, overRow) || SortsOverRow(sel, overRow)))
-		ThrowQueryException(0, 0, _("a nested query may not DISTINCT, group or order by an output computed over its "
-		                            "finished rows - put it INTO a temporary table first"));
+	// …and where it also DISTINCTs or groups by one, the statement road reads it whole (ibStatementRowsQueryable)
+	// and the wrapper stands over those rows, published as the statement names them. (No ORDER BY reaches here:
+	// the parser keeps it to a statement.)
+	if (!overRow.empty() && (sel.m_distinct || GroupsOverRow(sel, overRow))) {
+		const auto rows = std::make_shared<ibStatementRowsQueryable>(sel, params, innerSchema, ibSourceMetaDataScope::Get());
+		ibDataQueryBuilder over;
+		over.From(rows);
+		std::vector<ibSubqueryOutput> published;
+		const std::vector<const ibBackendQueryColumn*> columns = rows->GetColumns();
+		for (size_t i = 0; i < columns.size(); ++i) {
+			ibSubqueryOutput out;
+			out.m_name      = columns[i]->GetName();
+			out.m_col       = columns[i];
+			out.m_type      = columns[i]->GetTypeDesc();
+			out.m_available = innerSchema[i].m_available;
+			published.push_back(out);
+		}
+		std::shared_ptr<ibSubqueryQueryable> wrapped =
+			std::make_shared<ibSubqueryQueryable>(over, /*TOP is the statement's own*/ 0, published);
+		owner.push_back(wrapped);
+		return wrapped;
+	}
 
 	// ibSubqueryQueryable copies the inner door (shares its owned raw columns via shared_ptr), so the
 	// local 'inner' may die here — the copy is self-sufficient. The wrapper itself lives in 'owner'.
