@@ -19,6 +19,7 @@
 #include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibBackendColumnRawDB
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
 #include "backend/system/value/valuePointInTime.h"                // g_valuePointInTimeCLSID — the moment column assembles one
+#include "backend/system/value/valueArray.h"                      // ibValueArray — what the order column reads as
 #include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — the empty value of a declared type
 #include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
@@ -151,6 +152,65 @@ wxString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 // know (columnLayout.h § THE ROW KEY). Answering with it made the enum's ordering right and every
 // text-rendered read wrong ("unknown attribute 'Row_RRRef'"), which is how the quick choice stopped opening.
 // Whatever fixes an enum's ordering belongs at the tier that expands fields, not in what the key IS.
+
+// ⭐⭐ THE ORDER OF A REFERENCE KIND, AS A COLUMN (commonObject.h) — ONE NAME for the whole family, so a walk through
+// a reference of several kinds finds each kind's own.
+wxString ibBackendColumnSortOrder::GetName()         const { return wxT("SortOrder"); }
+wxString ibBackendColumnSortOrder::GetSynonym()      const { return _("Sort order"); }
+wxString ibBackendColumnSortOrder::GetPhysicalName() const { return GetName(); }   // none of its own — see the layout
+
+// Nothing declared it, so its id is minted over what it belongs to: its kind's own number, which no other column of
+// any source carries (queryColumn.h, SyntheticId).
+ibMetaID ibBackendColumnSortOrder::GetColumnId() const
+{
+	return SyntheticId(SyntheticKind::Derived, m_owner->GetMetaID());
+}
+
+// IT LIES IN THE FIELDS OF ITS PARTS, one after the other, and nothing else — the moment's rule
+// (ibBackendColumnPointInTime::DescribeLayout, below): without the parts' type tags, since each part's type was
+// chosen when the kind named it, and two tags under one prefix is a statement Firebird refuses.
+std::vector<ibColumnSlot> ibBackendColumnSortOrder::DescribeLayout() const
+{
+	std::vector<ibColumnSlot> slots;
+	for (const ibBackendQueryColumn* part : m_parts()) {
+		if (part == nullptr) continue;
+		for (const ibColumnSlot& slot : DescribeColumnLayout(part))
+			if (slot.m_role != ibColumnRole::Discriminator)
+				slots.push_back(slot);
+	}
+	return slots;
+}
+
+// …and it reads as its parts' values, in that order — each by the part's own field name and role, no tag
+// consulted, exactly as the moment reads its halves. An ARRAY orders element by element, so in memory a sort by
+// this column compares what the server's ORDER BY compares.
+bool ibBackendColumnSortOrder::ReadValue(const wxString& /*fieldName*/, const ibMetaData* metaData,
+	ibValue& retValue, ibQueryResult& result, bool createData) const
+{
+	std::vector<ibValue> values;
+	for (const ibBackendQueryColumn* part : m_parts()) {
+		if (part == nullptr) continue;
+		const ibColumnSlot slot = FirstValueSlot(part);
+		ibValue value;
+		if (slot.m_role == ibColumnRole::ReferenceId)   // a reference takes its own pair off its base name
+			ibColumnCodec::ReadField(part->GetPhysicalName(), ibFieldTypes_Reference, part, metaData, value, result, createData);
+		else
+			ibColumnCodec::ReadField(slot.m_name, ibPersistedTypeTag(slot.m_role), part, metaData, value, result, createData);
+		values.push_back(value);
+	}
+	retValue = new ibValueArray(values);
+	return true;
+}
+
+// ⭐ AN ENUMERATION IS ORDERED AS ITS AUTHOR DECLARED, then by the reference.
+ibEnumQueryable::ibEnumQueryable(const ibValueMetaObjectRecordDataEnumRef* meta)
+	: ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef>(meta) {}
+
+std::vector<const ibBackendQueryColumn*> ibEnumQueryable::GetSortParts() const
+{
+	return { m_meta->GetDataOrder()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
+}
+
 // ⭐⭐ THE MOMENT READS ITSELF — the one column here that does.
 //
 // It has no field, so there is no `_TYPE` tag to dispatch on and the default read cannot describe it.
@@ -182,6 +242,12 @@ std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetColumns() const
 		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetColumns();
 	cols.push_back(&m_momentColumn);
 	return cols;
+}
+
+// ⭐ A DOCUMENT IS ORDERED BY ITS MOMENT — the very two columns the moment lies in (DescribeLayout below).
+std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetSortParts() const
+{
+	return { m_meta->GetDocumentDate()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
 }
 
 // THE MOMENT LIES IN TWO OTHER COLUMNS — the date first, then the reference. Each of them already
@@ -311,9 +377,9 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 	//
 	// ⚠ It used to answer `IsHierarchical()` — the two arrangements the engine NAVIGATES — and that
 	// made one accessor carry two different questions under one null: "is there a parent" and "does
-	// the list drill". A chart of accounts declares Subordination (`chartOfAccountsMetadata.cpp`), so
-	// it answered NO to both, and everything downstream that needed only the FIRST answer went quietly
-	// without: `TOTALS BY <account> HIERARCHY` degraded to a flat grouping, and a filter asking in
+	// the list drill". A source that records a parent without navigating it answered NO to both — the chart
+	// of accounts, before its mode was the tree it now is — and everything downstream that needed only
+	// the FIRST answer went quietly without: `TOTALS BY <account> HIERARCHY` degraded to a flat grouping, and a filter asking in
 	// hierarchy had to reach around this accessor into the metaobject to get an answer at all. The
 	// enumeration says as much in its own words — *whoever wants the structure asks for it, a query,
 	// a grouping* (`commonObjectEnum.h`) — and this is the accessor they ask.

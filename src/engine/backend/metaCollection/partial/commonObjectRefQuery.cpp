@@ -497,7 +497,10 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData()
 	if (ibValueRecordDataObjectRef::ReadData()) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
 		wxASSERT(metaFolder);
-		ibValue isFolder; ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
+		// Without folders there is no IsFolder to read (FillArrayObjectByPredefinedAttribute), and every record is an item.
+		ibValue isFolder;
+		if (metaFolder->HasFolders())
+			ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
 		if (isFolder.GetBoolean())
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else
@@ -512,7 +515,9 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData(const ibGuid& srcGuid)
 	if (ibValueRecordDataObjectRef::ReadData(srcGuid)) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
 		wxASSERT(metaFolder);
-		ibValue isFolder; ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
+		ibValue isFolder;   // …the same question as above
+		if (metaFolder->HasFolders())
+			ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
 		if (isFolder.GetBoolean())
 			m_objMode = ibObjectMode::OBJECT_FOLDER;
 		else

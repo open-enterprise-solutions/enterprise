@@ -56,31 +56,36 @@ constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 // the emptiness test alike, so the four cannot drift apart.
 #define emptyEnum -1
 
-// ⭐⭐ WHAT A PARENT MAY BE — ONE declaration with FOUR answers, and every layer asks it by name.
+// ⭐⭐ WHAT A PARENT MAY BE — ONE declaration, and every layer asks it by name. Three MODES are offered:
 //
-//   None            — a FLAT list. No parent at all: the field is gone, not merely unused.
-//   Subordination   — a parent that is DATA: the field exists, is filled and is shown like any other
-//                     attribute, and the list stays FLAT. This is a chart of accounts — an account
-//                     records which account it sits under, and nobody browses it as a tree.
-//   Items           — every element may hold elements; the platform drills into any of them.
-//   FoldersAndItems — items live INSIDE folders: a folder is a container, an item is a leaf.
+//   None       — a FLAT list. No parent at all: the field is gone, not merely unused.
+//   Items      — a TREE OF PEERS: every value is an item, and any item may stand under any other; the
+//                platform drills into any of them. This is a chart of accounts — an account under an
+//                account, a class opening onto its accounts.
+//   Folders    — the same tree with a second kind of value: items live INSIDE folders, a folder is a
+//                container, an item is a leaf.
 //
-// It lives HERE, at the bottom, because three different tiers need the same four answers: the
+// …and one that is no longer offered: ParentOnly — a parent recorded as DATA, the list flat, nothing
+// built on it. A configuration that stored it reads back as it did; nobody chooses it any more (Max,
+// 2026-09-29: "folders, items, and no hierarchy"). The modes were Subordination / Items / FoldersAndItems,
+// and Subordination — the chart's own — was the flat one, so a chart printed as a column of codes.
+//
+// It lives HERE, at the bottom, because three different tiers need the same answers: the
 // metaobject declares it, the query tier reads it off a source, the list decides how to walk it.
 // Each of them used to be handed a BOOLEAN PROJECTION instead — `GetHierarchyColumn() != nullptr`
 // for "is there a parent", `IsItemHierarchy()` for "may an item hold items" — and a projection
-// answers one question while the caller has another. That is how a chart of accounts, which
-// declares Subordination, first lost its hierarchy groupings (the accessor said "no parent") and
-// then grew a tree in its list (the same accessor, corrected, now said "yes" to a caller asking
-// whether to DRILL). One value with four states cannot be misread that way: whoever needs a
-// distinction names the state it turns on.
+// answers one question while the caller has another. That is how a chart of accounts first lost its
+// hierarchy groupings (the accessor said "no parent") and then grew a tree in its list (the same
+// accessor, corrected, now said "yes" to a caller asking whether to DRILL). One value with named
+// states cannot be misread that way: whoever needs a distinction names the state it turns on.
 //
-// ⚠ Stored as its INTEGER — these numbers are the wire. New members APPEND.
+// ⚠ Stored as its INTEGER — these numbers are the wire, and they keep their meaning under the new names.
+// New members APPEND.
 enum ibHierarchyType {
-	eFoldersAndItems = 0,
-	eItems           = 1,
-	eNone            = 2,   // the editor lists them in reading order (see CreateEnumeration), which is free
-	eSubordination   = 3,
+	eFolders    = 0,
+	eParentOnly = 1,   // not offered — see above
+	eNone       = 2,   // the editor lists them in reading order (see CreateEnumeration), which is free
+	eItems      = 3,
 };
 
 typedef int ibRoleID;

@@ -743,12 +743,12 @@ void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* sourc
 		const std::vector<const ibBackendQueryColumn*> key = source->GetPrimaryKeyColumns();
 		if (key.size() == 1 && key.front() != nullptr) {
 			identity = key.front()->GetName();
-			// ⚠ A LIST WALKS A TREE ONLY WHERE THE ARRANGEMENT IS ONE (queryable.h, GetHierarchyType).
-			// Asked as "is there a parent column", a chart of accounts — Subordination: a recorded parent,
-			// a flat list — got a tree rung here that the list's own model does not browse, and served it as
-			// a grouping: every account a heading of itself, with itself inside.
+			// ⚠ A LIST WALKS A TREE ONLY WHERE THE ARRANGEMENT IS ONE (queryable.h, GetHierarchyType): folders,
+			// or items — a chart of accounts, an account under an account. Asked as "is there a parent column", a
+			// source whose parent builds no hierarchy (ParentOnly) would get a tree rung here that the list's own
+			// model does not browse, served as a grouping: every row a heading of itself.
 			const ibHierarchyType arrangement = source->GetHierarchyType();
-			hasTree  = arrangement == ibHierarchyType::eItems || arrangement == ibHierarchyType::eFoldersAndItems;
+			hasTree  = arrangement == ibHierarchyType::eItems || arrangement == ibHierarchyType::eFolders;
 		}
 	}
 

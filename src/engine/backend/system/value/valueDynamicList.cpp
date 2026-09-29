@@ -12,6 +12,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
+#include "backend/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
 namespace {
 // (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,
@@ -526,12 +527,19 @@ ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
 
 // ⚠ NO LOOKUP FOR A KEY-ONLY ROW. GetItemKey resolves a restore stub by its key because a command needs the row;
 // the picture is asked on every paint, and a point read per paint is the price of a picture - so a stub shows
-// none until the fetch that replaces it. A heading is not a row, and shows none either.
+// none until the fetch that replaces it.
+//
+// ⭐ A HEADING OF A GROUPING WEARS THE FOLDER'S PICTURE — the one a catalog's folder row wears: a heading holds the
+// rows under it the way a folder does. It is no record of the source, so the source cannot answer for it, and with
+// no picture at all a grouped list read as a column of bare lines (Max, 2026-09-29: "there should be a picture here
+// too" — "take the folder's picture").
 ibPictureID ibValueDynamicList::GetRowPicture(const ibDataViewItem& item) const
 {
 	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
-	if (node == nullptr || node->IsGroup() || node->IsKeyOnlyAnchor())
+	if (node == nullptr || node->IsKeyOnlyAnchor())
 		return 0;
+	if (node->IsGroup())
+		return g_picRowFolderCLSID;
 	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
 	return holder != nullptr ? holder->GetRowPicture(node->GetTableValues()) : 0;
 }

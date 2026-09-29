@@ -13,12 +13,12 @@
 
 ibValueMetaObjectChartOfAccounts::ibValueMetaObjectChartOfAccounts() : ibValueMetaObjectRecordDataHierarchyMutableRef()
 {
-	// AN ACCOUNT RECORDS WHICH ACCOUNT IT SITS UNDER, and that record is not a tree. There is no
-	// separate container kind — every node is an account — but the platform navigates nothing here:
-	// the list is flat, and whoever wants the structure asks for it in a query or a grouping. Stated
-	// here rather than left to the user, because it is not a preference: it is what a chart of
-	// accounts IS. (A catalog keeps the default, folders and items.)
-	SetHierarchyType(ibHierarchyType::eSubordination);
+	// AN ACCOUNT SITS UNDER AN ACCOUNT — a hierarchy of ITEMS, the tree of peers: there is no separate
+	// container kind, every node is an account in its own right, and any account may hold others. The list
+	// walks it as a catalog walks its folders, a class opening onto its accounts (Max, 2026-09-29: "the same
+	// as folders, only every value is equal and they may stand one under another"). Stated here rather than
+	// left to the user, because it is what a chart of accounts IS. (A catalog keeps the default, folders.)
+	SetHierarchyType(ibHierarchyType::eItems);
 	// …and an account is NAMED BY ITS NUMBER: an accountant writes 361, not "Settlements with customers".
 	SetReferencePresentation(ibDataPresentation_Code);
 

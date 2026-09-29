@@ -502,9 +502,16 @@ void ibValueModelTableBox::Command_OutputList()
 			// selection — so the widget is not asked for it (Max, 2026-08-30: *"the current row you can
 			// get from the box itself"*). One holder of that fact, and the print reads the same one
 			// every other command on this band reads.
+			//
+			// ⭐⭐ …AND WHAT DELIMITS IS THE GROUP THE ROW STANDS IN, not the row. A heading's path ends with its
+			// own value, so standing on a heading printed that one group alone, while a person means the level
+			// they are looking at (Max, 2026-09-29: *"not where you stand, but which group you are in"*). The
+			// group a row stands in is its parent in the tree; a top-level heading has none, and the whole list
+			// is printed.
 			const ibValueModel::ibValueModelReturnLine* const line = GetCurrentLine();
 			const ibDataViewItem where = line != nullptr ? line->GetLineItem() : ibDataViewItem();
-			const ibComposerNode* const node = m_tableModel->GetViewData<ibComposerNode>(where);
+			const ibDataViewItem in = m_tableModel->GetParent(where);
+			const ibComposerNode* const node = m_tableModel->GetViewData<ibComposerNode>(in);
 			const std::vector<ibValue> path = node != nullptr ? node->GetGroupPath() : std::vector<ibValue>();
 			const std::vector<ibGroupLineDescription>& rungs = settings.m_group.m_lines;
 
@@ -517,10 +524,11 @@ void ibValueModelTableBox::Command_OutputList()
 			}
 
 			// The probe separates the ways this comes back empty, because they want different answers:
-			// no current item, an item that is not a node, and a node standing at the root.
+			// no current item, a row standing at the root, and a group that is not a node.
 			ibJournalInfo(wxT("ui.list"),
-				wxT("output list: item %s, node %s, %u rung(s) deep, %u grouping line(s), %u filter(s)"),
-				where.IsOk() ? wxT("ok") : wxT("none"), node != nullptr ? wxT("yes") : wxT("no"),
+				wxT("output list: item %s, in %s, %u rung(s) deep, %u grouping line(s), %u filter(s)"),
+				where.IsOk() ? wxT("ok") : wxT("none"),
+				!in.IsOk() ? wxT("the root") : node != nullptr ? wxT("a group") : wxT("not a node"),
 				(unsigned)path.size(), (unsigned)rungs.size(), (unsigned)fixed);
 
 			// 🛑 …AND ONLY WHEN WHAT WE ARE INSIDE IS A ROW. `InHierarchy` below is stated over the

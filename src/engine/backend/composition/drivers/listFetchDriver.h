@@ -7,8 +7,9 @@
 //
 // A stack object built per fetch call: it CARRIES the page envelope in (the
 // model builds the ibReadPageRequest exactly as the door path did — anchor,
-// direction, the tree's parent filter) and ACCUMULATES meta-keyed rows out
-// (attribute metaID -> value, off OutputColumn::GetColumnId()). The list model
+// direction, the tree's parent filter) and ACCUMULATES rows out keyed by the
+// READER's column ids — asked of the reader by the output's NAME (see the paged
+// constructor), else the output column's own id. The list model
 // then converts the rows into its own row type — the row guid is pulled from
 // the data-reference column's VALUE (the uuid identity column is a raw DB
 // column outside the query language; the reference attribute is the named,
@@ -17,13 +18,14 @@
 // The driver knows no metaobject and no row class — it is the passive sink of
 // the composer's walk.
 //
-//   ibListFetchDriver p(page);     // the envelope in
+//   ibListFetchDriver p(page, idOf);   // the envelope in, and the reader's column lookup
 //   m_composer.Run(p);             // render -> parse -> lower -> walk
 //   for (auto& row : p.Rows()) …   // the rows out
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/query/dataQueryBuilder.h"   // ibReadPageRequest — held by value
 
+#include <functional>
 #include <map>
 
 class BACKEND_API ibListFetchDriver : public ibCompositionDriver
@@ -46,6 +48,13 @@ public:
 		// expander. The consumers ask it to decide `isContainer`, so the name is now the question.
 		bool m_expandable = false;
 		std::map<ibMetaID, ibValue> m_values;   // by the attribute metaID
+		// ⭐⭐ A HEADING'S OWN KEY — the value of the field its level groups by, as the OUTPUT says which column
+		// that is (the dimension column of this heading's level). Asked of the output, not walked out of the
+		// grouping's path by the reader: the list walked `Recorder.Counterparty` through the references itself,
+		// stopped at the composite recorder, and every heading came out keyless — no caption, no expander, and
+		// the page window never found its anchor, so the same headings arrived twice (2026-09-29).
+		ibValue m_key;
+		bool    m_keyed = false;   // …and whether the output had one to give: a record has none
 
 		ibValue GetValue(const ibMetaID& id) const {
 			const auto it = m_values.find(id);
@@ -58,7 +67,16 @@ public:
 
 	// Paged read — the envelope the model built (anchor / direction / count + the hierarchy scope, if any).
 	// The model fills m_hierarchy* on the request directly (RunComposerPage); there is no separate scope object.
-	explicit ibListFetchDriver(const ibReadPageRequest& page) : m_paged(true), m_page(page) {}
+	//
+	// ⭐ …AND THE COLUMNS THE ROWS ARE FILED UNDER ARE THE READER'S, asked by name (`idOf`, the model's own
+	// lookup). The statement's output columns are the statement's: on a plain read they are the attributes
+	// themselves, but a grouped read goes to the server as a DECLARED nested source (`WITH q_sub0`), whose
+	// columns carry numbers of their own — and a list reading every cell by its attribute's id found none of
+	// them: a grouped chart of accounts showed its headings as empty lines (journal `list.group`, 2026-09-29:
+	// "read under column 1067, ABSENT; carries -646 … -6").
+	using ColumnIdOf = std::function<ibMetaID(const wxString&)>;
+	ibListFetchDriver(const ibReadPageRequest& page, ColumnIdOf idOf)
+		: m_paged(true), m_page(page), m_idOf(std::move(idOf)) {}
 
 	bool GetPageRequest(ibReadPageRequest& request) const override {
 		if (!m_paged)
@@ -78,12 +96,12 @@ public:
 	// the flag is draw an EXPANDER, and an expander may promise only what the output will actually
 	// show; a heading standing over rows this output does not print must not offer to open.
 	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
-		Append(line.m_level, line.m_indent, line.m_showsWhatIsUnder, values);
+		Append(line.m_level, line.m_indent, line.m_showsWhatIsUnder, /*heading*/ true, values);
 	}
 
 	// A RECORD OPENS NOTHING, so it offers no expander — the truthful answer, not a default.
 	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
-		Append(line.m_level, line.m_indent, false, values);
+		Append(line.m_level, line.m_indent, false, /*heading*/ false, values);
 	}
 
 	// (⛔ NO OnGroupEnd HERE, and that is a fact about a list rather than an omission: a list draws a
@@ -91,15 +109,34 @@ public:
 	//  list has no place for. The default does nothing, which is exactly right.)
 
 private:
-	void Append(int level, int indent, bool expandable, const std::vector<ibValue>& values) {
+	void Append(int level, int indent, bool expandable, bool heading, const std::vector<ibValue>& values) {
 		Row row;
 		row.m_level = level;
 		row.m_indent = indent;
 		row.m_expandable = expandable;
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
+			// A heading's key — the first dimension column of its level (a column counts levels from 0, a line from 1).
+			if (heading && !row.m_keyed && m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension
+			    && m_schema[i].m_level + 1 == level) {
+				row.m_key   = values[i];
+				row.m_keyed = true;
+			}
 			const ibBackendQueryColumn* col = m_schema[i].m_col;
-			if (col != nullptr)
-				row.m_values.emplace(col->GetColumnId(), values[i]);
+			if (col == nullptr)
+				continue;
+			ibMetaID id = col->GetColumnId();
+			if (m_idOf) {
+				const ibMetaID own = m_idOf(m_schema[i].m_name);
+				if (own != wxNOT_FOUND)
+					id = own;
+				// ⚠ …AND A COLUMN ONLY THE QUERY HAS STAYS IN THE QUERY. Its id is synthetic — negative, the
+				// query took the minus for them and says "none" with 0 — while the reader's "none" is -1, and
+				// the query's first synthetic output IS -1 (`dim0`). Filed here, a lookup that found nothing
+				// read that column's value. A heading's key travels as m_key; nothing else of it is the reader's.
+				else if (ibBackendQueryColumn::IsSyntheticId(id))
+					continue;
+			}
+			row.m_values.emplace(id, values[i]);
 		}
 		m_rows.push_back(std::move(row));
 	}
@@ -111,6 +148,7 @@ public:
 private:
 	bool              m_paged = false;
 	ibReadPageRequest m_page;
+	ColumnIdOf        m_idOf;   // the reader's column id by output name — empty: the output column's own
 
 	std::vector<ibQueryLowering::OutputColumn> m_schema;
 	std::vector<Row>                           m_rows;

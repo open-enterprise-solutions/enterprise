@@ -7617,7 +7617,9 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			// ⭐ THE ROW'S STATE PICTURE — the ROW's, drawn here once per row, in the first column after the expander
 			// and before the value, the way the expander is: asked of the model (GetRowPicture) and drawn from this
 			// control's own bitmaps (RowPictureBitmap). The cell's renderer draws its value after it and never sees it.
-			if (col == expander && !isGroupRow && !IsVirtualList()) {
+			// A GROUP row has one too (the grouping picture): it is the row's, not a cell's, so it is drawn here as
+			// well, and the caption pass below starts after it.
+			if (col == expander && !IsVirtualList()) {
 				const wxBitmap& picture = RowPictureBitmap(model->GetRowPicture(dataitem));
 				if (picture.IsOk()) {
 					wxDCClipper clipPicture(dc, cell_rect);
@@ -7674,8 +7676,11 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			if (gnode != NULL && gnode->GetItem().GetGroupCaption(grpCaption))
 			{
 				const ibDataViewItem gitem = gnode->GetItem();
+				// …after the row's picture, which the cell loop drew in the expander column.
+				const wxBitmap& picture = RowPictureBitmap(GetModel()->GetRowPicture(gitem));
 				const int capX = grpCaptionColX + FromDIP(PADDING_RIGHTLEFT)
-					+ GetIndent() * gnode->GetIndentLevel() + grpExpanderWidth;
+					+ GetIndent() * gnode->GetIndentLevel() + grpExpanderWidth
+					+ (picture.IsOk() ? picture.GetLogicalWidth() + FromDIP(4) : 0);
 				// ⭐⭐ AND IT RUNS TO THE END OF THE ROW. A grouping is ONE line saying what it groups by —
 				// that is what this pass exists for and what the model's door was added for
 				// (ibDataViewItem::GetGroupCaption). No cell is drawn under it (see `isGroupRow` in the

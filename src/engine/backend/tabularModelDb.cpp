@@ -19,6 +19,7 @@
 #include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — typed empty parent ref (hierarchy roots)
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
+#include "backend/diagnostics/journal.h"            // ibJournal — what a group heading arrived with
 // ibValueModelCursor::EnsureSnapshot — DynamicRead OFF: materialise the WHOLE result set into m_snapshot ONCE, then
 // every fetch / scroll / group serves from RAM (RunStoragePage). Re-materialises only when the view generation moved
 // (a refresh / filter / sort change bumps it; a scroll does not). The SQL read applies the persistent FILTER + SORT
@@ -44,7 +45,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 		ibDataDBComposer& composer = m_composer;
 		const ibDataComposer::SettingsScope scope = composer.MarkScope();
 		const ibDataComposer::TakenGroups savedGroups = composer.TakeGroups();   // detail read
-		ibListFetchDriver driver(page);
+		ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
 		try {
 			composer.Run(driver);
 		}
@@ -178,13 +179,13 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	const bool   grouping   = !dims.empty();
 
 	// ⭐ WALKING A TREE IS ASKED OF THE ARRANGEMENT, not of the parent column. `GetHierarchyColumn()`
-	// answers "is there a parent to walk up", which THREE arrangements say yes to — including
-	// `eSubordination`, where the parent is ordinary data and the list is meant to stay flat. Asked
-	// through the column, a chart of accounts grew a tree it never declared: an account nested under
-	// its parent account, with a twisty to expand, over a list that is by declaration a flat one.
+	// answers "is there a parent to walk up", which a parent recorded without a hierarchy says yes to as
+	// well (`eParentOnly`, no longer offered), and that list is meant to stay flat. The tree is FOLDERS,
+	// and ITEMS — the same tree without a folder kind, every node a full element, an account under an
+	// account (Max, 2026-09-29: "like the folders, only the folder here is a full element").
 	const ibHierarchyType arrangement = q->GetHierarchyType();
 	const bool browsable = arrangement == ibHierarchyType::eItems
-	                    || arrangement == ibHierarchyType::eFoldersAndItems;
+	                    || arrangement == ibHierarchyType::eFolders;
 
 	// ⭐⭐ WHICH RUNG IS BROWSED, AND HOW A PAGE OF IT IS SERVED — asked of the LADDER, not of two
 	// mutually-exclusive flags.
@@ -239,11 +240,20 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// rows). A joined column can't be a keyset key, so we fetch the WHOLE ordered result in ONE shot: unbounded
 	// on the initial (unanchored) read, nothing on any keyset continuation. (Detail-level only — a grouped read
 	// runs the TOTALS path.) The trade: a dot-walk sort loads all rows up front (user-chosen, so acceptable).
+	//
+	// ⚠ A REFERENCE COLUMN IS SUCH A SORT TOO, though it is found by name: the engine sorts it by its kind's
+	// order (ResolveReferenceSortColumn) — through a join to the target, or by the row's own fields that the
+	// node does not carry — so a keyset over its value would page in another order than the rows come.
 	bool dotWalkSort = false;
 	if (!groupLevel) {
 		for (size_t i = 0; i < m_composer.SortCount(); ++i) {
 			wxString f; bool a;
-			if (m_composer.GetSortAt(i, f, a) && GetColumnIDByName(f) == wxNOT_FOUND) { dotWalkSort = true; break; }
+			if (!m_composer.GetSortAt(i, f, a)) continue;
+			if (GetColumnIDByName(f) == wxNOT_FOUND
+			 || q->GetProvider().ResolveReferenceSortColumn(q, q->ResolveColumnByName(f)) != nullptr) {
+				dotWalkSort = true;
+				break;
+			}
 		}
 	}
 	if (dotWalkSort && anchor.IsOk())
@@ -365,8 +375,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// flat: no drill — the persistent filter + sort render as-is.
 
 	// Run the composer onto the generic list-fetch sink — the driver carries the page
-	// envelope in and accumulates attribute-keyed rows out.
-	ibListFetchDriver driver(page);
+	// envelope in and accumulates rows out, keyed by this model's own columns (asked by name).
+	ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
 	try {
 		composer.Run(driver);
 	}
@@ -396,15 +406,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			std::reverse(rows.begin(), rows.end());
 	}
 
-	// At a GROUP level the dimension being grouped is dims[depth]; the DISPLAY column that renders the group
-	// header + the drill scope key by its column id. A PLAIN dimension resolves through the model column
-	// collection AND the totals result carries its value under that same id — read straight off the row. A
-	// DOT-WALK dimension ("Reference.DataVersion") does NOT: the totals lowering groups it under a SYNTHETIC id
-	// (so its leaf can't clash with the main table on a self-reference), so the value rides under that synthetic
-	// id, NOT the display leaf's real id. So (a) resolve the REAL leaf id by walking the path through the
-	// queryable's references (this is the dot-path display column's own model id), and (b) flag it so we re-key
-	// the value from the synthetic id to the leaf id per group row below (the composer computed the value; we
-	// just route it to where the display + drill read it — no per-row dot re-resolution on a group header).
+	// At a GROUP level the dimension being grouped is dims[depth]. Its VALUE is the heading's own key, which the
+	// output hands over (ibListFetchDriver::Row::m_key); what is resolved here is only the DISPLAY column the value
+	// is drawn under, so a cell showing that field on the heading reads it. A plain dimension is a column of this
+	// model; a dot-walk one ("Reference.DataVersion") is its leaf's column, found by walking the path through the
+	// queryable's references — and a path that cannot be walked so (through a composite recorder) has no column
+	// to be drawn under, and the heading still carries its key and its caption.
 	// Resolve a possibly-dotted dimension field NAME to its leaf column id by walking the queryable's references;
 	// wxNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
 	auto resolveDotWalkLeaf = [&](const wxString& field) -> ibMetaID {
@@ -420,31 +427,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		return (leaf != nullptr && rest.IsEmpty()) ? leaf->GetColumnId() : ibMetaID(wxNOT_FOUND);
 	};
 
-	ibMetaID groupDimCol   = ibMetaID(wxNOT_FOUND);
-	bool     dotWalkDim    = false;
-	int      dwOrdinal     = 0;   // index of dims[depth] among the dot-walk dimensions — selects the matching synthetic key
+	ibMetaID groupDimCol = ibMetaID(wxNOT_FOUND);
 	if (groupLevel) {
-		// Each single-source scalar dot-walk dimension consumed one synthetic id in lowering order (queryLowering
-		// nextSynthId++, in m_totalsBy order), so dims[depth]'s grouped value rides under the dwOrdinal-th synthetic
-		// key on the row — NOT simply the lowest. Count the dot-walk dimensions strictly before this level.
-		for (size_t k = 0; k < depth && k < dims.size(); ++k)
-			if (GetColumnIDByName(dims[k]) == wxNOT_FOUND && resolveDotWalkLeaf(dims[k]) != ibMetaID(wxNOT_FOUND))
-				++dwOrdinal;
-
 		groupDimCol = GetColumnIDByName(dims[depth]);
-		if (groupDimCol == wxNOT_FOUND) {
-			const ibMetaID leafId = resolveDotWalkLeaf(dims[depth]);
-			if (leafId != ibMetaID(wxNOT_FOUND)) {
-				groupDimCol = leafId;
-				dotWalkDim  = true;
-			}
-		}
+		if (groupDimCol == wxNOT_FOUND)
+			groupDimCol = resolveDotWalkLeaf(dims[depth]);
 	}
-	// A dot-walk dimension's grouped value rides under a totals-lowering SYNTHETIC column id (queryLowering.cpp
-	// kSyntheticColumnBase). Keep in sync: dim synthetics sit at/above this base (aggregate synthetics sit lower,
-	// at 0x40000000). Several dot-walk dimensions each take their OWN synthetic id, ASCENDING in lowering order
-	// (dim0, dim1, … then measures), so a group row at depth D reads the dwOrdinal-th synthetic key (below).
-	const ibMetaID kDimSyntheticBase = 0x50000000;
 
 	// The source's PRIMARY-KEY columns — stamp each DB-list DETAIL copy's stable identity (m_rowKey) so it
 	// survives re-fetch selection AND a guid-keyed FindRowValue stub matches a fetched row by it. (RAM never
@@ -458,8 +446,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// concern of the hierarchical list, ordering is the folder-first SORT. Null on a flat / non-folder list.
 	const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
 
-	// The hierarchy KIND, asked of the source once per fetch: where an element nests inside an element (a
-	// chart of accounts) EVERY row is enterable; where it nests inside a folder, only a folder is.
+	// The hierarchy KIND, asked of the source once per fetch: where an element nests inside an element
+	// (items, a chart of accounts) EVERY row is enterable; where it nests inside a folder, only a folder is.
 	const bool itemHierarchy = (q != nullptr) && q->GetHierarchyType() == ibHierarchyType::eItems;
 
 	// `this` is const here (fetch READS + returns rows). The node holds COPIES of the row values and
@@ -509,7 +497,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		bool ownKids = false;
 		if (nestedRung) {
 			const size_t step = r.m_indent > 0 ? static_cast<size_t>(r.m_indent) : 0;
-			ibValue own = (groupDimCol != ibMetaID(wxNOT_FOUND)) ? r.GetValue(groupDimCol) : ibValue();
+			const ibValue& own = r.m_key;
 			if (subChain.size() > step)
 				subChain.resize(step);
 			subChain.push_back(own);
@@ -530,23 +518,21 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// value was stamped into the path (else a drill re-enters at depth 0 → groupLevel fires again →
 			// infinite re-grouping).
 			std::map<ibMetaID, ibValue> values = r.m_values;
-			ibValue dimValue = (groupDimCol != wxNOT_FOUND) ? values[groupDimCol] : ibValue();
-			if (dotWalkDim) {
-				// The value rides under a synthetic dim id, not the leaf id the display + drill key by. The synthetic
-				// keys iterate in ASCENDING order (dim0, dim1, … then measures); this level's value is the
-				// dwOrdinal-th one (each earlier dot-walk dimension consumed one). RE-KEY it under the real leaf id,
-				// so GetValueByRow(group, dot-path column) reads the composer's grouped value directly. (A dot-walk
-				// dimension that lowered to an expanded LEFT-join instead of a scalar synthetic — multi-source or a
-				// non-scalar leaf — takes no synthetic id; a mix of the two on one grouping would skew this ordinal.
-				// Pure single-source scalar dot-walk dimensions, the common case, map 1:1 to the leading synthetics.)
-				int seen = 0;
-				for (const auto& kv : r.m_values) {
-					if (kv.first < kDimSyntheticBase) continue;
-					if (seen++ == dwOrdinal) { dimValue = kv.second; break; }
-				}
-				if (groupDimCol != wxNOT_FOUND)
-					values[groupDimCol] = dimValue;
+			const ibValue& dimValue = r.m_key;
+			// WHAT A HEADING ARRIVED WITH — once a fetch: the field it groups by, whether the output gave it a key,
+			// the column the list draws that key under, and which columns the heading carries.
+			if (groupNodes.empty()) {
+				wxString carried;
+				for (const auto& kv : r.m_values)
+					carried += wxString::Format(wxT("%d%s "), kv.first, kv.second.IsEmpty() ? wxT("(empty)") : wxT(""));
+				ibJournalInfo(wxT("list.group"), wxT("heading of '%s': key %s, drawn under column %d; carries %s"),
+					dims[depth], !r.m_keyed ? wxT("NONE") : dimValue.IsEmpty() ? wxT("empty") : wxT("set"),
+					static_cast<int>(groupDimCol), carried);
 			}
+			// …and the key stands under the column that draws it, so a cell showing that field on the heading
+			// reads it (a dot-walk dimension arrives under an output column of its own, not the leaf's).
+			if (groupDimCol != wxNOT_FOUND)
+				values[groupDimCol] = dimValue;
 			// ANCESTOR-dimension SCOPE on the group header (nested grouping). The per-level drill FILTERS each
 			// already-drilled ancestor dimension to its browsed value (parentPath[k]) but does NOT project it, so
 			// ONLY this level's dimension rides in r.m_values. A display column that dot-walks an ANCESTOR
@@ -572,13 +558,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 				// for the NEXT grouping and the folder's contents would never be reached.
 				subPath = subChain;
 			}
-			else if (groupDimCol != wxNOT_FOUND) {
+			else if (r.m_keyed) {
 				// A LEAF of this rung (or an ordinary grouping value) — opening it moves to what stands
 				// under this rung: the next grouping, or the records.
 				groupPath.push_back(dimValue);
 			}
-			groupNodes.push_back(new ibComposerNode(values, groupPath,
-				/*container*/ groupDimCol != ibMetaID(wxNOT_FOUND), subPath));
+			groupNodes.push_back(new ibComposerNode(values, groupPath, /*container*/ r.m_keyed, subPath));
 			continue;   // collected — the client window (below) transfers the on-page groups into `out`
 		}
 		else {
@@ -692,7 +677,7 @@ std::map<ibMetaID, ibValue> ibValueModel::ResolveAnchorByKey(const std::vector<i
 	page.m_count      = 2;        // 1 row + the probe row RunComposerPage's envelope keeps
 	page.m_flatScan   = true;
 	page.m_isTopLevel = true;
-	ibListFetchDriver driver(page);
+	ibListFetchDriver driver(page, [this](const wxString& name) { return GetColumnIDByName(name); });
 	composer.Run(driver);
 
 	composer.PutGroups(savedGroups);

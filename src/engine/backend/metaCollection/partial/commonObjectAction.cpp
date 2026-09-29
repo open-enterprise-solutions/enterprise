@@ -81,12 +81,12 @@ void ibValueMetaObjectRecordDataRecorderRef::FillSourceExplorer(ibSourceDataObje
 void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
 	// THE PARENT HIDES ONLY WHERE IT IS THE TREE. In a real hierarchy the list SHOWS the structure by
-	// being a tree, so a Parent column beside it repeats what the indentation already says. Under
-	// SUBORDINATION the parent is an ordinary recorded fact ("subordinate to account"), and hiding it
-	// would leave the one thing that arrangement exists for invisible.
+	// being a tree, so a Parent column beside it repeats what the indentation already says — folders, and
+	// items (a chart of accounts). Where a parent is only recorded (ParentOnly, no longer offered) it is an
+	// ordinary fact, and hiding it would leave the one thing that arrangement exists for invisible.
 	//
 	// ⏳ Left as the DECLARED question on purpose (2026-08-13). `GetHierarchyColumn()` now answers
-	// `HasParentLink()`, so a Subordination source CAN be shown as a tree — but only in a tree view,
+	// `HasParentLink()`, so a ParentOnly source CAN be shown as a tree — but only in a tree view,
 	// and whether the list is one is the FRONTEND's answer (`flatView`), which no metaobject can give.
 	// Asking `HasParentLink()` here would hide the column in a flat view too, taking the structure
 	// away exactly where nothing else shows it. So the two questions stay apart until the visibility
@@ -302,7 +302,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 					// to the anchor's parent here would make "create inside this account" silently create a
 					// neighbour, which is the one outcome that looks like it worked.
 					bool nestInsideAnchor = IsItemHierarchy();
-					if (!nestInsideAnchor) {
+					if (!nestInsideAnchor && HasFolders()) {   // …and only folders have an IsFolder to ask
 						ibValue isFolder;
 						sel->GetValueByMetaID(GetDataIsFolder()->GetMetaID(), isFolder);
 						nestInsideAnchor = isFolder.GetBoolean();

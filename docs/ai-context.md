@@ -471,6 +471,11 @@ Computed fields may read through a reference and across a join — `T.Qty * T.It
 `SUM(B.Qty * G.Price)` over `LEFT JOIN Catalog.Goods AS G`, a `WHERE` or `ORDER BY` over such an expression: the
 engine reads the rows one level down first (query-language-arc, rule 3). No nested query is needed for it.
 
+A sort by a reference is its kind's order — an account by its code, a catalog by what it is presented by, a
+document by its moment (date, then reference), the reference settling ties — in `ORDER BY`, in a report's
+groupings and in a hierarchy alike. Sort by the reference itself; do not write `Account.Code` to have accounts
+in order (query-language-arc § 38).
+
 ---
 
 ## 6. Concept glossary

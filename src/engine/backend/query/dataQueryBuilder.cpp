@@ -323,8 +323,47 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<const ibB
 	return Where(path, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
 }
 
+// ⭐⭐ A SORT BY A REFERENCE IS A SORT BY WHAT ITS KIND IS ORDERED BY — the engine's own knowledge, so no caller
+// writes `Account.Code` to have accounts in order (Max, 2026-09-29: "a sort by a reference must be understood by
+// the engine without a tambourine"). Sorted by the column itself, a reference came out by its identity — 92, 64,
+// 90, 28 — and a report's groupings with it: the class-6 folder of a chart stood below every other class. So the
+// sort goes through the reference to the column its target is ordered by (the provider's
+// ResolveReferenceSortColumn — the kind's order column: a catalog's presentation, a document's date, an
+// enumeration's order, each then its reference), and the reference itself stays after it, as it stood. The walk is
+// the one `Account.Code` makes, and every road already sorts by one: a join to the target on the server, a read of
+// it in memory. Asked here, the door every sort goes through — a query's ORDER BY, a report's levels, a list's
+// column, a script's ordering.
+//
+// ⚠ ONE SOURCE. A statement of several reads a walk through the join the lowering makes for it
+// (ExpandDotWalkHere), and asks the provider itself there. And in a GROUPED statement the walk is a key as well,
+// since a sort may name only what it groups by — it decides nothing, the target's field being one per reference.
 ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col, bool ascending)
 {
+	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
+	if (col != nullptr && oneSource) {
+		const ibBackendQueryColumn* by = m_queryable != nullptr
+			? m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, col) : nullptr;
+		const bool grouped = !m_groupBy.empty() || !m_aggregates.empty();
+		bool aKey = false;
+		for (size_t i = 0; i < m_groupBy.size() && !aKey; ++i)
+			aKey = m_groupBy[i] == col && m_groupPaths[i].empty() && !m_groupExprs[i];
+		if (by != nullptr && by != col && (!grouped || aKey)) {
+			// THE SOURCE'S OWN REFERENCE is sorted by its own fields, where they lie — a document by its moment,
+			// the date and the reference in its own row. Walked like a foreign one, it joined the table to itself.
+			const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
+			if (keys.size() == 1 && keys.front() == col) {
+				if (grouped)
+					GroupBy(by);
+				m_sorts.push_back(ibQuerySortItem{ by, ascending });
+			}
+			else {
+				const std::vector<const ibBackendQueryColumn*> walk{ col, by };
+				if (grouped)
+					GroupBy(walk);
+				OrderBy(walk, ascending);
+			}
+		}
+	}
 	m_sorts.push_back(ibQuerySortItem{ col, ascending });
 	return *this;
 }
@@ -333,6 +372,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 {
 	if (path.empty())
 		return *this;
+	// …a walk that ENDS at a reference (`Doc.Counterparty`) sorts the same way, one step further on.
+	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
+	if (oneSource && m_groupBy.empty() && m_aggregates.empty() && m_queryable != nullptr)
+		if (const ibBackendQueryColumn* by = m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, path.back())) {
+			std::vector<const ibBackendQueryColumn*> further(path);
+			further.push_back(by);
+			OrderBy(further, ascending);
+		}
 	ibQuerySortItem s;
 	s.m_col       = path.back();
 	s.m_ascending = ascending;

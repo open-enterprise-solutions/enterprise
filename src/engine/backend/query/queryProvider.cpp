@@ -38,6 +38,7 @@
 #include <set>                                                        // DedupeRows — seen-row identity keys (plain UNION)
 #include <unordered_set>                                              // DISTINCT folds — keyed by value, see ibValueHash
 #include <unordered_map>                                              // RAM hash-join index
+#include <limits>                                                     // a value with no place in its kind's order sorts last
 
 namespace {
 // Build an empty RAM table with the given metadata columns (id / name / type), and append a src row to dst
@@ -129,6 +130,29 @@ private:
 	mutable ibTypeDescription m_type;
 };
 } // namespace
+
+// ⭐ WHAT A SORT BY A REFERENCE COLUMN SORTS BY — the order column of what it points at (ibBackendColumnSortOrder).
+// A reference to one of SEVERAL kinds — a register's recorder, an analytics slot of goods and counterparties — sorts
+// by the one every kind has under ONE name: a walk through it finds it in each kind by that name, each kind's own,
+// and the fields of one role meet in one COALESCE. A kind with no order of its own leaves the reference its
+// identity's.
+const ibBackendQueryColumn* ibBackendQueryProvider::ResolveReferenceSortColumn(const ibBackendQueryable* queryable,
+                                                                               const ibBackendQueryColumn* refColumn) const
+{
+	if (refColumn == nullptr)
+		return nullptr;
+	if (const ibBackendQueryable* const target = ResolveReferenceTarget(queryable, refColumn))
+		return target->GetSortColumn();
+	const ibBackendQueryColumn* shared = nullptr;
+	for (const ibBackendQueryable* target : ResolveReferenceTargets(queryable, refColumn)) {
+		const ibBackendQueryColumn* by = target != nullptr ? target->GetSortColumn() : nullptr;
+		if (by == nullptr || (shared != nullptr && !by->GetName().IsSameAs(shared->GetName(), false)))
+			return nullptr;
+		if (shared == nullptr)
+			shared = by;
+	}
+	return shared;
+}
 
 // Reference dot-walk resolution over a COMPUTED source — this layer owns no metadata, so it FORWARDS
 // to the DB provider (the single metadata home). Resolution reads queryable->GetMetaData(), which a
@@ -1169,11 +1193,14 @@ void AppendSemiJoinCondition(const ibBackendQueryColumn* col, std::vector<ibValu
 // GetColumnId. (docs/private/query-language-arc.md §22.1a, docs/private/temp-db.md)
 ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                      const std::vector<ibQueryCondition>& conds,
-                                     const std::vector<const ibBackendQueryColumn*>& cols)
+                                     const std::vector<const ibBackendQueryColumn*>& cols,
+                                     const std::vector<ibValue>* keys = nullptr)
 {
 	ibQueryRamTable t;
 	for (const ibBackendQueryColumn* col : cols)
 		t.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
+	if (keys != nullptr && keys->empty())
+		return t;   // asked for no row — nothing to read
 
 	// ⭐ AN ALIASED LEAF IS READ THROUGH THE TABLE IT ALIASES. `FROM T AS A JOIN T AS B` gives the
 	// second reading its own columns so the composer can tell the sides apart — but there is only one
@@ -1189,6 +1216,16 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 		ibQueryCondition rc = c;
 		rc.m_col = readCol(c.m_col);
 		q.Where(rc);   // VERBATIM but for the column — rebuilding from (col, op, value) drops m_values / m_path / m_expr
+	}
+	// ⭐ …AND ONLY THE ROWS ASKED FOR, WHERE THE CALLER KNOWS THEM: a walk reads its target for the references its
+	// rows hold — a read by keys that names its columns, which projects those and no others (the batch that says
+	// what references are reads the same way, ibValueReferenceDataObject::ReadBatch; the provider carries a long
+	// list in as many runs as its driver takes). Read whole, a sort by a reference over a register's turnovers
+	// brought every goods row with every attribute, and a recorder every document of every kind it may be.
+	if (keys != nullptr) {
+		q.WhereKeyIn(*keys);
+		for (const ibBackendQueryColumn* col : cols)
+			q.Select(readCol(col), wxEmptyString);
 	}
 	ibReadPageRequest page; page.m_count = 0;   // every matching row
 	ibJournalStopwatch execute, fetch, cells;
@@ -1304,9 +1341,41 @@ private:
 // not this function.
 ibQueryRamTable MaterialiseLeaf(const ibBackendQueryable* leaf, ibDatabaseConnectionHolder* holder,
                                 const std::vector<ibQueryCondition>& conds,
-                                const std::vector<const ibBackendQueryColumn*>& cols)
+                                const std::vector<const ibBackendQueryColumn*>& cols,
+                                const std::vector<ibValue>* keys = nullptr)
 {
-	return MaterialiseLeafToRam(leaf, holder, conds, cols);
+	return MaterialiseLeafToRam(leaf, holder, conds, cols, keys);
+}
+
+// ⭐ THE REFERENCES A COLUMN OF THESE ROWS HOLDS, each once — all a walk from it has to read of its target. An empty
+// reference points at no row and is left out.
+std::vector<ibValue> ReferencesIn(const ibQueryRamTable& rows, const ibBackendQueryColumn* refCol)
+{
+	std::vector<ibValue> keys;
+	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
+	for (long row = 0; row < rows.RowCount(); ++row) {
+		const ibValue v = rows.GetCell(row, refCol->GetColumnId());
+		if (v.IsEmpty() || v.IsNull())
+			continue;
+		if (seen.insert(v).second)
+			keys.push_back(v);
+	}
+	return keys;
+}
+
+// …and those of them ONE table can hold: a reference value carries its own type, and a table's own key is typed to
+// its kind (the Ref attribute, typed at run time) — so a recorder of fifteen kinds asks each kind for its own, not
+// every kind for all of them.
+std::vector<ibValue> ReferencesOf(const std::vector<ibValue>& keys, const ibBackendQueryColumn* targetKey)
+{
+	const std::vector<ibClassID>& kinds = targetKey->GetTypeDesc().GetClsidList();
+	if (kinds.empty())
+		return keys;   // a key that says no type narrows nothing
+	std::vector<ibValue> own;
+	for (const ibValue& v : keys)
+		if (std::find(kinds.begin(), kinds.end(), v.GetClassType()) != kinds.end())
+			own.push_back(v);
+	return own;
 }
 
 // One cell of a materialised RAM table at (row, column model-id).
@@ -1356,14 +1425,16 @@ const ibBackendQueryColumn* SelfReferenceColumn(const ibBackendQueryable* q)
 
 ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBackendQueryColumn* refCol,
                                     const std::vector<const ibBackendQueryColumn*>& path, size_t seg,
-                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey);
+                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey,
+                                    const std::vector<ibValue>& keys);
 
-// The field a walk reaches, for every row of `owner`: a table of (owner's own key, the leaf under path.back()'s id),
-// path[seg] being a column of `owner`. The last segment is read as it stands; a reference is followed into every
-// table it may point at (WalkedLeafOfTargets) and joined back by its value. Empty, with `keyOut` null, when the
-// owner is no reference target or does not have the column.
+// The field a walk reaches, for the rows of `owner` that `keys` name: a table of (owner's own key, the leaf under
+// path.back()'s id), path[seg] being a column of `owner`. The last segment is read as it stands; a reference is
+// followed into every table it may point at (WalkedLeafOfTargets) and joined back by its value. Empty, with `keyOut`
+// null, when the owner is no reference target or does not have the column.
 ibQueryRamTable WalkedLeafByKey(const ibBackendQueryable* owner, const std::vector<const ibBackendQueryColumn*>& path,
-                                size_t seg, ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& keyOut)
+                                size_t seg, ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& keyOut,
+                                const std::vector<ibValue>& keys)
 {
 	keyOut = nullptr;
 	const ibBackendQueryColumn* key  = SelfReferenceColumn(owner);
@@ -1372,7 +1443,7 @@ ibQueryRamTable WalkedLeafByKey(const ibBackendQueryable* owner, const std::vect
 		return ibQueryRamTable();
 	const ibBackendQueryColumn* leaf = path.back();
 
-	ibQueryRamTable own = MaterialiseLeaf(owner, holder, {}, { key, here });
+	ibQueryRamTable own = MaterialiseLeaf(owner, holder, {}, { key, here }, &keys);
 	if (seg + 1 == path.size()) {
 		ibQueryRamTable filed;
 		filed.AddColumn(key->GetColumnId(), key->GetName(), key->GetTypeDesc());
@@ -1387,7 +1458,7 @@ ibQueryRamTable WalkedLeafByKey(const ibBackendQueryable* owner, const std::vect
 	}
 
 	const ibBackendQueryColumn* targetKey = nullptr;
-	const ibQueryRamTable reached = WalkedLeafOfTargets(owner, here, path, seg + 1, holder, targetKey);
+	const ibQueryRamTable reached = WalkedLeafOfTargets(owner, here, path, seg + 1, holder, targetKey, ReferencesIn(own, here));
 	if (targetKey == nullptr)
 		return ibQueryRamTable();
 	keyOut = key;
@@ -1395,10 +1466,12 @@ ibQueryRamTable WalkedLeafByKey(const ibBackendQueryable* owner, const std::vect
 }
 
 // …and the same over EVERY table the reference `refCol` of `owner` may point at, laid into one table filed under the
-// first target's key: a reference value carries its own type, so a row of one table can only meet its own.
+// first target's key: a reference value carries its own type, so a row of one table can only meet its own — and
+// each table is read for its own among `keys` (ReferencesOf).
 ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBackendQueryColumn* refCol,
                                     const std::vector<const ibBackendQueryColumn*>& path, size_t seg,
-                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey)
+                                    ibDatabaseConnectionHolder* holder, const ibBackendQueryColumn*& fileKey,
+                                    const std::vector<ibValue>& keys)
 {
 	fileKey = nullptr;
 	std::vector<const ibBackendQueryable*> targets;
@@ -1412,8 +1485,11 @@ ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBac
 	for (const ibBackendQueryable* target : targets) {
 		if (seg < path.size() && !ibDbTableProvider::WalkEnters(target, path[seg]))
 			continue;   // a CAST names the one type the walk goes into
+		const ibBackendQueryColumn* const targetKey = SelfReferenceColumn(target);
+		if (targetKey == nullptr)
+			continue;   // not a reference target — nothing to walk into
 		const ibBackendQueryColumn* key = nullptr;
-		ibQueryRamTable part = WalkedLeafByKey(target, path, seg, holder, key);
+		ibQueryRamTable part = WalkedLeafByKey(target, path, seg, holder, key, ReferencesOf(keys, targetKey));
 		if (key == nullptr)
 			continue;
 		if (fileKey == nullptr) {
@@ -1513,7 +1589,8 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 				const wxString joinKey = prefixKey + wxString::Format(wxT("%p|%p"), (const void*)refCol, (const void*)bring);
 				if (joined.find(joinKey) == joined.end()) {
 					const ibBackendQueryColumn* fileKey = nullptr;
-					ibQueryRamTable filed = WalkedLeafOfTargets(curQ, refCol, path, i + 1, spec.m_holder, fileKey);
+					ibQueryRamTable filed = WalkedLeafOfTargets(curQ, refCol, path, i + 1, spec.m_holder, fileKey,
+						ReferencesIn(rows, refCol));
 					if (fileKey == nullptr)
 						break;   // no table this reference may point at reaches the field — the cell stays empty
 					std::vector<const ibBackendQueryColumn*> outCols = present;
@@ -1547,7 +1624,9 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 				if (!tgtQ->OwnsColumn(bring))
 					if (const ibBackendQueryColumn* own = tgtQ->ResolveColumnByName(bring->GetName()))
 						readLeaf = own;
-				ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, readLeaf });
+				// …for the references these rows hold, and no others (MaterialiseLeafToRam)
+				const std::vector<ibValue> keys = ReferencesIn(rows, refCol);
+				ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, readLeaf }, &keys);
 				if (readLeaf != bring) {
 					ibQueryRamTable filed;
 					filed.AddColumn(tgtKey->GetColumnId(), tgtKey->GetName(), tgtKey->GetTypeDesc());
@@ -3293,6 +3372,111 @@ inline bool IsNoKey(const ibValue& v)
 {
 	return v.IsEmpty() || v.IsNull()
 		|| (v.GetType() == ibValueTypes::TYPE_STRING && v.GetString().IsEmpty());
+}
+
+// ⭐ THE TREE A REFERENCE'S TARGET IS ARRANGED IN — read once and whole, for both roads that build a hierarchy
+// level: each value's parent, its PLACE in its kind's order, and whether the kind keeps folders apart from items.
+// The read is sorted by the target's own key, which the door sorts by the kind's order (a catalog by what it is
+// presented by, a chart by its code), so the place is the order the kind's own list shows. Empty when the target
+// has no parent column or there is no connection.
+struct ibValueHierarchy {
+	ibValueParentMap                                             parentOf;
+	std::unordered_map<ibValue, long, ibValueHash, ibValueEqual> place;
+	bool                                                         foldersFirst = false;
+};
+
+ibValueHierarchy ReadValueHierarchy(const ibBackendQueryable* target, ibDatabaseConnectionHolder* holder)
+{
+	ibValueHierarchy tree;
+	if (target == nullptr || holder == nullptr)
+		return tree;
+	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
+	const ibBackendQueryColumn* rk = keys.empty() ? nullptr : keys.front();
+	const ibBackendQueryColumn* pk = target->GetHierarchyColumn();
+	if (rk == nullptr || pk == nullptr)
+		return tree;
+	tree.foldersFirst = target->GetHierarchyType() == eFolders;
+	ibDataQueryBuilder q(holder);
+	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString).OrderBy(rk, /*ascending*/ true);
+	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
+	long place = 0;
+	while (ts.Next()) {
+		const ibValue key = ts.GetValue(rk);
+		tree.parentOf[key] = ts.GetValue(pk);
+		tree.place.emplace(key, place++);
+	}
+	return tree;
+}
+
+// ⭐⭐ THE VALUES OF A HIERARCHY LEVEL, FILED UNDER THEIR PARENTS IN THE ORDER THEIR ROWS ARRIVED — one
+// arrangement for both roads that build such a tree (BuildReferenceHierarchy and the dimension combiner).
+//
+// A value stands where its own row stood — the fold's rule everywhere, so the read's order (a sort by a reference
+// is its kind's order: a chart by its code) is the order of the tree. A folder with NO row of its own — every
+// account of class 6 posted, the class itself never — stands where its FIRST descendant did. Appended after
+// everything instead, a chart's class 6 printed below class 9; and walked from an unordered map, the whole level
+// came out in the order of its hashes (Max, 2026-09-29: "the hierarchical output puts class 6 at the bottom").
+// A folder that HAS a row keeps its own turn: filed from a child, a folder whose contents sort early jumped ahead
+// of its own row.
+//
+// ⭐ …THAT IS A TREE OF PEERS — an account under an account, each an element in its own right. A catalog of
+// FOLDERS AND ITEMS keeps them apart the way its list does: under every parent the folders first, among
+// themselves in their kind's order (their place in the read above), then the items as their rows came (Max,
+// 2026-09-29: "folders always go on top; subordinate accounts are peers"). A folder is what has children here —
+// an item of such a catalog never does.
+ibRefChildren ibArrangeUnderParents(const std::vector<ibValue>& keyOrder, const ibValueHierarchy& tree,
+                                    const std::function<bool(const ibValue&)>& hasRow)
+{
+	const ibValueParentMap& parentOf = tree.parentOf;
+	ibRefChildren childrenOf;
+	ibValueSeen   seen;
+	// "No parent" arrives as two values — a key the map does not mention, and an empty reference — and the root
+	// is one bucket: both are filed under `ibValue()`, where the roots are looked up.
+	const auto parentOfKey = [&parentOf](const ibValue& key) {
+		const auto pit = parentOf.find(key);
+		const ibValue par = pit != parentOf.end() ? pit->second : ibValue();
+		return IsNoKey(par) ? ibValue() : par;
+	};
+	for (const ibValue& key : keyOrder) {
+		if (IsNoKey(key) || seen[key])
+			continue;
+		seen[key] = 1;
+		ibValue par = parentOfKey(key);
+		childrenOf[par].push_back(key);
+		// …and the folders above it that have no row of their own, at this moment
+		while (!IsNoKey(par) && !seen[par] && !hasRow(par)) {
+			seen[par] = 1;
+			const ibValue up = parentOfKey(par);
+			childrenOf[up].push_back(par);
+			par = up;
+		}
+	}
+	// Whatever is still unfiled above them follows — an ancestor the walk up stopped at.
+	std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
+		if (IsNoKey(key) || seen[key])
+			return;
+		seen[key] = 1;
+		const ibValue par = parentOfKey(key);
+		childrenOf[par].push_back(key);
+		chainUp(par);
+	};
+	for (const ibValue& key : keyOrder)
+		chainUp(parentOfKey(key));
+	// …the folders first, in their kind's order, where the kind keeps folders and items apart (see above)
+	if (tree.foldersFirst) {
+		const auto isFolder = [&childrenOf](const ibValue& v) { return childrenOf.find(v) != childrenOf.end(); };
+		const auto placeOf  = [&tree](const ibValue& v) {
+			const auto it = tree.place.find(v);
+			return it != tree.place.end() ? it->second : std::numeric_limits<long>::max();
+		};
+		for (auto& under : childrenOf) {
+			std::vector<ibValue>& kids = under.second;
+			const auto items = std::stable_partition(kids.begin(), kids.end(), isFolder);
+			std::stable_sort(kids.begin(), items,
+				[&placeOf](const ibValue& a, const ibValue& b) { return placeOf(a) < placeOf(b); });
+		}
+	}
+	return childrenOf;
 }
 
 struct HierBuildCtx {
@@ -5280,17 +5464,10 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	if (target == nullptr || holder == nullptr || tRowKey == nullptr || tParent == nullptr)
 		return BuildTotalsTree(snapshot, { refCol }, aggregates);
 
-	// Materialise the target's parent-map (value -> parent value) through the door.
-	ibValueParentMap parentOf;
-	{
-		ibDataQueryBuilder q(holder);
-		q.From(source->GetProvider().ResolveReferenceTarget(source, refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
-		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
-		while (ts.Next())
-			parentOf[ts.GetValue(tRowKey)] = ts.GetValue(tParent);
-	}
+	// The target's tree (value -> parent value, and each one's place in its kind's order), through the door.
+	const ibValueHierarchy hierarchy = ReadValueHierarchy(target, holder);
 
-	// Index the snapshot rows by the refCol value; build the value->children map from parentOf.
+	// Index the snapshot rows by the refCol value; build the value->children map from the tree.
 	ibSelectorTree tree;
 	for (const ibQueryRamColumn& col : snapshot.Columns())
 		tree.AddColumn(col.m_id, col.m_name, col.m_type);
@@ -5298,22 +5475,24 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 
 	// `valOf` is gone: it existed only to map a rendered key back to the value it came from, and the
 	// value is the key now.
+	// …the values in the order their rows came, which the map does not keep (see ibArrangeUnderParents).
 	ibRowsByValue rowsByVal;
+	std::vector<ibValue> keyOrder;
 	const long n = snapshot.RowCount();
-	for (long r = 0; r < n; ++r)
-		rowsByVal[snapshot.GetCell(r, refCol->GetColumnId())].push_back(r);
+	for (long r = 0; r < n; ++r) {
+		const ibValue key = snapshot.GetCell(r, refCol->GetColumnId());
+		auto it = rowsByVal.find(key);
+		if (it == rowsByVal.end()) {
+			keyOrder.push_back(key);
+			rowsByVal.emplace(key, std::vector<long>{ r });
+		}
+		else
+			it->second.push_back(r);
+	}
 
-	ibRefChildren childrenOf;   // among VALUES PRESENT (+ their ancestors)
-	ibValueSeen   seen;
-	std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
-		if (IsNoKey(key) || seen[key]) return;
-		seen[key] = 1;
-		const auto pit = parentOf.find(key);
-		const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
-		childrenOf[par].push_back(key);   // an absent parent => a root
-		chainUp(par);
-	};
-	for (const auto& kv : rowsByVal) chainUp(kv.first);
+	// Among VALUES PRESENT (+ their ancestors), each where its row stood.
+	ibRefChildren childrenOf = ibArrangeUnderParents(keyOrder, hierarchy,
+		[&rowsByVal](const ibValue& key) { return rowsByVal.find(key) != rowsByVal.end(); });
 
 	RefHierCtx ctx{ &snapshot, refCol, &rowsByVal, &childrenOf, &aggregates, dim };
 	ibValueSeen visited;
@@ -5347,28 +5526,24 @@ struct DimCtx {
 	// table, a join). A level grouped BY it holds one row per group by construction, so its headings are
 	// the rows themselves; see AttachDimValue. Read once, here, rather than per node.
 	ibMetaID                                              identity = 0;
+	// ⭐ …AND THE TREES, ONE PER LEVEL FIELD, READ ONCE PER FOLD (HierarchyForField). A hierarchy level under another
+	// is folded once per heading above it, and every one of those folds read its catalog's whole tree again — all the
+	// goods, for each warehouse.
+	mutable std::map<const ibBackendQueryColumn*, ibValueHierarchy> trees;
 };
 
-// Parent-map (value-key -> parent value-key) for a level field: the target catalog of the reference
-// field (cross), or the source itself when the field is the source's OWN parent column (self). Read
-// through the door. Empty when there is no hierarchy target / no holder.
-ibValueParentMap ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
+// The tree a level field's values stand in (ReadValueHierarchy): the target catalog of the reference field (cross),
+// or the source itself when the field is the source's OWN parent column (self) — read once per fold (DimCtx::trees).
+// Empty when there is no hierarchy target / no holder.
+const ibValueHierarchy& HierarchyForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
 {
-	ibValueParentMap pm;
+	const auto known = ctx.trees.find(field);
+	if (known != ctx.trees.end())
+		return known->second;
 	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->GetProvider().ResolveReferenceTarget(ctx.source, field) : nullptr;
 	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetHierarchyColumn())
 		target = ctx.source;
-	if (target == nullptr || ctx.holder == nullptr) return pm;
-	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
-	const ibBackendQueryColumn* rk = keys.empty() ? nullptr : keys.front();
-	const ibBackendQueryColumn* pk = target->GetHierarchyColumn();
-	if (rk == nullptr || pk == nullptr) return pm;
-	ibDataQueryBuilder q(ctx.holder);
-	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString);
-	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
-	while (ts.Next())
-		pm[ts.GetValue(rk)] = ts.GetValue(pk);
-	return pm;
+	return ctx.trees.emplace(field, ReadValueHierarchy(target, ctx.holder)).first->second;
 }
 
 // `across` — this call is building the COLUMN branch of a cross-table: the levels past the seam,
@@ -5686,9 +5861,11 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	//
 	// The parent map is read FIRST and its emptiness IS the answer, so this asks the same authority the
 	// walk would have asked anyway and costs nothing extra.
-	const ibValueParentMap parentOf = (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements)
-		? ParentMapForField(ctx, level.HeadCol())
-		: ibValueParentMap{};
+	static const ibValueHierarchy kNoHierarchy;
+	const ibValueHierarchy& hierarchy = (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements)
+		? HierarchyForField(ctx, level.HeadCol())
+		: kNoHierarchy;
+	const ibValueParentMap& parentOf = hierarchy.parentOf;
 
 	if (level.IsSingleField() && level.HeadDim() != ibDimensionKind::Elements && !parentOf.empty()) {
 		// Grouped by the VALUE, in first-seen order. `valOf` is gone with the string key — it only ever
@@ -5720,48 +5897,16 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 
 		// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree. (`parentOf`
 		// was read above the branch: its emptiness is what decides whether this road is taken at all.)
-		ibRefChildren childrenOf;
-		ibValueSeen   seen;
-		std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
-			if (IsNoKey(key) || seen[key]) return;
-			seen[key] = 1;
-			const auto pit = parentOf.find(key);
-			const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
-			// ⭐⭐ "NO PARENT" ARRIVES AS TWO DIFFERENT VALUES, AND THE ROOT BUCKET IS ONE. A key the
-			// parent-map does not mention gives a default `ibValue()`; a key it DOES mention as
-			// top-level gives an EMPTY REFERENCE — a reference value with a null guid, which is not
-			// equal to `ibValue()` and hashes elsewhere. `IsNoKey` already reads both as "root", so
-			// they are filed under the same key here; the roots are looked up under `ibValue()` below.
-			//
-			// 🛑 Filed under whatever came, a hierarchical catalog lost its whole tree: every top-level
-			// element went into the empty-REFERENCE bucket, the root lookup read the empty-VALUE one and
-			// found nobody, and the only node that survived was the one whose parent happened to be
-			// missing from the map altogether. One node out of five rows — which is exactly what the
-			// walk saw (Max, 2026-08-29: the hierarchical sheet came out blank, twice).
-			childrenOf[IsNoKey(par) ? ibValue() : par].push_back(key);
-			chainUp(par);
-		};
-		// ⭐⭐ …AND A KEY STANDS WHERE ITS OWN ROW STOOD, NOT WHERE ITS FIRST CHILD DID. `chainUp` walks
-		// UPWARD, so filing straight from it puts a folder in its parent's list the moment the first row
-		// UNDER it is met — and a folder whose contents sort early jumped to the front while its own row
-		// sat further down the read. Two passes say it properly:
 		//
-		//   1. every key that HAS a row, in the order the rows arrived — the fold's rule everywhere else;
-		//   2. only then the ancestors that have NO row of their own (pulled in by a filter that kept a
-		//      child and dropped the folder). They have nothing to be ordered by, so they follow.
-		for (const ibValue& key : keyOrder) {
-			if (IsNoKey(key) || seen[key])
-				continue;
-			seen[key] = 1;
-			const auto pit = parentOf.find(key);
-			const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
-			childrenOf[IsNoKey(par) ? ibValue() : par].push_back(key);
-		}
-		for (const ibValue& key : keyOrder) {
-			const auto pit = parentOf.find(key);
-			if (pit != parentOf.end())
-				chainUp(pit->second);
-		}
+		// ⭐⭐ "NO PARENT" ARRIVES AS TWO DIFFERENT VALUES, AND THE ROOT BUCKET IS ONE — a key the map does not
+		// mention, and an empty reference; both are filed under `ibValue()`, where the roots are looked up below.
+		// 🛑 Filed under whatever came, a hierarchical catalog lost its whole tree: every top-level element went
+		// into the empty-REFERENCE bucket and the root lookup read the empty-VALUE one (Max, 2026-08-29: the
+		// hierarchical sheet came out blank, twice).
+		// ⭐⭐ …AND A KEY STANDS WHERE ITS OWN ROW STOOD, NOT WHERE ITS FIRST CHILD DID; a folder with no row of
+		// its own, where its first descendant did (ibArrangeUnderParents — the other hierarchy road says it too).
+		ibRefChildren childrenOf = ibArrangeUnderParents(keyOrder, hierarchy,
+			[&byVal](const ibValue& key) { return byVal.find(key) != byVal.end(); });
 		ibValueSeen visited;
 		// Rows of ROOT values that HIERARCHYONLY folded away: an element standing at the top has no
 		// folder to be read under, so its rows join the level's remainder below rather than vanishing
@@ -5778,7 +5923,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			}
 
 		// ⭐⭐ …AND THE ROWS THAT HAVE NO KEY AT THIS LEVEL BELONG TO THE NODE ITSELF. Grouping a catalog by
-		// its PARENT makes "no parent" a real group — it means the TOP LEVEL — and `chainUp` refuses such a
+		// its PARENT makes "no parent" a real group — it means the TOP LEVEL — and the arrangement refuses such a
 		// key at the door (it is what ends the walk up the chain), so those rows had no heading to hang
 		// under and simply vanished: a catalog printed one folder and lost every element standing beside it
 		// (Max, 2026-08-29). They are not a heading either — the top level of a tree has no caption — so

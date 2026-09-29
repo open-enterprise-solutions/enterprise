@@ -837,15 +837,17 @@ public:
 	// every caller reads off it the distinction it actually needs:
 	//
 	//   is there a parent to walk        — anything but `eNone`      (grouping, IN HIERARCHY)
-	//   does a LIST walk it as a tree    — `eItems` / `eFoldersAndItems`
+	//   does a LIST walk it as a tree    — `eItems` / `eFolders`
 	//   may an ITEM hold items           — `eItems`
+	//
+	// (`eItems` is the tree of peers — a chart of accounts, an account under an account; `eParentOnly`, no
+	// longer offered, records a parent and builds nothing on it. Max, 2026-09-29.)
 	//
 	// It used to be handed out as booleans, one per question, and a boolean is a PROJECTION: it
 	// answers what its author needed and silently answers something else for the next caller. Both
-	// mistakes that came of it were the same mistake — a chart of accounts declares `eSubordination`
-	// (a recorded parent, a flat list), and asked through `GetHierarchyColumn() != nullptr` it first
-	// said "no parent" to the grouping and later "yes, drill" to the list. Nothing to decide here:
-	// the source states its arrangement and the caller names the state it cares about.
+	// mistakes that came of it were the same mistake — asked through `GetHierarchyColumn() != nullptr`,
+	// a source first said "no parent" to the grouping and later "yes, drill" to the list. Nothing to
+	// decide here: the source states its arrangement and the caller names the state it cares about.
 	// (Asked once per fetch, not per row.)
 	virtual ibHierarchyType GetHierarchyType() const { return ibHierarchyType::eNone; }
 	// (GetFolderColumn REMOVED — folders are a folder-first SORT / IsFolder FILTER set at list creation, not a
@@ -902,6 +904,14 @@ public:
 	// after it, and a partially-rebuilt tree then calls through the wrong one: the stack does not
 	// unwind and the frame pointer reads as a code address. New optional virtuals go here.
 	virtual wxString GetQueryTableAlias() const { return wxEmptyString; }
+
+	// ⭐⭐ THE COLUMN THIS SOURCE'S ROWS ARE ORDERED BY — what a sort by a REFERENCE to it sorts by
+	// (ibDataQueryBuilder::OrderBy). Not a field but the list of them, made a column the way a document's
+	// moment is: a catalog by what it is presented by and then the reference, a document by its date and then
+	// the reference, an enumeration by its declared order and then the reference (ibBackendColumnSortOrder).
+	// Null (the default): no order of its own, and a reference to it sorts by its identity. (Appended after
+	// the one above, for the same reason.)
+	virtual const ibBackendQueryColumn* GetSortColumn() const { return nullptr; }
 };
 
 // ==========================================================================

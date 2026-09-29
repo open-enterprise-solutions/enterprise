@@ -588,8 +588,9 @@ bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObjec
 }
 
 // …AND ITS ORDER, WHICH IS THE ONE THE AUTHOR DECLARED. Read off the predefined `Order` attribute — the
-// very field the enumeration's own list is built with (`ibCreateList(GetQueryable(), GetDataOrder())`) —
-// so a sorted column, a grouping and that list all agree without anyone restating the sequence.
+// very field the enumeration's own list is built with (`ibCreateList(GetQueryable(), GetDataOrder())`) and
+// its query source orders by (ibEnumQueryable::GetSortParts) — so a sorted column, a grouping and that list
+// all agree without anyone restating the sequence.
 //
 // ⚠ NO READ HAPPENS HERE. The caller (ibValueReferenceDataObject::CompareValueLS) asks only when both
 // rows are already in hand; a value it cannot find falls through to identity rather than fetching one.
@@ -966,7 +967,8 @@ bool ibValueMetaObjectRecordDataRecorderRef::GenerateDataDesc(const ibValueDataO
 	return ibValueMetaObjectRecordDataMutableRef::GenerateDataDesc(objValue, out);   // by its template
 }
 
-// …and no order of its own: two records are told apart by identity.
+// …and two records in memory are told apart by identity (see the base: a read record and an unread one would
+// order differently); the engine orders them by the moment, read for every row.
 int ibValueMetaObjectRecordDataRecorderRef::CompareDataValues(const ibValueDataObject* lhs,
 	const ibValueDataObject* rhs) const
 {
@@ -1061,8 +1063,8 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 	return ibValueMetaObjectRecordDataMutableRef::GenerateDataDesc(objValue, out);
 }
 
-// …and no order of its own: the rows of a catalog, a chart of accounts or a chart of characteristic
-// types are told apart by identity.
+// …and two rows in memory are told apart by identity (see the base); the engine orders the rows of a catalog, a
+// chart of accounts or a chart of characteristic types by what they are presented by, read for every row.
 int ibValueMetaObjectRecordDataHierarchyMutableRef::CompareDataValues(const ibValueDataObject* lhs,
 	const ibValueDataObject* rhs) const
 {
@@ -2859,11 +2861,14 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 	}
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
 	wxASSERT(metaFolder);
-	if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), false);
-	}
-	else if (m_objMode == ibObjectMode::OBJECT_FOLDER) {
-		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
+	// IsFolder only where the arrangement lists it (FillArrayObjectByPredefinedAttribute)
+	if (metaFolder->HasFolders()) {
+		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
+			m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), false);
+		}
+		else if (m_objMode == ibObjectMode::OBJECT_FOLDER) {
+			m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
+		}
 	}
 	// table is collection values 
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
@@ -2908,11 +2913,14 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 	}
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
 	wxASSERT(metaFolder);
-	if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), false);
-	}
-	else if (m_objMode == ibObjectMode::OBJECT_FOLDER) {
-		m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
+	// IsFolder only where the arrangement lists it (FillArrayObjectByPredefinedAttribute)
+	if (metaFolder->HasFolders()) {
+		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
+			m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), false);
+		}
+		else if (m_objMode == ibObjectMode::OBJECT_FOLDER) {
+			m_listObjectValue.insert_or_assign(*metaFolder->GetDataIsFolder(), true);
+		}
 	}
 	// table is collection values 
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {

@@ -2135,6 +2135,26 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 	return nullptr;
 }
 
+// ⭐ WHAT A COLUMN IS SORTED ON, standing where `qual` says — the fields of its layout that carry a value, in
+// order: one for a scalar, the date and the reference for a moment, the kind's fields and its reference for an
+// order column (ibBackendColumnSortOrder). One answer for the column read on the main scan (BuildSortKeys) and
+// for the same column reached through a join (a walk's leaf), which took its FIRST field only and so sorted a
+// moment by the date alone.
+//
+// A reference's identity is (guid, type). ColumnValueFields gives the _RRRef guid; the _RTRef type follows as the
+// tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of type B — in lockstep with
+// BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID). A single-type / self-reference column
+// has a constant _RTRef, so this is a harmless no-op there.
+static std::vector<ibQueryExprPtr> SortFieldsOf(const ibBackendQueryColumn* col, const wxString& qual)
+{
+	std::vector<ibQueryExprPtr> fields;
+	for (const wxString& name : ColumnValueFields(col))
+		fields.push_back(ibColQ(qual, name));
+	if (IsReferenceValued(col))
+		fields.push_back(ibColQ(qual, col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType)));
+	return fields;
+}
+
 std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQueryable* queryable,
                                                            const std::vector<ibQuerySortItem>& sorts,
                                                            bool reverse,
@@ -2157,19 +2177,9 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 		if (s.m_col == nullptr) continue;
 		if (!s.m_path.empty()) continue;   // dot-walk sort — emitted inline by BuildPageIR (qualified by its join alias)
 		const bool asc = reverse ? !s.m_ascending : s.m_ascending;
-		for (const wxString& name : ColumnValueFields(s.m_col)) {
+		for (ibQueryExprPtr& field : SortFieldsOf(s.m_col, mainQual)) {
 			ibQuerySortKey k;
-			k.m_expr = ibColQ(mainQual, name);
-			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
-			keys.push_back(std::move(k));
-		}
-		// A reference's identity is (guid, type). ColumnValueFields gives the _RRRef guid; append the _RTRef
-		// type as the tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of
-		// type B — in lockstep with BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID).
-		// A single-type / self-reference column has a constant _RTRef, so this is a harmless no-op there.
-		if (IsReferenceValued(s.m_col)) {
-			ibQuerySortKey k;
-			k.m_expr = ibColQ(mainQual, s.m_col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
+			k.m_expr = std::move(field);
 			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
 			keys.push_back(std::move(k));
 		}
@@ -2513,6 +2523,50 @@ public:
 	ibQueryRelPtr From()  const { return m_from; }
 	bool          Empty() const { return m_aliasSeq == 0; }
 
+	// ⭐⭐ WHERE A WALK'S LEAF STANDS, IN EVERY TABLE IT REACHES — the one walker the composite forms ask.
+	//
+	// Recursively from the root: a SINGLE-target reference → one LEFT JOIN, continue; a COMPOSITE reference →
+	// FORK, one LEFT JOIN + the rest of the walk per target type that has the next segment (a REGISTER's
+	// Recorder is a composite of MANY document types, and a field pulled through it often exists on one — no
+	// point in fifteen joins for it). Each segment is re-resolved BY NAME per branch: the path columns were
+	// resolved against the representative type at lowering. `sawComposite` says whether the walk forked at all.
+	//
+	// It stood written out twice — the scalar leaf below and the object leaf of a read's projection — and a third
+	// reader (a sort by a leaf of several fields) was about to copy it again.
+	struct LeafOccurrence { wxString m_alias; const ibBackendQueryColumn* m_col; const ibBackendQueryable* m_q; };
+	std::vector<LeafOccurrence> LeafOccurrences(const std::vector<const ibBackendQueryColumn*>& path, bool& sawComposite)
+	{
+		sawComposite = false;
+		std::vector<LeafOccurrence> out;
+		if (path.empty()) return out;
+		std::function<void(const wxString&, const ibBackendQueryable*, size_t)> walk =
+			[&](const wxString& ownerQual, const ibBackendQueryable* ownerQ, size_t seg) {
+				if (ownerQ == nullptr) return;
+				const ibBackendQueryColumn* col = ownerQ->ResolveColumnByName(path[seg]->GetName());
+				if (col == nullptr) return;                           // this branch's type lacks the attribute — skip
+				if (seg + 1 == path.size()) {                         // LEAF (NULL on a non-matching join)
+					out.push_back(LeafOccurrence{ ownerQual, col, ownerQ });
+					return;
+				}
+				if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
+					const wxString f = SelfReferenceField(single);
+					if (f.empty()) return;
+					walk(AddLeftJoin(single, ownerQual, FirstSqlFieldOfColumn(col)), single, seg + 1);
+					return;
+				}
+				sawComposite = true;
+				for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
+					if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
+					if (!ibDbTableProvider::WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
+					const wxString f = SelfReferenceField(tq);
+					if (f.empty()) continue;
+					walk(AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1);
+				}
+			};
+		walk(m_rootTable, m_root, 0);
+		return out;
+	}
+
 	// A dot-walk path with a COMPOSITE (multi-type) reference at ANY segment, as ONE scalar SQL expression.
 	// Recursively walk from the root table: a SINGLE-target ref → one LEFT JOIN, continue; a COMPOSITE ref →
 	// FORK, one LEFT JOIN + recursive tail per target type. Each branch contributes its RAW leaf field (NULL on
@@ -2547,6 +2601,30 @@ public:
 		return CompositeLeaf(path, /*withTypedEmpty*/ false);
 	}
 
+	// ⭐ …AND A LEAF OF SEVERAL FIELDS (a reference, an enum) IS COMPARED WHERE EACH BRANCH HOLDS IT — every branch
+	// through its own target, the way a single-target walk is compared (BuildConditionExpr), and the branches OR'ed:
+	// a row takes at most one. An EMPTY value also matches the rows no branch reached: the fold files those under
+	// the empty key (a salary document has no counterparty), so a list opening that heading has to find them.
+	// It was a refusal, and a list grouped by `Recorder.Counterparty` could not open a single heading (2026-09-29).
+	// Null when the path has no composite hop.
+	ibQueryExprPtr CompositeCondition(const ibQueryCondition& c)
+	{
+		bool sawComposite = false;
+		const std::vector<LeafOccurrence> occs = LeafOccurrences(c.m_path, sawComposite);
+		if (!sawComposite || occs.empty())
+			return nullptr;
+		ibQueryExprPtr any, none;
+		for (const LeafOccurrence& o : occs) {
+			ibQueryCondition branch = c;
+			branch.m_col = o.m_col;
+			any  = OrFold(any, ibMetaIRBuilder::BuildConditionExpr(o.m_q, branch, o.m_alias));
+			none = AndFold(none, ibIsNull(ibCol(o.m_alias, FirstSqlFieldOfColumn(o.m_col))));
+		}
+		if (c.m_op == ibQueryFilterOp::Equal && c.m_value.IsEmpty())
+			any = OrFold(any, none);
+		return any;
+	}
+
 	ibQueryExprPtr CompositeLeaf(const std::vector<const ibBackendQueryColumn*>& path, bool withTypedEmpty)
 	{
 		if (path.size() < 2) return nullptr;
@@ -2557,39 +2635,71 @@ public:
 		}
 
 		bool sawComposite = false;
-		std::function<void(const wxString&, const ibBackendQueryable*, size_t, std::vector<ibQueryExprPtr>&)> walk =
-			[&](const wxString& ownerQual, const ibBackendQueryable* ownerQ, size_t seg, std::vector<ibQueryExprPtr>& out) {
-				if (ownerQ == nullptr) return;
-				const ibBackendQueryColumn* col = ownerQ->ResolveColumnByName(path[seg]->GetName());
-				if (col == nullptr) return;                           // this branch's type lacks the attribute — skip
-				if (seg + 1 == path.size()) {                         // LEAF — raw scalar field (NULL on non-match)
-					out.push_back(ibCol(ownerQual, FirstSqlFieldOfColumn(col)));
-					return;
-				}
-				if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
-					const wxString f = SelfReferenceField(single);
-					if (f.empty()) return;
-					walk(AddLeftJoin(single, ownerQual, FirstSqlFieldOfColumn(col)), single, seg + 1, out);
-					return;
-				}
-				sawComposite = true;
-				// A REGISTER's Recorder is a composite of MANY document types (15+); a field
-				// pulled through it often exists on only ONE. Join ONLY the types that actually have the next
-				// segment — no point in 15 LEFT JOINs for a field on 1. The deeper tail still self-skips.
-				for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
-					if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
-					if (!ibDbTableProvider::WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
-					const wxString f = SelfReferenceField(tq);
-					if (f.empty()) continue;
-					walk(AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1, out);
-				}
-			};
-
 		std::vector<ibQueryExprPtr> out;
-		walk(m_rootTable, m_root, 0, out);
+		for (const LeafOccurrence& at : LeafOccurrences(path, sawComposite))   // each branch's raw scalar field
+			out.push_back(ibCol(at.m_alias, FirstSqlFieldOfColumn(at.m_col)));
 		if (!sawComposite || out.empty()) return nullptr;            // pure single-target — caller's path
 		if (empty) out.push_back(empty);
 		return out.size() == 1 ? out.front() : ibFunc(wxT("COALESCE"), out);
+	}
+
+	// ⭐⭐ …AND A LEAF OF SEVERAL FIELDS, SORTED BY THROUGH A REFERENCE OF SEVERAL KINDS — a kind's ORDER
+	// (ibBackendColumnSortOrder), a moment through a register's recorder. Each kind brings its own leaf, and their
+	// value fields meet BY ROLE: every date in one COALESCE, every text in another, the references last — so a
+	// document sorts among the documents by its date, a catalog among the catalogs by its description, and a row
+	// whose kind has no field of a role is NULL there, which keeps the kinds apart. Empty for a single-target walk
+	// (the caller's Resolve).
+	std::vector<ibQueryExprPtr> CompositeSortFields(const std::vector<const ibBackendQueryColumn*>& path)
+	{
+		std::vector<ibQueryExprPtr> fields;
+		for (const RoleField& f : CompositeRoleFields(path))
+			if (ibIsValueRole(f.m_role))
+				fields.push_back(f.m_expr);
+		return fields;
+	}
+
+	// …the same meeting, every field of the leaf: its value roles in the order they first stand, then the
+	// reference's type and id — each with the name the FIRST kind gives that field (empty where it has none),
+	// which is the name the leaf column reads its value back by. What a GROUP BY through such a walk groups by and
+	// projects (BuildAggregateQuery); the sort takes the value roles of it (above). Empty for a single-target walk.
+	struct RoleField { ibColumnRole m_role; wxString m_name; ibQueryExprPtr m_expr; };
+	std::vector<RoleField> CompositeRoleFields(const std::vector<const ibBackendQueryColumn*>& path)
+	{
+		bool sawComposite = false;
+		const std::vector<LeafOccurrence> leaves = LeafOccurrences(path, sawComposite);
+		if (!sawComposite || leaves.empty()) return {};
+		const auto slotsOf = [](const ibBackendQueryColumn* col) {
+			std::vector<ibColumnSlot> slots;
+			for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+				if (slot.m_role != ibColumnRole::Discriminator) slots.push_back(slot);
+			return slots;
+		};
+		std::vector<ibColumnRole> roles;   // in the order they first stand — the reference's last
+		const auto note = [&roles](ibColumnRole role) {
+			if (std::find(roles.begin(), roles.end(), role) == roles.end()) roles.push_back(role);
+		};
+		for (const LeafOccurrence& at : leaves)
+			for (const ibColumnSlot& slot : slotsOf(at.m_col))
+				if (slot.m_role != ibColumnRole::ReferenceType && slot.m_role != ibColumnRole::ReferenceId)
+					note(slot.m_role);
+		note(ibColumnRole::ReferenceType);
+		note(ibColumnRole::ReferenceId);
+		std::vector<RoleField> fields;
+		for (const ibColumnRole role : roles) {
+			RoleField field{ role, wxString(), nullptr };
+			std::vector<ibQueryExprPtr> args;
+			for (const LeafOccurrence& at : leaves)
+				for (const ibColumnSlot& slot : slotsOf(at.m_col))
+					if (slot.m_role == role) {
+						if (&at == &leaves.front()) field.m_name = slot.m_name;
+						args.push_back(ibCol(at.m_alias, slot.m_name));
+						break;
+					}
+			if (args.empty()) continue;
+			field.m_expr = args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args);
+			fields.push_back(std::move(field));
+		}
+		return fields;
 	}
 
 	// The flat path CONDITIONS — qualified by the leaf's join alias; BuildConditionExpr on the TARGET
@@ -2611,9 +2721,14 @@ public:
 				continue;
 			}
 			wxString a; const ibBackendQueryable* tq = nullptr;
-			if (!Resolve(c.m_path, a, tq) || tq == nullptr)
-				throw std::logic_error("a dot-walk WHERE on a composite non-scalar leaf is not yet supported");
-			where = AndFold(where, ibMetaIRBuilder::BuildConditionExpr(tq, c, a));
+			if (Resolve(c.m_path, a, tq) && tq != nullptr) {
+				where = AndFold(where, ibMetaIRBuilder::BuildConditionExpr(tq, c, a));
+				continue;
+			}
+			ibQueryExprPtr branches = CompositeCondition(c);   // composite non-scalar leaf -> per branch, OR'ed
+			if (!branches)
+				throw std::logic_error("a dot-walk WHERE did not resolve its join");
+			where = AndFold(where, branches);
 		}
 		return where;
 	}
@@ -2672,9 +2787,11 @@ public:
 				if (ibQueryExprPtr lhs = CompositeComparand(p->m_leaf.m_path))   // composite scalar leaf
 					return ibBinOp(FilterOpToBinOp(p->m_leaf.m_op), lhs, ibConst(p->m_leaf.m_value));
 				wxString a; const ibBackendQueryable* tq = nullptr;
-				if (!Resolve(p->m_leaf.m_path, a, tq) || tq == nullptr)
-					throw std::logic_error("a dot-walk WHERE-tree leaf did not resolve its join");
-				return ibMetaIRBuilder::BuildConditionExpr(tq, p->m_leaf, a);
+				if (Resolve(p->m_leaf.m_path, a, tq) && tq != nullptr)
+					return ibMetaIRBuilder::BuildConditionExpr(tq, p->m_leaf, a);
+				if (ibQueryExprPtr branches = CompositeCondition(p->m_leaf))   // composite non-scalar leaf
+					return branches;
+				throw std::logic_error("a dot-walk WHERE-tree leaf did not resolve its join");
 			}
 			return ibMetaIRBuilder::BuildConditionExpr(m_root, p->m_leaf, mainQual);
 		}
@@ -2809,6 +2926,8 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		// built, and read by the ORDER BY below — because "sort by the name the projection published"
 		// is only true of names the projection published, and nothing was checking.
 		std::vector<wxString> projectedAliases;
+		// A walk grouped by through a reference of several kinds -> the fields it is sorted on (see below).
+		std::map<std::vector<const ibBackendQueryColumn*>, std::vector<ibQueryExprPtr>> compositeSorts;
 		for (size_t gi = 0; gi < spec.m_groupBy->size(); ++gi) {
 			// A COMPUTED key (GroupByExpr) occupies the same slot with a null column: lower the tree
 			// and project it under its alias. One GROUP BY item, not a field spread — an expression
@@ -2832,7 +2951,6 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				continue;   // a null column with no expression is an empty slot — nothing to group by
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
-			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
 			// ⭐ A WALK THAT HAS A NAME OF ITS OWN IS PROJECTED UNDER IT — the way the flat read projects the same
 			// walk (a scalar leaf AS the alias, an object leaf as its spread under the alias prefix), and read back
 			// by that name. Under the leaf's own field names, `AccountDr.Code` and `AccountCr.Code` were both
@@ -2840,6 +2958,30 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			// (measured 2026-09-16 — `63 / 63 222 000` where the lines say `63 / 31`).
 			const wxString keyAlias = (!path.empty() && spec.m_groupAliases != nullptr && gi < spec.m_groupAliases->size())
 				? (*spec.m_groupAliases)[gi] : wxString();
+			wxString qual = mainQual;   // dot-walk leaf -> join alias
+			if (!path.empty()) {
+				const ibBackendQueryable* tq = nullptr;
+				if (!chain.Resolve(path, qual, tq) || tq == nullptr) {
+					// ⭐ …AND A WALK THROUGH A REFERENCE OF SEVERAL KINDS — a register's recorder grouped by, sorted by
+					// its kind's order (ibDataQueryBuilder::OrderBy) — groups by each field of its leaf met across the
+					// kinds, projected under the FIRST kind's names: the ones the leaf column reads its value back by
+					// (ibRefJoinChain::CompositeRoleFields). A walk named by the author through one stays refused.
+					const std::vector<ibRefJoinChain::RoleField> fields =
+						keyAlias.IsEmpty() ? chain.CompositeRoleFields(path) : std::vector<ibRefJoinChain::RoleField>{};
+					if (fields.empty())
+						ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+							_("a dot-walk GROUP BY / aggregate path did not resolve its reference join"));
+					std::vector<ibQueryExprPtr>& sorted = compositeSorts[path];
+					for (const ibRefJoinChain::RoleField& f : fields) {
+						q.GroupBy(f.m_expr);
+						if (!f.m_name.IsEmpty())
+							projection.push_back(ibQueryProjItem{ f.m_expr, f.m_name });
+						if (ibIsValueRole(f.m_role))
+							sorted.push_back(f.m_expr);
+					}
+					continue;
+				}
+			}
 			if (!keyAlias.IsEmpty()) {
 				const wxString sqlAlias = ibSqlAliasOf(keyAlias);
 				const wxString base = gcol->GetPhysicalName();
@@ -2890,8 +3032,28 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		}
 		if (having) q.Having(having);
 
-		for (const ibQuerySortKey& key : ibMetaIRBuilder::BuildSortKeys(queryable, *spec.m_sorts, /*reverse*/ false))
-			q.AddSortKey(key);
+		// ⭐ …AND A WALK THIS STATEMENT GROUPS BY IS SORTED BY THROUGH THE JOIN ITS KEY RODE — the fields GROUP BY
+		// names are the ones ORDER BY may, so `GROUP BY Item ORDER BY Item` sorts by the goods' order column
+		// (ibDataQueryBuilder::OrderBy groups by that walk too). BuildSortKeys lowers columns of the main scan
+		// and passes a walk by; a walk nothing grouped by stays unsorted, as it did.
+		for (const ibQuerySortItem& s : *spec.m_sorts) {
+			const bool grouped = !s.m_path.empty() && s.m_expr == nullptr
+				&& std::find(groupPaths.begin(), groupPaths.end(), s.m_path) != groupPaths.end();
+			if (!grouped) {
+				for (const ibQuerySortKey& key : ibMetaIRBuilder::BuildSortKeys(queryable, { s }, /*reverse*/ false))
+					q.AddSortKey(key);
+				continue;
+			}
+			// (through several kinds: the very fields its key grouped by, met across them — above)
+			const auto composite = compositeSorts.find(s.m_path);
+			for (ibQueryExprPtr& field : composite != compositeSorts.end() ? composite->second
+			                                                                : SortFieldsOf(s.m_col, joinLeaf(s.m_path))) {
+				ibQuerySortKey k;
+				k.m_expr = field;
+				k.m_dir  = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+				q.AddSortKey(std::move(k));
+			}
+		}
 
 		// ⭐ …AND THE SORTS THAT NAME AN OUTPUT, which the builder above cannot see: it lowers COLUMNS
 		// of the source, and an aggregate is not one. `ORDER BY SUM(Qty) DESC` sorts by the name the
@@ -4901,6 +5063,47 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		catch (...) { return -1; }
 	}
 
+// ⭐ WHAT A DISTINCT STATEMENT SORTS ON, IT SELECTS — the server's rule (PostgreSQL refuses anything else), and
+// kept by projecting the sort's own expression beside the outputs. Only a value that FOLLOWS from the columns the
+// statement distinguishes by, so the rows it keeps stay the rows it keeps: a walk out of one of them (a reference
+// sorted by its kind's order — `Item` by its description), or a field of the row when the row's own key is one of
+// them (a document by its date). A sort on anything else is the author's, and is left for the server to answer.
+static bool SortFollowsFromDistinct(const ibDataQuerySpec& spec, const ibQuerySortItem& s)
+{
+	if (!spec.m_distinct || spec.m_distinctBy == nullptr || s.m_col == nullptr || s.m_expr)
+		return false;
+	const std::vector<const ibBackendQueryColumn*>& by = *spec.m_distinctBy;
+	const auto distinguishes = [&by](const ibBackendQueryColumn* c) {
+		return std::find(by.begin(), by.end(), c) != by.end();
+	};
+	const ibBackendQueryColumn* head = s.m_path.empty() ? s.m_col : s.m_path.front();
+	if (distinguishes(head))
+		return !s.m_path.empty();   // a distinguished column itself is selected already
+	const std::vector<const ibBackendQueryColumn*> keys = spec.m_queryable->GetPrimaryKeyColumns();
+	return spec.m_queryable->OwnsColumn(head) && !keys.empty() && std::all_of(keys.begin(), keys.end(), distinguishes);
+}
+
+// ⭐ DOES THIS READ STAND ON A JOIN CHAIN — a reference walk in a projected path (SelectPath), a FILTER
+// (Where(path,…)), a SORT (OrderBy(path,…)) or a grouping dimension, or a computed output, which is lowered
+// over the qualified main table. Then the main table is not alone in the FROM — a walk through the row's own
+// reference joins that very table a second time — and every field of it is spelled with its name.
+//
+// Asked by the read (BuildPageIR) AND by a declaration's own select list (AttachNamedQueries), which has to
+// spell the fields the way the body it wraps does. It wrote them bare for a single source, and a chart of
+// accounts list with a filter through `Ref.Parent`, grouped, answered -204 "ambiguous field name between
+// table CHARTOFACCOUNTS1060 and table CHARTOFACCOUNTS1060" (2026-09-29).
+static bool ReadWalks(const ibDataQuerySpec& spec, const std::vector<ibQuerySortItem>& effective)
+{
+	const auto anyPath = [](const auto& items) {
+		for (const auto& it : items) if (!it.m_path.empty()) return true;
+		return false;
+	};
+	return !spec.m_dotWalks->empty() || anyPath(*spec.m_conditions) || anyPath(effective)
+		|| PredicateHasPath(spec.m_predicate)
+		|| (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty())
+		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty());
+}
+
 // Generate L2-1 by substituting names — all read from the spec; Build() is connection-free.
 // The dot-walk join-tree + projection, the parent/tree filter, the user conditions, the
 // key-in set, the keyset anchor, the sort keys, the limit.
@@ -4911,24 +5114,18 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		const bool hasAnchor  = req.m_hasAnchor && !effective.empty();
 		const wxString mainTable = queryable->GetQueryTableName();
 
-		// A reference dot-walk join is needed for a projected path (SelectPath), a path FILTER
-		// (Where(path,…)) OR a path SORT (OrderBy(path,…)). One join chain serves all three.
-		auto anyPath = [](const auto& items) {
-			for (const auto& it : items) if (!it.m_path.empty()) return true;
-			return false;
-		};
+		// A reference dot-walk join is needed for a projected path, a path filter or a path sort — one join
+		// chain serves all three (ReadWalks).
 		const bool hasComputed = spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty();
 		const bool hasDimWalk  = spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty();
-		const bool hasDotWalk = !spec.m_dotWalks->empty() || anyPath(*spec.m_conditions) || anyPath(effective)
-		                        || PredicateHasPath(spec.m_predicate) || hasComputed || hasDimWalk;
+		const bool hasDotWalk  = ReadWalks(spec, effective);
 		const wxString mainQual = hasDotWalk ? mainTable : wxString();
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 
 		ibQueryExprPtr dotWalkWhere;                          // flat path-condition predicate (qualified by join alias)
 		ibQueryExprPtr treeWhere;                             // boolean predicate tree (dot-walk leaves qualified by join alias)
-		std::map<const ibQuerySortItem*, wxString> sortAlias; // path-sort -> its join alias (built before From)
-		std::map<const ibQuerySortItem*, ibQueryExprPtr> sortExpr; // COMPOSITE path-sort -> its COALESCE leaf expr
+		std::map<const ibQuerySortItem*, std::vector<ibQueryExprPtr>> sortFields; // path-sort -> what it sorts on
 
 		if (hasDotWalk) {
 			// The reference dot-walk join chain — shared by the projection, the path filters, and the path
@@ -4970,7 +5167,59 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						projection.push_back(ibQueryProjItem{ ibCol(mainTable, field), field });
 					}
 				}
+				// …and a field of the row it sorts on, where the row's key is distinguished (SortFollowsFromDistinct)
+				for (const ibQuerySortItem& s : effective) {
+					if (!s.m_path.empty() || !SortFollowsFromDistinct(spec, s))
+						continue;
+					for (const wxString& field : ColumnFieldNames(s.m_col)) {
+						if (std::find(written.begin(), written.end(), field) != written.end())
+							continue;
+						written.push_back(field);
+						projection.push_back(ibQueryProjItem{ ibCol(mainTable, field), field });
+					}
+				}
 			}
+			// COMPOSITE reference anywhere in the path + a leaf of SEVERAL fields (reference / enum / composite):
+			// each branch joins its target type and contributes the leaf's FULL field spread; the spreads merge PER
+			// SUFFIX with COALESCE under the alias prefix (a row matches at most one branch, so exactly one branch's
+			// fields are non-null). The reader (GetColumn(prefix, col)) reassembles the object off the merged spread
+			// exactly like a single-target full-spread projection. Suffix alignment rides the REPRESENTATIVE leaf
+			// (the first branch — the same type the lowering resolved the path against); a branch whose leaf lacks
+			// a representative suffix simply skips that COALESCE argument. A path with no composite hop projects nothing.
+			//
+			// ⭐ ONE PROJECTION FOR BOTH WALKS — a projected path and a grouping's dimension. The dimension had only
+			// the single-target road and skipped the rest, so a list grouped by `Recorder.Counterparty` folded rows
+			// it could not read the key of (`out_dim0_TYPE not found`, 82 times per read — journal, 2026-09-29)
+			// and every heading came out empty.
+			auto projectCompositeSpread = [&](const std::vector<const ibBackendQueryColumn*>& fp, const wxString& alias) {
+				// The leaf occurrences — the chain's one walker (LeafOccurrences), yielding (join alias, branch leaf
+				// column, branch target) per branch.
+				bool sawComposite = false;
+				const std::vector<ibRefJoinChain::LeafOccurrence> occs = chain.LeafOccurrences(fp, sawComposite);
+				if (!sawComposite || occs.empty())
+					return;
+
+				// Per-occurrence field spreads, cached; the representative drives the suffix list.
+				std::vector<std::vector<wxString>> occFields;
+				occFields.reserve(occs.size());
+				for (const ibRefJoinChain::LeafOccurrence& o : occs)
+					occFields.push_back(ColumnFieldNames(o.m_col));
+
+				const wxString repBase = occs.front().m_col->GetPhysicalName();
+				for (const wxString& repField : occFields.front()) {
+					const wxString suffix = repField.Mid(repBase.length());
+					std::vector<ibQueryExprPtr> args;
+					for (size_t oi = 0; oi < occs.size(); ++oi) {
+						const wxString branchField = occs[oi].m_col->GetPhysicalName() + suffix;
+						for (const wxString& bf : occFields[oi])
+							if (bf == branchField) { args.push_back(ibCol(occs[oi].m_alias, branchField)); break; }
+					}
+					if (args.empty()) continue;
+					projection.push_back(ibQueryProjItem{
+						args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args),
+						alias + suffix });
+				}
+			};
 			for (const ibDotWalkColumn& dw : *spec.m_dotWalks) {
 				const std::vector<const ibBackendQueryColumn*>& fp = dw.m_path;
 				if (fp.size() < 2) continue;
@@ -5010,70 +5259,9 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					}
 				}
 
-				// COMPOSITE reference anywhere in the path + a NON-scalar leaf (reference / enum /
-				// composite): each branch joins its target type and contributes the leaf's FULL field
-				// spread; the spreads merge PER SUFFIX with COALESCE under the alias prefix (a row
-				// matches at most one branch, so exactly one branch's fields are non-null). The reader
-				// (GetColumn(prefix, col)) reassembles the object off the merged spread exactly like a
-				// single-target full-spread projection. Suffix alignment rides the REPRESENTATIVE leaf
-				// (the first branch — the same type the lowering resolved the path against); a branch
-				// whose leaf lacks a representative suffix simply skips that COALESCE argument.
-				{
-					// Collect the leaf occurrences — the same recursive walk as the scalar case (composite
-					// fork + peek optimisation), but yielding (join alias, branch leaf column, branch
-					// target) instead of expressions.
-					struct LeafOcc { wxString m_alias; const ibBackendQueryColumn* m_col; const ibBackendQueryable* m_q; };
-					std::vector<LeafOcc> occs;
-					bool sawComposite = false;
-					std::function<void(const wxString&, const ibBackendQueryable*, size_t)> collect =
-						[&](const wxString& ownerQual, const ibBackendQueryable* ownerQ, size_t seg) {
-							if (ownerQ == nullptr) return;
-							const ibBackendQueryColumn* col = ownerQ->ResolveColumnByName(fp[seg]->GetName());
-							if (col == nullptr) return;
-							if (seg + 1 == fp.size()) {
-								occs.push_back(LeafOcc{ ownerQual, col, ownerQ });
-								return;
-							}
-							if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
-								const wxString f = SelfReferenceField(single);
-								if (f.empty()) return;
-								collect(chain.AddLeftJoin(single, ownerQual, FirstSqlFieldOfColumn(col)), single, seg + 1);
-								return;
-							}
-							sawComposite = true;
-							for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
-								if (tq->ResolveColumnByName(fp[seg + 1]->GetName()) == nullptr) continue;
-								if (!ibDbTableProvider::WalkEnters(tq, fp[seg + 1])) continue;   // a CAST names the one type the walk goes into
-								const wxString f = SelfReferenceField(tq);
-								if (f.empty()) continue;
-								collect(chain.AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1);
-							}
-						};
-					collect(mainTable, queryable, 0);
-					if (!sawComposite || occs.empty())
-						continue;   // unresolvable path — same skip as before (the read yields the empty value)
-
-					// Per-occurrence field spreads, cached; the representative drives the suffix list.
-					std::vector<std::vector<wxString>> occFields;
-					occFields.reserve(occs.size());
-					for (const LeafOcc& o : occs)
-						occFields.push_back(ColumnFieldNames(o.m_col));
-
-					const wxString repBase = occs.front().m_col->GetPhysicalName();
-					for (const wxString& repField : occFields.front()) {
-						const wxString suffix = repField.Mid(repBase.length());
-						std::vector<ibQueryExprPtr> args;
-						for (size_t oi = 0; oi < occs.size(); ++oi) {
-							const wxString branchField = occs[oi].m_col->GetPhysicalName() + suffix;
-							for (const wxString& bf : occFields[oi])
-								if (bf == branchField) { args.push_back(ibCol(occs[oi].m_alias, branchField)); break; }
-						}
-						if (args.empty()) continue;
-						projection.push_back(ibQueryProjItem{
-							args.size() == 1 ? args.front() : ibFunc(wxT("COALESCE"), args),
-							alias + suffix });
-					}
-				}
+				// COMPOSITE reference anywhere in the path + a NON-scalar leaf — the merged spread; an unresolvable
+				// path projects nothing (the read yields the empty value).
+				projectCompositeSpread(fp, alias);
 			}
 			// computed columns (arithmetic / CASE) — lower the L3 expression tree, project AS its alias.
 			//
@@ -5128,10 +5316,17 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// fold groups by that column's own unique id. Scalar leaves only (the lowering rejects others).
 			if (hasDimWalk)
 				for (const ibDotWalkColumn& dw : *spec.m_dimWalks) {
-					wxString a; const ibBackendQueryable* tq = nullptr;
-					if (!resolvePath(dw.m_path, a, tq) || tq == nullptr) continue;
 					const ibBackendQueryColumn* leaf = dw.m_path.back();
 					const wxString alias = ibSqlAliasOf(dw.m_alias);   // the statement's spelling — see above
+
+					// A composite hop (`Recorder.Counterparty`, a recorder of several document kinds) — the merged
+					// spread, the same projection a walked output gets.
+					wxString a; const ibBackendQueryable* tq = nullptr;
+					if (!resolvePath(dw.m_path, a, tq) || tq == nullptr) {
+						if (!leaf->IsRawColumn())
+							projectCompositeSpread(dw.m_path, alias);
+						continue;
+					}
 
 					// ⭐ A NON-SCALAR LEAF IS NOT ONE FIELD. A reference / enum / composite dimension
 					// (group by Parent, by Ref.Ref) is stored as a SPREAD, so it is projected the way
@@ -5154,17 +5349,31 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// path WHERE — over the chain (ibRefJoinChain::PathConditions), the same lowering the aggregate uses.
 			dotWalkWhere = chain.PathConditions(*spec.m_conditions, mainQual);
 
-			// path ORDER BY — pre-build the joins now; the alias / composite expr is consumed (in effective
-			// order) below. Composite leaf -> a COALESCE expression; single-target -> its join alias. An
-			// unresolvable path (composite + non-scalar leaf) THROWS — a silently dropped sort key would
-			// return mis-ordered rows.
+			// path ORDER BY — pre-build the joins now; the expressions are consumed (in effective order) below.
+			// A composite walk to a scalar -> one COALESCE; a single-target walk -> every field its leaf sorts on,
+			// qualified by the join alias (SortFieldsOf — a moment's date AND reference, a kind's order column); a
+			// composite walk to a leaf of several fields -> a COALESCE per role (CompositeSortFields). A path none of
+			// them resolves THROWS — a silently dropped sort key would return mis-ordered rows.
 			for (const ibQuerySortItem& s : effective) {
 				if (s.m_path.empty()) continue;
-				if (ibQueryExprPtr e = chain.CompositeLeaf(s.m_path, /*withTypedEmpty*/ true)) { sortExpr[&s] = e; continue; }
+				if (ibQueryExprPtr e = chain.CompositeLeaf(s.m_path, /*withTypedEmpty*/ true)) { sortFields[&s] = { e }; continue; }
 				wxString a; const ibBackendQueryable* tq = nullptr;
-				if (!resolvePath(s.m_path, a, tq))
-					throw std::logic_error("BuildPageIR: a dot-walk ORDER BY on a composite non-scalar leaf is not yet supported");
-				sortAlias[&s] = a;
+				if (resolvePath(s.m_path, a, tq)) { sortFields[&s] = SortFieldsOf(s.m_col, a); continue; }
+				std::vector<ibQueryExprPtr> fields = chain.CompositeSortFields(s.m_path);
+				if (fields.empty())
+					throw std::logic_error("BuildPageIR: a dot-walk ORDER BY did not resolve its path");
+				sortFields[&s] = std::move(fields);
+			}
+			// …a walk it sorts on out of a distinguished reference is selected as those very expressions
+			// (SortFollowsFromDistinct), under names of their own that no output has.
+			int sortedWalks = 0;
+			for (const ibQuerySortItem& s : effective) {
+				if (s.m_path.empty() || !SortFollowsFromDistinct(spec, s))
+					continue;
+				const auto it = sortFields.find(&s);
+				if (it != sortFields.end())
+					for (const ibQueryExprPtr& e : it->second)
+						projection.push_back(ibQueryProjItem{ e, wxString::Format(wxT("q_sorted%d"), sortedWalks++) });
 			}
 
 			// boolean predicate TREE — lowered HERE (before From) so a dot-walk leaf joins through the chain
@@ -5187,8 +5396,12 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				std::vector<ibQueryProjItem> projection;
 				std::vector<wxString> written;
 				for (const auto& sc : *spec.m_selectCols) {
-					if (sc.first == nullptr || sc.first->IsSyntheticColumn())
-						continue;   // its parts are somebody else's fields — they project themselves
+					if (sc.first == nullptr)
+						continue;
+					// ⚠ A COLUMN MADE OF OTHERS IS PROJECTED TOO — a document's moment, a kind's order: it lies in
+					// fields of this very row, which its layout names, and its read asks for them by those names. It
+					// was skipped as "its parts project themselves", which holds only while the parts are selected
+					// beside it; a walk reading a kind's order selects the order alone (MaterialiseLeafToRam).
 					for (const wxString& field : ColumnFieldNames(sc.first)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;   // one field, one place in the list
@@ -5240,18 +5453,14 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				if (s.m_col == nullptr) continue;
 				const bool asc = req.m_reverseSort ? !s.m_ascending : s.m_ascending;
 				if (!s.m_path.empty()) {
-					ibQuerySortKey k;
-					auto se = sortExpr.find(&s);
-					if (se != sortExpr.end()) {
-						k.m_expr = se->second;                                  // composite leaf -> COALESCE(...) sort
+					const auto it = sortFields.find(&s);
+					if (it == sortFields.end()) continue;   // unresolvable path -> skip (matches projection's skip)
+					for (const ibQueryExprPtr& e : it->second) {
+						ibQuerySortKey k;
+						k.m_expr = e;
+						k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+						q.AddSortKey(std::move(k));
 					}
-					else {
-						auto it = sortAlias.find(&s);
-						if (it == sortAlias.end()) continue;   // unresolvable path -> skip (matches projection's skip)
-						k.m_expr = ibCol(it->second, FirstSqlFieldOfColumn(s.m_col));   // single-target -> alias.leafField
-					}
-					k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
-					q.AddSortKey(std::move(k));
 				}
 				else {
 					for (const wxString& name : ColumnValueFields(s.m_col)) {
@@ -5316,6 +5525,19 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					for (const wxString& field : ColumnFieldNames(col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;   // one field, one place in the list (two outputs may share a column)
+						written.push_back(field);
+						distinctProj.push_back(ibQueryProjItem{
+							mainQual.empty() ? ibCol(field) : ibCol(mainQual, field), field });
+					}
+				}
+			// …and a field of the row it sorts on, where the row's key is distinguished (SortFollowsFromDistinct)
+			if (!alreadyProjected && !distinctProj.empty())
+				for (const ibQuerySortItem& s : effective) {
+					if (!s.m_path.empty() || !SortFollowsFromDistinct(spec, s))
+						continue;
+					for (const wxString& field : ColumnFieldNames(s.m_col)) {
+						if (std::find(written.begin(), written.end(), field) != written.end())
+							continue;
 						written.push_back(field);
 						distinctProj.push_back(ibQueryProjItem{
 							mainQual.empty() ? ibCol(field) : ibCol(mainQual, field), field });
@@ -5446,6 +5668,12 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 			// The two halves of a declaration must agree about WHAT EXISTS, and agreeing means walking
 			// the same outputs — not the same-looking list.
 			const bool hasExprs = innerSpec.m_selectExprs != nullptr && !innerSpec.m_selectExprs->empty();
+			// ⚠ …AND A SINGLE SOURCE THAT WALKS IS NOT ALONE IN ITS FROM (ReadWalks): its fields and its computed
+			// outputs are spelled with its own name, the one BuildPageIR's chain spells them with. Bare, a walk
+			// through the row's own reference made them ambiguous (-204, 2026-09-29). Empty otherwise — the
+			// unqualified read it was.
+			const wxString innerQual = leaves.empty() && ReadWalks(innerSpec, innerSort)
+				? innerSpec.m_queryable->GetQueryTableName() : wxString();
 			if ((innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) || hasExprs) {
 				std::vector<ibQueryProjItem> proj;
 				std::vector<const ibBackendQueryColumn*> projected;      // …once each — see below
@@ -5529,7 +5757,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// …and QUALIFIED BY THE LEAF THAT OWNS IT when the declaration is a join: two tables
 					// in one FROM make a bare field name ambiguous to the engine even where the two
 					// spellings differ, and the qualifier is the same one the join's own ON uses.
-					// Empty for a single-source declaration, which is the unqualified read it was.
+					// A single-source declaration takes `innerQual` — its own name when it walks, empty otherwise.
 					//
 					// ⭐ A REPEATED COLUMN SPELLS ITS ALIAS FROM THE OUTPUT NAME, not from `fld<metaID>`:
 					// the physical name is already taken by the first projection of it, and two items of
@@ -5560,7 +5788,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					// asks for (the lowering leaves such an output on its COLUMN, not on an alias).
 					const bool spelledByAlias = repeated || col->IsRawColumn() || !leaves.empty();
 					const wxString base = spelledByAlias ? ibSqlAliasOf(sc.second) : col->GetPhysicalName();
-					const wxString qual = leaves.empty() ? wxString() : ColocatedQual(leaves, col);
+					const wxString qual = leaves.empty() ? innerQual : ColocatedQual(leaves, col);
 					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 						proj.push_back(ibQueryProjItem{ ibColQ(qual, slot.m_name),
 							slot.m_role == ibColumnRole::Raw ? base
@@ -5585,7 +5813,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 							continue;
 						projectedNames.push_back(se.m_alias);
 						proj.push_back(ibQueryProjItem{
-							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr),
+							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
 							ibSqlAliasOf(se.m_alias) });
 					}
 				}

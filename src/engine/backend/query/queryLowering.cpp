@@ -4219,6 +4219,16 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		const std::vector<const ibBackendQueryColumn*> cols =
 			ResolveWhereTarget(sources, oe, allowOrderDotWalk || ridesAGroupKey);
 
+		// ⭐ …A REFERENCE OVER SEVERAL SOURCES SORTS BY ITS KIND'S ORDER TOO — through the join its walk makes here, as
+		// `Account.Code` would (one source: the builder's OrderBy does it; see there). Not in a grouped statement,
+		// where a sort may name only what it groups by.
+		if (multiSource && cols.size() == 1 && b.GetGroupBy().empty() && b.GetAggregates().empty()) {
+			const ibBackendQueryable* first = sources.front().m_q;
+			if (const ibBackendQueryColumn* by = first->GetProvider().ResolveReferenceSortColumn(first, cols[0]))
+				if (const ibBackendQueryColumn* leaf = ExpandDotWalkHere(sources, { cols[0], by }, oe))
+					b.OrderBy(leaf, o.m_ascending);
+		}
+
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
 	}
@@ -4352,6 +4362,29 @@ std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, c
 	return b0;
 }
 
+// ⭐ …AND THE STACK READ AS ONE SOURCE — the other half of reading a union, for whoever reads it as a table: a nested
+// query over it (`FROM (… UNION ALL …) AS x`), and a union's own ORDER BY that has to walk (LowerUnion). The first
+// branch's columns are published by name, as the stack selects them; `top` limits the whole union.
+std::shared_ptr<ibSubqueryQueryable> WrapUnionStack(const ibDataQueryBuilder& stack, const ibSubqueryQueryable& first,
+                                                    long top, ibSubqueryOwner& owner)
+{
+	std::vector<ibSubqueryOutput> published;
+	for (const ibBackendQueryColumn* c : first.GetColumns()) {
+		if (c == nullptr) continue;
+		ibSubqueryOutput out;
+		out.m_name  = c->GetName();
+		out.m_alias = c->GetName();   // the stack selects each column under its own name
+		out.m_type  = c->GetTypeDesc();
+		out.m_available = c->IsAvailable();
+		out.m_balanceRole = c->GetBalanceRole();
+		out.m_periodRank  = c->GetPeriodRank();
+		published.push_back(out);
+	}
+	std::shared_ptr<ibSubqueryQueryable> wrapped = std::make_shared<ibSubqueryQueryable>(stack, top, published);
+	owner.push_back(wrapped);
+	return wrapped;
+}
+
 // Drain a finished selection into a snapshot — defined below, with the package that puts one INTO a temp table.
 ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result, const std::vector<OutputColumn>& schema);
 
@@ -4445,23 +4478,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 		ibDataQueryBuilder stack;
 		std::vector<OutputColumn> stackSchema;
 		const std::shared_ptr<ibSubqueryQueryable> first = BuildUnionStack(sel, params, stack, stackSchema, owner);
-
-		std::vector<ibSubqueryOutput> published;
-		for (const ibBackendQueryColumn* c : first->GetColumns()) {
-			if (c == nullptr) continue;
-			ibSubqueryOutput out;
-			out.m_name  = c->GetName();
-			out.m_alias = c->GetName();   // the stack selects each column under its own name
-			out.m_type  = c->GetTypeDesc();
-			out.m_available = c->IsAvailable();
-			out.m_balanceRole = c->GetBalanceRole();
-			out.m_periodRank  = c->GetPeriodRank();
-			published.push_back(out);
-		}
-		std::shared_ptr<ibSubqueryQueryable> wrapped =
-			std::make_shared<ibSubqueryQueryable>(stack, sel.m_top, published);   // TOP = the whole union's limit
-		owner.push_back(wrapped);
-		return wrapped;
+		return WrapUnionStack(stack, *first, sel.m_top, owner);   // TOP = the whole union's limit
 	}
 
 	ibDataQueryBuilder inner;
@@ -5157,11 +5174,33 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 
 	// ORDER BY on the whole union — resolve against the first branch's columns (by name).
 	const std::vector<ibSourceBinding> usrc{ { wxEmptyString, b0.get() } };
-	for (const ibQueryOrderItem& o : ast.m_orderBy)
-		b.OrderBy(ResolveColumnSingle(usrc, *o.m_expr), o.m_ascending);
+	std::vector<std::pair<const ibBackendQueryColumn*, bool>> order;
+	bool walks = false;
+	for (const ibQueryOrderItem& o : ast.m_orderBy) {
+		const ibBackendQueryColumn* col = ResolveColumnSingle(usrc, *o.m_expr);
+		order.emplace_back(col, o.m_ascending);
+		walks = walks || b0->GetProvider().ResolveReferenceSortColumn(b0.get(), col) != nullptr;
+	}
 
 	ibReadPageRequest page;
 	page.m_count = ast.m_top;   // TOP on the first core = the whole-union row limit (0 = all)
+
+	// ⭐ A SORT THE STACK CANNOT GIVE IS GIVEN BY ONE READ OVER IT. The stack sorts by its own outputs; a sort by a
+	// reference goes on into what it points at (its kind's order — ibDataQueryBuilder::OrderBy), and a stack of
+	// branches has no one table to walk from. So such an ORDER BY reads the union as ONE source — wrapped as a nested
+	// query over it is (WrapUnionStack) — and sorts there, TOP after the sort; the outputs keep their names.
+	if (walks) {
+		const std::shared_ptr<ibSubqueryQueryable> whole = WrapUnionStack(b, *b0, /*top*/ 0, owner);
+		ibDataQueryBuilder over;
+		over.From(whole);
+		for (const ibBackendQueryColumn* c : whole->GetColumns())
+			if (c != nullptr) over.Select(c, c->GetName());
+		for (const std::pair<const ibBackendQueryColumn*, bool>& o : order)
+			over.OrderBy(o.first != nullptr ? whole->Column(o.first->GetName()) : nullptr, o.second);
+		return over.Execute(page);
+	}
+	for (const std::pair<const ibBackendQueryColumn*, bool>& o : order)
+		b.OrderBy(o.first, o.second);
 	return b.Execute(page);
 }
 

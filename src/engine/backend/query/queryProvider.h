@@ -98,6 +98,12 @@ public:
 		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
 		                      : std::vector<const ibBackendQueryable*>{};
 	}
+	// …and what a sort by that COLUMN sorts by — its target's order column (ibBackendQueryable::GetSortColumn). A
+	// reference of SEVERAL kinds sorts by the one every kind has under one name, which a walk through it finds in
+	// each. Null for a column that is no reference, or whose kind has no order of its own. Asked of the two above,
+	// so every provider answers it alike. (Body in queryProvider.cpp.)
+	const ibBackendQueryColumn* ResolveReferenceSortColumn(const ibBackendQueryable* queryable,
+	                                                       const ibBackendQueryColumn* refColumn) const;
 
 	// ⭐⭐ A FLAT LIST IS WHOLE, AND ITS REFERENCES ARE MADE — the event, raised by the one door every RAM
 	// road ends at (the RAM-backed ibDataQueryResult), of the provider of the source it was read from. It

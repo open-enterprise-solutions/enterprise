@@ -151,7 +151,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"`<Register>.Balance` and `<Register>.Turnovers`; never compute a balance by summing\n"
 		"movements yourself.\n"
 		"\"The balance at the start and at the end of each month\" is `<Register>.BalanceAndTurnovers`\n"
-		"with TOTALS `SUM(…OpeningBalance)`, `SUM(…ClosingBalance)` BY the period: the table marks its\n"
+		"with TOTALS `SUM(...OpeningBalance)`, `SUM(...ClosingBalance)` BY the period: the table marks its\n"
 		"own period, dimensions and edges, so a month's opening is its first day's, not the sum of its\n"
 		"days. Over a source that says nothing, say it per field: in a REPORT with report_field `role` (a\n"
 		"`ROLE` written into a report's query is dropped), in a query run from code with `ROLE` in the\n"

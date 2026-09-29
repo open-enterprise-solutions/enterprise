@@ -217,10 +217,10 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
 
 	// RETIRING A COLUMN IS DELETING WHAT IT HOLDS. Changing the hierarchy kind is a declaration and reads
-	// like a setting, but two of its answers take columns away: "no subordination" retires Parent, and
-	// anything but folders+items retires IsFolder (ApplyHierarchyType disables them, so the walk above
-	// stops declaring them and the differ drops them). Rows that filled those columns lose their place in
-	// the tree with no way back and no word said.
+	// like a setting, but two of its answers take columns away: "no hierarchy" retires Parent, and
+	// anything but folders retires IsFolder (the list stops declaring it — FillArrayObjectByPredefinedAttribute —
+	// and the differ drops it; Parent is still listed always, so its half of this rule waits for that step).
+	// Rows that filled those columns lose their place in the tree with no way back and no word said.
 	//
 	// Same shape as the chart of accounts' ceiling: the rule travels with the declaration, the differ asks
 	// it before touching this table, and a refusal states its reason in the ledger — which greys Apply.
