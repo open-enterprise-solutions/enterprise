@@ -6,10 +6,10 @@
 
 // Over the character buffer, a RUN at a time: a checked build registers every string iterator under one global
 // lock, and a megabyte of text is a million of them and a million one-character appends.
-void ibJsonText::AppendQuoted(wxString& out, const wxString& text)
+void ibJsonText::AppendQuoted(wxString& out, const wchar_t* text, size_t length)
 {
-	const wchar_t* const begin = text.wc_str();
-	const wchar_t* const end = begin + text.length();
+	const wchar_t* const begin = text;
+	const wchar_t* const end = begin + length;
 
 	out += wxT('"');
 	const wchar_t* run = begin;

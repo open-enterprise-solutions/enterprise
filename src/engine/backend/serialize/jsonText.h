@@ -5,6 +5,7 @@
 
 #include <wx/string.h>
 
+#include <cstddef>
 #include <string>
 
 // ⭐ HOW A STRING IS SPELLED IN JSON - said ONCE. There were two escapers, the configuration's JSON view
@@ -17,8 +18,10 @@
 // business. A NUL inside the text is a character like any other (`\u0000`), not the end of it.
 class BACKEND_API ibJsonText {
 public:
-	// `text` quoted and escaped, appended to `out`.
-	static void AppendQuoted(wxString& out, const wxString& text);
+	// `text` quoted and escaped, appended to `out`. The characters themselves are all it reads, so a runtime
+	// string (ibString) is escaped where it lies rather than copied into a wxString first.
+	static void AppendQuoted(wxString& out, const wchar_t* text, size_t length);
+	static void AppendQuoted(wxString& out, const wxString& text) { AppendQuoted(out, text.wc_str(), text.length()); }
 
 	// The same as UTF-8 bytes - for a writer that builds its document in bytes.
 	static std::string QuotedUtf8(const wxString& text);

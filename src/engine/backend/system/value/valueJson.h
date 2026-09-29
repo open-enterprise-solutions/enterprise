@@ -3,6 +3,7 @@
 
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
+#include "backend/fstring.h"   // ibString - the text SetText and WritePropertyName take
 
 #include <string>
 #include <vector>
@@ -77,7 +78,7 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	// The same verbs for a caller in C++ (and for the tests).
-	void SetText(const wxString& text);      // the script's SetString (ibValue has a SetString of its own); raises on text that is not JSON
+	void SetText(const ibString& text);      // the script's SetString (ibValue has a SetString of its own); raises on text that is not JSON
 	bool Read();                               // false when nothing is left
 	void Skip();                               // a container, or a property with its value, as one step
 
@@ -157,7 +158,7 @@ public:
 	void WriteEndObject();
 	void WriteStartArray();
 	void WriteEndArray();
-	void WritePropertyName(const wxString& name);
+	void WritePropertyName(const ibString& name);
 	void WriteValue(const ibValue& value);
 	wxString Close();                          // the text; raises while anything is still open
 
