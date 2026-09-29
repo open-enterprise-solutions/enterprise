@@ -4494,6 +4494,131 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	return wrapped;
 }
 
+// ⭐⭐ THE TOTALS ROAD FOLDS ROWS — IT DID NOT PROJECT AN OUTPUT ANSWERED OVER THE FINISHED ROW. Its detail projection
+// was a copy of the statement's (a column, a walk, a computed expression) that never learned the fourth kind:
+// `PRESENTATION(x)` / `VALUETYPE(x)` went into the SQL as an empty expression (`Acc.*,  AS out_Item`, refused by the
+// engine), and a CAST over a value table came back empty in every detail row while the grand total was right
+// (2026-09-29). A second road that has to learn every kind the first one knows.
+//
+// So a totals query whose SELECT holds such an output is read ONE LEVEL DOWN: the SELECT (its sources, WHERE, GROUP
+// BY, DISTINCT) becomes a nested query — the one road that projects every kind of output — and the totals fold its
+// rows under the same names. Asked the way the lowering asks (the describing pass DescribeOutput runs: sources and
+// outputs, nothing read), and only where a projection is computed at all.
+ibQuerySelectPtr WithOverRowOutputsNested(const ibQuerySelectPtr& ast, const std::map<wxString, ibValue>& params)
+{
+	if (ast->m_selectAll || !ast->m_unions.empty()   // a union's branches are nested queries already
+	    || (ast->m_from.m_name.empty() && !ast->m_from.m_subquery))
+		return ast;
+	if (std::none_of(ast->m_projections.begin(), ast->m_projections.end(),
+	        [](const ibQueryProjection& p) { return p.m_expr && IsComputedExprAst(*p.m_expr); }))
+		return ast;
+
+	// The detail the totals are taken over — the statement without them.
+	auto inner = std::make_shared<ibQuerySelect>(*ast);
+	inner->m_hasTotals = false;
+	inner->m_totalsBy.clear();
+	inner->m_totalsAggregates.clear();
+	inner->m_totalsSplits.clear();
+	inner->m_totalsOverall = false;
+	inner->m_orderBy.clear();
+	inner->m_top = 0;
+	inner->m_intoTemp.clear();
+	inner->m_ontoName.clear();
+	inner->m_indexBy.clear();
+	{
+		ibSubqueryOwner owner;
+		std::vector<ibSourceBinding> sources;
+		ibDataQueryBuilder b;
+		std::vector<ibQueryAstExprPtr> conditions;
+		std::vector<OutputColumn> schema;
+		std::vector<ibQueryColumnSelect> overRow;
+		BuildSourceTree(*inner, params, owner, sources, b, &conditions);
+		PopulateBuilder(*inner, params, sources, b, schema, /*asSubquery*/true, conditions, &overRow);
+		if (overRow.empty())
+			return ast;
+	}
+
+	// Each output published under the name the totals take, and read by it one level up.
+	const wxString rows = wxT("q_rows");
+	auto outer = std::make_shared<ibQuerySelect>();
+	std::vector<std::pair<wxString, wxString>> written;   // (the output's expression as written, its name)
+	int idx = 0;
+	for (size_t i = 0; i < inner->m_projections.size(); ++i) {
+		ibQueryProjection& p = inner->m_projections[i];
+		if (p.m_star || !p.m_expr)
+			continue;
+		const wxString name = OutputNameFor(*ast, ast->m_projections[i], idx++);   // the name the totals take
+		written.emplace_back(ibRenderQueryExpr(*p.m_expr), name);
+		p.m_alias = name;
+		ibQueryProjection read;
+		read.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+		read.m_expr->m_path = { rows, name };
+		read.m_alias = name;
+		outer->m_projections.push_back(read);
+	}
+	outer->m_from.m_subquery = inner;
+	outer->m_from.m_alias    = rows;
+
+	// A field the totals or the order name — an output's name stays as written (the totals take the result's names);
+	// a source path the SELECT chose, or one walking on from it, becomes that output. Anything else names a field the
+	// rows one level up do not have, and says so.
+	const auto ontoOutput = [&written, &rows](const ibQueryAstExprPtr& e) -> ibQueryAstExprPtr {
+		if (!e || e->m_kind != ibQueryAstExprKind::Column || e->m_path.empty())
+			return e;
+		for (const auto& w : written)
+			if (w.second.CmpNoCase(e->m_path.front()) == 0)
+				return e;
+		for (size_t take = e->m_path.size(); take > 0; --take) {
+			ibQueryAstExpr prefix = *e;
+			prefix.m_path.assign(e->m_path.begin(), e->m_path.begin() + static_cast<long>(take));
+			const wxString spelled = ibRenderQueryExpr(prefix);
+			for (const auto& w : written) {
+				if (w.first != spelled)
+					continue;
+				ibQueryAstExprPtr onto = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+				onto->m_path = { rows, w.second };
+				onto->m_path.insert(onto->m_path.end(), e->m_path.begin() + static_cast<long>(take), e->m_path.end());
+				onto->m_line = e->m_line;
+				onto->m_col  = e->m_col;
+				return onto;
+			}
+		}
+		ThrowQueryException(e->m_line, e->m_col, _("beside a field computed over the finished rows, TOTALS and ORDER BY "
+		                                           "may name only the fields the query selects"));
+		return e;
+	};
+
+	outer->m_hasTotals     = true;
+	outer->m_totalsOverall = ast->m_totalsOverall;
+	outer->m_totalsBy      = ast->m_totalsBy;
+	outer->m_totalsSplits  = ast->m_totalsSplits;
+	for (ibQueryTotalDim& d : outer->m_totalsBy)
+		for (ibQueryTotalField& f : d.m_fields)
+			f.m_expr = ontoOutput(f.m_expr);
+	for (ibQueryTotalSplit& s : outer->m_totalsSplits)
+		for (ibQueryTotalDim& d : s.m_levels)
+			for (ibQueryTotalField& f : d.m_fields)
+				f.m_expr = ontoOutput(f.m_expr);
+	for (const ibQueryTotalAggregate& a : ast->m_totalsAggregates) {
+		ibQueryTotalAggregate onto = a;
+		if (a.m_expr && a.m_expr->m_arg) {
+			onto.m_expr = std::make_shared<ibQueryAstExpr>(*a.m_expr);
+			onto.m_expr->m_arg = ontoOutput(a.m_expr->m_arg);
+		}
+		outer->m_totalsAggregates.push_back(onto);
+	}
+	for (const ibQueryOrderItem& o : ast->m_orderBy) {
+		ibQueryOrderItem onto = o;
+		onto.m_expr = ontoOutput(o.m_expr);
+		outer->m_orderBy.push_back(onto);
+	}
+	outer->m_top      = ast->m_top;
+	outer->m_intoTemp = ast->m_intoTemp;
+	outer->m_ontoName = ast->m_ontoName;
+	outer->m_indexBy  = ast->m_indexBy;
+	return outer;
+}
+
 // ⭐ WHY A QUERY WENT HOME INSTEAD OF TO THE SERVER — said where the decision is made, and named.
 // Every exit below is "the rows road takes it", which is correct and invisible: the report is right
 // and the whole source came into memory to make it so. In Debug the reason is one line in the
@@ -7348,8 +7473,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
                                                  const ibTotalsLayout& layout)
 {
 	// Same optimizer pass as Execute — the totals path benefits from a flattened FROM
-	// and a normalized WHERE the same way. (queryRewrite.h)
-	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
+	// and a normalized WHERE the same way. (queryRewrite.h) …and a SELECT holding an output answered over the
+	// finished row is read one level down, by the road that projects it (WithOverRowOutputsNested).
+	const ibQuerySelectPtr astOpt = WithOverRowOutputsNested(ibQueryRewrite::Rewrite(astIn), params);
 	const ibQuerySelect& ast = *astOpt;
 
 	// OVERALL ON ITS OWN IS A WHOLE TOTALS QUERY — one row folding everything, no dimensions. So
