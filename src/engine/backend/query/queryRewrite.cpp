@@ -293,6 +293,10 @@ void FlattenFrom(ibQuerySelect& s)
 	const std::shared_ptr<ibQuerySelect> innerKeep = s.m_from.m_subquery;
 	const ibQuerySelect& inner = *innerKeep;
 	if (!InnerIsFlattenable(inner)) return;
+	// A nested query that says a ROLE of a field keeps its wrapper: the wrapper publishes the role with the
+	// field (StampDeclaredRoles), and merged into the outer select the word would have no output to stand on.
+	for (const ibQueryProjection& p : inner.m_projections)
+		if (p.m_roleSaid) return;
 
 
 	// Output-name -> inner column path. Empty for SELECT * (pass-through names).
@@ -494,6 +498,147 @@ bool NeedsTheRows(const ibQueryAstExprPtr& term)
 	}
 }
 
+// ⭐⭐ …AND AN EXPRESSION THE ROW ROAD CANNOT COMPUTE WHERE IT STANDS (2026-09-29, Max: "the gaps of the language").
+// Arithmetic, a CASE, a scalar call is computed over the row it reads, of plain fields, and two shapes had no such
+// row. One reads a field THROUGH a reference — `T.Qty * T.Item.Price`: the walk is a join, and no expression carries
+// one ("a computed expression takes plain columns"). The other folds or filters an expression over a JOIN —
+// `SUM(B.Qty * G.Price)`: the stitched rows of a join carry columns, not expressions ("not yet supported over a
+// JOIN"). Both are the same sentence one level up: the walk is a plain field of the rows below, and the join is ONE
+// source above them, over which every expression is computed. So they read their rows one level down too.
+bool NamesASource(const ibQuerySelect& select, const wxString& segment);   // below, with the naming
+
+// A field reached THROUGH a reference: past the source the path names (when it names one) more than one step — or a
+// field of a CAST (`CAST(x AS T).A`), which walks the fields of T.
+bool IsWalk(const ibQuerySelect& s, const ibQueryAstExpr& e)
+{
+	if (e.m_kind != ibQueryAstExprKind::Column)
+		return false;
+	if (e.m_arg && e.m_arg->m_kind == ibQueryAstExprKind::Cast)
+		return true;
+	const bool qualified = e.m_path.size() > 1 && NamesASource(s, e.m_path.front());
+	return e.m_path.size() > (qualified ? 2u : 1u);
+}
+
+// Computed where it stands — arithmetic, a CASE's values, a scalar call — with a WALK among its operands. A walk
+// standing alone is a field the engine joins, one folded alone (`SUM(Producer.Weight)`) is too, one handed to a
+// question put to the value is answered over the finished row, and a condition's fields are the WHERE road's: none of
+// them is this.
+bool ComputesThroughAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	switch (e->m_kind) {
+	case ibQueryAstExprKind::Func:
+		return !e->m_over && e->m_arg && e->m_arg->m_kind != ibQueryAstExprKind::Column
+		    && ComputesThroughAWalk(s, e->m_arg);
+	case ibQueryAstExprKind::Arith:
+	case ibQueryAstExprKind::Case:
+		break;
+	case ibQueryAstExprKind::ScalarCall:
+		if (AsksTheValue(*e))
+			return false;
+		break;
+	default:
+		return false;
+	}
+	bool found = false;
+	ibQueryForEachOperand(*e, [&s, &found](const ibQueryAstExprPtr& operand) {
+		if (!found && operand)
+			found = IsWalk(s, *operand) || ComputesThroughAWalk(s, operand);
+	});
+	return found;
+}
+
+bool ReadsAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
+{
+	return e && (IsWalk(s, *e) || ComputesThroughAWalk(s, e));
+}
+
+// A fold whose argument is neither a field nor a constant — what the stitched rows of a JOIN cannot fold.
+bool FoldsAnExpression(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Func && !e->m_over && ibIsAggregateKeyword(e->m_func))
+		return e->m_arg && e->m_arg->m_kind != ibQueryAstExprKind::Column && !IsKnownBeforeRows(e->m_arg);
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = FoldsAnExpression(child);
+	});
+	return found;
+}
+
+// Computed where it stands, the lowering's IsComputedExprAst said of the text: arithmetic, a CASE, a scalar call, a
+// CAST standing as a value, a condition asked for its value.
+bool IsComputedAst(const ibQueryAstExpr& e)
+{
+	switch (e.m_kind) {
+	case ibQueryAstExprKind::Arith:   case ibQueryAstExprKind::Case:    case ibQueryAstExprKind::ScalarCall:
+	case ibQueryAstExprKind::Cast:    case ibQueryAstExprKind::Compare: case ibQueryAstExprKind::Logical:
+	case ibQueryAstExprKind::Not:     case ibQueryAstExprKind::Like:    case ibQueryAstExprKind::In:
+	case ibQueryAstExprKind::Between: case ibQueryAstExprKind::IsNull:  case ibQueryAstExprKind::Refs:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ReadsAField(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Column)
+		return true;
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = ReadsAField(child);
+	});
+	return found;
+}
+
+// A WHERE term the road would refuse for its expression: a comparison it computes where it stands (a computed left
+// side, or a field on the right — the lowering's ComparesComputed) over a JOIN, or reading a walk.
+bool ComputesWhereItCannot(const ibQuerySelect& s, const ibQueryAstExprPtr& term)
+{
+	if (!term)
+		return false;
+	switch (term->m_kind) {
+	case ibQueryAstExprKind::Logical:
+		return ComputesWhereItCannot(s, term->m_lhs) || ComputesWhereItCannot(s, term->m_rhs);
+	case ibQueryAstExprKind::Not:
+		return ComputesWhereItCannot(s, term->m_lhs);
+	case ibQueryAstExprKind::Compare:
+		if (!term->m_lhs || !term->m_rhs || IsValueTypeCall(term->m_lhs) != IsValueTypeCall(term->m_rhs))
+			return false;   // `VALUETYPE(x) = <a type>` is REFS, placed over a field (NeedsTheRows)
+		if (!IsComputedAst(*term->m_lhs) && !ReadsAField(term->m_rhs))
+			return false;
+		return !s.m_joins.empty() || ReadsAWalk(s, term->m_lhs) || ReadsAWalk(s, term->m_rhs);
+	default:
+		return false;
+	}
+}
+
+// Does the statement hold an expression — outside its WHERE — that only its rows one level down can compute?
+bool ComputesOverItsRows(const ibQuerySelect& s)
+{
+	const bool joined = !s.m_joins.empty();
+	for (const ibQueryProjection& p : s.m_projections)
+		if (ComputesThroughAWalk(s, p.m_expr) || (joined && FoldsAnExpression(p.m_expr)))
+			return true;
+	for (const ibQueryAstExprPtr& g : s.m_groupBy)
+		if (ComputesThroughAWalk(s, g))
+			return true;
+	if (ComputesThroughAWalk(s, s.m_having) || (joined && FoldsAnExpression(s.m_having)))
+		return true;
+	for (const ibQueryOrderItem& o : s.m_orderBy)
+		if (ComputesThroughAWalk(s, o.m_expr)
+		    || (joined && o.m_expr && IsComputedAst(*o.m_expr) && !ibQueryMentionsAggregate(o.m_expr)))
+			return true;
+	return false;
+}
+
 // The rows one level down, and what they publish: each field the statement reads, once, under the name the
 // statement gives it where it gives one.
 struct ibRowsOneLevelDown
@@ -583,16 +728,31 @@ void LiftOntoRows(ibRowsOneLevelDown& rows, const ibQueryAstExprPtr& term)
 	});
 }
 
+// Does an expression read one of the statement's OUTPUTS rather than a field of its sources?
+bool ReadsAnOutput(const ibQueryAstExprPtr& e, const std::vector<wxString>& outputs)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Column)
+		return e->m_path.size() == 1 && std::any_of(outputs.begin(), outputs.end(),
+			[&e](const wxString& output) { return output.CmpNoCase(e->m_path.front()) == 0; });
+	bool found = false;
+	ibQueryForEachOperand(*e, [&found, &outputs](const ibQueryAstExprPtr& child) {
+		if (!found)
+			found = ReadsAnOutput(child, outputs);
+	});
+	return found;
+}
+
 void ReadRowsOneLevelDown(ibQuerySelect& s)
 {
-	if (!s.m_where)
-		return;
 	std::vector<ibQueryAstExprPtr> terms;
 	ibQueryFlattenAnd(s.m_where, terms);
 	std::vector<ibQueryAstExprPtr> kept, lifted;
 	for (const ibQueryAstExprPtr& term : terms)
-		(NeedsTheRows(term) ? lifted : kept).push_back(term);
-	if (lifted.empty())
+		(NeedsTheRows(term) || ComputesWhereItCannot(s, term) ? lifted : kept).push_back(term);
+	const bool computes = ComputesOverItsRows(s);
+	if (lifted.empty() && !computes)
 		return;
 
 	// ⚠ TWO SHAPES STAY WHERE THEY WERE WRITTEN, and the lowering refuses them in its own words: a lock taken by a
@@ -606,6 +766,8 @@ void ReadRowsOneLevelDown(ibQuerySelect& s)
 	wxString said;
 	for (const ibQueryAstExprPtr& term : lifted)
 		said += (said.IsEmpty() ? wxString() : wxString(wxT(" AND "))) + ibRenderQueryExpr(*term);
+	if (computes)
+		said += (said.IsEmpty() ? wxString() : wxString(wxT("; "))) + wxString(wxT("an expression through a walk or over a join"));
 
 	auto inner = std::make_shared<ibQuerySelect>();
 	inner->m_allowed = s.m_allowed;   // SELECT ALLOWED travels DOWN, to the door that reads the restricted source
@@ -633,8 +795,17 @@ void ReadRowsOneLevelDown(ibQuerySelect& s)
 	for (const ibQueryAstExprPtr& g : s.m_groupBy)
 		OntoRows(rows, g, &outputs);
 	OntoRows(rows, s.m_having, &outputs);
-	for (const ibQueryOrderItem& o : s.m_orderBy)
-		OntoRows(rows, o.m_expr, &outputs);
+	// A SORT BY AN EXPRESSION goes down WHOLE where the rows are not grouped: read back as a field it is sorted by one,
+	// and a computed source is sorted by fields only — its fields carried apart, the expression over them was refused.
+	const bool groups = s.m_distinct || !s.m_groupBy.empty()
+		|| std::any_of(s.m_projections.begin(), s.m_projections.end(),
+		               [](const ibQueryProjection& p) { return ibQueryMentionsAggregate(p.m_expr); });
+	for (const ibQueryOrderItem& o : s.m_orderBy) {
+		if (!groups && o.m_expr && IsComputedAst(*o.m_expr) && !ReadsAnOutput(o.m_expr, outputs))
+			rows.Carry(*o.m_expr);
+		else
+			OntoRows(rows, o.m_expr, &outputs);
+	}
 	for (const ibQueryTotalAggregate& a : s.m_totalsAggregates)
 		OntoRows(rows, a.m_expr, &outputs);
 	for (const ibQueryTotalDim& d : s.m_totalsBy)
@@ -645,13 +816,17 @@ void ReadRowsOneLevelDown(ibQuerySelect& s)
 			for (const ibQueryTotalField& f : d.m_fields)
 				OntoRows(rows, f.m_expr, &outputs);
 
+	// …and the rows are asked the same question: a sort carried down whole may itself read through a walk, and is then
+	// computed one level further down. Below that only fields are carried, so it asks once more at most.
+	ReadRowsOneLevelDown(*inner);
+
 	s.m_where   = ibQueryFoldAnd(lifted);
 	s.m_from    = ibQuerySource();
 	s.m_from.m_subquery = inner;
 	s.m_from.m_alias    = rows.m_alias;
 	s.m_joins.clear();
 	s.m_allowed = false;
-	ibJournalInfo(wxT("query.rewrite"), wxT("a condition over the rows reads them one level down: %s"), said);
+	ibJournalInfo(wxT("query.rewrite"), wxT("the rows are read one level down for: %s"), said);
 }
 
 #undef LiftDecline

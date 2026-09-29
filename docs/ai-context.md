@@ -441,6 +441,36 @@ FROM AccountingRegister.Ledger.DrCrTurnovers(&Begin, &End, , AccountDr IN (&Debi
 `AccountDr` inside a `Balance` call is refused even in a correspondence register. A figure the row's
 account keeps no accounting for (a quantity on a money-only account) reads EMPTY, not zero.
 
+### 5.3 Opening and closing balances by period — `ROLE`
+
+A month's opening is its FIRST day's, its closing its LAST day's — never the days added up. The engine does
+this when it knows what each field is in a balance, and a register's `BalanceAndTurnovers` (accumulation
+and accounting) says it for its own fields: read it with `TOTALS SUM(…OpeningBalance), SUM(…ClosingBalance)
+BY <keys>, Period PERIODS(MONTH)` and write nothing else. Over a source that says nothing (a value table, a
+temp table, a `UNION`), mark the fields in the SELECT:
+
+```sql
+SELECT U.Day ROLE PERIOD AS Day, U.Store ROLE DIMENSION AS Store,
+       U.Start ROLE OPENING AS Start, U.Finish ROLE CLOSING AS Finish
+FROM (… UNION ALL …) AS U
+TOTALS SUM(Start), SUM(Finish) BY Store
+```
+
+`ROLE PERIOD [n] | DIMENSION | OPENING | CLOSING | NONE`, optional like `AS`; `n` orders several period
+fields (numbered first, then the source's order). Over a value table, read (or mark) the fields that divide the
+balance, or two balances fold into one; a register's table and a nested query carry their own keys. **In a
+report (composition) do not write `ROLE` into its query** — the composer drops it; set the role on the field
+(`report_field {path, role}`). Help: `q.Role`; design: query-language-arc § 37.
+
+Read by `Recorder` / `Record`, every row is ONE document's record — the periodicity said at the top is the
+grouping. In a report that means two groupings (the key, `Period` by `periods: Month`) and a DETAIL level
+(`report_level` with no field), with the recorder, warehouse or line number SELECTED onto it — not a grouping
+by the recorder.
+
+Computed fields may read through a reference and across a join — `T.Qty * T.Item.Price`,
+`SUM(B.Qty * G.Price)` over `LEFT JOIN Catalog.Goods AS G`, a `WHERE` or `ORDER BY` over such an expression: the
+engine reads the rows one level down first (query-language-arc, rule 3). No nested query is needed for it.
+
 ---
 
 ## 6. Concept glossary

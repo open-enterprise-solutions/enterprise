@@ -41,6 +41,13 @@
 
 class ibMetaData;
 
+// ⭐ THE ROLE EDITOR — what a field is in a balance, picked rather than typed: "as its source says", or one of
+// the words the query writes (PERIOD, DIMENSION, OPENING, CLOSING, NONE), and for a PERIOD its number. ONE window
+// for every place a role is set — the field's expression editor in the query constructor and the composer's Fields
+// page (Max, 2026-09-29). `withNumber` false hides the number, for a caller that keeps none. True = accepted.
+bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& periodRank,
+                       bool readOnly = false, bool withNumber = true);
+
 class ibDialogQueryExpression : public wxDialog
 {
 public:
@@ -65,7 +72,18 @@ public:
 	// the old two-mode condition dialog's "simple mode" was actually for.
 	void SetText(const wxString& text);
 
+	// ⭐ WHAT THE FIELD IS IN A BALANCE — offered by the one caller whose expression IS a field (the Fields tab,
+	// Max 2026-09-29): a "Role…" button beside the others opens the role constructor, and what it picks is read
+	// back with the expression. The text stays the expression alone; the constructor writes `ROLE <word>`
+	// itself. Not offered, there is no button — a condition or a total has no role.
+	void OfferRole(bool said, ibBalanceRole role, int periodRank);
+	bool          RoleSaid()   const { return m_roleSaid; }
+	ibBalanceRole Role()       const { return m_role; }
+	int           PeriodRank() const { return m_periodRank; }
+
 private:
+	void OnEditRole(wxCommandEvent&);
+	void ShowRoleOnButton();   // the button reads as what is picked: "Role: OPENING"
 	void OnOk(wxCommandEvent&);
 	void OnInsertField(wxTreeEvent&);
 	void OnInsertLanguage(wxTreeEvent&);
@@ -122,6 +140,12 @@ private:
 	wxTreeCtrl* m_language  = nullptr;
 	// The same styled editor the constructor's text pane uses — one language, one look.
 	class wxStyledTextCtrl* m_text = nullptr;
+
+	// The role, when it is offered (OfferRole) — the button hidden otherwise.
+	class wxButton* m_roleButton = nullptr;
+	bool            m_roleSaid   = false;
+	ibBalanceRole   m_role       = ibBalanceRole::None;
+	int             m_periodRank = 0;
 };
 
 #endif // __QUERY_EXPRESSION_DIALOG_H__

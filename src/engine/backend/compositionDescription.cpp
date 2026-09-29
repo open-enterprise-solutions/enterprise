@@ -753,6 +753,45 @@ const wxString  kFieldInfoPath     = wxT("Path");
 const wxString  kFieldInfoName     = wxT("Name");
 const wxString  kFieldInfoTitle    = wxT("Title");
 const wxString  kFieldInfoUseTitle = wxT("UseTitle");
+const wxString  kFieldInfoRole     = wxT("Role");   // present = a person's word over the source's (m_useRole)
+const wxString  kFieldInfoPeriodRank = wxT("PeriodRank");   // a period's number; absent = in order
+const wxString  kFieldInfoAppearance = wxT("Appearance");   // the sub-node the field's appearance is written in
+
+// AN APPEARANCE — one child per parameter a person touched, under whoever points at it.
+constexpr ibClassID g_appearanceNodeClsid = make_clsid("CompositionAppearance", ibClassKind_None);
+const wxString  kAppearanceParameter = wxT("Parameter");
+const wxString  kAppearanceUse       = wxT("Use");
+const wxString  kAppearanceValue     = wxT("Value");
+
+void ReadAppearance(const ibDataNode& node, ibAppearanceDescription& appearance)
+{
+	appearance.m_values.clear();
+	const std::vector<ibAppearanceParameter>& known = ibAppearanceParameters();
+	for (const ibDataNode& child : node.Children()) {
+		if (child.GetClsid() != g_appearanceNodeClsid)
+			continue;
+		const ibAppearanceParameter parameter = static_cast<ibAppearanceParameter>(child.GetValue<s32>(kAppearanceParameter));
+		if (std::find(known.begin(), known.end(), parameter) == known.end())
+			continue;   // a parameter this platform does not define shows nothing
+		ibAppearanceValueDescription value;
+		value.m_parameter = parameter;
+		value.m_use       = child.GetValue<bool>(kAppearanceUse);
+		if (const ibDataNode* stored = child.FindChild(kAppearanceValue))
+			value.m_value = *stored;
+		appearance.m_values.push_back(std::move(value));
+	}
+}
+
+void WriteAppearance(ibDataNode& node, const ibAppearanceDescription& appearance)
+{
+	for (size_t i = 0; i < appearance.m_values.size(); ++i) {
+		const ibAppearanceValueDescription& value = appearance.m_values[i];
+		ibDataNode& sub = node.AddChild(g_appearanceNodeClsid, static_cast<ibMetaID>(i));
+		sub.SetValue<s32>(kAppearanceParameter, static_cast<s32>(value.m_parameter));
+		sub.SetValue<bool>(kAppearanceUse, value.m_use);
+		sub.Child(kAppearanceValue) = value.m_value;
+	}
+}
 } // namespace
 
 bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
@@ -856,13 +895,101 @@ const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDescription>
 	return selects.size() == 1 ? &selects.front() : nullptr;
 }
 
-wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path)
+wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path, const wxString& caption)
 {
 	const wxString leaf = ibNameFromPath(path);
 	if (const ibSelectDescription* select = ibSelectOfPath(selects, path))
 		if (const ibFieldDescription* field = select->Find(leaf))
-			return field->TitleInForce();
-	return ibTitleFromName(leaf);
+			return field->TitleInForce(caption);
+	return !caption.IsEmpty() ? caption : ibTitleFromName(leaf);
+}
+
+ibBalanceRole ibRoleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path, ibBalanceRole fromSource)
+{
+	if (const ibSelectDescription* select = ibSelectOfPath(selects, path))
+		if (const ibFieldDescription* field = select->Find(ibNameFromPath(path)))
+			return field->RoleInForce(fromSource);
+	return fromSource;
+}
+
+ibAppearanceDescription ibAppearanceForPath(const std::vector<ibSelectDescription>& selects, const wxString& path)
+{
+	if (const ibSelectDescription* select = ibSelectOfPath(selects, path))
+		if (const ibFieldDescription* field = select->Find(ibNameFromPath(path)))
+			return field->m_appearance;
+	return ibAppearanceDescription();
+}
+
+// --- APPEARANCE — see the header ---------------------------------------------
+
+const std::vector<ibAppearanceParameter>& ibAppearanceParameters()
+{
+	static const std::vector<ibAppearanceParameter> s_parameters = {
+		ibAppearanceParameter::Format,
+	};
+	return s_parameters;
+}
+
+wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter)
+{
+	switch (parameter) {
+		case ibAppearanceParameter::Format: return _("Format");
+	}
+	return wxEmptyString;
+}
+
+ibValue ibAppearanceDescription::ValueInForce(ibAppearanceParameter parameter) const
+{
+	const ibAppearanceValueDescription* value = Find(parameter);
+	if (value == nullptr || !value->m_use)
+		return ibValue();
+	return ibStoredValue(value->m_value, nullptr);   // never a reference — see the header
+}
+
+void ibAppearanceDescription::Say(ibAppearanceParameter parameter, bool use, const ibValue& value)
+{
+	for (size_t i = 0; i < m_values.size(); ++i) {
+		if (m_values[i].m_parameter != parameter)
+			continue;
+		if (!use && value.IsEmpty()) {
+			m_values.erase(m_values.begin() + i);
+			return;
+		}
+		m_values[i].m_use = use;
+		ibStoreValue(m_values[i].m_value, value);
+		return;
+	}
+	if (!use && value.IsEmpty())
+		return;
+	ibAppearanceValueDescription said;
+	said.m_parameter = parameter;
+	said.m_use       = use;
+	ibStoreValue(said.m_value, value);
+	m_values.push_back(std::move(said));
+}
+
+ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& selects, const wxString& path)
+{
+	// THE SELECT A COMPOSITION STARTS WITH — made the first time anything is said about one of its
+	// fields, since a description that said nothing carries none.
+	if (selects.empty())
+		selects.emplace_back();
+	const ibSelectDescription* named = ibSelectOfPath(selects, path);
+	if (named == nullptr)
+		return nullptr;
+	ibSelectDescription& select = selects[static_cast<size_t>(named - selects.data())];
+
+	// THE SAME FIELD is the one whose name in force ends in the same word — ibSelectDescription::Find's
+	// rule, asked here of the writable list.
+	const wxString leaf = ibNameFromPath(path);
+	for (ibFieldDescription& field : select.m_fields)
+		if (ibNameFromPath(field.NameInForce()).IsSameAs(leaf, false))
+			return &field;
+
+	ibFieldDescription made;
+	made.m_path = path;
+	select.m_fields.push_back(std::move(made));
+	return &select.m_fields.back();
 }
 
 // ===========================================================================
@@ -927,6 +1054,19 @@ void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& f
 		field.m_name     = child.GetValue<wxString>(kFieldInfoName);
 		field.m_useTitle = child.GetValue<bool>(kFieldInfoUseTitle);
 		field.m_title    = child.GetValue<wxString>(kFieldInfoTitle);
+		// THE ROLE IS WRITTEN ONLY WHEN A PERSON SAID ONE — its presence is what `m_useRole` means, so an
+		// entry written before roles existed reads as "the source's", which is what it always was.
+		if (child.FindField(kFieldInfoRole) != nullptr) {
+			const s32 role = child.GetValue<s32>(kFieldInfoRole);
+			if (role >= static_cast<s32>(ibBalanceRole::None) && role <= static_cast<s32>(ibBalanceRole::Closing)) {
+				field.m_useRole = true;
+				field.m_role    = static_cast<ibBalanceRole>(role);
+				if (field.m_role == ibBalanceRole::Moment)
+					field.m_periodRank = child.GetValue<s32>(kFieldInfoPeriodRank);   // absent reads as 0: in order
+			}
+		}
+		if (const ibDataNode* appearance = child.FindChild(kFieldInfoAppearance))
+			ReadAppearance(*appearance, field.m_appearance);
 		fields.push_back(std::move(field));
 	}
 }
@@ -936,7 +1076,8 @@ void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& f
 // supposed to keep following the name.
 bool SaysAnything(const ibFieldDescription& field)
 {
-	return !field.m_path.IsEmpty() && (field.m_useTitle || !field.m_name.IsEmpty());
+	return !field.m_path.IsEmpty()
+	    && (field.m_useTitle || field.m_useRole || !field.m_appearance.IsEmpty() || !field.m_name.IsEmpty());
 }
 
 bool SaysAnything(const std::vector<ibFieldDescription>& fields)
@@ -960,6 +1101,12 @@ void WriteSelectFields(ibDataNode& node, const std::vector<ibFieldDescription>& 
 			sub.SetValue<bool>(kFieldInfoUseTitle, true);
 			sub.SetValue<wxString>(kFieldInfoTitle, fields[i].m_title);
 		}
+		if (fields[i].m_useRole)
+			sub.SetValue<s32>(kFieldInfoRole, static_cast<s32>(fields[i].m_role));
+		if (fields[i].m_useRole && fields[i].m_periodRank > 0)
+			sub.SetValue<s32>(kFieldInfoPeriodRank, fields[i].m_periodRank);
+		if (!fields[i].m_appearance.IsEmpty())
+			WriteAppearance(sub.Child(kFieldInfoAppearance), fields[i].m_appearance);
 	}
 }
 
@@ -1124,6 +1271,7 @@ static const std::pair<ibClassID, const wxChar*>* ibCompositionNodeTable(size_t&
 		{ g_resourceNodeClsid,  wxT("CompositionResource")   },
 		{ g_selectNodeClsid,    wxT("CompositionSelect")     },
 		{ g_fieldInfoNodeClsid, wxT("CompositionFieldInfo")  },
+		{ g_appearanceNodeClsid, wxT("CompositionAppearance") },
 	};
 
 	count = sizeof(s_names) / sizeof(s_names[0]);

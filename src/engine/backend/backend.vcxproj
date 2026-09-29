@@ -294,6 +294,7 @@
     <ClInclude Include="query\queryException.h" />
     <ClInclude Include="query\queryHierarchy.h" />
     <ClInclude Include="query\queryUnfold.h" />
+    <ClInclude Include="query\queryBalanceRole.h" />
     <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="compiler\lambdaQueryAST.h" />
     <ClInclude Include="query\queryableFactory.h" />

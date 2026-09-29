@@ -40,12 +40,12 @@ inline wxMenuItem* ibAppendCmd(wxMenu& menu, int id, const wxString& label,
 // A TAB WEARS ITS PICTURE, the same tab the same one in both worlds. Every settings notebook is handed
 // the whole set; a page names its picture by what the page IS, so a page taken off and put back (the
 // grouping, the reader's parameters) finds it again without counting.
-enum class ibSettingsTab { Query, Resources, Parameters, Output, Grouping, SelectedFields, Filter, Sort };
+enum class ibSettingsTab { Query, Fields, Resources, Parameters, Output, Grouping, SelectedFields, Filter, Sort };
 
 inline void ibStyleSettingsTabs(wxBookCtrlBase* tabs)
 {
-	static const wxString s_art[] = { wxART_QUERY_CONSTRUCTOR, wxART_TOTALS, wxART_PARAMETERS, wxART_OUTPUT,
-		wxART_GROUPING, wxART_SELECTED_FIELDS, wxART_FILTER, wxART_SORT };   // in ibSettingsTab's order
+	static const wxString s_art[] = { wxART_QUERY_CONSTRUCTOR, wxART_TABLE, wxART_TOTALS, wxART_PARAMETERS,
+		wxART_OUTPUT, wxART_GROUPING, wxART_SELECTED_FIELDS, wxART_FILTER, wxART_SORT };   // in ibSettingsTab's order
 	wxWithImages::Images images;
 	for (const wxString& id : s_art)   // a bundle's size is at normal DPI — no FromDIP
 		images.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));

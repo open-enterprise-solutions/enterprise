@@ -342,6 +342,7 @@
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp" />
@@ -748,6 +749,7 @@
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsSortEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsStyle.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h" />
@@ -760,6 +762,7 @@
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h" />
     <ClInclude Include="win\dlgs\callbackDropTarget.h" />
     <ClInclude Include="win\dlgs\rowValueCell.h" />
+    <ClInclude Include="win\dlgs\textWithDotsCell.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryTempTableDialog.h" />

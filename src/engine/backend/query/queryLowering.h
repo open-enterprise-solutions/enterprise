@@ -103,6 +103,19 @@ public:
 		const ibTypeDescription& GetTypeDesc() const {
 			return m_type.IsOk() || m_col == nullptr ? m_type : m_col->GetTypeDesc();
 		}
+
+		// ⭐ …AND WHAT IT IS IN A BALANCE, ASKED HERE for the same reason: the query's own `ROLE` where it said
+		// one (m_roleSaid), else the column it is read from. What publishes this output one level up — a
+		// nested query, a declaration — hands it on, so totals over it fold a balance as one.
+		bool          m_roleSaid    = false;
+		ibBalanceRole m_balanceRole = ibBalanceRole::None;
+		int           m_periodRank  = 0;   // a PERIOD's seniority, when the ROLE said one
+		ibBalanceRole GetBalanceRole() const {
+			return m_roleSaid || m_col == nullptr ? m_balanceRole : m_col->GetBalanceRole();
+		}
+		int GetPeriodRank() const {
+			return m_roleSaid || m_col == nullptr ? m_periodRank : m_col->GetPeriodRank();
+		}
 	};
 
 	// Resolve + build + run. Fills outSchema (in projection order). Throws

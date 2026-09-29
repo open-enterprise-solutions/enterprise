@@ -794,34 +794,18 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 	if (view == nullptr)
 		return;
 
-	// ⭐⭐ A DIMENSION IN A VIEW IS THE DIMENSION, not a copy of it.
+	// ⭐⭐ WHAT THE VIEW PUBLISHES IS WHAT IS SHOWN — the accounting register's rule (FillExplorerFromShape),
+	// arrived at there on 2026-09-16 and now here.
 	//
-	// The view's columns are built as plain (name, type, id) triples, which is right for the ones
-	// that are genuinely DERIVED — `PeriodMonth`, `Resource1Turnover`: nothing in the metadata stands
-	// behind those. It is wrong for a dimension: that column IS the register's own attribute, kept
-	// deliberately under its metaID so a read reaches it exactly as on the movements table.
-	//
-	// Handed over as a synthetic triple it lost everything the attribute knows: its own picture, and
-	// — the visible half — the fact that it holds a REFERENCE. A dimension typed as a reference could
-	// not be unfolded in the catalogue, while the same dimension one node up, on the register itself,
-	// unfolded fine. Two answers to "what is this column" from one column.
-	//
-	// So the metaobject is handed over where there is one. The id is the key, because the id is
-	// exactly what the view builder promised to keep.
-	//
-	// ⚠ ASKED OF THE REGISTER, NOT LISTED HERE. This used to be a hand-written list — period,
-	// dimensions, resources — and the turnovers view publishes two columns the list did not know: the
-	// RECORDER and the LINE NUMBER (accumulationRegisterMetadataSchema.cpp, the movement arm's own
-	// identity). Wherever the granularity offers those columns (Auto / Recorder / Record) they were
-	// appended as plain synthetic triples, so the recorder lost its picture and stopped saying it
-	// holds a reference — the very loss this comment describes, one row further down the same list.
-	// FindAnyAttributeObjectByFilter is the register's own economical find — one walk over the children
-	// with the id compared as it goes — so an attribute added tomorrow is found without anybody editing
-	// a list, and nothing is allocated per column to answer it.
-	const auto attributeById = [reg](const ibMetaID& id) -> const ibValueMetaObjectAttributeBase* {
-		return reg->FindAnyAttributeObjectByFilter(id);
-	};
-
+	// This used to swap in the register's ATTRIBUTE whose id a column carries, because a view column was a
+	// plain (name, type, id) triple and lost the attribute's picture and the fact that it holds a reference.
+	// It has both now — ibRegAttributeColumn publishes the stored type, the caption and the picture — and the
+	// swap had started to take something away instead: what the column IS in a balance. The view knows the
+	// dimensions are keys and the recorder and the line number are periods after the period (see
+	// GetViewQueryable); the attribute knows none of it. Swapped, the catalogue and a report's Fields page
+	// offered a recorder that was no period and a dimension that was no key (Max, 2026-09-29: "you do not work
+	// with the attribute, you get a set of virtual tables"). The id still matches the attribute's, so a read
+	// reaches the column exactly as on the movements table.
 	const wxString periodName = reg->GetRegisterPeriod() != nullptr
 		? reg->GetRegisterPeriod()->GetName() : wxString();
 
@@ -832,10 +816,7 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
 				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString()))
 			continue;
-		if (const ibValueMetaObjectAttributeBase* attribute = attributeById(col->GetColumnId()))
-			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
-		else
-			explorer.AppendColumn(col);
+		explorer.AppendColumn(col);
 	}
 }
 

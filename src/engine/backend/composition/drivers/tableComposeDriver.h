@@ -101,7 +101,10 @@ public:
 			const ibQueryLowering::OutputColumn& oc = info.m_schema[i];
 			ibComposedColumn c;
 			c.m_title = info.TitleOf(i);   // the output's own wording, falling back to the name
-			c.m_name  = oc.m_name;
+			// …and the NAME of the field it reads, where the composition knows one: a level's column is read one
+			// level down under a name nobody wrote (`q_carried0`, WithSelectOneLevelDown), and that is what a
+			// caller was handed to address a column by (2026-09-29).
+			c.m_name  = !info.PathOf(i).IsEmpty() ? info.PathOf(i) : oc.m_name;
 			c.m_alias = oc.m_alias;
 			if (oc.m_col != nullptr) { c.m_id = oc.m_col->GetColumnId(); c.m_hasId = true; }
 			m_columns.push_back(std::move(c));

@@ -1594,3 +1594,38 @@ TEST(QueryRender, ATypeMadeIntoACastComesBackFromTheText)
 	// A composite has no CAST to say it.
 	EXPECT_EQ(ibQueryMakeCast(nullptr, ibTypeDescription(std::vector<ibClassID>{ g_valueNumberCLSID, g_valueStringCLSID })), nullptr);
 }
+
+// ⭐⭐ `<expr> ROLE <word> [n] AS <name>` — what a field is in a balance, said between the expression and its
+// name, optional as AS is. Contextual: `ROLE` followed by none of the five words is a name, so a field
+// called `Role` stays one. And the text makes the round trip whole — the words, and a period's number.
+TEST(QueryL4Parser, RoleSaysWhatAFieldIsInABalance)
+{
+	auto sel = Parse(wxT("SELECT T.Day ROLE PERIOD 2 AS Day, T.Item ROLE DIMENSION AS Item, ")
+	                 wxT("T.Start ROLE OPENING AS Start, T.Finish ROLE CLOSING, T.Receipt, T.Extra ROLE NONE AS Extra, ")
+	                 wxT("T.Kind AS Role, T.Code Role FROM Catalog.X AS T"));
+	ASSERT_EQ(sel->m_projections.size(), 8u);
+	const auto& p = sel->m_projections;
+	EXPECT_TRUE(p[0].m_roleSaid);  EXPECT_EQ(p[0].m_role, ibBalanceRole::Moment);    EXPECT_EQ(p[0].m_periodRank, 2);
+	EXPECT_EQ(p[0].m_alias, wxT("Day"));
+	EXPECT_EQ(p[1].m_role, ibBalanceRole::Dimension);
+	EXPECT_EQ(p[2].m_role, ibBalanceRole::Opening);
+	EXPECT_TRUE(p[3].m_roleSaid);  EXPECT_EQ(p[3].m_role, ibBalanceRole::Closing);   EXPECT_TRUE(p[3].m_alias.IsEmpty());
+	EXPECT_FALSE(p[4].m_roleSaid);                                                    // unsaid: the source's
+	EXPECT_TRUE(p[5].m_roleSaid);  EXPECT_EQ(p[5].m_role, ibBalanceRole::None);      // said NONE: taken away
+	EXPECT_FALSE(p[6].m_roleSaid); EXPECT_EQ(p[6].m_alias, wxT("Role"));             // a field named Role
+	EXPECT_FALSE(p[7].m_roleSaid); EXPECT_EQ(p[7].m_alias, wxT("Role"));             // …aliased without AS too
+
+	// THE ROUND TRIP — written back and read again, every word and number where it was.
+	const wxString written = ibRenderQuery(*sel);
+	auto back = Parse(written);
+	ASSERT_EQ(back->m_projections.size(), p.size()) << written.ToStdString();
+	for (size_t i = 0; i < p.size(); ++i) {
+		EXPECT_EQ(back->m_projections[i].m_roleSaid, p[i].m_roleSaid) << i << ": " << written.ToStdString();
+		EXPECT_EQ(back->m_projections[i].m_role, p[i].m_role) << i;
+		EXPECT_EQ(back->m_projections[i].m_periodRank, p[i].m_periodRank) << i;
+		EXPECT_EQ(back->m_projections[i].m_alias, p[i].m_alias) << i;
+	}
+
+	// A period's number is a whole number from 1, below the band a source orders its own periods in.
+	EXPECT_THROW(Parse(wxT("SELECT T.Day ROLE PERIOD 0 AS Day FROM Catalog.X AS T")), ibBackendException);
+}

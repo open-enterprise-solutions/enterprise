@@ -41,7 +41,7 @@ ibDataDBComposer& ibDataDBComposer::FromSource(const wxString& ns, const wxStrin
 	m_directSources.clear();   // a transient registry belongs to ONE source set — reset it in lock-step
 	m_prepared.Forget();
 	m_sources.push_back({ ns, name });
-	RefreshFieldAvailability();
+	RefreshSourceFields();
 	return *this;
 }
 
@@ -71,20 +71,22 @@ ibDataDBComposer& ibDataDBComposer::FromSource(const ibBackendQueryable* queryab
 	const wxString name = wxString::Format(wxT("t%u"), static_cast<unsigned int>(m_directSources.size()));
 	m_directSources[name] = queryable;
 	m_sources.push_back({ s_tempSourceNamespace, name });
-	RefreshFieldAvailability();
+	RefreshSourceFields();
 	return *this;
 }
 
 ibDataDBComposer& ibDataDBComposer::FromText(const wxString& text)
 {
-	m_sourceText = text;
+	// ⭐ WITHOUT THE ROLES IT SAYS — a field's role is the composition's word (its Fields page, RoleSaidFor),
+	// and a `ROLE` in the author's query would be a second place to say it (Max, 2026-09-29).
+	m_sourceText = ibQueryTextWithoutRoles(text);
 	m_sources.clear();
 	// ⭐ AND THIS IS WHERE A RUN STARTS. Every compose calls it, so it is the honest moment to let go
 	// of what the LAST run prepared: a temp table holds ROWS, and rows read a minute ago are not an
 	// answer to a report being asked again now. (Handing the same text back does not save them — the
 	// question is not "is it the same query" but "is it the same reading of the data".)
 	m_prepared.Forget();
-	RefreshFieldAvailability();
+	RefreshSourceFields();
 	return *this;
 }
 
@@ -100,11 +102,12 @@ static ibQueryConstructorField ibWalkFieldOf(const wxString& name, const ibTypeD
 	return field;
 }
 
-// ⭐ THE SOURCE'S FIELDS, AS THIS BASE'S OPTIONS LEAVE THEM — see the header. Asked of what the source IS, the
-// way the settings pickers ask it: the author's query through the constructor model (a computed output for
-// everything it reads, a temp table's field for the select that made it), a bound queryable through its own
-// columns, a named source through its descriptor's explorer.
-void ibDataDBComposer::RefreshFieldAvailability()
+// ⭐ THE SOURCE'S FIELDS — see the header. Asked of what the source IS, the way the settings pickers ask it: the
+// author's query through the constructor model (a computed output for everything it reads, a temp table's field
+// for the select that made it), a bound queryable through its own columns, a named source through its
+// descriptor's explorer. Each field carries what the source says of it: whether this base's options leave it
+// available, what it is called, and what it is in a balance.
+void ibDataDBComposer::RefreshSourceFields()
 {
 	// ⭐ A RUN SHOWS WHAT THE BASE USES, WHOEVER RUNS IT — the application, or the designer answering for what a
 	// person sees (compose_run). The designer's own rule ("it sees everything") is for what an author EDITS, not
@@ -112,10 +115,10 @@ void ibDataDBComposer::RefreshFieldAvailability()
 	// caller asks for it (2026-09-28: warehouses printed through the designer).
 	const ibFunctionalOptionGate::AsApplication asTheApplication;
 
-	m_fieldAvailability.reset();
+	m_sourceFields.reset();
 	m_availablePaths.clear();   // a new source answers anew
-	if (!ibFunctionalOptionGate::AnyUnavailable(m_metaData))
-		return;   // nothing is off in this base
+	// (Read whether or not anything is off in this base: the captions and the balance roles are asked on every
+	//  run — IsAvailable keeps its own fast answer for a base that switched nothing off.)
 
 	std::vector<ibQueryConstructorField> fields;
 	if (!m_sourceText.IsEmpty()) {
@@ -146,7 +149,36 @@ void ibDataDBComposer::RefreshFieldAvailability()
 			}
 		}
 	}
-	m_fieldAvailability = std::make_shared<const std::vector<ibQueryConstructorField>>(std::move(fields));
+	m_sourceFields = std::make_shared<const std::vector<ibQueryConstructorField>>(std::move(fields));
+}
+
+// WHAT THE SOURCE SAYS OF ONE FIELD — the field its list publishes under that name, or null.
+const ibQueryConstructorField* ibDataDBComposer::SourceField(const wxString& path) const
+{
+	if (!m_sourceFields)
+		return nullptr;
+	for (const ibQueryConstructorField& field : *m_sourceFields)
+		if (field.m_name.IsSameAs(path, false))
+			return &field;
+	return nullptr;
+}
+
+// ` ROLE <word> [n]` for a field whose role a person set in the composition (ibFieldDescription::m_useRole), or
+// nothing. The entry is found by its PATH, whole: a walk (`Item.Code`) is another field than `Code`.
+wxString ibDataDBComposer::RoleSaidFor(const wxString& path) const
+{
+	for (const ibSelectDescription& select : Selects())
+		for (const ibFieldDescription& field : select.m_fields)
+			if (field.m_useRole && field.m_path.IsSameAs(path, false))
+				return wxString(wxT(" ROLE ")) + ibBalanceRoleWord(field.m_role)
+					+ (field.m_periodRank > 0 ? wxString::Format(wxT(" %d"), field.m_periodRank) : wxString());
+	return wxString();
+}
+
+wxString ibDataDBComposer::SourceCaptionOf(const wxString& path) const
+{
+	const ibQueryConstructorField* field = SourceField(path);
+	return field != nullptr ? field->m_caption : wxString();
 }
 
 bool ibDataComposer::IsAvailable(const wxString& path) const
@@ -157,7 +189,7 @@ bool ibDataComposer::IsAvailable(const wxString& path) const
 	if (known != m_availablePaths.end())
 		return known->second;
 
-	// The hops are asked the way the fields were — as the application (see RefreshFieldAvailability).
+	// The hops are asked the way the fields were — as the application (see RefreshSourceFields).
 	const ibFunctionalOptionGate::AsApplication asTheApplication;
 	bool available = true;   // nothing is off in this base — no path is laid out, no walk is made
 	if (ibFunctionalOptionGate::AnyUnavailable(m_metaData)) {
@@ -174,7 +206,7 @@ bool ibDataComposer::IsAvailable(const wxString& path) const
 // have is not this question.
 bool ibDataDBComposer::IsWalkAvailable(const std::vector<wxString>& hops) const
 {
-	return !m_fieldAvailability || ibQueryConstructorModel(m_metaData).WalkPath(*m_fieldAvailability, hops).m_available;
+	return !m_sourceFields || ibQueryConstructorModel(m_metaData).WalkPath(*m_sourceFields, hops).m_available;
 }
 
 bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value)
@@ -1089,6 +1121,9 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 			if (!authorProj.IsEmpty())
 				authorProj += wxT(", ");
 			authorProj += name;
+			// ⭐ …AND WHAT A PERSON SAID IT IS IN A BALANCE — the Fields page's word, written the way the query
+			// says it (`Opening ROLE OPENING`). What the source says needs no word: it travels with the column.
+			authorProj += RoleSaidFor(name);
 		}
 		// ⭐ …AND A PACKAGE IS NOT WRAPPED, IT IS STOOD ON. `(SELECT …; SELECT …)` is not a query, so
 		// the statements that PREPARE stay ahead of the composer's own select and what it reads FROM

@@ -3965,9 +3965,13 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR;
 		// the null-column check for the keys is made above, where the levels are walked.
 		ColocatedLeaves one; one.push_back(q);
-		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
+		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec)) {
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one))
 				RollupDecline(wxT("aggregate input '%s' is not a scalar column"), a.m_col->GetName());
+			// A BALANCE is a reading at a key's first or last moment — ROLLUP only adds rows up.
+			if (a.m_balance != ibBalanceRole::None)
+				RollupDecline(wxT("'%s' is a balance, taken at a moment rather than added up"), a.m_alias);
+		}
 		return true;
 	}
 

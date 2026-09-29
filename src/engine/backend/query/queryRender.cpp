@@ -403,6 +403,14 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 		for (const auto& projection : select.m_projections) {
 			if (projection.m_star) { cols.push_back(wxT("*")); continue; }
 			wxString col = projection.m_expr ? RenderExpr(*projection.m_expr) : wxString();
+			// …THE ROLE IT WAS GIVEN, where it was read: between the expression and the name. Dropped, a round
+			// trip through text would hand the field back to what its source says.
+			if (projection.m_roleSaid) {
+				col += wxT(" ROLE ");
+				col += ibBalanceRoleWord(projection.m_role);
+				if (projection.m_periodRank > 0)
+					col += wxString::Format(wxT(" %d"), projection.m_periodRank);
+			}
 			if (!projection.m_alias.IsEmpty())
 				col += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + projection.m_alias;
 			cols.push_back(col);

@@ -78,7 +78,7 @@ public:
 	static void Forget(const class ibMetaData* metaData);
 
 	// ⭐ THE APPLICATION'S VIEW, INSIDE THE DESIGNER — for what PRODUCES what a person sees: a composition's run,
-	// which opens it itself (ibDataDBComposer::RefreshFieldAvailability), whoever called the run. While one is
+	// which opens it itself (ibDataDBComposer::RefreshSourceFields), whoever called the run. While one is
 	// open on this thread the gate answers as the running application does, not with "the designer sees
 	// everything" — which stays the rule for what an author edits. In the designer the outermost scope reads
 	// the values afresh: the base as it stands now, not as it stood when the designer first asked. A scope, so

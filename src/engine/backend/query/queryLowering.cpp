@@ -1648,14 +1648,17 @@ bool IsComputedExprAst(const ibQueryAstExpr& e)
 	    || e.m_kind == ibQueryAstExprKind::ScalarCall || e.m_kind == ibQueryAstExprKind::Cast || IsConditionAst(e);
 }
 
-// Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / projection: a single DB source
-// lowers it server-side; a COMPUTED source (register slice / subquery) evaluates it in RAM per row
-// (EvalColumnExprRow — SELECT / WHERE / SUM alike). Only a JOIN across leaves is still unsupported here
-// (the RAM stitch has no cross-leaf expression evaluator yet).
+// Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / sort: a single DB source lowers it
+// server-side; a COMPUTED source (register slice / subquery) evaluates it in RAM per row (EvalColumnExprRow —
+// SELECT / WHERE / SUM alike). Over a JOIN it is not computed here at all: the statement reads its rows one level
+// down and computes it over them, one source (queryRewrite.cpp, rule 3). What still arrives is a statement that
+// rule leaves as written — `SELECT *`, `FOR UPDATE`.
 void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
 	if (sources.size() > 1)
-		ThrowQueryException(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a JOIN"));
+		ThrowQueryException(e.m_line, e.m_col, _("an arithmetic / CASE expression over a JOIN is computed over the rows "
+		                                         "the join makes, and SELECT * or FOR UPDATE keeps them where they are: "
+		                                         "name the fields, or lock the rows in a query of their own"));
 }
 
 // Does this side of a comparison read a field of the row — anywhere inside it, not only as itself?
@@ -3163,6 +3166,28 @@ wxString OutputNameFor(const ibQuerySelect& select, const ibQueryProjection& p, 
 	return wxString::Format(wxT("col%d"), idx);
 }
 
+// ⭐ THE ROLES A SELECT SAYS ITSELF (`<expr> ROLE OPENING AS Opening`) — stamped on its outputs by the name each
+// one answers to, once the schema is built, so whatever publishes an output one level up (a nested query, a
+// declaration) hands the role on. An output the select says nothing about keeps its column's.
+static void StampDeclaredRoles(const ibQuerySelect& sel, std::vector<OutputColumn>& schema)
+{
+	int idx = 0;
+	for (const ibQueryProjection& p : sel.m_projections) {
+		if (p.m_star || !p.m_expr)
+			continue;
+		const wxString name = OutputNameFor(sel, p, idx++);
+		if (!p.m_roleSaid)
+			continue;
+		for (OutputColumn& oc : schema)
+			if (oc.m_name.IsSameAs(name, false)) {
+				oc.m_roleSaid    = true;
+				oc.m_balanceRole = p.m_role;
+				oc.m_periodRank  = p.m_periodRank;
+				break;
+			}
+	}
+}
+
 // ibSubqueryOwner owns the ibSubqueryQueryable instances built for a single Execute — they must outlive
 // the door's terminal call (declared above for IN-subquery). RAM-materialised on Execute, so a local
 // list living to the return statement is enough (no cross-call lifetime). (docs §22 / §23)
@@ -4429,6 +4454,8 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 			out.m_alias = c->GetName();   // the stack selects each column under its own name
 			out.m_type  = c->GetTypeDesc();
 			out.m_available = c->IsAvailable();
+			out.m_balanceRole = c->GetBalanceRole();
+			out.m_periodRank  = c->GetPeriodRank();
 			published.push_back(out);
 		}
 		std::shared_ptr<ibSubqueryQueryable> wrapped =
@@ -4463,6 +4490,7 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// refused here ("cannot be read back"), so the outer query could not filter by a column it had typed.
 	std::vector<ibQueryColumnSelect> overRow;
 	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+	StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, published with them
 	// …and where it also DISTINCTs or groups by one, the statement road reads it whole (ibStatementRowsQueryable)
 	// and the wrapper stands over those rows, published as the statement names them. (No ORDER BY reaches here:
 	// the parser keeps it to a statement.)
@@ -4478,6 +4506,8 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 			out.m_col       = columns[i];
 			out.m_type      = columns[i]->GetTypeDesc();
 			out.m_available = innerSchema[i].m_available;
+			out.m_balanceRole = innerSchema[i].GetBalanceRole();
+			out.m_periodRank  = innerSchema[i].GetPeriodRank();
 			published.push_back(out);
 		}
 		std::shared_ptr<ibSubqueryQueryable> wrapped =
@@ -4505,6 +4535,8 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 		out.m_type         = oc.m_type;
 		out.m_owned        = oc.m_ownedCol;   // …and its storage, when the schema minted the column
 		out.m_available    = oc.m_available;  // …and whether what it reads may be shown — not its leaf's word alone
+		out.m_balanceRole  = oc.GetBalanceRole();   // …and what it is in a balance — its ROLE, else its column's
+		out.m_periodRank   = oc.GetPeriodRank();
 		published.push_back(out);
 	}
 
@@ -4685,6 +4717,66 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		onto.m_expr = ontoOutput(o.m_expr);
 		outer->m_orderBy.push_back(onto);
 	}
+
+	// ⭐⭐ …AND WHAT A BALANCE IS KEPT APART BY, WHERE THE ROWS ARE CUT ALREADY. A balance is folded per key at its
+	// first and last moment (AggregateAsBalance), by the fields that say they are one. A table the statement calls
+	// cuts its rows by what the statement reads (ibQueryReadColumns), so a key it does not read is no key of those
+	// rows either. A nested query and a table a package filled have their rows cut ALREADY: a key they carry and the
+	// statement does not read still keeps two balances apart, and folded without it the first and last moments are
+	// those of whichever of them moved (2026-09-29: a composition reads its author's query as `FROM (…) AS
+	// AuthorQuery`, names only its figures and levels, and every balance of the report was added up over its
+	// documents). So such a source's periods and keys come down with the rows, read by nobody.
+	// (A statement that groups its rows itself — GROUP BY, DISTINCT, a fold in its SELECT — has cut them by what it
+	// groups by, and a field carried past that would be refused as ungrouped.)
+	const bool groupsItself = inner->m_distinct || !inner->m_groupBy.empty()
+		|| std::any_of(inner->m_projections.begin(), inner->m_projections.end(), [](const ibQueryProjection& p) {
+			return p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(p.m_expr->m_func)
+			    && !p.m_expr->m_over;
+		});
+	if (!star && !groupsItself) {
+		std::vector<std::pair<wxString, wxString>> kept;   // (the source, its field): a period or a key
+		bool folds = false;
+		for (const ibQueryProjection& p : inner->m_projections)
+			folds = folds || (p.m_roleSaid && (p.m_role == ibBalanceRole::Opening || p.m_role == ibBalanceRole::Closing));
+		const auto sort = [&](const wxString& source, const wxString& field, ibBalanceRole role) {
+			if (role == ibBalanceRole::Opening || role == ibBalanceRole::Closing)
+				folds = true;
+			else if (role == ibBalanceRole::Moment || role == ibBalanceRole::Dimension)
+				kept.emplace_back(source, field);
+		};
+		std::vector<const ibQuerySource*> cut{ &ast->m_from };
+		for (const ibQueryAstJoin& j : ast->m_joins)
+			cut.push_back(&j.m_source);
+		for (const ibQuerySource* src : cut) {
+			const wxString source = ibQuerySourceName(*src);
+			if (src->m_subquery) {
+				std::vector<OutputColumn> schema;
+				ibQueryLowering::DescribeOutput(*src->m_subquery, params, schema);
+				for (const OutputColumn& oc : schema)
+					sort(source, oc.m_name, oc.GetBalanceRole());
+			}
+			else if (src->m_name.size() == 1) {
+				if (const ibBackendQueryable* filled = ibTempSourceScope::Find(src->m_name.front()))
+					for (const ibBackendQueryColumn* c : filled->GetColumns())
+						if (c != nullptr)
+							sort(source, c->GetName(), c->GetBalanceRole());
+			}
+		}
+		if (!folds)
+			kept.clear();   // no balance is folded: nothing is kept apart
+		for (const auto& k : kept) {
+			const wxString qualified = k.first + wxT(".") + k.second;
+			const bool read = std::any_of(written.begin(), written.end(), [&](const std::pair<wxString, wxString>& w) {
+				return w.first.CmpNoCase(k.second) == 0 || w.first.CmpNoCase(qualified) == 0;
+			});
+			if (read)
+				continue;
+			ibQueryAstExprPtr field = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			field->m_path = { k.first, k.second };
+			ontoOutput(field);
+		}
+	}
+
 	outer->m_top      = ast->m_top;
 	outer->m_intoTemp = ast->m_intoTemp;
 	outer->m_ontoName = ast->m_ontoName;
@@ -4797,6 +4889,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	try {
 		BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
 		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+		StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, declared with them
 		// ⭐ AND THE AUTHOR'S LIMIT IS PUT ON THE DOOR, because a declaration has no terminal to put it
 		// on. An ordinary read carries TOP in its PAGE REQUEST — the limit is asked for at the moment
 		// the rows are fetched — and a declared query is never fetched: it is written into a `WITH` and
@@ -4945,6 +5038,9 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// under a second name, and only the first one published stands for it.
 		field.m_isKey = !repeated && oc.m_col != nullptr
 			&& std::find(innerKeys.begin(), innerKeys.end(), oc.m_col) != innerKeys.end();
+		// …and what it is in a balance, so totals read over the declaration still find their period and keys.
+		field.m_balanceRole = oc.GetBalanceRole();
+		field.m_periodRank  = oc.GetPeriodRank();
 		fields.push_back(field);
 		// What this output really puts in the statement — the spread of the column behind it. A
 		// repeated alias writes the SAME fields under its own name, so it adds nothing here.
@@ -6033,7 +6129,6 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		CollectColumns(join.m_on, strict);
 	for (const ibQueryOrderItem& item : ast.m_orderBy)
 		CollectColumns(item.m_expr, ordering);
-
 	// THE SAME RESOLVER THE EXECUTION USES. Its words are the ones the user sees — there is no
 	// second definition here of what a known field is.
 	// ⚠ A COLUMN THIS CHECK CANNOT ATTRIBUTE TO A VERIFIABLE SOURCE IS LEFT ALONE. With an opaque
@@ -7676,6 +7771,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					const std::vector<const ibBackendQueryColumn*> argCols = ResolvePath(sources, *agg->m_arg);
 					if (argCols.size() != 1 || argCols.back() == nullptr) { measuresArePlain = false; break; }
 					m.m_col = argCols.back();
+					// …and a BALANCE is not plain either: a GROUP BY adds rows up, a balance is taken at a moment.
+					const ibBalanceRole role = m.m_col->GetBalanceRole();
+					if (role == ibBalanceRole::Opening || role == ibBalanceRole::Closing) { measuresArePlain = false; break; }
 				}
 				catch (const ibBackendException&) { measuresArePlain = false; break; }
 			}
@@ -8180,6 +8278,12 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// slot, of its own.
 	std::set<const ibBackendQueryColumn*> aggregatedCols;
 
+	// ⭐ THE BALANCES — figures over a field that is an opening or a closing. Their period and KEYS are worked out
+	// once every figure is known, below the loop: a key is what the rows carry BESIDES figures.
+	struct PendingBalance { wxString m_alias; ibBalanceRole m_edge; };
+	std::vector<PendingBalance>           balances;
+	std::set<const ibBackendQueryColumn*> figureCols;   // what the figures fold — never part of a key
+
 	// ⭐⭐ …AND A COLUMN THE REPORT GROUPS BY IS SPOKEN FOR TOO — by the LEVEL, which wrote its key
 	// into that slot before any aggregate ran. Same collision, same cure, and it is the same set
 	// because it is the same question: "is this column's slot already somebody's answer?"
@@ -8227,6 +8331,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		const ibBackendQueryColumn*           col   = nullptr;   // the column the fold aggregates by metaID
 		std::shared_ptr<ibBackendQueryColumn> owned;             // set only for a synthetic computed measure
 		ibTypeDescription                     argType;           // the type of what it folds — see TypeOfFold; empty = unknown
+		ibBalanceRole                         argRole = ibBalanceRole::None;   // …and what that is in a balance
 		if (!agg->m_star) {
 			// A bare identifier may name a SELECTed field (alias) before a metadata attribute.
 			const bool bareName = agg->m_arg->m_kind == ibQueryAstExprKind::Column && agg->m_arg->m_path.size() == 1;
@@ -8264,8 +8369,14 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// sources. That it IS selected was settled above, before anything was built.
 			else col = ResolveColumnSingle(sources, *agg->m_arg);
 			// Taken before a repeat is moved to a column of its own below: that one is synthetic and says nothing.
-			if (col != nullptr)
+			if (col != nullptr) {
 				argType = col->GetTypeDesc();
+				argRole = col->GetBalanceRole();   // …and what the field is in a balance, for the same reason
+			}
+			// …or what the query says it is, when the SELECT it names says so itself (`V.Open ROLE OPENING AS Open`
+			// over a table that says nothing): the query's word over its source's.
+			if (pit != selectByName.end() && pit->second->m_roleSaid)
+				argRole = pit->second->m_role;
 
 			// ⭐ A SECOND AGGREGATE OVER THE SAME COLUMN NEEDS A COLUMN OF ITS OWN. The fold rolls
 			// each one IN PLACE — into the slot keyed by its input column — so `SUM(Amount)` and
@@ -8293,6 +8404,16 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			}
 		}
 		b.Aggregate(AggFn(agg->m_func), col, outName, agg->m_distinctArg);   // in-place — rolls into its own column (named for read-back)
+		if (col != nullptr)
+			figureCols.insert(col);
+
+		// ⭐⭐ …AND A BALANCE, when the field IS one — an opening or a closing, by its source's role or the query's
+		// own `ROLE`. A plain SUM over it is then taken at each key's first or last period instead of added up;
+		// the period and the keys are the fields the totals read whose roles say so, found once every figure is
+		// known (below the loop). An OVER or a DISTINCT asks another question, and is left to ask it.
+		if ((argRole == ibBalanceRole::Opening || argRole == ibBalanceRole::Closing)
+		    && agg->m_func == ibQueryKeyword::Sum && !agg->m_distinctArg && resource.m_scope.IsEmpty())
+			balances.push_back({ outName, argRole });
 
 		// ⭐⭐ …AND OVER WHAT, when the author said so. The name is resolved against the levels that
 		// were just lowered, so it can only mean a grouping this very query declares.
@@ -8423,6 +8544,95 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			ProjectPlainColumn(b, oc, pathCols.front(), name, sources.size() > 1);
 			outSchema.push_back(oc);
 		}
+	}
+
+	// ⭐⭐ THE PERIOD AND THE KEYS OF EVERY BALANCE, among the fields the totals read, by their roles.
+	//
+	// The PERIOD is every field that is one, THE SENIOR FIRST — by its rank (GetPeriodRank): what the query
+	// numbered itself first, then what its source ordered (the period, a recorder, a line number), then the rest
+	// in the order read (Max, 2026-09-29: "a number you write sets the priority on purpose; without it the number
+	// comes from what there is"). Compared one after another, as a point in time is; a coarser grain of the same
+	// period changes nothing in that order. With none read, a key has one row and adding the rows up IS its
+	// balance — the figure stays a sum.
+	// The KEYS are what tells one balance from another: the fields that are DIMENSIONS (an item, a warehouse,
+	// an account and its analytics); a read whose fields say nothing is keyed by everything it reads beyond
+	// the figures and the periods. A key left out would fold two balances into one; a figure let in would
+	// split one balance per value it took.
+	//
+	// 🛑 AFTER THE SELECTED FIELDS, NOT BEFORE THEM. This stood above the block that projects them, so it saw only
+	// the levels and the figures: a period or a dimension the report reads without grouping by it was not there
+	// yet, no period was found, and every balance was ADDED UP — a month's opening the thirty days' openings
+	// (2026-09-29, the first run on a base: a daily BalanceAndTurnovers folded to 33128 where the balance is 998).
+	// …and a field's role is the query's own word where its SELECT says one (`V.Day ROLE PERIOD 2`), else its
+	// column's — the same rule the figure above follows.
+	//
+	// 🛑 THE FIELDS AS THE SELECT READS THEM, not the columns the levels made of them. A field the totals also
+	// group by is not projected a second time above ("already in the schema"), and its level's column is not the
+	// field: `Period PERIODS(MONTH)` keys by the MONTH, so taken as the moment it made every day of a month one
+	// moment and added their balances up (the same run). So each field is resolved to its own column — the full
+	// period, the dimension — and read, if nothing reads it yet.
+	if (!balances.empty()) {
+		std::vector<std::pair<const ibBackendQueryColumn*, int>> periods;   // …each with the rank it is compared by
+		std::vector<const ibBackendQueryColumn*> dimensions, unspoken;
+		std::set<const ibBackendQueryColumn*> decided;   // …by the SELECT, which the rows below do not overrule
+		const auto read = [&b](const ibBackendQueryColumn* c, const wxString& name) {
+			for (const auto& selected : b.GetSelectColumns())
+				if (selected.first == c)
+					return;
+			b.Select(c, name + wxT("_read"));   // …a field a balance reads its moment or its key from rides into the read
+		};
+		int projectionIndex = 0;
+		for (const ibQueryProjection& p : ast.m_projections) {
+			if (p.m_star || !p.m_expr)
+				continue;
+			const wxString name = OutputNameFor(ast, p, projectionIndex++);
+			if (p.m_expr->m_kind != ibQueryAstExprKind::Column)
+				continue;   // a computed field is neither a moment nor a key
+			const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *p.m_expr);
+			if (cols.size() != 1 || cols.front() == nullptr || figureCols.count(cols.front()) != 0)
+				continue;
+			const ibBackendQueryColumn* c = cols.front();
+			decided.insert(c);
+			switch (p.m_roleSaid ? p.m_role : c->GetBalanceRole()) {
+			case ibBalanceRole::Moment:
+				periods.emplace_back(c, p.m_roleSaid ? p.m_periodRank : c->GetPeriodRank());
+				read(c, name);
+				break;
+			case ibBalanceRole::Dimension: dimensions.push_back(c); read(c, name); break;
+			case ibBalanceRole::None:      unspoken.push_back(c);   read(c, name); break;
+			default: break;
+			}
+		}
+		// 🛑 …AND THE ONES THE ROWS CARRY WITHOUT THE SELECT READING THEM. A level's field (a report groups by what
+		// it does not show) and a key a nested source keeps its balances apart by come down with the rows as outputs
+		// nobody reads (WithSelectOneLevelDown) — and a composition names nothing BUT its figures: taken from the
+		// SELECT alone, its every balance found no period and was added up over the documents (2026-09-29, the
+		// first report over a register read by recorder: an item's opening the sum of its three documents'
+		// openings). What the rows publish says what they are; the SELECT's own word, above, stands.
+		for (const ibSourceBinding& s : sources) {
+			if (s.m_q == nullptr)
+				continue;
+			for (const ibBackendQueryColumn* c : s.m_q->GetColumns()) {
+				if (c == nullptr || figureCols.count(c) != 0 || decided.count(c) != 0)
+					continue;
+				switch (c->GetBalanceRole()) {
+				case ibBalanceRole::Moment:    periods.emplace_back(c, c->GetPeriodRank()); read(c, c->GetName()); break;
+				case ibBalanceRole::Dimension: dimensions.push_back(c);                     read(c, c->GetName()); break;
+				default: break;
+				}
+			}
+		}
+		std::stable_sort(periods.begin(), periods.end(), [](const auto& a, const auto& b) {
+			const int ra = a.second > 0 ? a.second : std::numeric_limits<int>::max();
+			const int rb = b.second > 0 ? b.second : std::numeric_limits<int>::max();
+			return ra < rb;
+		});
+		std::vector<const ibBackendQueryColumn*> moments;
+		for (const auto& period : periods)
+			moments.push_back(period.first);
+		if (!moments.empty())
+			for (const PendingBalance& balance : balances)
+				b.AggregateAsBalance(balance.m_alias, balance.m_edge, moments, !dimensions.empty() ? dimensions : unspoken);
 	}
 
 	// No WHERE and no virtual table's own condition here: both belong to the statement, read one level down by its

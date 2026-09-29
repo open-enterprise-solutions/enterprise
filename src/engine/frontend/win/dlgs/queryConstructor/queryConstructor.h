@@ -93,6 +93,10 @@ enum ibQueryConstructorExclude {
 	// The first tab. Excluded by nobody today — it is what a query IS — but it carries a bit like
 	// every other, so a host that one day opens the window on a fixed source does not need a new one.
 	ibQueryExclude_Tables     = 1 << 9,
+	// Not a tab but a word of the field: `ROLE`. A composition says what a field is in a balance on its own
+	// Fields page, so the "Role..." button is not offered and a role the text already says is dropped
+	// (Max, 2026-09-29: "otherwise it is a duplicate").
+	ibQueryExclude_Roles      = 1 << 10,
 };
 
 class FRONTEND_API ibDialogQueryConstructor : public wxDialog

@@ -15,6 +15,7 @@
 // fact — and it WAS one: the runtime enumeration is registered over ibQueryDimUnfold, so a window
 // speaking the twin got an enumeration nobody had (an assert in CreateEnumObject).
 #include "backend/query/queryUnfold.h"
+#include "backend/query/queryBalanceRole.h"   // ibBalanceRole — what a field is in a balance (its entry's role)
 
 #include <vector>
 
@@ -458,6 +459,60 @@ struct ibResourceDescription {
 	bool operator!=(const ibResourceDescription& o) const { return !(*this == o); }
 };
 
+// --- APPEARANCE ------------------------------------------------------------
+// ⭐⭐ HOW A VALUE IS SHOWN — a description of its own, whose parameters are a FINITE LIST THE PLATFORM
+// DEFINES (Max, 2026-09-29: "the field points at this description, and the description has a fixed number
+// of parameters, decided on the platform's side"). Nobody invents a parameter: the window lists the
+// platform's, and each is set the way any setting is — ticked, and given a value. A field of the composition
+// carries one; a conditional-appearance rule is expected to carry the same one.
+//
+// The numbers are what the store writes, so they stay.
+enum class ibAppearanceParameter {
+	Format = 0,   // how a value is WRITTEN — a format string (`ND=10; NFD=2`), in every language it is written in
+};
+
+// THE PLATFORM'S LIST, in the order a window shows it, and what each is called there.
+BACKEND_API const std::vector<ibAppearanceParameter>& ibAppearanceParameters();
+BACKEND_API wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
+
+// ONE PARAMETER A PERSON TOUCHED. Unticked keeps the value without applying it, the way a filter line is
+// switched off rather than deleted. The value is PACKED (ibStoreValue), for the reason a parameter's is: a
+// description is data. What goes here is never a reference, so it reads back without a configuration.
+struct ibAppearanceValueDescription {
+	ibAppearanceParameter m_parameter = ibAppearanceParameter::Format;
+	bool                  m_use       = false;
+	ibDataNode            m_value;
+
+	bool operator==(const ibAppearanceValueDescription& o) const {
+		return m_parameter == o.m_parameter && m_use == o.m_use && m_value == o.m_value;
+	}
+	bool operator!=(const ibAppearanceValueDescription& o) const { return !(*this == o); }
+};
+
+struct ibAppearanceDescription {
+	// Only the parameters somebody touched — an untouched one is the value showing itself its own way.
+	std::vector<ibAppearanceValueDescription> m_values;
+
+	const ibAppearanceValueDescription* Find(ibAppearanceParameter parameter) const {
+		for (const ibAppearanceValueDescription& value : m_values)
+			if (value.m_parameter == parameter)
+				return &value;
+		return nullptr;
+	}
+
+	// ⭐ WHAT IS IN FORCE — the value of a TICKED parameter, else empty.
+	BACKEND_API ibValue ValueInForce(ibAppearanceParameter parameter) const;
+
+	// ⭐⭐ THE DOOR a person's word comes in through — the appearance window and MCP's report_field alike.
+	// Unticked and empty forgets the parameter altogether.
+	BACKEND_API void Say(ibAppearanceParameter parameter, bool use, const ibValue& value);
+
+	bool IsEmpty() const { return m_values.empty(); }
+
+	bool operator==(const ibAppearanceDescription& o) const { return m_values == o.m_values; }
+	bool operator!=(const ibAppearanceDescription& o) const { return !(*this == o); }
+};
+
 // ⭐⭐ A FIELD OF THE COMPOSITION, AND WHAT IT IS CALLED. This is the entity a resource, a grouping
 // level and a printed column all REFER TO — they name a path, and the path is this. So the title
 // lives here, once, and everything that mentions the field reads the same answer.
@@ -472,7 +527,7 @@ struct ibResourceDescription {
 //   * the NAME — the short word everything else says: a resource names a field, a level groups by
 //     one, a script reads one back.
 //   * the TITLE — what a person reads. Generated from the name until somebody takes it over.
-// (A role — opening balance, closing balance — is expected to join them; it is the same table.)
+// (The role — opening balance, closing balance — and the appearance joined them below: the same table.)
 struct ibFieldDescription {
 	wxString m_path;
 	// Empty = the name IS the path's last segment, which is the ordinary case and is why nothing
@@ -480,10 +535,19 @@ struct ibFieldDescription {
 	wxString m_name;
 	bool     m_useTitle = false;
 	wxString m_title;
-	// (⏭ AND ITS ROLE — opening balance, closing balance — and its periodicity, which is what this
-	//  table is FOR beyond captions: an output can then say "this figure is the opening balance"
-	//  instead of the report re-deriving it from a name (Max, 2026-08-26). One entry per field,
-	//  whatever ends up being said about it; the readers all come through here already.)
+	// ⭐⭐ …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — the moment, a key, an opening or a closing — which
+	// is what this table is FOR beyond captions (Max, 2026-08-26): a figure is folded by what it IS. The
+	// SOURCE says it first (a register's view publishes its moment, keys and edges) and the composition
+	// fills the field in from there; this is a person's word over it, for a field whose source says
+	// nothing or says something else. `m_useRole` for the reason `m_useTitle` has: "no role" is a word too.
+	bool          m_useRole = false;
+	ibBalanceRole m_role    = ibBalanceRole::None;
+	// …and a PERIOD's seniority (`ROLE PERIOD 1`) — 0 = in the order it stands. Kept here because a composition
+	// reads its query without the roles it says (ibQueryTextWithoutRoles): this is where a report numbers one.
+	int           m_periodRank = 0;
+	// ⭐ …AND HOW IT IS SHOWN — the field points at an appearance (above). The Fields page's "Appearance" sets
+	// it; the report's output applies it (ibCompositionOutputInfo::AppearanceOf).
+	ibAppearanceDescription m_appearance;
 
 	// THE NAME IN FORCE — what was written down, else the PATH itself: a name is assembled as the
 	// package's name plus the field's (`Sales.Qty`), and that assembly IS the path (Max, 2026-08-26).
@@ -491,14 +555,38 @@ struct ibFieldDescription {
 	// otherwise re-state it.
 	wxString NameInForce() const { return m_name.IsEmpty() ? m_path : m_name; }
 
-	// …AND WHAT A READER SEES. What a person took over, else the field's own name read out loud.
-	wxString TitleInForce() const {
-		return m_useTitle ? m_title : ibTitleFromName(ibNameFromPath(NameInForce()));
+	// …AND WHAT A READER SEES. What a person took over, else what the SOURCE calls the field (`caption`,
+	// when the caller knows it — a register's "Amount Closing balance"), else its own name read out loud.
+	wxString TitleInForce(const wxString& caption = wxString()) const {
+		if (m_useTitle)
+			return m_title;
+		return !caption.IsEmpty() ? caption : ibTitleFromName(ibNameFromPath(NameInForce()));
 	}
+
+	// …AND WHAT IT IS IN A BALANCE: what a person said, else what the source says (`fromSource`).
+	ibBalanceRole RoleInForce(ibBalanceRole fromSource) const { return m_useRole ? m_role : fromSource; }
+
+	// ⭐⭐ THE DOORS A PERSON'S WORD COMES IN THROUGH — the settings window's Fields page and MCP's report_field
+	// say it the same way, so the two cannot come to keep one fact differently (Max, 2026-09-29).
+	//
+	// A TITLE, in every language it is written in (`en = '…'; ru = '…'`). Empty gives it back to what
+	// generates itself — the source's caption, else the name read out loud.
+	void SayTitle(const wxString& title) { m_useTitle = !title.IsEmpty(); m_title = title; }
+	// A ROLE, kept as the person's word only where it is not what the source says: the source's own answer
+	// picked back lets the field follow its source again. A period's number is always a person's word — a
+	// source orders its own periods above every number a person may write (ibSourcePeriodRank).
+	void SayRole(ibBalanceRole role, ibBalanceRole fromSource, int periodRank = 0) {
+		m_periodRank = role == ibBalanceRole::Moment ? periodRank : 0;
+		m_useRole    = role != fromSource || m_periodRank > 0;
+		m_role       = role;
+	}
+	// (…and its appearance through the appearance's own door, m_appearance.Say.)
 
 	bool operator==(const ibFieldDescription& o) const {
 		return m_path == o.m_path && m_name == o.m_name
-		    && m_useTitle == o.m_useTitle && m_title == o.m_title;
+		    && m_useTitle == o.m_useTitle && m_title == o.m_title
+		    && m_useRole == o.m_useRole && m_role == o.m_role && m_periodRank == o.m_periodRank
+		    && m_appearance == o.m_appearance;
 	}
 	bool operator!=(const ibFieldDescription& o) const { return !(*this == o); }
 };
@@ -572,7 +660,26 @@ BACKEND_API const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelect
 // ⚠ A PATH NOBODY HAS AN ENTRY FOR IS NOT AN ERROR — it is the ordinary case, and it is also what a
 // field that has GONE looks like. Either way the answer is its name, so a report whose query lost a
 // column still prints: the schema degrades field by field, never as a whole.
-BACKEND_API wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path);
+// `caption` — what the SOURCE calls the field, when the caller knows it: the generated title then, in place
+// of the name read out loud.
+BACKEND_API wxString ibTitleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path,
+                                    const wxString& caption = wxString());
+
+// ⭐ …AND THE ROLE IN FORCE FOR A PATH — what a person said in its entry, else what the source says
+// (`fromSource`). One function for the composer's render and the Fields page, for the reason the title has one.
+BACKEND_API ibBalanceRole ibRoleForPath(const std::vector<ibSelectDescription>& selects, const wxString& path,
+                                        ibBalanceRole fromSource);
+
+// …AND HOW IT IS SHOWN — the appearance a person gave the field, or an empty one.
+BACKEND_API ibAppearanceDescription ibAppearanceForPath(const std::vector<ibSelectDescription>& selects,
+                                                        const wxString& path);
+
+// ⭐ THE ENTRY A FIELD IS DESCRIBED IN, FOR WRITING — found, or made the first time anything is said
+// about the field (the first select too, when nothing was ever said about any). Null when the path does
+// not say which select it speaks of, which each writer refuses in its own words. ONE door for every
+// writer — the settings window's Fields page and report_field — so what "the same field" means is
+// answered once.
+BACKEND_API ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& selects, const wxString& path);
 
 // ⭐⭐ AND `Auto` IS A ROW, NOT A FLAG. It stands for everything the storey above chose, and it
 // stands SOMEWHERE: a row has a position, so the inherited fields can sit before this node's own,

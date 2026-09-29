@@ -492,10 +492,12 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// not with the knowledge, so this half kept the old shape until a reading that spells fields
 		// through the column layout came past it (a turnover folded by the recorder, 2026-09-02).
 		// Numbered over the period (ibRegDerivedColumnId): the stored period first, each coarser unit after it.
+		// ⭐ …AND IT IS THE MOMENT a balance's first and last are counted by — as is each coarser unit below.
 		columns.push_back(ibTempColumn(periodName, periodField,
 		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
 		                               GetRegisterPeriod()->GetSynonym(),
-		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnIcon()));
+		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnIcon())
+		                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -514,22 +516,26 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 				                               GetRegisterPeriod()->GetTypeDesc(),
 				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
 				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed,
-				                               GetRegisterPeriod()->GetColumnIcon()));
+				                               GetRegisterPeriod()->GetColumnIcon())
+				                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));   // a grain of the same period
 	}
 
 	// Dimensions keep their METAID as the column id, so a composed read reaches them by
 	// Value(dimension) exactly as it would on the movements table — the view is interchangeable
 	// with the register as a source, not a parallel vocabulary.
+	// …and they are what keeps one balance apart from another.
 	for (const auto dimension : GetDimensionArrayObject())
-		columns.push_back(ibRegAttributeColumn(dimension));
+		columns.push_back(ibRegAttributeColumn(dimension).PlaysInBalance(ibBalanceRole::Dimension));
 
 	// The movement arm's own identity — published EXACTLY as a dimension is (its own metaID, its own
 	// type), because that is what it is on the source table: a real attribute of the register. Null
 	// on every stored row, which is also how a reader tells the two arms apart. Only the turnovers
 	// view carries them; a balance view has no arm to distinguish.
+	// …and they are the junior PERIODS a balance's first and last are counted by after the period itself: two
+	// documents of one second are told apart by the recorder, two lines of one document by the line number.
 	if (withPeriod && HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
-		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()));
-		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()));
+		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(2)));
+		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(3)));
 	}
 
 	// Per-resource columns, by shape. A turnover-only register (no record type) has no expense side
@@ -553,7 +559,8 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
 		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
-		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()).StandsFor(res));
+		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()).StandsFor(res)
+		                  .PlaysInBalance(ibRegFigureBalanceRole(suffix)));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {

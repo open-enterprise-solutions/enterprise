@@ -111,6 +111,30 @@ TEST(QueryConstructorModel, ANestedTableAnswersWithItsOwnProjections)
 	EXPECT_EQ(wxT("Name"), fields[1]);
 }
 
+// ⭐⭐ A COMPOSITION READS ITS QUERY WITHOUT THE ROLES IT SAYS — its Fields page says them (Max, 2026-09-29).
+// Every select forgets them, the one it reads FROM and a union's branch included, since a role travels up
+// with its column; a text that says none comes back as it was, byte for byte.
+TEST(QueryConstructorModel, ACompositionReadsItsQueryWithoutTheRolesItSays)
+{
+	const wxString plain = wxT("SELECT T.Qty AS Qty FROM Catalog.Products AS T");
+	EXPECT_EQ(plain, ibQueryTextWithoutRoles(plain));
+
+	const wxString said =
+		wxT("SELECT U.Start ROLE OPENING AS Start, U.Day ROLE PERIOD 2 AS Day ")
+		wxT("FROM (SELECT T.Qty ROLE CLOSING AS Start, T.Date AS Day FROM Catalog.Products AS T ")
+		wxT("      UNION ALL SELECT S.Qty ROLE DIMENSION, S.Date FROM Catalog.Stock AS S) AS U");
+	ibQueryPackage package = Package(said);
+	EXPECT_TRUE(ibQueryDropRoles(package));
+	EXPECT_FALSE(ibQueryDropRoles(package)) << "a role was left somewhere the walk did not reach";
+
+	const wxString text = ibQueryTextWithoutRoles(said);
+	EXPECT_EQ(wxNOT_FOUND, text.Upper().Find(wxT("ROLE"))) << text.ToStdString();
+	// …and it still reads, its fields where they were.
+	const ibQueryPackage back = Package(text);
+	ASSERT_EQ(1u, back.m_statements.size());
+	EXPECT_EQ(2u, back.m_statements[0].m_select->m_projections.size());
+}
+
 TEST(QueryConstructorModel, ANestedTableUsesTheAliasWhereTheAuthorGaveOne)
 {
 	ibQueryParser parser;

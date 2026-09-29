@@ -27,6 +27,9 @@
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/stc/stc.h>
+#include <wx/choice.h>     // the role constructor — the word picked
+#include <wx/spinctrl.h>   // …and a period's number
+#include <iterator>        // std::size — GCC does not bring it along with the rest
 
 #include <algorithm>
 #include <functional>   // the name check walks the tree through a recursive lambda
@@ -196,6 +199,13 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	choice->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnEditChoice, this);
 	choice->Enable(!m_readOnly);
 	buttons->Add(choice, 0, wxRIGHT, FromDIP(6));
+	// ⭐ AND WHAT THE FIELD IS IN A BALANCE — the role constructor, shown only where the expression is a field
+	// (OfferRole). Hidden until then: a condition or a total has no role to give.
+	m_roleButton = new wxButton(this, wxID_ANY, _("Role..."));
+	m_roleButton->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnEditRole, this);
+	m_roleButton->Enable(!m_readOnly);
+	m_roleButton->Hide();
+	buttons->Add(m_roleButton, 0, wxRIGHT, FromDIP(6));
 	buttons->AddStretchSpacer();
 	buttons->Add(CreateStdDialogButtonSizer(m_readOnly ? wxCLOSE : (wxOK | wxCANCEL)), 0);
 	sizer->Add(buttons, 0, wxEXPAND | wxALL, FromDIP(6));
@@ -667,4 +677,99 @@ void ibDialogQueryExpression::OnEditChoice(wxCommandEvent&)
 	m_text->SetSelection(from, to);
 	m_text->ReplaceSelection(ibRenderQueryExpr(*existing));
 	m_text->SetFocus();
+}
+
+// ---------------------------------------------------------------------------
+//  The role constructor — what a field is in a balance
+// ---------------------------------------------------------------------------
+
+void ibDialogQueryExpression::OfferRole(bool said, ibBalanceRole role, int periodRank)
+{
+	m_roleSaid   = said;
+	m_role       = role;
+	m_periodRank = periodRank;
+	if (m_roleButton != nullptr) {
+		m_roleButton->Show();
+		ShowRoleOnButton();
+		Layout();
+	}
+}
+
+void ibDialogQueryExpression::ShowRoleOnButton()
+{
+	if (m_roleButton == nullptr)
+		return;
+	wxString label = _("Role");
+	if (m_roleSaid) {
+		label += wxT(": ");
+		label += ibBalanceRoleWord(m_role);
+		if (m_role == ibBalanceRole::Moment && m_periodRank > 0)
+			label += wxString::Format(wxT(" %d"), m_periodRank);
+	}
+	m_roleButton->SetLabel(label + wxT("..."));
+}
+
+// ⭐ THE ROLE EDITOR — the word the query writes (`ROLE OPENING`), picked rather than typed, and for a PERIOD its
+// number: which period decides "first" and "last" before the others. "As its source says" leaves the field what
+// its source says it is; NONE takes that away. The words are the query's own, as everything in the constructor is
+// (it speaks the language it writes). One window — see the declaration for who opens it.
+bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& periodRank, bool readOnly, bool withNumber)
+{
+	wxDialog dialog(parent, wxID_ANY, _("Role"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
+	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+	static const ibBalanceRole s_roles[] = { ibBalanceRole::Moment, ibBalanceRole::Dimension,
+		ibBalanceRole::Opening, ibBalanceRole::Closing, ibBalanceRole::None };
+	wxArrayString words;
+	words.Add(_("As its source says"));
+	for (const ibBalanceRole known : s_roles)
+		words.Add(ibBalanceRoleWord(known));
+	wxChoice* choice = new wxChoice(&dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, words);
+	int at = 0;
+	if (said)
+		for (size_t i = 0; i < std::size(s_roles); ++i)
+			if (s_roles[i] == role)
+				at = static_cast<int>(i) + 1;
+	choice->SetSelection(at);
+	choice->Enable(!readOnly);
+	sizer->Add(new wxStaticText(&dialog, wxID_ANY, _("What the field is in a balance:")), 0, wxLEFT | wxRIGHT | wxTOP, dialog.FromDIP(8));
+	sizer->Add(choice, 0, wxEXPAND | wxALL, dialog.FromDIP(8));
+
+	// A PERIOD'S NUMBER — 0 is "in the order it stands": the platform counts it after the numbered ones.
+	wxSpinCtrl* rank = nullptr;
+	if (withNumber) {
+		wxBoxSizer* rankRow = new wxBoxSizer(wxHORIZONTAL);
+		rankRow->Add(new wxStaticText(&dialog, wxID_ANY, _("Period number (0 = in order):")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, dialog.FromDIP(6));
+		rank = new wxSpinCtrl(&dialog, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+			wxSP_ARROW_KEYS, 0, ibSourcePeriodRank(0) - 1, periodRank);
+		rankRow->Add(rank, 0);
+		sizer->Add(rankRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, dialog.FromDIP(8));
+		const auto syncRank = [choice, rank, readOnly]() { rank->Enable(!readOnly && choice->GetSelection() == 1); };   // PERIOD only
+		choice->Bind(wxEVT_CHOICE, [syncRank](wxCommandEvent&) { syncRank(); });
+		syncRank();
+	}
+
+	sizer->Add(dialog.CreateStdDialogButtonSizer(readOnly ? wxCLOSE : (wxOK | wxCANCEL)), 0, wxEXPAND | wxALL, dialog.FromDIP(8));
+	dialog.SetSizerAndFit(sizer);
+	if (readOnly) {
+		dialog.Bind(wxEVT_BUTTON, [&dialog](wxCommandEvent&) { dialog.EndModal(wxID_CANCEL); }, wxID_CLOSE);
+		dialog.ShowModal();
+		return false;
+	}
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	const int picked = choice->GetSelection();
+	said       = picked > 0;
+	role       = said ? s_roles[picked - 1] : ibBalanceRole::None;
+	periodRank = said && role == ibBalanceRole::Moment && rank != nullptr ? rank->GetValue() : 0;
+	return true;
+}
+
+void ibDialogQueryExpression::OnEditRole(wxCommandEvent&)
+{
+	if (!ibEditBalanceRole(this, m_roleSaid, m_role, m_periodRank, m_readOnly))
+		return;
+	ShowRoleOnButton();
+	Layout();
 }

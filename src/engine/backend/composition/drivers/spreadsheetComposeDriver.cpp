@@ -1,5 +1,6 @@
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
 #include "backend/backend_type.h"                           // GetFormatFromTypeDesc — a column's format from its type
+#include "backend/backend_localization.h"                   // ibTranslateString — an appearance's format, in the language in force
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 #include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
 
@@ -165,13 +166,19 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_paths.reserve(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i)
 		m_paths.push_back(info.PathOf(i));
-	// …AND HOW EACH COLUMN WRITES ITS FIGURES, asked of its type (OutputColumn::GetTypeDesc) once here rather
-	// than once per cell.
+	// …AND HOW EACH COLUMN WRITES ITS FIGURES — the format its field's APPEARANCE says, in the language in
+	// force, else the one its type gives (OutputColumn::GetTypeDesc) — the way a list column's Format stands
+	// over its type (GetFormatFromColumn). Once here rather than once per cell.
 	m_formats.clear();
 	m_formats.resize(info.m_schema.size());
 	for (size_t i = 0; i < info.m_schema.size(); ++i) {
 		ibFormatString& format = m_formats[i];
-		ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+		const wxString said = ibTranslateString(
+			info.AppearanceOf(i).ValueInForce(ibAppearanceParameter::Format).GetString()).GetString();
+		if (said.IsEmpty() || !ibFormatString::Parse(said, format)) {
+			format = ibFormatString();
+			ibBackendTypeConfigFactory::GetFormatFromTypeDesc(info.m_schema[i].GetTypeDesc(), format);
+		}
 		// …and the report's own rule, where the format says nothing of its own: nothing is written empty.
 		if (!format.m_number.m_zero)
 			format.m_number.m_zero = wxString();
@@ -816,13 +823,17 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	// A GROUPING ROW IS TINTED ACROSS ITS WHOLE WIDTH AND BOLD — the tint says "a level starts here"
 	// while scrolling, the weight still says it in print. A detail row is tinted too, faintly: left
 	// white it would be the only pure white on a page of soft greens.
-	const wxColour fill = hasChildren ? ibGroupFillForLevel(level) : kDetailFill;
+	// ⭐ …AND A HEADING WITH NOTHING UNDER IT IS STILL ONE, where the output reads further down: a month the fold
+	// filled in because nothing moved in it printed as a record among its bold neighbours (Max, 2026-09-29). The
+	// deepest heading of a report that reads no records stays as it was — nothing is under any of them.
+	const bool groupRow = line.m_kind != ibSelectorNodeKind::Detail && (hasChildren || line.m_levelReadsDeeper);
+	const wxColour fill = groupRow ? ibGroupFillForLevel(level) : kDetailFill;
 	wxFont font = s_defaultSpreadsheetFont;
-	if (hasChildren)
+	if (groupRow)
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	for (int col = 0; col < m_columnCount; ++col) {
 		row->SetCellBackgroundColour(0, col, fill);
-		if (hasChildren)
+		if (groupRow)
 			row->SetCellFont(0, col, font);
 		// …and its share of the grid: the verticals that carry a column down the page, and the lines
 		// that close the row at both ends.

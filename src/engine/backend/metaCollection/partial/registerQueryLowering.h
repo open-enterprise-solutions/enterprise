@@ -291,6 +291,16 @@ inline wxString ibRegFigureCaption(const wxString& figure)
 	return figure;   // a figure nobody captioned reads as its own name rather than as nothing
 }
 
+// ⭐ …AND WHAT THE FIGURE IS IN A BALANCE — its two edges, beside the words, for the same reason the
+// caption is here: a figure added to the list is known everywhere it appears. A gross balance is an edge
+// too; a movement, and the balance a register reports at one moment, are ordinary values.
+inline ibBalanceRole ibRegFigureBalanceRole(const wxString& figure)
+{
+	if (figure == ibRegFigure::OpeningBalance || figure == ibRegFigure::OpeningGrossBalance) return ibBalanceRole::Opening;
+	if (figure == ibRegFigure::ClosingBalance || figure == ibRegFigure::ClosingGrossBalance) return ibBalanceRole::Closing;
+	return ibBalanceRole::None;
+}
+
 // The side, said to a PERSON — the caption twin of ibRegSide, and the one place the two words are
 // spelled. A FIELD held per side is captioned with it too ("Currency Dr"), so it stands on its own
 // rather than inside the figure's caption below.

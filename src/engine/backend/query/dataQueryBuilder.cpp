@@ -446,6 +446,20 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const wxString& alias,
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const wxString& alias, ibBalanceRole edge,
+	std::vector<const ibBackendQueryColumn*> moments, std::vector<const ibBackendQueryColumn*> keys)
+{
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	for (auto it = into.rbegin(); it != into.rend(); ++it)
+		if (it->m_alias.IsSameAs(alias, false)) {
+			it->m_balance        = edge;
+			it->m_balanceMoments = std::move(moments);
+			it->m_balanceKeys    = std::move(keys);
+			break;
+		}
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const wxString& alias,
 	std::shared_ptr<ibBackendQueryColumn> receiver)
 {

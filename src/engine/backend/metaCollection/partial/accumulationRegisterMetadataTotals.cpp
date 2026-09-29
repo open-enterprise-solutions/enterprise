@@ -599,6 +599,8 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// added to its group (step 2a) and the group is ordered (step 2b) before anything reaches the fold.
 	struct ibPeriodRow {
 		ibValue              m_period;
+		ibValue              m_recorder;   // at movement grain: the document the row is, and its line
+		ibValue              m_line;
 		std::vector<ibValue> m_receipt;
 		std::vector<ibValue> m_expense;
 	};
@@ -612,34 +614,97 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		groups.push_back({ std::move(key), {} });
 		return groups.back().second;
 	};
-	{
+	// ⭐ AT MOVEMENT GRAIN (Periodicity = Recorder / Record) THE ROWS ARE THE MOVEMENTS — read off the register's
+	// own table, a document (and a line) apiece, the way ComputeTurnover reads them (2026-09-06). The surface
+	// keeps periods, not documents: read there, every document of a key folded into one row with no period and
+	// no recorder, and a balance by document was one balance for the whole interval (2026-09-29, the ROLE
+	// battery: `Period`, `Recorder` and `LineNumber` empty on every row).
+	const bool atMovementGrain = cFold.FromMovements();
+	const ibBackendQueryable* const reading = atMovementGrain ? GetQueryable() : source;
+	const wxString recorderName = GetRegisterRecorder()   != nullptr ? GetRegisterRecorder()->GetName()   : wxString();
+	const wxString lineName     = GetRegisterLineNumber() != nullptr ? GetRegisterLineNumber()->GetName() : wxString();
+	if (reading != nullptr) {
 		ibDataQueryBuilder b;
-		openRead(b);
-		if (periodCol != nullptr) {
-			if (!cBegin.IsEmpty()) b.WhereCompare(periodCol, ibQueryFilterOp::GreaterEqual, cBegin);
-			if (!cEnd.IsEmpty())   b.WhereCompare(periodCol, ibQueryFilterOp::LessEqual,    cEnd);
-			if (cFold.IsCalendar())
-				b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), cFold.m_unit), periodName);
-			else if (cFold.m_kind == ibRegGranularity::Period)
-				b.GroupBy(periodCol);
+		const ibBackendQueryColumn* readPeriod = atMovementGrain ? reading->ResolveColumnByName(periodName) : periodCol;
+		std::vector<const ibBackendQueryColumn*> keyOnReading = keyOnView;
+		const ibBackendQueryColumn* recorderCol = nullptr;
+		const ibBackendQueryColumn* lineCol     = nullptr;
+		if (!atMovementGrain)
+			openRead(b);
+		else {
+			// The movements table has one arm — itself — so no arm is asked for; the rights are left out for
+			// the reason openRead gives; the condition and the keys are resolved on this table.
+			b.From(reading);
+			b.WithAccessPolicy(nullptr);
+			if (const ibQueryPredicatePtr onMoves = ibRegConditionOn(reading, cFilter, ibRegSelectsByDimensions(this)))
+				b.Where(onMoves);
+			keyOnReading.clear();
+			for (const auto dimension : GetDimensionArrayObject())
+				if (const ibBackendQueryColumn* onMoves = dimension != nullptr ? reading->ResolveColumnByName(dimension->GetName()) : nullptr) {
+					keyOnReading.push_back(onMoves);
+					b.GroupBy(onMoves);
+				}
+			if (!recorderName.IsEmpty() && (recorderCol = reading->ResolveColumnByName(recorderName)) != nullptr)
+				b.GroupBy(recorderCol);
+			// A `Record` reading is one row per LINE; a `Recorder` reading folds a document's lines together.
+			if (cFold.HasLineNumber() && !lineName.IsEmpty() && (lineCol = reading->ResolveColumnByName(lineName)) != nullptr)
+				b.GroupBy(lineCol);
 		}
-		for (const auto res : resources) {
-			if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Receipt))
-				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Receipt);
-			if (withSign)
-				if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Expense))
-					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Expense);
+		if (readPeriod != nullptr) {
+			if (!cBegin.IsEmpty()) b.WhereCompare(readPeriod, ibQueryFilterOp::GreaterEqual, cBegin);
+			if (!cEnd.IsEmpty())   b.WhereCompare(readPeriod, ibQueryFilterOp::LessEqual,    cEnd);
+			if (cFold.IsCalendar())
+				b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(readPeriod), cFold.m_unit), periodName);
+			else if (cFold.m_kind == ibRegGranularity::Period || atMovementGrain)
+				b.GroupBy(readPeriod);   // a movement's moment is its own
+		}
+		if (!atMovementGrain) {
+			for (const auto res : resources) {
+				if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Receipt))
+					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Receipt);
+				if (withSign)
+					if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Expense))
+						b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Expense);
+			}
+		}
+		else {
+			// ON THE MOVEMENTS THE FIGURES DO NOT EXIST YET — one amount and a record type, read two ways as CASE
+			// sums, compared as the enum VALUE (see ComputeTurnover for why not its ordinal).
+			const ibValueMetaObjectAttributePredefined* const typeAttr = GetRegisterRecordType();
+			const ibBackendQueryColumn* const typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
+			ibQueryPredicatePtr isReceipt;
+			if (withSign && typeCol != nullptr)
+				isReceipt = ibQueryPredicate::Leaf(ibQueryCondition{
+					typeCol, ibQueryFilterOp::Equal,
+					ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt) });
+			const ibQueryColumnExprPtr zero = ibQueryColumnExpr::Const(ibValue(0.0));
+			for (const auto res : resources) {
+				if (res == nullptr || res->GetQueryColumn() == nullptr)
+					continue;
+				const ibQueryColumnExprPtr amount = ibQueryColumnExpr::Col(res->GetQueryColumn());
+				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
+					isReceipt != nullptr ? ibQueryColumnExpr::Case({ { isReceipt, amount } }, zero) : amount,
+					res->GetName() + ibRegFigure::Receipt);
+				if (withSign && isReceipt != nullptr)
+					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
+						ibQueryColumnExpr::Case({ { isReceipt, zero } }, amount),
+						res->GetName() + ibRegFigure::Expense);
+			}
 		}
 
 		try {
 			ibDataQueryResult sel = b.SelectAggregate();
 			while (sel.Next()) {
 				std::vector<ibValue> keyValues;
-				for (const ibBackendQueryColumn* key : keyOnView)
+				for (const ibBackendQueryColumn* key : keyOnReading)
 					keyValues.push_back(sel.GetValue(key));
 				ibPeriodRow read;
-				if (periodCol != nullptr)
-					read.m_period = sel.GetColumn(periodName);
+				if (readPeriod != nullptr)   // a grouped column is read by the column, a truncation by the name it was given
+					read.m_period = atMovementGrain ? sel.GetValue(readPeriod) : sel.GetColumn(periodName);
+				if (recorderCol != nullptr)
+					read.m_recorder = sel.GetValue(recorderCol);
+				if (lineCol != nullptr)
+					read.m_line = sel.GetValue(lineCol);
 				for (size_t i = 0; i < resources.size(); i++) {
 					read.m_receipt.push_back(sel.GetColumn(resources[i]->GetName() + ibRegFigure::Receipt));
 					read.m_expense.push_back(withSign ? sel.GetColumn(resources[i]->GetName() + ibRegFigure::Expense) : ibValue());
@@ -676,6 +741,10 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		ibPeriodRow carried;
 		if (firstPeriod.IsValid())
 			carried.m_period = ibValue(firstPeriod);
+		// …and at movement grain it stands at the interval's beginning: no document wrote it, but a report by
+		// period still has to find it somewhere — with no date it made a month heading of its own with none.
+		else if (atMovementGrain && beginDate.GetType() == TYPE_DATE)
+			carried.m_period = beginDate;
 		carried.m_receipt.assign(resources.size(), ibValue());
 		carried.m_expense.assign(resources.size(), ibValue());
 		groupFor(entry.first).push_back(std::move(carried));
@@ -706,7 +775,18 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		std::stable_sort(group.second.begin(), group.second.end(), [](const ibPeriodRow& a, const ibPeriodRow& b) {
 			// static_cast, not a functional cast: wxLongLong_t is `long long` outside MSVC (docs/portability.md).
 			const auto dateOf = [](const ibValue& v) { return v.GetType() == TYPE_DATE ? v.GetDate() : static_cast<wxLongLong_t>(0); };
-			return dateOf(a.m_period) < dateOf(b.m_period);
+			if (dateOf(a.m_period) != dateOf(b.m_period))
+				return dateOf(a.m_period) < dateOf(b.m_period);
+			// …and at movement grain within one second by the recorder, then the line — the order a TOTALS fold
+			// counts moments in (ibMomentBefore), so the row it calls a key's first is the row the roll reached
+			// first. Rolled by the line alone, two documents of one second interleaved and a document's opening
+			// carried the other's movement (2026-09-29).
+			const ibValueEqual same;
+			if (!same(a.m_recorder, b.m_recorder))
+				return a.m_recorder < b.m_recorder;
+			if (!same(a.m_line, b.m_line))
+				return a.m_line < b.m_line;
+			return false;
 		});
 		for (const ibPeriodRow& read : group.second) {
 			const long row = retTable.AppendRow();
@@ -718,6 +798,12 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			}
 			if (periodCol != nullptr)
 				retTable.SetCell(row, periodId, read.m_period);
+			if (atMovementGrain) {
+				if (!read.m_recorder.IsEmpty() && !recorderName.IsEmpty())
+					retTable.SetByName(row, recorderName, read.m_recorder);
+				if (!read.m_line.IsEmpty() && !lineName.IsEmpty())
+					retTable.SetByName(row, lineName, read.m_line);
+			}
 			for (size_t i = 0; i < resources.size(); i++) {
 				retTable.SetCell(row, slots[i].m_receipt, read.m_receipt[i]);
 				if (withSign)

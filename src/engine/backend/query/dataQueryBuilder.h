@@ -111,7 +111,18 @@ struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; 
                          // …and the column the figure is read back through when the SERVER computed
                          // it (a window projected under an alias of its own). Owned here because
                          // nothing else outlives the read it belongs to.
-                         std::shared_ptr<ibBackendQueryColumn> m_ownedReceiver; };
+                         std::shared_ptr<ibBackendQueryColumn> m_ownedReceiver;
+                         // ⭐⭐ A BALANCE — `TOTALS SUM(x)` over a field that is `ROLE OPENING` / `ROLE CLOSING`.
+                         //
+                         // None = the ordinary figure. Set, a group does not add the rows up: for each
+                         // KEY it takes the rows at the key's first (Opening) or last (Closing) MOMENT,
+                         // and adds up those. The key is what tells one balance from another — the
+                         // read's dimensions. The moment is the PERIOD fields in the order they are
+                         // read, the senior first (a period, then a recorder, then a line number):
+                         // compared one after another, as a point in time is.
+                         ibBalanceRole m_balance = ibBalanceRole::None;
+                         std::vector<const ibBackendQueryColumn*> m_balanceMoments;
+                         std::vector<const ibBackendQueryColumn*> m_balanceKeys; };
 // ONE FIELD of a TotalBy level — the column to roll up by + how it unfolds.
 // ⭐ A LEVEL'S FIELD CARRIES ITS OWN PATH. A dot-walked dimension (`Producer.Region`) groups by a
 // SYNTHETIC column — one this door made up so the fold has a stable id to key the tree on — while
@@ -888,6 +899,11 @@ public:
 	// the common one. Together they are an ADDRESS, and the fields it stands for are derivable from
 	// it, which is what leaves the push-down road open (the same address is `PARTITION BY <prefix>`).
 	ibDataQueryBuilder& AggregateOver(const wxString& alias, std::shared_ptr<ibTotalBranch> branch, int depth);
+	// …AND THAT AN ALREADY-DECLARED AGGREGATE IS A BALANCE (its field's role — OPENING / CLOSING), stated the same
+	// way and for the same reason: the edge, the moment and the keys are properties of the figure, not of
+	// how its input was spelled. Addressed by alias.
+	ibDataQueryBuilder& AggregateAsBalance(const wxString& alias, ibBalanceRole edge,
+		std::vector<const ibBackendQueryColumn*> moments, std::vector<const ibBackendQueryColumn*> keys);
 
 	// …AND THE COLUMN THE FIGURE IS READ BACK THROUGH, when the SERVER computed it. The window is
 	// projected under an alias of its own, so the value must not land on the column it was computed

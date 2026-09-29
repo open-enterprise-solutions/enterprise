@@ -404,6 +404,8 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// what no tab can show, nobody can remove either.
 	if ((m_exclude & ibQueryExclude_Totals) != 0)
 		ibDropTotalsFromPackage(m_package);
+	if ((m_exclude & ibQueryExclude_Roles) != 0)
+		ibQueryDropRoles(m_package);
 
 	// ONE FONT, SET BEFORE ANYTHING IS BUILT. Controls made at different times otherwise pick up
 	// different defaults and the window reads as several dialogs stitched together — and setting it
@@ -824,7 +826,17 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		if (select == nullptr || row >= select->m_projections.size())
 			return wxEmptyString;
 		const ibQueryProjection& projection = select->m_projections[row];
-		return projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+		wxString shown = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+		// …AND ITS ROLE, when the query says one — in brackets after it, in the query's own words, so the list
+		// shows at a glance which fields were given one (Max, 2026-09-29). Shown only: the cell is not typed into.
+		if (projection.m_roleSaid) {
+			shown += wxT(" (ROLE ");
+			shown += ibBalanceRoleWord(projection.m_role);
+			if (projection.m_role == ibBalanceRole::Moment && projection.m_periodRank > 0)
+				shown += wxString::Format(wxT(" %d"), projection.m_periodRank);
+			shown += wxT(")");
+		}
+		return shown;
 	});
 	m_fieldModel->SetWriter([this](unsigned int row, unsigned int, const wxString& text) -> bool {
 		ibQuerySelect* select = Current();

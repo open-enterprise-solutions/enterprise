@@ -1906,15 +1906,18 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// period and the document, Record = the period, the document and the line within it.
 	const bool atMovementGrain = fold.FromMovements();
 	const bool withPeriod = (shape == ibAcctShape::Records) || fold.HasPeriod() || atMovementGrain;
+	// …and it is the MOMENT a balance's first and last are counted by.
 	if (withPeriod && GetRegisterPeriod() != nullptr)
-		columns.push_back(ibRegAttributeColumn(GetRegisterPeriod()));
+		columns.push_back(ibRegAttributeColumn(GetRegisterPeriod()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
 
 	// --- the movement's own identity — where a row IS a movement, or a document's worth of them ---
+	// …the recorder and the line are the junior PERIODS after it — what tells two documents of one second, and
+	// two lines of one document, apart in time.
 	if (shape == ibAcctShape::Records || atMovementGrain) {
 		if (GetRegisterRecorder() != nullptr)
-			columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()));
+			columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(2)));
 		if ((shape == ibAcctShape::Records || fold.HasLineNumber()) && GetRegisterLineNumber() != nullptr)
-			columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()));
+			columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(3)));
 		// The side a LINE stands on. A total has none — it reports a debit figure and a credit figure
 		// side by side — so this belongs to the movements listing alone.
 		if (shape == ibAcctShape::Records && !correspondence && GetRegisterRecordType() != nullptr)
@@ -1943,13 +1946,16 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// identity. Composed over the attribute's REAL metaID rather than a running ordinal: the same column
 	// then has the same id in every shape and in the condition scope (ScopeFromAccountCondition), whatever
 	// the call's arguments put before it, and two such columns cannot meet on one number.
+	// The account, the analytics and the register's own dimensions are what keep one balance apart from
+	// another — each is published as a DIMENSION of it.
 	if (GetRegisterAccount() != nullptr)
-		columns.push_back(bothSides || !correspondence
+		columns.push_back((bothSides || !correspondence
 			? ibRegAttributeColumn(GetRegisterAccount())
 			: ibRegAttributeColumn(GetRegisterAccount(), PublishedAccountName(this, shape), AccountColumnSynonym(wxEmptyString),
-			                       ibRegDerivedColumnId(GetRegisterAccount()->GetMetaID())));
+			                       ibRegDerivedColumnId(GetRegisterAccount()->GetMetaID())))
+			.PlaysInBalance(ibBalanceRole::Dimension));
 	if (bothSides && GetRegisterAccountCr() != nullptr)
-		columns.push_back(ibRegAttributeColumn(GetRegisterAccountCr()));
+		columns.push_back(ibRegAttributeColumn(GetRegisterAccountCr()).PlaysInBalance(ibBalanceRole::Dimension));
 
 	// ⭐⭐ THE CORRESPONDENT OF A TURNOVER — the account the row's account moved against, published beside
 	// it as the reference publishes it. Synthetic like `Account` above: it is the credit account on the
@@ -2000,7 +2006,8 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			// no chart to expand it through — typed by the declaration, it could not be opened in a field
 			// picker, offered no value to filter by, and adjusted every counterparty poured into it to
 			// nothing (2026-09-15).
-			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())).StandsFor(slot));
+			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())).StandsFor(slot)
+				.PlaysInBalance(ibBalanceRole::Dimension));
 		}
 	};
 	addBreakdown(/*creditSide*/ false, kindsDr, /*corr*/ false);
@@ -2021,11 +2028,11 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		const ibValueMetaObjectAttributeBase* debit  = bothSidesOnOneRow ? GetFieldSide(/*creditSide*/ false, field) : nullptr;
 		const ibValueMetaObjectAttributeBase* credit = bothSidesOnOneRow ? GetFieldSide(/*creditSide*/ true, field) : nullptr;
 		if (debit == nullptr || credit == nullptr) {
-			columns.push_back(ibRegAttributeColumn(field));
+			columns.push_back(ibRegAttributeColumn(field).PlaysInBalance(ibBalanceRole::Dimension));
 			return;
 		}
-		columns.push_back(ibRegAttributeColumn(debit));
-		columns.push_back(ibRegAttributeColumn(credit));
+		columns.push_back(ibRegAttributeColumn(debit).PlaysInBalance(ibBalanceRole::Dimension));
+		columns.push_back(ibRegAttributeColumn(credit).PlaysInBalance(ibBalanceRole::Dimension));
 	};
 	for (const auto dimension : GetDimensionArrayObject())
 		if (dimension != nullptr)
@@ -2065,7 +2072,8 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, suffix), FigureField(resource, suffix),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(figure, credit)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource)
+		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));   // the figure's word, not the sided spelling
 	};
 
 	// A figure with NO side — one row is a pair of accounts, so there is one number and nothing to
@@ -2074,7 +2082,8 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, figure), FigureField(resource, figure),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegFigureCaption(figure)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource)
+		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));
 	};
 
 	// ⭐⭐ BALANCED OR NOT, A FIGURE IS REPORTED — what the flag decides is how many numbers it is.
@@ -3379,6 +3388,10 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	const bool everyPeriod = withPeriod && fold.m_kind == ibRegGranularity::Calendar && !fold.FromMovements()
 		&& begin.m_date.GetType() == TYPE_DATE;
 	const wxDateTime firstPeriod = everyPeriod ? ibTruncateToPeriod(begin.m_date.GetDateTime(), fold.m_unit) : wxDateTime();
+	// …and at movement grain (Recorder / Record) at the interval's beginning, as the accumulation register stands
+	// it: no document wrote the row, but a report by period still has to find it somewhere — with no date it
+	// made a month heading of its own with none (2026-09-29, the ROLE battery).
+	const bool atBeginning = withPeriod && fold.FromMovements() && begin.m_date.GetType() == TYPE_DATE;
 	for (const auto& entry : openingByKey) {
 		if (byKey.find(entry.first) != byKey.end())
 			continue;
@@ -3389,6 +3402,11 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			identity.push_back(ibValue(firstPeriod));
 			if (keyColumns.size() < key.size())
 				key[keyColumns.size()] = ibValue(firstPeriod);
+		}
+		else if (atBeginning) {
+			identity.push_back(begin.m_date);
+			if (keyColumns.size() < key.size())
+				key[keyColumns.size()] = begin.m_date;
 		}
 
 		const size_t before = rows.size();
@@ -3550,8 +3568,20 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	orderedBalanceless.reserve(rows.size());
 	for (auto& group : byKey) {
 		if (withPeriod)
-			std::stable_sort(group.second.begin(), group.second.end(),
-				[&](size_t a, size_t b) { return periodOf(rows[a].second) < periodOf(rows[b].second); });
+			std::stable_sort(group.second.begin(), group.second.end(), [&](size_t a, size_t b) {
+				if (periodOf(rows[a].second) != periodOf(rows[b].second))
+					return periodOf(rows[a].second) < periodOf(rows[b].second);
+				// …and at movement grain within one second by the recorder, then the line (the slots after the
+				// period): the order a TOTALS fold counts moments in (ibMomentBefore), so the row it calls a key's
+				// first is the row the roll reached first (2026-09-29).
+				const std::vector<ibValue>& ka = rows[a].second.m_key;
+				const std::vector<ibValue>& kb = rows[b].second.m_key;
+				const ibValueEqual same;
+				for (size_t i = periodSlot + 1; i < ka.size() && i < kb.size(); ++i)
+					if (!same(ka[i], kb[i]))
+						return ka[i] < kb[i];
+				return false;
+			});
 		for (const size_t member : group.second) {
 			ordered.push_back(std::move(rows[member]));
 			orderedBalanceless.push_back(balanceless[member]);

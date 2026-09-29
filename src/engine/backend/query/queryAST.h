@@ -20,6 +20,7 @@
 #include "backend/compiler/value.h"   // ibValue
 #include "queryKeywords.h"            // ibQueryKeyword (aggregate func tag)
 #include "queryUnfold.h"              // ibQueryDimUnfold — the three unfold words, shared with L3
+#include "queryBalanceRole.h"         // ibBalanceRole — what a projected field is in a balance (ROLE)
 
 #include <vector>
 #include <memory>
@@ -240,6 +241,19 @@ struct ibQueryProjection
 	ibQueryAstExprPtr m_expr;    // column path or aggregate func (null when m_star)
 	wxString       m_alias;   // AS alias (empty => derived in lowering)
 	bool           m_star = false;
+
+	// ⭐⭐ `<expr> ROLE <word> AS <name>` — WHAT THE FIELD IS IN A BALANCE, said in the query: the PERIOD a
+	// balance is taken at, a DIMENSION it is kept apart by, its OPENING or its CLOSING (NONE takes a role
+	// away). Optional — unsaid, the field is what its SOURCE says it is (a register's view marks its own
+	// columns), and a field that reads nothing with a role is an ordinary value. A TOTALS SUM over a field
+	// that is an opening or a closing is then taken at each key's first or last period rather than added up.
+	// Contextual, not reserved: `ROLE` is this only when one of the five words follows it.
+	// (docs/private/query-language-arc.md §37)
+	bool           m_roleSaid = false;
+	ibBalanceRole  m_role     = ibBalanceRole::None;
+	// `ROLE PERIOD <n>` — the period's seniority: 1 is compared first. 0 = none written: the platform counts
+	// it after the numbered ones, in the order the fields are read (Max, 2026-09-29).
+	int            m_periodRank = 0;
 };
 
 // A FROM / JOIN source: EITHER a dotted metaobject path (m_name) OR a nested SELECT

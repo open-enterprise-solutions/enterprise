@@ -684,6 +684,10 @@ struct ibSubqueryOutput
 	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — the inner schema's answer
 	// (OutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
 	bool                                  m_available = true;
+	// …and what it is in a balance — the inner schema's answer too (OutputColumn::GetBalanceRole): the query's
+	// own `ROLE` where it said one, else the column's. With a period's seniority beside it.
+	ibBalanceRole                         m_balanceRole = ibBalanceRole::None;
+	int                                   m_periodRank  = 0;
 };
 
 // ==========================================================================
@@ -1088,6 +1092,8 @@ public:
 	// …and WHAT IT STANDS FOR answers for it here too: a twin of a raw column IS that raw column for
 	// every question about the data, and this is the one question a cast used to answer instead.
 	const ibBackendColumnRawDB* AsRawColumn() const override { return m_origin->AsRawColumn(); }
+	ibBalanceRole GetBalanceRole() const override { return m_origin->GetBalanceRole(); }
+	int           GetPeriodRank()  const override { return m_origin->GetPeriodRank(); }
 
 	std::vector<ibColumnSlot> DescribeLayout() const override { return m_origin->DescribeLayout(); }
 

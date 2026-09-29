@@ -186,6 +186,39 @@ const ibArg& ArgColumns()
 	return s_a;
 }
 
+// ⭐ A LEVEL BY PERIODS — `BY Period PERIODS(Month, &From, &To)` in the query's words, the settings window's
+// periodicity in a person's. It was the one thing a level holds that no verb could say, so a report by month
+// was built by rewriting the whole composition with report_set (2026-09-29).
+const ibArg& ArgPeriods()
+{
+	static const std::vector<wxString> s_units = [] {
+		std::vector<wxString> units;
+		for (const auto& unit : ibPeriodUnits())
+			units.push_back(unit.second);
+		return units;
+	}();
+	static const ibArg s_a(wxT("periods"), ibArg::Kind::Text,
+		ibMcpText("Group a DATE field by periods of this length - one heading per month, per day - instead of by "
+			"its every value. One field only, named by `groupBy`."), false, s_units);
+	return s_a;
+}
+
+const ibArg& ArgPeriodsFrom()
+{
+	static const ibArg s_a(wxT("periodsFrom"), ibArg::Kind::Text,
+		ibMcpText("With `periods`: the first period shown even with nothing in it - a parameter (`&From`) or a "
+			"date. Omit to start at the earliest period in the data."));
+	return s_a;
+}
+
+const ibArg& ArgPeriodsTo()
+{
+	static const ibArg s_a(wxT("periodsTo"), ibArg::Kind::Text,
+		ibMcpText("With `periods`: the last period shown - a parameter (`&To`) or a date. Omit to end at the "
+			"latest period in the data."));
+	return s_a;
+}
+
 const ibArg& ArgFunction()
 {
 	static const ibArg s_a(wxT("function"), ibArg::Kind::Text,
@@ -1060,19 +1093,36 @@ public:
 			// a field, and packs itself. This used to look for a field only - so a packed date, the one
 			// way to state a period, was never found - and to nest a scalar under "value", a shape
 			// nothing reads: a default set here never applied (the payroll demo, 2026-09-10).
-			if (const ibDataNode* packed = params.FindChild(ibMcpValueArgument().Name())) {
-				found->m_value = *packed;
-			}
-			else if (const ibDataValue* scalar = params.FindField(ibMcpValueArgument().Name())) {
-				ibValue given;
+			//
+			// 🛑 AND A VALUE OF A TYPE THE PARAMETER DOES NOT DECLARE IS REFUSED HERE, not stored. compose_run
+			// refuses it (composeRunSchema.cpp, the same question), so storing it only moved the refusal to the
+			// run: a date written as text went in as a String, every call said yes, and the report would not
+			// compose (2026-09-29).
+			ibValue given;
+			const ibDataNode* packed = params.FindChild(ibMcpValueArgument().Name());
+			const ibDataValue* scalar = packed == nullptr ? params.FindField(ibMcpValueArgument().Name()) : nullptr;
+			if (packed != nullptr)
+				given = ibStoredValue(*packed, metaData);
+			else if (scalar != nullptr) {
 				switch (scalar->Kind()) {
 					case ibDataKind::String: given = ibValue(scalar->AsString()); break;
 					case ibDataKind::Number: given = ibValue(scalar->AsNumber()); break;
 					case ibDataKind::Bool:   given = ibValue(scalar->AsBool()); break;
 					default: break;
 				}
-				ibStoreValue(found->m_value, given);
 			}
+			if ((packed != nullptr || scalar != nullptr) && found->m_type.GetClsidCount() > 0 && !given.IsEmpty()
+			    && !found->m_type.ContainType(given.GetClassType())) {
+				refusal = wxString::Format(
+					ibMcpText("'%s' holds a value of the type it declares, and this is not one. A date is not "
+						"written as text here: make it with value_pack {type, value} and send what it answers "
+						"under `packed`."), name);
+				return false;
+			}
+			if (packed != nullptr)
+				found->m_value = *packed;
+			else if (scalar != nullptr)
+				ibStoreValue(found->m_value, given);
 		}
 
 		composer->SetCompositionDesc(composition);
@@ -1254,42 +1304,77 @@ public:
 MCP_TOOL_REGISTER(ibMcpToolReportSelect);
 
 //---------------------------------------------------------------------------
-// report_title
+// report_field
 //---------------------------------------------------------------------------
 //
-// ⭐ WHAT A COLUMN IS CALLED ON THE PAGE. The title lives on the FIELD of the composition
-// (ibFieldDescription) — the field's name read out loud until somebody takes it over — and nothing but
-// the designer's table could take it over: a payroll report built through these verbs printed
-// "Month norm days" over a column its author meant as the month's norm in days (2026-09-17). Written
-// in several languages, it is read in the reader's, as a synonym is (ibDataDBComposer, OnOutputBegin).
-class ibMcpToolReportTitle : public ibMcpTool {
+// ⭐⭐ WHAT A FIELD OF THE REPORT IS — the title printed over its column, what it is in a balance and its
+// appearance — said through the very doors the settings window's Fields page says them (ibFieldEntryForPath,
+// SayTitle, SayRole, the appearance's Say), so a field described here and one described there are described
+// the same way (Max, 2026-09-29: "you do in the settings what I do"). Its NAME is not said here: the fields are
+// what the query's SELECT yields, and a new name is a new query (Max: "the query drives them"). It was
+// report_title, which said one of them; the title lives on the FIELD (ibFieldDescription), and a payroll report
+// built through these verbs printed "Month norm days" over a column meant as the month's norm in days until one
+// could be set (2026-09-17). Written in several languages, it is read in the reader's, as a synonym is.
+class ibMcpToolReportField : public ibMcpTool {
 
 	static const ibArg& ArgTitle() {
 		static const ibArg a(wxT("title"), ibArg::Kind::Text,
 			ibMcpText("What stands over the column. Several languages in the synonym form - "
-				"`en = 'Norm, days'; ru = '...'` - are read in the reader's. Empty gives back the title made from the name."));
+				"`en = 'Norm, days'; ru = '...'` - are read in the reader's. Empty gives back the generated title: "
+				"what the source calls the field, else its name read out loud. Omit to leave it."));
+		return a;
+	}
+	static const ibArg& ArgRole() {
+		static const ibArg a(wxT("role"), ibArg::Kind::Text,
+			ibMcpText("What the field is in a balance: `period` (the time a balance is taken at), `dimension` (what "
+				"keeps one balance apart from another - an item, a warehouse, an account), `opening` / `closing` (the "
+				"balance before / after a row: a SUM of it is taken at each key's first / last period instead of added "
+				"up), `none` (an ordinary value), or `source` to give the field back to what its source says. A "
+				"register's virtual table says it for its own fields already. Omit to leave it."),
+			false, { wxT("period"), wxT("dimension"), wxT("opening"), wxT("closing"), wxT("none"), wxT("source") });
+		return a;
+	}
+	static const ibArg& ArgPeriodNumber() {
+		static const ibArg a(wxT("period_number"), ibArg::Kind::Whole,
+			ibMcpText("For a field whose role is `period`: its seniority when several periods are read (a period, "
+				"a recorder, a line number) - 1 is compared first; numbered periods come before the ones nobody "
+				"numbered, which keep their source's order. 0 = in the order it stands. Omit to leave it."));
+		return a;
+	}
+	// ⭐ THE APPEARANCE'S PARAMETERS — the platform's list (ibAppearanceParameters), one argument each; Format is
+	// the whole list today.
+	static const ibArg& ArgFormat() {
+		static const ibArg a(wxT("format"), ibArg::Kind::Text,
+			ibMcpText("How the field's values are written - a format string (`ND=15; NFD=2`, `DF=dd.MM.yyyy`; "
+				"format_string reads one out and builds one), several languages in the synonym form - `en = 'NFD=2'; ru = '...'`. "
+				"Applies to the field's column and to every figure summed over it. Empty takes it away. Omit to leave it."));
 		return a;
 	}
 
 public:
 
-	wxString GetName() const override { return wxT("report_title"); }
+	wxString GetName() const override { return wxT("report_field"); }
 
 	wxString GetActivity(const ibDataNode& params) const override
 	{
-		return wxString::Format(ibMcpText("titling a column of '%s'"), ibMcpNameOf(params));
+		return wxString::Format(ibMcpText("describing a field of '%s'"), ibMcpNameOf(params));
 	}
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Give a field of the report the TITLE printed over its column. Until it is given, a column "
-			"is titled by its field's name read out loud - `MonthNormDays` prints as 'Month norm days'. The field "
-			"is named by `path` as report_fields lists it, a resource by the name it answers to.");
+		return ibMcpText("Say what a field of the report IS - the same things the composer window's Fields page "
+			"says: its TITLE (printed over its column), its ROLE in a balance (period / dimension / opening / "
+			"closing) and its APPEARANCE (for now the FORMAT its values are written in). Until somebody says "
+			"otherwise a field is what its source says it is. A report's roles are said HERE, not with `ROLE` in its "
+			"query - the composer drops that. The fields themselves are what the query's SELECT yields: a field is "
+			"added, removed or renamed by changing the query. The field is named by `path` as report_fields lists "
+			"it; a resource may be titled by the name it answers to.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgOnePath(), ArgTitle() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgOnePath(), ArgTitle(), ArgRole(),
+			ArgPeriodNumber(), ArgFormat() };
 		return s_arguments;
 	}
 
@@ -1303,57 +1388,90 @@ public:
 
 		const wxString path = ArgOnePath().Text(params);
 		if (path.IsEmpty()) {
-			refusal = ibMcpText("Name the field to title - `path`, as report_fields lists it.");
+			refusal = ibMcpText("Name the field to describe - `path`, as report_fields lists it.");
 			return false;
 		}
+		const bool saysRole = ArgRole().Given(params) || ArgPeriodNumber().Given(params);
+		if (!ArgTitle().Given(params) && !saysRole && !ArgFormat().Given(params)) {
+			refusal = ibMcpText("Say something about the field - a `title`, a `role` or a `format`.");
+			return false;
+		}
+		// 🛑 A FIELD FIRST, then a resource. `SUM(Opening) AS Opening` is the ordinary way to total a field, and the
+		// name then belongs to both: taken as the resource, its role and its format were refused and the report's
+		// every figure lost its title with them (2026-09-29, the first report built through this verb). Only a name
+		// the query does not offer is a resource alone — one over an expression, which has no field to describe.
+		const bool isResourceName = std::any_of(composition.m_resources.begin(), composition.m_resources.end(),
+			[&path](const ibResourceDescription& r) { return r.AnswersTo().IsSameAs(path, false); });
 		wxString fault;
-		if (!std::any_of(composition.m_resources.begin(), composition.m_resources.end(),
-		                 [&path](const ibResourceDescription& r) { return r.AnswersTo().IsSameAs(path, false); })
-		    && !PathIsOffered(composition, path, fault)) {
+		const bool isField = PathIsOffered(composition, path, fault);
+		if (!isField && !isResourceName) {
 			refusal = fault;
 			return false;
 		}
-
-		// THE SELECT THE PATH SPEAKS OF — the only one a composition starts with, made when nothing was
-		// ever said about any of its fields.
-		if (composition.m_selects.empty())
-			composition.m_selects.emplace_back();
-		const ibSelectDescription* named = ibSelectOfPath(composition.m_selects, path);
-		ibSelectDescription* select = nullptr;
-		for (ibSelectDescription& one : composition.m_selects)
-			if (&one == named)
-				select = &one;
-		if (select == nullptr) {
-			refusal = wxString::Format(ibMcpText("'%s' does not say which select of the query it is - qualify it by the select's name."), path);
+		if (!isField && (saysRole || ArgFormat().Given(params))) {
+			refusal = wxString::Format(ibMcpText("'%s' is a resource over an expression, not a field of the query: a "
+				"role and a format are a field's - give them to the fields it folds. Its title is said here."), path);
 			return false;
 		}
 
-		const wxString leaf = ibNameFromPath(path);
-		ibFieldDescription* field = nullptr;
-		for (ibFieldDescription& one : select->m_fields)
-			if (ibNameFromPath(one.NameInForce()).IsSameAs(leaf, false))
-				field = &one;
-		if (field == nullptr) {
-			select->m_fields.emplace_back();
-			field = &select->m_fields.back();
-			field->m_path = path;
-		}
+		// WHAT THE SOURCE SAYS OF IT — the generated title and the role a person's word is measured against.
+		const std::vector<ibQueryConstructorField> fields = FieldsOf(composition, fault);
+		const auto source = std::find_if(fields.begin(), fields.end(),
+			[&path](const ibQueryConstructorField& f) { return f.m_name.IsSameAs(path, false); });
+		const wxString      caption    = source != fields.end() ? source->m_caption : wxString();
+		const ibBalanceRole sourceRole = source != fields.end() ? source->m_balanceRole : ibBalanceRole::None;
 
-		const wxString title = ArgTitle().Text(params);
-		field->m_useTitle = !title.IsEmpty();
-		field->m_title = title;
+		// THE FIELD'S ENTRY — the one door every writer of a field goes through (the Fields page is the other).
+		ibFieldDescription* field = ibFieldEntryForPath(composition.m_selects, path);
+		if (field == nullptr) {
+			refusal = wxString::Format(ibMcpText("'%s' does not say which select of the query it is - qualify it by the select's name."), path);
+			return false;
+		}
+		if (ArgTitle().Given(params))
+			field->SayTitle(ArgTitle().Text(params));
+		if (saysRole) {
+			ibBalanceRole role = field->RoleInForce(sourceRole);
+			if (ArgRole().Given(params)) {
+				const wxString word = ArgRole().Text(params);
+				role = sourceRole;   // `source` — the field follows its source again
+				for (const ibBalanceRole known : { ibBalanceRole::None, ibBalanceRole::Moment, ibBalanceRole::Dimension,
+				                                   ibBalanceRole::Opening, ibBalanceRole::Closing })
+					if (word.IsSameAs(ibBalanceRoleWord(known), false))
+						role = known;
+			}
+			const s64 number = ArgPeriodNumber().Given(params) ? ArgPeriodNumber().Whole(params) : 0;
+			if (number != 0 && role != ibBalanceRole::Moment) {
+				refusal = ibMcpText("A number orders PERIODS: give `period_number` to a field whose role is `period`.");
+				return false;
+			}
+			if (number < 0 || number >= ibSourcePeriodRank(0)) {
+				refusal = wxString::Format(ibMcpText("A period's number is 1 to %d, or 0 for the order it stands in."),
+					ibSourcePeriodRank(0) - 1);
+				return false;
+			}
+			field->SayRole(role, sourceRole, static_cast<int>(number));
+		}
+		if (ArgFormat().Given(params)) {
+			const wxString format = ArgFormat().Text(params);
+			field->m_appearance.Say(ibAppearanceParameter::Format, !format.IsEmpty(),
+				format.IsEmpty() ? ibValue() : ibValue(format));
+		}
 
 		composer->SetCompositionDesc(composition);
 		activeMetaData->Modify(true);
 
 		result.SetValue(wxT("path"), path);
-		result.SetValue(wxT("title"), field->TitleInForce());
+		result.SetValue(wxT("title"), field->TitleInForce(caption));
+		result.SetValue(wxT("role"), wxString(ibBalanceRoleWord(field->RoleInForce(sourceRole))).Lower());
+		if (field->m_useRole && field->m_periodRank > 0)
+			result.SetValue(wxT("period_number"), static_cast<s32>(field->m_periodRank));
+		result.SetValue(wxT("format"), wxString(field->m_appearance.ValueInForce(ibAppearanceParameter::Format).GetString()));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}
 };
 
-MCP_TOOL_REGISTER(ibMcpToolReportTitle);
+MCP_TOOL_REGISTER(ibMcpToolReportField);
 
 //---------------------------------------------------------------------------
 // report_variant
@@ -1618,6 +1736,12 @@ public:
 			"want: [\"FixedAsset\", \"InventoryNumber\", \"Method\"] is one line per asset carrying "
 			"all three, where a level each nests them and repeats the row once per level. Reach for "
 			"a level each only when every one of them genuinely subdivides the one above it.\n"
+			"`periods` groups a date by months, days, quarters - one heading per period, with the empty ones "
+			"between `periodsFrom` and `periodsTo` shown too.\n"
+			"No field at all is a DETAIL level: the records themselves, showing what report_select selects. That is "
+			"where a register read by `Recorder` / `Record` puts its documents and line numbers - the periodicity "
+			"already made each row one document's record, so they are selected onto the detail level, not grouped "
+			"by.\n"
 			"`remove` takes a level out again, named by the field it groups by (or with neither "
 			"field given, the DETAIL level).");
 	}
@@ -1625,7 +1749,8 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments =
-			{ ArgId(), ArgOutput(), ArgGroupBy(), ArgGroupByMany(), ArgColumns(), ArgVariant(), ArgRemove() };
+			{ ArgId(), ArgOutput(), ArgGroupBy(), ArgGroupByMany(), ArgPeriods(), ArgPeriodsFrom(), ArgPeriodsTo(),
+			  ArgColumns(), ArgVariant(), ArgRemove() };
 		return s_arguments;
 	}
 
@@ -1743,6 +1868,34 @@ public:
 				level.m_settings.m_group.Append(one, ibQueryDimUnfold::Elements);
 		}
 
+		// …BY PERIODS, the unit in the platform's own spelling (ibPeriodUnits) — the word the query and the
+		// settings window write.
+		const wxString unit = ArgPeriods().Text(params);
+		ibGroupPeriodsDescription periods;
+		if (!unit.IsEmpty()) {
+			if (wanted.size() != 1) {
+				refusal = ibMcpText("Periods cut ONE date field: name it with `groupBy`.");
+				return false;
+			}
+			wxString known;
+			for (const auto& one : ibPeriodUnits()) {
+				if (one.second.IsSameAs(unit, false))
+					periods.m_unit = one.second;
+				known << (known.IsEmpty() ? wxT("") : wxT(", ")) << one.second;
+			}
+			if (!periods.IsOk()) {
+				refusal = wxString::Format(ibMcpText("'%s' is not a length of period. It takes: %s."), unit, known);
+				return false;
+			}
+			periods.m_from = ArgPeriodsFrom().Text(params);
+			periods.m_to   = ArgPeriodsTo().Text(params);
+			level.m_settings.m_group.m_lines.back().m_periods = periods;
+		}
+		else if (ArgPeriodsFrom().Given(params) || ArgPeriodsTo().Given(params)) {
+			refusal = ibMcpText("`periodsFrom` and `periodsTo` bound a level BY PERIODS: say `periods` too.");
+			return false;
+		}
+
 		levels.push_back(level);
 
 		composer->SetCompositionDesc(composition);
@@ -1764,6 +1917,8 @@ public:
 				by.push_back(ibDataValue::String(one));
 			result.AddField(wxT("groupBy"), ibDataValue::Array(by));
 		}
+		if (periods.IsOk())
+			result.SetValue(wxT("periods"), periods.m_unit);
 
 		return true;
 	}

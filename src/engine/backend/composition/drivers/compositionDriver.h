@@ -95,6 +95,14 @@ struct ibCompositionOutputInfo
 		return column < m_paths.size() ? m_paths[column] : wxString();
 	}
 
+	// ⭐ AND HOW IT IS SHOWN — the appearance of the field the column reads (ibAppearanceDescription), one
+	// entry per schema column; an empty one = the value shows itself its own way. Worked out with the
+	// title, from the same field (AppearanceForPath).
+	std::vector<ibAppearanceDescription>       m_appearances;
+	ibAppearanceDescription AppearanceOf(size_t column) const {
+		return column < m_appearances.size() ? m_appearances[column] : ibAppearanceDescription();
+	}
+
 	// ⭐⭐ AND WHETHER THE COLUMN IS SHOWN AT ALL — one entry per schema column.
 	//
 	// Reading and showing are two questions over one query: the read fetches everything ANY node
@@ -175,6 +183,10 @@ struct ibCompositionLine {
 	// …and the OUTPUT's promise: will what is under it actually be printed. Not the same question —
 	// see the note on OnGroupBegin.
 	bool               m_showsWhatIsUnder = false;
+	// …and the output's LADDER: does it read further down than this heading's rung — another level, or its
+	// records. A heading with nothing under it is still one of its level's headings: a period the fold filled in
+	// because nothing moved in it (PERIODS) reads as a month like its neighbours, not as a record (Max, 2026-09-29).
+	bool               m_levelReadsDeeper = false;
 
 	int Page() const { return m_level + m_indent; }
 };

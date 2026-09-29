@@ -64,6 +64,9 @@
     <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
       <Filter>win\dlgs\settings\list</Filter>
     </ClCompile>
@@ -1123,6 +1126,9 @@
     <ClInclude Include="win\dlgs\settings\settingsSortEditor.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\settingsStyle.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
@@ -1160,6 +1166,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\rowValueCell.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\textWithDotsCell.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">

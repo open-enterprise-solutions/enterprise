@@ -12,6 +12,7 @@
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h" // the Query tab's constructor button
 #include "frontend/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
 #include "frontend/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
+#include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // a field's title, every language of it
 #include "frontend/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
 #include "backend/query/queryable.h"                        // ibPeriodUnits — the engine's own list of period words
 #include "frontend/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
@@ -41,6 +42,7 @@
 #include <wx/statbox.h>
 #include <wx/toolbar.h>
 #include <wx/artprov.h>
+#include <wx/settings.h>   // wxSystemSettings — a generated title reads grey
 #include <wx/menu.h>
 #include <wx/choicdlg.h>  // wxGetSingleChoiceIndex — which saved setting to rename / drop
 #include <wx/stc/stc.h>   // wxStyledTextCtrl — the query editor
@@ -48,6 +50,8 @@
 
 #include "frontend/win/dlgs/callbackDropTarget.h"   // the drop half: a drop raises the same verb a button does
 #include "frontend/win/dlgs/rowValueCell.h"          // ibRowValueCellRenderer — a field and a kind are VALUES
+#include "frontend/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
+#include "frontend/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
 
 namespace {
 enum {
@@ -286,95 +290,257 @@ wxString ibDescribeTypes(const ibTypeDescription& typeDesc, const ibMetaData* me
 	}
 	return described.IsEmpty() ? _("<any>") : described;
 }
-// A PLAIN TEXT CELL WITH A "..." — no drop-down.
+
+// WHAT A FIELD READS AS, in the language a person reads — the title the output prints over its column
+// (ibTitleForPath), generated from what the source calls the field where it says. One answer for the
+// Fields page and for every picker in this window.
+static wxString ibTitleShown(const std::vector<ibSelectDescription>& selects, const ibQueryConstructorField& field)
+{
+	return ibTranslateString(ibTitleForPath(selects, field.m_name, field.m_caption)).GetString();
+}
+
+// WHAT A ROLE IS CALLED on the Fields page — the words a person picks from. None is an empty cell.
+static wxString ibBalanceRoleCaption(ibBalanceRole role)
+{
+	switch (role) {
+	case ibBalanceRole::Moment:    return _("Period");
+	case ibBalanceRole::Dimension: return _("Dimension");
+	case ibBalanceRole::Opening:   return _("Opening balance");
+	case ibBalanceRole::Closing:   return _("Closing balance");
+	default:                       return wxString();
+	}
+}
+
+static const ibBalanceRole s_balanceRoles[] = { ibBalanceRole::None, ibBalanceRole::Moment,
+	ibBalanceRole::Dimension, ibBalanceRole::Opening, ibBalanceRole::Closing };
+
+// ⭐⭐ THE FIELDS, as a dataview model — WHAT EACH FIELD THE QUERY READS IS.
 //
-// ⭐ The expression cell used the query constructor's, which is a COMBO: it exists there because a
-// totals expression is nearly always one of the ready calls, and the list is the point. A parameter
-// expression has no such list — the offered items were just the text already in the cell, so the
-// arrow opened a menu of one (Max: "get rid of the combobox there"). What is wanted is the ordinary
-// value cell: type in it, or press "..." for room to write.
-class ibTextWithDotsRenderer : public ibDataViewValueRenderer, public ibControlFrame {
+// The rows are the QUERY's own fields (the panel's parse of the text, asked every time), so a field
+// written into the text is a row here without anybody copying it in. Everything a row shows is
+// GENERATED — the title from the name, the type from the query — until a person overrules one field,
+// and only what they said is kept: an entry in its select's own list (ibSelectDescription::m_fields),
+// which the store writes only when it says something. The page is the list of deltas over what
+// generates itself.
+class ibFieldModel : public ibDataViewVirtualListModel {
 public:
-	using Expand = std::function<bool(wxString& text)>;
+	// kColBlank — the empty cell a row of the stack keeps where the other row has a column (see BuildFieldPage).
+	enum { kColName = 0, kColOwnTitle, kColTitle, kColType, kColRole, kColAppearance, kColBlank };
 
-	ibTextWithDotsRenderer(wxWindow* host, Expand expand)
-		: ibDataViewValueRenderer(nullptr), m_host(host), m_expand(std::move(expand)) {
+	ibFieldModel(std::function<const std::vector<ibQueryConstructorField>*()> fields,
+	             std::function<std::vector<ibSelectDescription>*()> selects,
+	             std::function<const ibMetaData*()> metaData,
+	             std::function<void()> changed)
+		: m_fields(std::move(fields)), m_selects(std::move(selects)),
+		  m_metaData(std::move(metaData)), m_changed(std::move(changed)) { ResetFromList(); }
+
+	void ResetFromList() {
+		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
+		Reset(fields != nullptr ? (unsigned int)fields->size() : 0u);
 	}
 
-	virtual bool HasEditorCtrl() const override { return true; }
-	bool EditOnSingleClick() const override { return true; }
+	// THE PATH A ROW STANDS FOR — what every entry is keyed by. Empty past the end.
+	wxString PathAt(unsigned row) const {
+		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
+		return fields != nullptr && row < fields->size() ? (*fields)[row].m_name : wxString();
+	}
 
-	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const wxVariant& value) override {
-		m_text = value.GetString();
-
-		ibControlTextEditor* editor = new ibControlTextEditor;
-		editor->SetDVCMode(true);
-		editor->Show(false);
-		if (!editor->Create(dv, wxID_ANY, value, labelRect.GetPosition(), labelRect.GetSize()))
+	// WHAT WAS SAID about the field on this row — null when nothing was, which is the ordinary case.
+	const ibFieldDescription* Said(unsigned row) const {
+		const std::vector<ibSelectDescription>* selects = m_selects ? m_selects() : nullptr;
+		const wxString path = PathAt(row);
+		if (selects == nullptr || path.IsEmpty())
 			return nullptr;
-
-		editor->ShowSelectButton(true);    // the "..." — room to write what does not fit
-		editor->ShowClearButton(true);
-		editor->ShowOpenButton(false);
-		editor->SetTextEditMode(true);     // typing straight into the cell is the ordinary case
-		editor->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibTextWithDotsRenderer::OnExpand, this);
-		editor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibTextWithDotsRenderer::OnClear, this);
-		editor->LayoutControls();
-		editor->Show(true);
-		return editor;
+		const ibSelectDescription* select = ibSelectOfPath(*selects, path);
+		return select != nullptr ? select->Find(ibNameFromPath(path)) : nullptr;
+	}
+	bool OwnTitle(unsigned row) const {
+		const ibFieldDescription* said = Said(row);
+		return said != nullptr && said->m_useTitle;
+	}
+	bool OwnRole(unsigned row) const {
+		const ibFieldDescription* said = Said(row);
+		return said != nullptr && said->m_useRole;
+	}
+	// THE FIELD A ROW STANDS FOR — the query's, with what its source says of it (caption, role). Null past the end.
+	const ibQueryConstructorField* FieldAt(unsigned row) const {
+		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
+		return fields != nullptr && row < fields->size() ? &(*fields)[row] : nullptr;
+	}
+	// …AND ITS ROLE IN FORCE — a person's word, else the source's (ibRoleForPath).
+	ibBalanceRole RoleAt(unsigned row) const {
+		const ibQueryConstructorField* field = FieldAt(row);
+		const std::vector<ibSelectDescription>* selects = m_selects ? m_selects() : nullptr;
+		if (field == nullptr || selects == nullptr)
+			return ibBalanceRole::None;
+		return ibRoleForPath(*selects, field->m_name, field->m_balanceRole);
 	}
 
-	// WHAT THE CELL COMMITS is whatever the box holds — typed or written in the dialog. With the box
-	// already gone (the dialog's own closing takes the editor with it), what it last held is what
-	// this renderer kept, so the written text is not lost with the window that wrote it.
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override {
-		if (ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(editor)) {
-			m_text = box->GetValue();
-			value  = m_text;
+	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
+		const std::vector<ibSelectDescription>* selects = m_selects ? m_selects() : nullptr;
+		if (fields == nullptr || selects == nullptr || row >= fields->size())
+			return;   // BOUNDS FIRST — a queued paint can outlive the line it was queued for
+		const ibQueryConstructorField& field = (*fields)[row];
+		if (col == kColName)
+			variant = field.m_name;
+		else if (col == kColOwnTitle)
+			variant = OwnTitle(row);   // ticked = the title is a person's, edited; unticked = it generates itself
+		else if (col == kColBlank)
+			variant = wxString();
+		else if (col == kColTitle)
+			// THE TITLE IN FORCE, in the language a person reads — the output's own answer
+			// (ibTitleForPath), so this cell and the column's header on the page cannot disagree.
+			variant = ibTitleShown(*selects, field);
+		else if (col == kColType)
+			variant = ibDescribeTypes(field.m_type, m_metaData ? m_metaData() : nullptr);
+		else if (col == kColRole) {
+			// …with a period's number beside its word where a person gave one (`Period 1`).
+			const ibFieldDescription* said = Said(row);
+			variant = ibBalanceRoleCaption(RoleAt(row))
+				+ (said != nullptr && said->m_useRole && said->m_periodRank > 0
+					? wxString::Format(wxT(" %d"), said->m_periodRank) : wxString());
+		}
+		else if (col == kColAppearance) {
+			const ibFieldDescription* said = Said(row);
+			variant = said != nullptr ? ibAppearanceSummary(said->m_appearance) : wxString();
+		}
+	}
+
+	// WHAT GENERATES ITSELF READS GREY — a title that follows the name (or the source's caption), a role the
+	// source gave. Each until somebody takes it over, and a cell that looked the same either way could not say
+	// which of the two it is showing.
+	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
+		if ((col == kColTitle && !OwnTitle(row)) || (col == kColRole && !OwnRole(row))) {
+			attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 			return true;
 		}
-		value = m_text;
+		return false;
+	}
+
+	// THE WORDS THE ROLE CELL OFFERS — every role, "none" first as the empty one.
+	static wxArrayString RoleChoices() {
+		wxArrayString choices;
+		for (const ibBalanceRole role : s_balanceRoles)
+			choices.Add(ibBalanceRoleCaption(role));
+		return choices;
+	}
+
+	// THE ENTRY A PERSON WRITES INTO for this row — found, or made the first time anything is said
+	// about the field (ibFieldEntryForPath). Null, refused in words, when the field cannot be told apart:
+	// two selects, and a path that names neither.
+	ibFieldDescription* EntryToWrite(unsigned row) {
+		std::vector<ibSelectDescription>* selects = m_selects ? m_selects() : nullptr;
+		const wxString path = PathAt(row);
+		if (selects == nullptr || path.IsEmpty())
+			return nullptr;
+		ibFieldDescription* entry = ibFieldEntryForPath(*selects, path);
+		if (entry == nullptr)
+			wxMessageBox(wxString::Format(_("\"%s\" does not say which select of the query it belongs to: name the selects with ONTO."),
+				path), _("Fields"), wxOK | wxICON_WARNING);
+		return entry;
+	}
+
+	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+		if (col == kColRole)
+			return SetRole(row, variant.GetString());
+		if (col == kColAppearance) {
+			// NOT TYPED — the "..." writes it (EditFieldAppearance); what reaches here is the cell cleared,
+			// which takes the whole appearance away.
+			const ibFieldDescription* said = Said(row);
+			if (!variant.GetString().IsEmpty() || said == nullptr || said->m_appearance.IsEmpty())
+				return false;
+			ibFieldDescription* entry = EntryToWrite(row);
+			if (entry == nullptr)
+				return false;
+			entry->m_appearance = ibAppearanceDescription();
+			if (m_changed)
+				m_changed();
+			return true;
+		}
+		if (col != kColOwnTitle && col != kColTitle)
+			return false;
+
+		wxString text = variant.GetString();
+		text.Trim(true).Trim(false);
+		if (col == kColOwnTitle ? variant.GetBool() == OwnTitle(row) : !OwnTitle(row) && text == ShownTitle(row))
+			return false;   // nothing changed — and a click through a generated title is not an edit of it
+
+		ibFieldDescription* said = EntryToWrite(row);
+		if (said == nullptr)
+			return false;
+
+		if (col == kColOwnTitle) {
+			// TICKED, THE TITLE STARTS FROM WHAT WAS SHOWN — the generated one becomes the person's to edit, not an
+			// empty cell to retype it into. Unticked, the field follows its source and its name again.
+			said->SayTitle(variant.GetBool()
+				? said->TitleInForce(FieldAt(row) != nullptr ? FieldAt(row)->m_caption : wxString())
+				: wxString());
+		}
+		else {
+			// THE LANGUAGE IN FORCE is the one the cell shows, so it is the one typing writes; the others
+			// stay as they were (the "..." edits them all). Emptied, that language is taken out — and a
+			// title with no language left is given back, the door's own rule (SayTitle).
+			ibTranslateString title(said->m_useTitle ? said->m_title : wxString());
+			if (text.IsEmpty())
+				title.RemoveTranslate(ibBackendLocalization::GetUserLanguage());
+			else
+				title.SetTranslate(text);
+			said->SayTitle(title.GetRawText());
+		}
+
+		if (m_changed)
+			m_changed();
 		return true;
 	}
 
+	// THE ROLE PICKED FOR A ROW, said through the entry's door (SayRole): the source's own answer picked back is
+	// no word of a person's — the field follows its source again; anything else is kept as the person's word.
+	bool SetRole(unsigned row, const wxString& caption) {
+		const ibQueryConstructorField* field = FieldAt(row);
+		if (field == nullptr)
+			return false;
+		ibBalanceRole picked = ibBalanceRole::None;
+		bool known = false;
+		for (const ibBalanceRole role : s_balanceRoles)
+			if (ibBalanceRoleCaption(role) == caption) { picked = role; known = true; break; }
+		if (!known || picked == RoleAt(row))
+			return false;   // not a word of the list, or nothing changed
 
-	// NO QUICK CHOICE HERE — the cell holds TEXT (an expression, a type description), and the "..."
-	// is what opens the real editor for it. Saying so is what keeps the runtime from offering a
-	// value picker over a piece of code.
-	virtual bool HasQuickChoice() const override { return false; }
-	virtual void ChoiceProcessing(ibValue&) override {}
-	virtual void ControlIncrRef() override {}
-	virtual void ControlDecrRef() override {}
+		ibFieldDescription* said = EntryToWrite(row);
+		if (said == nullptr)
+			return false;
+		said->SayRole(picked, field->m_balanceRole);   // the door report_field says it through too
+		if (m_changed)
+			m_changed();
+		return true;
+	}
+
+	// VIEW ONLY reaches the tick through here and nowhere else — see ibParameterModel::SetReadOnly.
+	// ⭐ …AND A GENERATED TITLE IS SHOWN, NOT EDITED (Max, 2026-09-29): unticked, the title is the source's caption or
+	// the name, greyed and closed; ticked, it opens on that very text for a person to change — the tick says the
+	// field's title is being edited (Max: "the tick means the field is edited, not the other way round").
+	void SetReadOnly(bool readOnly) { m_readOnly = readOnly; }
+	virtual bool IsEnabledByRow(unsigned int row, unsigned int col) const override {
+		if (m_readOnly || col == kColBlank)
+			return false;
+		return col != kColTitle || OwnTitle(row);
+	}
 
 private:
-	// ⚠⚠ THE BOX MAY NOT SURVIVE THE DIALOG. `m_expand` opens a MODAL window on top of a live cell
-	// editor; the editor loses focus, the grid closes it, and the pointer read before the call is
-	// then a dead object — writing the result back through it is a use-after-free (two crash dumps,
-	// 2026-08-21, both landing on this line).
-	//
-	// So the editor is asked for AGAIN afterwards, and the text is kept here as well: the cell
-	// commits `m_text` when the editor is already gone, which is what makes the dialog's result
-	// survive its own window closing. (The value cell beside this one learnt the same lesson from
-	// the other side — it closes the editor itself before opening a picker.)
-	void OnExpand(wxCommandEvent&) {
-		ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl());
-		wxString text = box != nullptr ? box->GetValue() : m_text;
-		if (!m_expand || !m_expand(text))
-			return;
-
-		m_text = text;   // what the cell commits, whether or not the box is still there
-		if (ibControlTextEditor* alive = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl()))
-			alive->SetValue(text);
-	}
-	void OnClear(wxCommandEvent&) {
-		if (ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl()))
-			box->SetValue(wxEmptyString);
+	wxString ShownTitle(unsigned row) const {
+		wxVariant shown;
+		GetValueByRow(shown, row, kColTitle);
+		return shown.GetString();
 	}
 
-	wxWindow* m_host;
-	Expand    m_expand;
-	wxString  m_text;
+	std::function<const std::vector<ibQueryConstructorField>*()> m_fields;     // the query's — asked every time
+	std::function<std::vector<ibSelectDescription>*()>           m_selects;    // …and what was said about them
+	std::function<const ibMetaData*()>                           m_metaData;   // the names a type is shown by
+	std::function<void()>                                        m_changed;    // an entry was written
+	bool m_readOnly = false;
 };
+
 // THE PARAMETERS, as a dataview model over the COMPOSITION — which owns them. Four columns, because
 // a parameter answers four separate questions, and folding any two of them into one caption is how
 // a settings page ends up unreadable:
@@ -506,6 +672,13 @@ private:
 	std::vector<size_t> m_rows;           // view row → parameter, rebuilt by ResetFromList
 	std::function<ibValue(const wxString&)> m_valueOf;   // whose value the Value column shows
 };
+// WHAT A VARIANT WITH NO NAME IS CALLED — its place in the list. Not a caption anybody wrote; the one answer for
+// the variants list and the picker's menu.
+static wxString ibUnnamedVariantCaption(size_t position)
+{
+	return wxString::Format(_("Variant %u"), static_cast<unsigned>(position + 1));
+}
+
 // THE VARIANTS, as a dataview model over the COMPOSITION — which is where they live. The window
 // keeps no list of its own: a variant is a snapshot the composition owns, and a copy of the names
 // here would be the second store that drifts the first time one is renamed.
@@ -534,7 +707,17 @@ public:
 		const std::vector<ibVariantDescription>* list = List();
 		if (list == nullptr || col != kColName || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the variant it was queued for
-		variant = (*list)[row].m_name;
+		// AN UNNAMED VARIANT SHOWS WHAT IT HAS — its place in the list, as the picker's menu shows it
+		// (ibUnnamedVariantCaption); an empty row cannot be picked with any confidence (Max, 2026-09-29).
+		variant = (*list)[row].m_name.IsEmpty() ? ibUnnamedVariantCaption(row) : (*list)[row].m_name;
+	}
+	// …and it reads grey, like everything else here that generates itself.
+	bool GetAttrByRow(unsigned row, unsigned col, ibDataViewItemAttr& attr) const override {
+		const std::vector<ibVariantDescription>* list = List();
+		if (list == nullptr || col != kColName || row >= list->size() || !(*list)[row].m_name.IsEmpty())
+			return false;
+		attr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		return true;
 	}
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibVariantDescription>* list = List();
@@ -543,6 +726,8 @@ public:
 		const wxString name = variant.GetString();
 		if (name.IsEmpty())
 			return false;   // a nameless variant is unpickable — the name is how it is chosen
+		if ((*list)[row].m_name.IsEmpty() && name == ibUnnamedVariantCaption(row))
+			return false;   // a click through the shown caption is not a name given
 		(*list)[row].m_name = name;
 		return true;
 	}
@@ -1587,6 +1772,9 @@ void ibComposerSettingsPanel::BuildPanel()
 	ibStyleSettingsTabs(notebook);
 	if (appData->DesignerMode()) {
 		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
+		// WHAT EACH FIELD THE QUERY READS IS — right after the query and before anything folds or lays
+		// them out, because the resources and the output both take their fields from here.
+		notebook->AddPage(BuildFieldPage(notebook), _("Fields"), false, ibSettingsTabArt(ibSettingsTab::Fields));
 		notebook->AddPage(BuildResourcePage(notebook), _("Resources"), false, ibSettingsTabArt(ibSettingsTab::Resources));
 		// PARAMETERS between what is READ and what is FOLDED: they are part of the reading — the query
 		// asks for them — but they are filled in, not written, so they get a page of their own.
@@ -1673,10 +1861,10 @@ void ibComposerSettingsPanel::BuildPanel()
 	if (m_resourceView != nullptr)
 		m_resourceView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnResourceContextMenu, this);
 
-	// VIEW ONLY, the cell half — every grid this window owns, in ONE place. Bound after all four
+	// VIEW ONLY, the cell half — every grid this window owns, in ONE place. Bound after all of them
 	// exist so none is missed, and listed here rather than beside each creation for the same reason:
 	// a fifth grid is added to this line, not remembered about.
-	for (ibDataViewCtrl* view : { m_variantView, m_structureView, m_resourceView, m_parameterView }) {
+	for (ibDataViewCtrl* view : { m_variantView, m_structureView, m_fieldView, m_resourceView, m_parameterView }) {
 		if (view != nullptr)
 			view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibComposerSettingsPanel::OnStartEditing, this);
 	}
@@ -1735,10 +1923,12 @@ void ibComposerSettingsPanel::SetReadOnly(bool readOnly)
 	// both the click and the Space road. See ibParameterModel::IsEnabledByRow.
 	if (m_parameterModel != nullptr)
 		m_parameterModel->SetReadOnly(readOnly);
+	if (m_fieldModel != nullptr)
+		m_fieldModel->SetReadOnly(readOnly);
 }
 
-// The cell half of the rule above — one handler for all four grids, so a fifth grid added later is
-// covered by binding it rather than by remembering a rule.
+// The cell half of the rule above — one handler for every grid, so a grid added later is covered by
+// binding it rather than by remembering a rule.
 void ibComposerSettingsPanel::OnStartEditing(ibDataViewEvent& event)
 {
 	if (m_readOnly)
@@ -1977,7 +2167,7 @@ bool ibDialogComposerSettings::PickVariant(wxWindow* parent, ibDataComposer& com
 		// a translated text, and put in a menu as it stands it showed the reader the whole line -
 		// `en = 'Trial balance'; ru = '…'; uk = '…';` (2026-09-16).
 		wxString caption = variants[i].GetPresentation();
-		if (caption.IsEmpty()) caption = wxString::Format(_("Variant %u"), static_cast<unsigned>(i + 1));
+		if (caption.IsEmpty()) caption = ibUnnamedVariantCaption(i);
 
 		// ⭐ AND THE ONE IN FORCE IS TICKED — by COMPARING the settings, because there is no stored
 		// "active variant" to read. That is not a gap: at runtime there is only the setting that
@@ -2268,8 +2458,16 @@ wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 	m_variantView->AssociateModel(m_variantModel);
 	// THE NAME IS EDITABLE IN PLACE — it is the whole of a variant a person sees, and renaming it
 	// somewhere else would be a dialog for one string.
-	m_variantView->GetRootColumnGroup()->AppendTextColumn(_("Variant"), ibVariantModel::kColName,
-		wxDATAVIEW_CELL_EDITABLE, FromDIP(160), wxAlignment::wxALIGN_LEFT);
+	ibDataViewColumn* variantColumn = m_variantView->GetRootColumnGroup()->AppendTextColumn(_("Variant"),
+		ibVariantModel::kColName, wxDATAVIEW_CELL_EDITABLE, FromDIP(160), wxAlignment::wxALIGN_LEFT);
+	// THE ONE COLUMN FILLS THE LIST — a variant's name is the whole row, and a fixed width either cut it off at the
+	// pane's edge or left an empty strip beside it (Max, 2026-09-29: "by default the variant does not fit").
+	m_variantView->Bind(wxEVT_SIZE, [this, variantColumn](wxSizeEvent& e) {
+		e.Skip();
+		const int width = m_variantView->GetClientSize().x;
+		if (variantColumn != nullptr && width > 0)
+			variantColumn->SetWidth(width);
+	});
 	variantSizer->Add(m_variantView, 1, wxALL | wxEXPAND, FromDIP(4));
 	variantPane->SetSizer(variantSizer);
 
@@ -3083,6 +3281,182 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	return pane;
 }
 
+// ⭐⭐ THE FIELDS PAGE — every field the query reads, and what it is. Nothing here has to be filled in:
+// the rows come from the text, the title from the name, the type from the query. A person overrules one
+// field at a time, and what they said is the whole of what is kept.
+//
+// The columns stand ONE UNDER ANOTHER — the field on its line, its title under it — so a row grows down
+// instead of sideways (Max, 2026-09-29): the table control's vertical group, the same one a form's table
+// stacks its columns with.
+wxWindow* ibComposerSettingsPanel::BuildFieldPage(wxWindow* parent)
+{
+	wxPanel* page = new wxPanel(parent);
+	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+	m_fieldView = new ibDataViewCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxDV_ROW_LINES | wxDV_SINGLE);
+	ibStyleSettingsGrid(m_fieldView);
+	m_fieldModel = new ibFieldModel([this] { return &m_fieldList; },
+	                                [this] { return &m_edited.m_selects; },
+	                                [this] { return GetEditedMetaData(); },
+	                                [this] { OnFieldDescribed(); });
+	m_fieldView->AssociateModel(m_fieldModel);
+
+	// TWO LINES A FIELD (Max, 2026-09-29): the field and what it IS on the first — its name, type, role and
+	// appearance side by side — and under them what a reader sees, its title, the whole width.
+	//
+	// ⚠ THE LINES LINE UP BY PLACE. The table gives the first column of every line of a stack one width, the
+	// second another — so the tick and the empty cell above it are both the tick's width, and the name and the
+	// title start at one line. (A name alone over tick + title gave the tick the name's width: it grew to half
+	// the screen whenever the table was stretched.)
+	ibDataViewColumnGroup* lines = new ibDataViewColumnGroup(wxEmptyString, ibColumnGroupVertical, wxALIGN_LEFT);
+	m_fieldView->GetRootColumnGroup()->AppendGroup(lines);
+
+	ibDataViewColumnGroup* is = new ibDataViewColumnGroup(wxEmptyString, ibColumnGroupHorizontal, wxALIGN_LEFT);
+	lines->AppendGroup(is);
+	is->AppendColumn(new ibDataViewColumn(wxEmptyString,
+		new ibDataViewTextRenderer(), ibFieldModel::kColBlank, FromDIP(24), wxAlignment::wxALIGN_CENTER));
+	// The field's NAME — what the query's SELECT calls it, shown only: the fields are the query's, and a new name
+	// is a new query (Max, 2026-09-29: "the query drives them, and when you change the query they are worked out
+	// again").
+	is->AppendColumn(new ibDataViewColumn(_("Field"),
+		new ibDataViewTextRenderer(), ibFieldModel::kColName, FromDIP(256), wxAlignment::wxALIGN_LEFT));
+	// WHAT IT HOLDS — the query's, shown only.
+	is->AppendColumn(new ibDataViewColumn(_("Type"),
+		new ibDataViewTextRenderer(), ibFieldModel::kColType, FromDIP(200), wxAlignment::wxALIGN_LEFT));
+	// WHAT IT IS IN A BALANCE — the source's until somebody picks another: the period a balance is taken at, the
+	// dimensions it is kept apart by, its opening and its closing. The quick list in the cell, and "..." for the
+	// ROLE EDITOR — the one window a role is set in, the query constructor's too.
+	is->AppendColumn(new ibDataViewColumn(_("Role"),
+		new queryctor::ibExpressionCellRenderer(
+			[]() -> wxArrayString { return ibFieldModel::RoleChoices(); },
+			[this](wxString& text) -> bool { return EditFieldRole(text); }, wxDATAVIEW_CELL_EDITABLE),
+		ibFieldModel::kColRole, FromDIP(200), wxAlignment::wxALIGN_LEFT));
+	// …AND HOW IT IS SHOWN — what its appearance sets, and "..." for the appearance window: the platform's
+	// parameters, each ticked and given a value. Not typed into.
+	is->AppendColumn(new ibDataViewColumn(_("Appearance"),
+		new ibTextWithDotsRenderer(this, [this](wxString& text) -> bool { return EditFieldAppearance(text); },
+			/*typed*/ false),
+		ibFieldModel::kColAppearance, FromDIP(200), wxAlignment::wxALIGN_LEFT));
+
+	ibDataViewColumnGroup* title = new ibDataViewColumnGroup(wxEmptyString, ibColumnGroupHorizontal, wxALIGN_LEFT);
+	lines->AppendGroup(title);
+	// THE TITLE IS EDITED — ticked, it is the person's (open); unticked, it generates itself (greyed, closed) (Max,
+	// 2026-09-29).
+	title->AppendColumn(new ibDataViewColumn(wxEmptyString,
+		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
+		ibFieldModel::kColOwnTitle, FromDIP(24), wxAlignment::wxALIGN_CENTER));
+	// Typed in the cell for the language in force; the "..." opens every language at once. The last of its line,
+	// so it takes the width the line above has.
+	title->AppendColumn(new ibDataViewColumn(_("Title"),
+		new ibTextWithDotsRenderer(this, [this](wxString& text) -> bool { return EditFieldTitle(text); }),
+		ibFieldModel::kColTitle, FromDIP(256), wxAlignment::wxALIGN_LEFT));
+
+	// A DOUBLE-CLICK (or Enter) EDITS THE CELL under the cursor — the same gesture the settings grids use.
+	m_fieldView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+		if (m_fieldView != nullptr)
+			m_fieldView->EditItem(e.GetItem(), e.GetDataViewColumn());
+		e.Skip();
+	});
+
+	sizer->Add(m_fieldView, 1, wxALL | wxEXPAND, FromDIP(4));
+	page->SetSizer(sizer);
+	return page;
+}
+
+// THE "..." BEHIND A TITLE — every language of it at once, in the window every caption opens. What it
+// writes goes straight into the field's entry; the cell then commits the language in force, which the
+// window has already written.
+bool ibComposerSettingsPanel::EditFieldTitle(wxString& text)
+{
+	const int row = ibSelectedRow(m_fieldView);
+	if (row == wxNOT_FOUND || m_fieldModel == nullptr)
+		return false;
+
+	// A GENERATED TITLE OPENS AS ITSELF — what the cell showed, in the language in force.
+	const ibFieldDescription* said = m_fieldModel->Said(row);
+	const ibTranslateString before(said != nullptr && said->m_useTitle ? said->m_title : text);
+	ibDialogTranslateConstructor dialog(this, _("Title"), before, GetEditedMetaData(), m_readOnly);
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+	const ibTranslateString after = dialog.GetTranslate();
+	if (after == before)
+		return false;
+
+	ibFieldDescription* entry = m_fieldModel->EntryToWrite(row);
+	if (entry == nullptr)
+		return false;
+	// Every language emptied gives the title back — the door's own rule (SayTitle).
+	entry->SayTitle(after.GetRawText());
+	text = ibTitleShown(m_edited.m_selects, *m_fieldModel->FieldAt(row));
+	OnFieldDescribed();
+	return true;
+}
+
+// THE "..." BEHIND A ROLE — the role editor (ibEditBalanceRole), the window the query constructor opens too. "As
+// its source says" gives the field back to its source; a word is kept as the person's (SayRole) — and a
+// period's number with it: a report's query says no roles (the composer drops them), so this is where a report
+// numbers its periods (Max, 2026-09-29: "where do I put the 1 here?").
+bool ibComposerSettingsPanel::EditFieldRole(wxString& text)
+{
+	const int row = ibSelectedRow(m_fieldView);
+	if (row == wxNOT_FOUND || m_fieldModel == nullptr || m_fieldModel->FieldAt(row) == nullptr)
+		return false;
+	const ibBalanceRole fromSource = m_fieldModel->FieldAt(row)->m_balanceRole;
+	const ibFieldDescription* before = m_fieldModel->Said(row);
+	bool          said = m_fieldModel->OwnRole(row);
+	ibBalanceRole role = m_fieldModel->RoleAt(row);
+	int           rank = before != nullptr && before->m_useRole ? before->m_periodRank : 0;
+	if (!ibEditBalanceRole(this, said, role, rank, m_readOnly, /*withNumber*/true))
+		return false;
+
+	ibFieldDescription* entry = m_fieldModel->EntryToWrite(row);
+	if (entry == nullptr)
+		return false;
+	entry->SayRole(said ? role : fromSource, fromSource, said ? rank : 0);
+	wxVariant shown;
+	m_fieldModel->GetValueByRow(shown, row, ibFieldModel::kColRole);   // the word, and the number beside it
+	text = shown.GetString();
+	OnFieldDescribed();
+	return true;
+}
+
+// THE "..." BEHIND AN APPEARANCE — the appearance window (ibEditAppearance): the platform's parameters, each
+// ticked and given a value. What it writes goes straight into the field's entry, as a title's window does.
+bool ibComposerSettingsPanel::EditFieldAppearance(wxString& text)
+{
+	const int row = ibSelectedRow(m_fieldView);
+	if (row == wxNOT_FOUND || m_fieldModel == nullptr || m_fieldModel->FieldAt(row) == nullptr)
+		return false;
+	const ibFieldDescription* said = m_fieldModel->Said(row);
+	ibAppearanceDescription appearance = said != nullptr ? said->m_appearance : ibAppearanceDescription();
+	if (!ibEditAppearance(this, appearance, GetEditedMetaData(), m_readOnly))
+		return false;
+
+	ibFieldDescription* entry = m_fieldModel->EntryToWrite(row);
+	if (entry == nullptr)
+		return false;
+	entry->m_appearance = appearance;
+	text = ibAppearanceSummary(appearance);
+	OnFieldDescribed();
+	return true;
+}
+
+// A FIELD'S ENTRY WAS WRITTEN — by the cell or by the "..." behind it, one consequence for both.
+void ibComposerSettingsPanel::OnFieldDescribed()
+{
+	MarkModified();
+	// A tick changes how the title beside it reads (grey or not) — the row repaints whole.
+	if (m_fieldView != nullptr)
+		m_fieldView->Refresh();
+	// …AND EVERY PICKER READS THE FIELD BY ITS TITLE, so they are re-filled — after the cell has finished
+	// committing, not from inside it.
+	CallAfter([this] {
+		ReloadFields();
+		PopulateFieldTree(m_resourceFieldTree);
+	});
+}
+
 // WHAT THE LEVELS FOLD. A level says "break here"; a resource says "and add this up". The two are
 // separate pages because they are separate decisions — the same table folded by warehouse can carry
 // a sum of quantity, a count of documents, or both, and changing one has nothing to do with the other.
@@ -3849,7 +4223,9 @@ void ibComposerSettingsPanel::BindFieldSource()
 		// what says whether it unfolds anyway. wxNOT_FOUND is what "there is no such id" means here.
 		// ⭐ What the options of the base take away goes in too, marked: the query keeps the field, the
 		// pickers do not show it, and a line already on it is hidden, not dropped.
-		plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available });
+		// ⭐ …AND IT READS AS ITS TITLE — the one the Fields page sets and the page prints over its column.
+		plain.push_back({ field.m_name, wxNOT_FOUND, field.m_type, field.m_available,
+			ibTitleShown(m_edited.m_selects, field) });
 	m_fieldSource->SetPlainFields(std::move(plain), GetEditedMetaData());
 	// ⭐ AND WHICH OF THOSE FIELDS ARE RESOURCES — asked of the composition every time the tree
 	// draws, never copied into it. Being a resource is a DECLARATION this window makes on the
@@ -4064,6 +4440,9 @@ void ibComposerSettingsPanel::PopulateFieldTrees()
 	RefreshQueryFields();
 
 	PopulateFieldTree(m_resourceFieldTree);
+	// …and the fields page, whose ROWS are that same read.
+	if (m_fieldModel != nullptr)
+		m_fieldModel->ResetFromList();
 }
 
 // The field a tree's cursor stands on, or null on the root / an empty tree.
@@ -4120,6 +4499,10 @@ void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 	// path) is answered from the field itself rather than by parsing the label back.
 	for (size_t i = 0; i < m_fieldList.size(); ++i) {
 		const ibQueryConstructorField& field = m_fieldList[i];
+		// ⚠ BY ITS NAME, NOT ITS TITLE. Resources are the AUTHOR's page, written in the query's words — the
+		// expression cell beside this tree says `SUM(Amount)`, so the field it is picked from reads `Amount`
+		// (Max, 2026-09-29: "we are setting up resources, not showing them to a user"). The title is for the
+		// pickers a reader sees too — the Output page's.
 		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;
 		// ⭐ …AND THE PICTURE SAYS WHICH IT IS. The predicate above was written and then not asked:
 		// every node went on with the attribute icon, so a field already declared as a resource looked
@@ -4899,8 +5282,9 @@ void ibComposerSettingsPanel::OnBuildQuery(wxCommandEvent&)
 	wxString text = m_queryText->GetText();
 	// EXCLUDING TOTALS: a composition folds through its RESOURCES and its levels are its GROUPINGS,
 	// so a TOTALS clause in this text would be the same setting written where no window can show it.
+	// …AND ROLES, for the same reason: what a field is in a balance is said on the Fields page.
 	if (!ibShowQueryConstructor(this, text, GetEditedMetaData(), /*readOnly*/false,
-			ibQueryExclude_Totals))
+			ibQueryExclude_Totals | ibQueryExclude_Roles))
 		return;   // cancelled — the box keeps what the author had
 
 	// SetText fires the change handler, which stores the text and marks the source for a re-read —

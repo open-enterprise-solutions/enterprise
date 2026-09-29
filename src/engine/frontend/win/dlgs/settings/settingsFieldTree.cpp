@@ -287,7 +287,11 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 		// 2026-08-29: "I do not see even minimally that it is a resource").
 		const int icon = (m_isResource && m_isResource(data->m_path))
 			? ibSettingsResourceIcon(tree) : 0;
-		const wxTreeItemId item = tree->AppendItem(root, field.m_name, icon, icon, data);
+		// THE TITLE IS WHAT A USER READS, as the synonym is on the explorer road above; the name is what
+		// the path is built from and what a pick stores.
+		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;
+		data->m_presentation = label;
+		const wxTreeItemId item = tree->AppendItem(root, label, icon, icon, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
 	}

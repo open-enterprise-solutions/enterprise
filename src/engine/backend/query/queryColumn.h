@@ -32,6 +32,8 @@
 // two files that DEFINE such a body need the real header, and they already include it.
 class wxIcon;
 
+#include "backend/query/queryBalanceRole.h"   // ibBalanceRole — what a column is in a balance (GetBalanceRole)
+
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
 #include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
 #include <vector>
@@ -163,6 +165,16 @@ public:
 	// Body in metaAttributeObject_res.cpp, next to the icon it returns: this header must not pull
 	// the metadata tree in (the attribute metaobject includes THIS file).
 	virtual wxIcon GetColumnIcon() const;
+
+	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — a fact about the column a person is shown, like its
+	// picture, so it is asked here, where the field lists see a column. Answered by the view that published
+	// it; an ordinary column is an ordinary value. Last in the class, for the reason IsAvailable gives.
+	virtual ibBalanceRole GetBalanceRole() const { return ibBalanceRole::None; }
+	// …and, for a PERIOD, its SENIORITY — the smaller is compared first; what tells two readings of one key apart
+	// in time. A query's own `ROLE PERIOD n` counts first; a source orders its own after those (ibSourcePeriodRank:
+	// the period, then a recorder, then a line number); 0 = unranked, after all of them in the order read. A
+	// select's own order cannot say it — a report may read the recorder before the period.
+	virtual int GetPeriodRank() const { return 0; }
 };
 
 // ⭐⭐ A COLUMN CARRIES ITS OWN CONTROL BLOCK, so nobody ever has to invent a second one.

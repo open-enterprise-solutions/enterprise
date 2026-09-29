@@ -70,6 +70,9 @@ static ibQueryConstructorField FieldOfExplorer(const ibSourceDataObject::ibSourc
 	field.m_type           = held;
 	field.m_icon           = node.GetSourceIcon();   // the column's own picture, asked not deduced
 	field.m_available      = node.GetColumn() == nullptr || node.GetColumn()->IsAvailable();
+	// …what a person calls it, and what it is in a balance — for the hosts that fill a field in from them.
+	field.m_caption        = node.GetSourceSynonym();
+	field.m_balanceRole    = node.GetColumn() != nullptr ? node.GetColumn()->GetBalanceRole() : ibBalanceRole::None;
 	return field;
 }
 
@@ -332,6 +335,13 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 			if (of.m_icon.IsOk())
 				field.m_icon = of.m_icon;   // the column's own picture, when it has one
 			field.m_available = of.m_available;
+			// …and what it is in a balance travels with a plain reading, renamed or not:
+			// `T.AmountClosingBalance AS Amount` is still a closing balance. What the source CALLS it travels
+			// only while the query keeps the source's name — a field the author renamed is spoken for by
+			// that name.
+			field.m_balanceRole = of.m_balanceRole;
+			if (!projection.m_expr->m_path.empty() && field.m_name.IsSameAs(projection.m_expr->m_path.back(), false))
+				field.m_caption = of.m_caption;
 		}
 		else if (projection.m_expr) {
 			// ⭐ A COMPUTED ONE IS AVAILABLE WHILE EVERYTHING IT READS IS — each field asked the way a plain
@@ -352,6 +362,9 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 			if (projection.m_expr->m_kind == ibQueryAstExprKind::Cast)
 				TypeByCast(*this, *projection.m_expr, field);
 		}
+		// …AND A ROLE THE QUERY SAYS ITSELF (`ROLE OPENING`) is what the field is, over whatever its source says.
+		if (projection.m_roleSaid)
+			field.m_balanceRole = projection.m_role;
 		out.push_back(std::move(field));
 	}
 	return out;
@@ -745,6 +758,53 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetQualifiedFields
 #include "queryable.h"                   // ibSourceMetaDataScope — names resolve against THIS config
 #include "queryLowering.h"               // PlacePackageLinks — where a linked selection stands, asked ONCE
 
+namespace {
+
+// EVERY ROLE A SELECT SAYS, FORGOTTEN — its own projections, its union's branches and what it reads FROM.
+// True when there was one.
+bool ForgetSaidRoles(ibQuerySelect& select)
+{
+	bool forgot = false;
+	for (ibQueryProjection& projection : select.m_projections) {
+		if (!projection.m_roleSaid)
+			continue;
+		projection.m_roleSaid   = false;
+		projection.m_role       = ibBalanceRole::None;
+		projection.m_periodRank = 0;
+		forgot = true;
+	}
+	if (select.m_from.m_subquery)
+		forgot = ForgetSaidRoles(*select.m_from.m_subquery) || forgot;
+	for (ibQueryAstJoin& join : select.m_joins)
+		if (join.m_source.m_subquery)
+			forgot = ForgetSaidRoles(*join.m_source.m_subquery) || forgot;
+	for (const ibQuerySelectPtr& branch : select.m_unions)
+		if (branch)
+			forgot = ForgetSaidRoles(*branch) || forgot;
+	return forgot;
+}
+
+} // namespace
+
+bool ibQueryDropRoles(ibQueryPackage& package)
+{
+	bool forgot = false;
+	for (ibQueryAstStatement& statement : package.m_statements)
+		if (statement.m_select)
+			forgot = ForgetSaidRoles(*statement.m_select) || forgot;
+	return forgot;
+}
+
+wxString ibQueryTextWithoutRoles(const wxString& text)
+{
+	if (text.IsEmpty())
+		return text;
+	ibQueryPackage package;
+	try { package = ibQueryParser().ParsePackage(text); }
+	catch (const ibBackendException&) { return text; }   // half-typed: whoever reads it says why, in the parser's words
+	return ibQueryDropRoles(package) ? ibRenderQueryPackage(package) : text;
+}
+
 std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 	const ibMetaData* metaData, wxString* error)
 {
@@ -760,9 +820,10 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 	const ibSourceMetaDataScope scope(metaData);
 	try {
 		ibQueryParser parser;
-		const ibQueryPackage package = parser.ParsePackage(text);
+		ibQueryPackage package = parser.ParsePackage(text);
 		if (package.m_statements.empty())
 			return fields;
+		ibQueryDropRoles(package);   // a composition's roles are its own word — see ibQueryTextWithoutRoles
 
 		// ⭐⭐ A LINKED PACKAGE OFFERS EVERY RELATED SELECTION'S FIELDS, QUALIFIED BY ITS NAME.
 		//

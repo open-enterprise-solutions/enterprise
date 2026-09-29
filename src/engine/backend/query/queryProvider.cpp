@@ -433,12 +433,16 @@ public:
 	// — `GetTypeDesc` through a freed column (0xdddddddd) while a report was being composed.
 	// `available` — what the road to `from` adds: a dot-walk's hops before its leaf (one of them hidden and
 	// the leaf goes with it).
-	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id, bool available = true)
+	// `role` — what the output is in a balance: the query's own `ROLE`, else the column's (the schema's answer).
+	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id, bool available,
+	                      ibBalanceRole role, int rank)
 		: m_alias(alias)
 		, m_physical(from != nullptr ? from->GetPhysicalName() : alias)
 		, m_type(from != nullptr ? from->GetTypeDesc() : ibTypeDescription())
 		, m_id(id)
-		, m_available(available && (from == nullptr || from->IsAvailable())) {}
+		, m_available(available && (from == nullptr || from->IsAvailable()))
+		, m_balanceRole(role)
+		, m_periodRank(rank) {}
 
 	wxString GetName() const override { return m_alias; }
 	wxString GetPhysicalName() const override { return m_physical; }
@@ -447,6 +451,9 @@ public:
 	ibMetaID GetColumnId() const override { return m_id; }
 	// …and so is whether it may be shown (functional options), for the same reason: taken, not pointed at.
 	bool IsAvailable() const override { return m_available; }
+	// …and what it is in a balance: a renamed opening balance is still one.
+	ibBalanceRole GetBalanceRole() const override { return m_balanceRole; }
+	int           GetPeriodRank()  const override { return m_periodRank; }
 
 private:
 	wxString                  m_alias;
@@ -454,6 +461,8 @@ private:
 	mutable ibTypeDescription m_type;   // GetTypeDesc returns a non-const ref (engine-wide signature)
 	ibMetaID                  m_id;
 	bool                      m_available;
+	ibBalanceRole             m_balanceRole;
+	int                       m_periodRank;
 };
 
 // A COMPUTED projection of the inner query — `a * b`, a CASE — seen from outside under its alias.
@@ -469,20 +478,26 @@ public:
 	// projection. Empty stays "unknown"; what is known travels. `available` — whether what it is
 	// computed from may be shown (functional options), taken when it is made: it keeps no inputs.
 	ibSubqueryExprColumn(const wxString& alias, ibMetaID id, const ibTypeDescription& type = ibTypeDescription(),
-	                     bool available = true)
-		: m_alias(alias), m_type(type), m_id(id), m_available(available) {}
+	                     bool available = true, ibBalanceRole role = ibBalanceRole::None, int rank = 0)
+		: m_alias(alias), m_type(type), m_id(id), m_available(available), m_balanceRole(role), m_periodRank(rank) {}
 
 	wxString GetName() const override { return m_alias; }
 	wxString GetPhysicalName() const override { return m_alias; }
 	ibTypeDescription& GetTypeDesc() const override { return m_type; }
 	ibMetaID GetColumnId() const override { return m_id; }
 	bool IsAvailable() const override { return m_available; }
+	// …and what the query SAID it is in a balance (`<expr> ROLE OPENING AS x`) — a computed field has no
+	// column of its own to say it.
+	ibBalanceRole GetBalanceRole() const override { return m_balanceRole; }
+	int           GetPeriodRank()  const override { return m_periodRank; }
 
 private:
 	wxString                  m_alias;
 	mutable ibTypeDescription m_type;   // empty = unknown; GetTypeDesc returns a non-const ref
 	ibMetaID                  m_id;
 	bool                      m_available;
+	ibBalanceRole             m_balanceRole;
+	int                       m_periodRank;
 };
 
 // «IN HIERARCHY» AS NAMED (ibQueryCondition::m_unfold) never reaches a cell: the side that filters rows in memory
@@ -699,7 +714,8 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 			if (sc.first == nullptr)
 				continue;
 			if (!sc.second.IsEmpty() && sc.second != sc.first->GetName()) {
-				auto col = std::make_shared<ibSubqueryAliasColumn>(sc.second, sc.first, mintId());
+				auto col = std::make_shared<ibSubqueryAliasColumn>(sc.second, sc.first, mintId(), true,
+					sc.first->GetBalanceRole(), sc.first->GetPeriodRank());
 				m_ownedColumns.push_back(col);
 				m_columns.push_back(col.get());
 			}
@@ -724,7 +740,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 			continue;
 		// Every hop of the walk answers for the leaf — one the options take away takes the leaf with it.
 		auto col = std::make_shared<ibSubqueryAliasColumn>(walk.m_alias, walk.m_path.back(), mintId(),
-			ibIsWalkAvailable(walk.m_path));
+			ibIsWalkAvailable(walk.m_path), walk.m_path.back()->GetBalanceRole(), walk.m_path.back()->GetPeriodRank());
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(nullptr);
@@ -795,7 +811,9 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		// then it is published through a thin column that says so.
 		if (out.m_alias.IsEmpty() && out.m_objectPrefix.IsEmpty()
 		    && out.m_col != nullptr && out.m_col->GetName() == out.m_name
-		    && out.m_available == out.m_col->IsAvailable()) {
+		    && out.m_available == out.m_col->IsAvailable()
+		    && out.m_balanceRole == out.m_col->GetBalanceRole()      // …and it is what the column says it is
+		    && out.m_periodRank == out.m_col->GetPeriodRank()) {
 			m_columns.push_back(out.m_col);
 			m_readFrom.push_back(out.m_col);
 			m_readAlias.push_back(wxEmptyString);
@@ -809,9 +827,11 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		// a reference with no type is not a reference — the outer query could not walk into it.
 		std::shared_ptr<ibBackendQueryColumn> col = out.m_col != nullptr
 			? std::static_pointer_cast<ibBackendQueryColumn>(
-			      std::make_shared<ibSubqueryAliasColumn>(out.m_name, out.m_col, mintedId, out.m_available))
+			      std::make_shared<ibSubqueryAliasColumn>(out.m_name, out.m_col, mintedId, out.m_available,
+			                                              out.m_balanceRole, out.m_periodRank))
 			: std::static_pointer_cast<ibBackendQueryColumn>(
-			      std::make_shared<ibSubqueryExprColumn>(out.m_name, mintedId, out.m_type, out.m_available));
+			      std::make_shared<ibSubqueryExprColumn>(out.m_name, mintedId, out.m_type, out.m_available,
+			                                             out.m_balanceRole, out.m_periodRank));
 		m_ownedColumns.push_back(col);
 		m_columns.push_back(col.get());
 		m_readFrom.push_back(out.m_col);
@@ -2875,10 +2895,72 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 	if (spec.m_groupExprs != nullptr)
 		for (const ibQueryColumnExprPtr& e : *spec.m_groupExprs)
 			if (e) GatherColumnExprColumns(e.get(), add);
-	for (const auto& a : *spec.m_aggregates)                     add(a.m_col);
+	for (const auto& a : *spec.m_aggregates) {
+		add(a.m_col);
+		// A balance reads its moment and its keys off every row — carried like the figure itself.
+		if (a.m_balance != ibBalanceRole::None) {
+			for (const ibBackendQueryColumn* period : a.m_balanceMoments)
+				add(period);
+			for (const ibBackendQueryColumn* key : a.m_balanceKeys)
+				add(key);
+		}
+	}
 	for (const ibQueryCondition& c : *spec.m_conditions)         add(c.m_col);
 	CollectJoinKeys(spec.m_root, cols);
 	return cols;
+}
+
+// A LEVEL'S KEY — the values of its fields, in the level's own order. One field is the ordinary
+// case and stays a one-element key rather than a shape of its own, so nothing downstream branches
+// on how many fields a level has. (A balance keys its readings by one too — see ibAggAcc.)
+using ibLevelKey = std::vector<ibValue>;
+
+struct ibLevelKeyHash
+{
+	std::size_t operator()(const ibLevelKey& key) const
+	{
+		// Mixed in 64 bits and folded down at the end: on a 32-bit build std::size_t is half the
+		// width, and mixing IN it silently throws away the upper half of every value's hash.
+		const ibValueHash one;
+		wxULongLong_t h = 0xcbf29ce484222325ull;
+		for (const ibValue& value : key) {
+			h ^= static_cast<wxULongLong_t>(one(value));
+			h *= 0x100000001b3ull;
+		}
+		return static_cast<std::size_t>(h ^ (h >> 32));
+	}
+};
+
+struct ibLevelKeyEqual
+{
+	bool operator()(const ibLevelKey& left, const ibLevelKey& right) const
+	{
+		if (left.size() != right.size()) return false;
+		const ibValueEqual same;
+		for (std::size_t i = 0; i < left.size(); ++i)
+			if (!same(left[i], right[i])) return false;
+		return true;
+	}
+};
+
+// ⭐ WHERE A BALANCE READING STANDS — the key it is a reading of and the moment it was taken at (every period
+// field, the senior first). Read off the row once, beside the operand, and only for an aggregate that is a
+// balance (m_balance).
+struct ibBalanceMark
+{
+	ibLevelKey m_key;
+	ibLevelKey m_moment;
+};
+
+// EARLIER IN TIME — the period fields compared one after another, the senior first: a later field decides
+// only where every one before it is the same.
+inline bool ibMomentBefore(const ibLevelKey& left, const ibLevelKey& right)
+{
+	const ibValueEqual same;
+	for (std::size_t i = 0; i < left.size() && i < right.size(); ++i)
+		if (!same(left[i], right[i]))
+			return left[i] < right[i];
+	return false;
 }
 
 // ⭐⭐ AN AGGREGATE IS AN ACCUMULATOR — it always was, and holding the rows was how it hid.
@@ -2911,9 +2993,81 @@ struct ibAggAcc
 	// those sets stood in the stack samples of its fold (MEASURED 2026-09-12, Debug).
 	std::unique_ptr<std::unordered_set<ibValue, ibValueHash, ibValueEqual>> m_seen;
 
+	// ⭐⭐ A BALANCE only (a SUM over a `ROLE OPENING` / `ROLE CLOSING` field) — each KEY's reading at its first
+	// (opening) or last (closing) moment. A group's balance is the sum of those, never of every row: the opening of a month
+	// is not the openings of its thirty days added up. Rows of one key at one moment add up — they are
+	// parts of that key the read did not tell apart. Made on the first reading, like the DISTINCT set.
+	struct Reading { ibLevelKey m_moment; ibNumber m_sum{ 0 }; };
+	std::unique_ptr<std::unordered_map<ibLevelKey, Reading, ibLevelKeyHash, ibLevelKeyEqual>> m_readings;
+
+	// A KEY'S READING, or null — what ibStreamingFold::CarryBalancesByKey asks of a period.
+	const Reading* ReadingOf(const ibLevelKey& key) const
+	{
+		if (!m_readings)
+			return nullptr;
+		const auto found = m_readings->find(key);
+		return found != m_readings->end() ? &found->second : nullptr;
+	}
+
+	// …AND A KEY'S BALANCE CARRIED INTO A PERIOD IT DID NOT MOVE IN: a reading with no moment of its own, since
+	// the key has no row here to be read at.
+	void CarryBalance(const ibLevelKey& key, const ibNumber& balance)
+	{
+		if (!m_readings)
+			m_readings = std::make_unique<std::unordered_map<ibLevelKey, Reading, ibLevelKeyHash, ibLevelKeyEqual>>();
+		if (m_readings->emplace(key, Reading{ ibLevelKey(), balance }).second)
+			++m_n;
+	}
+
 	void Feed(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRow& row)
 	{
-		FeedOperand(a, Operand(a, row));
+		if (a.m_balance != ibBalanceRole::None)
+			FeedBalance(a, Operand(a, row), MarkOf(a, row));
+		else
+			FeedOperand(a, Operand(a, row));
+	}
+
+	// WHERE THIS ROW'S READING STANDS, for a balance — read once, like the operand.
+	static ibBalanceMark MarkOf(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRow& row)
+	{
+		ibBalanceMark mark;
+		mark.m_key.reserve(a.m_balanceKeys.size());
+		for (const ibBackendQueryColumn* key : a.m_balanceKeys)
+			mark.m_key.push_back(row.Get(key));
+		mark.m_moment.reserve(a.m_balanceMoments.size());
+		for (const ibBackendQueryColumn* period : a.m_balanceMoments)
+			mark.m_moment.push_back(row.Get(period));
+		return mark;
+	}
+
+	// ONE ENTRY FOR A FOLD THAT READ THE ROW ITSELF — the operand, and the mark when the aggregate is a balance.
+	void FeedRead(const ibDataQueryBuilder::AggregateItem& a, const ibValue& v, const ibBalanceMark& mark)
+	{
+		if (a.m_balance != ibBalanceRole::None)
+			FeedBalance(a, v, mark);
+		else
+			FeedOperand(a, v);
+	}
+
+	void FeedBalance(const ibDataQueryBuilder::AggregateItem& a, const ibValue& v, const ibBalanceMark& mark)
+	{
+		++m_rows;
+		if (RamIsNullValue(v))
+			return;
+		++m_n;
+		if (!m_readings)
+			m_readings = std::make_unique<std::unordered_map<ibLevelKey, Reading, ibLevelKeyHash, ibLevelKeyEqual>>();
+		const auto found = m_readings->find(mark.m_key);
+		if (found == m_readings->end()) {
+			m_readings->emplace(mark.m_key, Reading{ mark.m_moment, v.GetNumber() });
+			return;
+		}
+		Reading& reading = found->second;
+		if (ibLevelKeyEqual()(mark.m_moment, reading.m_moment))
+			reading.m_sum += v.GetNumber();                              // the same moment: another part of it
+		else if (a.m_balance == ibBalanceRole::Opening ? ibMomentBefore(mark.m_moment, reading.m_moment)
+		                                                : ibMomentBefore(reading.m_moment, mark.m_moment))
+			reading = Reading{ mark.m_moment, v.GetNumber() };         // an earlier (opening) / later (closing) one
 	}
 
 	// WHAT ONE ROW GIVES THIS AGGREGATE — read off the row once. COUNT(*) — no source column AND no
@@ -2977,6 +3131,16 @@ struct ibAggAcc
 		// zero. It is also what the server answers for the same SUM (a computed output that came back NULL
 		// is read as NULL, columnLayout.cpp), so the report no longer depends on which road its totals took.
 		using Fn = ibDataQueryBuilder::AggregateFn;
+		// A BALANCE is the sum of its keys' readings — read the way a SUM is: nothing kept is NULL, nothing fed is zero.
+		if (a.m_balance != ibBalanceRole::None) {
+			if (m_rows > 0 && m_n == 0)
+				return RamNullValue();
+			ibNumber total{ 0 };
+			if (m_readings)
+				for (const auto& reading : *m_readings)
+					total += reading.second.m_sum;
+			return ibValue(total);
+		}
 		switch (a.m_fn) {
 		case Fn::Count: return ibValue(ibNumber((a.m_col == nullptr && !a.m_expr) ? m_rows : m_n));
 		case Fn::Sum: return (m_rows > 0 && m_n == 0) ? RamNullValue() : ibValue(m_sum);
@@ -3118,40 +3282,7 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 // nothing is rendered to text per row to say so.
 using ibRowsByValue    = std::unordered_map<ibValue, std::vector<long>,    ibValueHash, ibValueEqual>;
 using ibRefChildren    = std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>;
-
-// A LEVEL'S KEY — the values of its fields, in the level's own order. One field is the ordinary
-// case and stays a one-element key rather than a shape of its own, so nothing downstream branches
-// on how many fields a level has.
-using ibLevelKey = std::vector<ibValue>;
-
-struct ibLevelKeyHash
-{
-	std::size_t operator()(const ibLevelKey& key) const
-	{
-		// Mixed in 64 bits and folded down at the end: on a 32-bit build std::size_t is half the
-		// width, and mixing IN it silently throws away the upper half of every value's hash.
-		const ibValueHash one;
-		wxULongLong_t h = 0xcbf29ce484222325ull;
-		for (const ibValue& value : key) {
-			h ^= static_cast<wxULongLong_t>(one(value));
-			h *= 0x100000001b3ull;
-		}
-		return static_cast<std::size_t>(h ^ (h >> 32));
-	}
-};
-
-struct ibLevelKeyEqual
-{
-	bool operator()(const ibLevelKey& left, const ibLevelKey& right) const
-	{
-		if (left.size() != right.size()) return false;
-		const ibValueEqual same;
-		for (std::size_t i = 0; i < left.size(); ++i)
-			if (!same(left[i], right[i])) return false;
-		return true;
-	}
-};
-
+// (ibLevelKey and its hash stand above ibAggAcc now — a balance keys its readings by one.)
 using ibRowsByLevelKey = std::unordered_map<ibLevelKey, std::vector<long>, ibLevelKeyHash, ibLevelKeyEqual>;
 using ibValueSeen      = std::unordered_map<ibValue, char,                 ibValueHash, ibValueEqual>;
 using ibValueParentMap = std::unordered_map<ibValue, ibValue,              ibValueHash, ibValueEqual>;
@@ -4030,6 +4161,7 @@ public:
 		m_pool.emplace_back(&tree.Root(), NewAccs());   // the root IS the grand total
 		m_rowKeys.resize(m_levels.size());
 		m_operands.resize(m_aggs.size());
+		m_marks.resize(m_aggs.size());
 	}
 
 	void Feed(const ibQueryRow& row)
@@ -4044,8 +4176,11 @@ public:
 			for (const ibTotalField& field : m_levels[li].m_fields)
 				key.push_back(LevelKeyValue(field, row));      // one field is the degenerate one-element key
 		}
-		for (std::size_t i = 0; i < m_aggs.size(); ++i)
+		for (std::size_t i = 0; i < m_aggs.size(); ++i) {
 			m_operands[i] = ibAggAcc::Operand(m_aggs[i], row);
+			if (m_aggs[i].m_balance != ibBalanceRole::None)
+				m_marks[i] = ibAggAcc::MarkOf(m_aggs[i], row);   // …and where a balance's reading stands, once too
+		}
 
 		std::size_t cur = 0;
 		FeedNode(cur);                                        // the grand total takes every row
@@ -4171,10 +4306,130 @@ public:
 	// headings and never touches the ones that share their column with a measure.
 	void Finish()
 	{
+		CarryBalancesByKey();
 		for (FoldNode& n : m_pool) {
 			for (std::size_t i = 0; i < m_aggs.size(); ++i)
 				n.m_node->m_values[AggSlotId(m_aggs, i)] = m_accPool[n.m_accs + i].Result(m_aggs[i]);
 			n.m_node->m_hasChildren = !n.m_node->m_children.empty();
+		}
+	}
+
+	// ⭐⭐ A KEY'S BALANCE IN A PERIOD IT DID NOT MOVE IN IS CARRIED, NOT LEFT OUT — the rule PadPeriodChildren keeps
+	// for a period nobody moved in, said for one key. A source read by movement (Periodicity = Recorder / Record)
+	// has a row only where a key moved, so a month heading added up only the keys that moved that month: a key
+	// holding 6 000 on account 90 through a quiet August left August's opening 6 000 short (2026-09-29, the ROLE
+	// battery). So under every heading whose children are a PERIOD level, a key missing from a period takes, as
+	// its closing AND its opening there, its last closing before it — what stood at the end of its last movement
+	// stands through the quiet period; before its first reading, its first opening after is what stood all along.
+	// The two edges of one figure are paired in the order TOTALS names them (the first opening with the first
+	// closing); a figure with only one edge carries the way PadPeriodChildren does: an opening from after, a
+	// closing from before. (A source that has a row for every period a key holds a balance in — a daily or a
+	// monthly reading — leaves nothing to carry: a key missing there held nothing.)
+	void CarryBalancesByKey()
+	{
+		std::vector<std::size_t> openings, closings;
+		for (std::size_t i = 0; i < m_aggs.size(); ++i) {
+			if (m_aggs[i].m_balance == ibBalanceRole::Opening) openings.push_back(i);
+			else if (m_aggs[i].m_balance == ibBalanceRole::Closing) closings.push_back(i);
+		}
+		if (openings.empty() && closings.empty())
+			return;
+
+		std::unordered_map<const ibSelectorTree::Node*, std::size_t> accsOf;   // a node's first accumulator
+		for (const FoldNode& n : m_pool)
+			accsOf[n.m_node] = n.m_accs;
+
+		const std::size_t none = static_cast<std::size_t>(-1);
+		for (const FoldNode& n : m_pool) {
+			// THE CHILDREN THAT ARE ONE PERIOD LEVEL, in time order
+			std::vector<std::pair<wxLongLong_t, std::size_t>> periods;
+			int level = -1;
+			for (const std::unique_ptr<ibSelectorTree::Node>& child : n.m_node->m_children) {
+				if (child == nullptr || child->m_kind == ibSelectorNodeKind::Detail)
+					continue;
+				const int li = child->m_level - 1;
+				if (li < 0 || static_cast<std::size_t>(li) >= m_levels.size() || m_levels[li].m_fields.empty())
+					continue;
+				const ibTotalField& head = m_levels[li].m_fields.front();
+				if (head.m_col == nullptr
+				    || (!head.ByPeriods() && head.m_col->GetBalanceRole() != ibBalanceRole::Moment))
+					continue;
+				if (level == -1)
+					level = child->m_level;
+				else if (child->m_level != level)
+					continue;
+				const auto value = child->m_values.find(head.m_col->GetColumnId());
+				const auto accs  = accsOf.find(child.get());
+				if (value == child->m_values.end() || value->second.GetType() != TYPE_DATE || accs == accsOf.end())
+					continue;
+				periods.emplace_back(value->second.GetDate(), accs->second);
+			}
+			if (periods.size() < 2)
+				continue;
+			std::stable_sort(periods.begin(), periods.end(),
+				[](const auto& a, const auto& b) { return a.first < b.first; });
+
+			const std::size_t pairs = std::max(openings.size(), closings.size());
+			for (std::size_t k = 0; k < pairs; ++k) {
+				const std::size_t o = k < openings.size() ? openings[k] : none;
+				const std::size_t c = k < closings.size() ? closings[k] : none;
+				const auto accOf = [&](std::size_t accs, std::size_t agg) -> ibAggAcc* {
+					return agg != none ? &m_accPool[accs + agg] : nullptr;
+				};
+
+				// every key read in any of these periods, by either edge
+				std::unordered_set<ibLevelKey, ibLevelKeyHash, ibLevelKeyEqual> keys;
+				for (const auto& period : periods)
+					for (const std::size_t agg : { o, c })
+						if (const ibAggAcc* acc = accOf(period.second, agg))
+							if (acc->m_readings)
+								for (const auto& reading : *acc->m_readings)
+									keys.insert(reading.first);
+
+				for (const ibLevelKey& key : keys) {
+					std::vector<bool> moved(periods.size(), false);
+					for (std::size_t p = 0; p < periods.size(); ++p) {
+						const ibAggAcc* oa = accOf(periods[p].second, o);
+						const ibAggAcc* ca = accOf(periods[p].second, c);
+						moved[p] = (oa != nullptr && oa->ReadingOf(key) != nullptr) || (ca != nullptr && ca->ReadingOf(key) != nullptr);
+					}
+					// FORWARD — the last closing, into every quiet period after it
+					if (c != none) {
+						bool have = false;
+						ibNumber last{ 0 };
+						for (std::size_t p = 0; p < periods.size(); ++p) {
+							ibAggAcc* ca = accOf(periods[p].second, c);
+							if (moved[p]) {
+								if (const ibAggAcc::Reading* r = ca->ReadingOf(key)) { have = true; last = r->m_sum; }
+								continue;
+							}
+							if (!have)
+								continue;
+							ca->CarryBalance(key, last);
+							if (ibAggAcc* oa = accOf(periods[p].second, o))
+								oa->CarryBalance(key, last);
+							moved[p] = true;
+						}
+					}
+					// BACKWARD — the first opening, into every quiet period before it
+					if (o != none) {
+						bool have = false;
+						ibNumber next{ 0 };
+						for (std::size_t p = periods.size(); p-- > 0;) {
+							ibAggAcc* oa = accOf(periods[p].second, o);
+							if (moved[p]) {
+								if (const ibAggAcc::Reading* r = oa->ReadingOf(key)) { have = true; next = r->m_sum; }
+								continue;
+							}
+							if (!have)
+								continue;
+							oa->CarryBalance(key, next);
+							if (ibAggAcc* ca = accOf(periods[p].second, c))
+								ca->CarryBalance(key, next);
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -4294,7 +4549,7 @@ private:
 	{
 		const std::size_t at = m_pool[idx].m_accs;
 		for (std::size_t i = 0; i < m_aggs.size(); ++i)
-			m_accPool[at + i].FeedOperand(m_aggs[i], m_operands[i]);
+			m_accPool[at + i].FeedRead(m_aggs[i], m_operands[i], m_marks[i]);
 	}
 
 	// A node's accumulators, one per aggregate, taken from the pool — see FoldNode.
@@ -4478,6 +4733,7 @@ private:
 	// per row by Feed and handed to every node on its path. Kept between rows so their storage is reused.
 	std::vector<ibLevelKey>                               m_rowKeys;
 	std::vector<ibValue>                                  m_operands;
+	std::vector<ibBalanceMark>                            m_marks;      // a balance's key and moment, per aggregate
 	// THE LADDERS THIS FOLD BUILDS — one without `SPLIT`, and then one per branch. What used to be
 	// three fields about "the levels" now belongs to each section, because with branches there is no
 	// longer a single answer to "where do the columns start".
@@ -4500,6 +4756,8 @@ private:
 ibValue EmptyPeriodFigure(const ibDataQueryBuilder::AggregateItem& a)
 {
 	using Fn = ibDataQueryBuilder::AggregateFn;
+	if (a.m_balance != ibBalanceRole::None)
+		return ibValue();   // a balance is not nought on a quiet month — it is carried (PadPeriodChildren)
 	return (a.m_fn == Fn::Sum || a.m_fn == Fn::Count) ? ibValue(ibNumber(0L)) : ibValue();
 }
 
@@ -4553,6 +4811,31 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	}
 	if (made.empty())
 		return;
+
+	// ⭐ …AND A BALANCE IS CARRIED INTO A QUIET PERIOD, never zeroed. Nothing moved there, so what stood at
+	// its START is what stood at the start of the next period that has rows, and what stands at its END is
+	// what stood at the end of the last one before it. Beyond the data on the far side the figure itself has
+	// no neighbour to take it from (the other edge would — that is the pair of a balance), and it is left
+	// empty there rather than invented.
+	for (size_t i = 0; i < aggregates.size(); ++i) {
+		const ibDataQueryBuilder::AggregateItem& a = aggregates[i];
+		if (a.m_balance == ibBalanceRole::None)
+			continue;
+		const ibMetaID slot = AggSlotId(aggregates, i);
+		const ibValue* carried = nullptr;
+		const auto visit = [&](const wxDateTime& at, ibSelectorTree::Node* node) {
+			if (have.count(at) != 0) {
+				const auto it = node->m_values.find(slot);
+				carried = it != node->m_values.end() ? &it->second : nullptr;
+			}
+			else
+				node->m_values[slot] = carried != nullptr ? *carried : ibValue();
+		};
+		if (a.m_balance == ibBalanceRole::Opening)
+			for (auto it = series.rbegin(); it != series.rend(); ++it) visit(it->first, it->second);
+		else
+			for (auto it = series.begin(); it != series.end(); ++it) visit(it->first, it->second);
+	}
 
 	// Rebuild the child list along the SERIES, keeping the direction the data came in: a report that
 	// reads newest-first must not have its filled months arrive ascending in the middle of it.
@@ -4627,9 +4910,10 @@ bool LevelsUnfoldHierarchy(const std::vector<ibTotalLevel>& levels)
 //   * a level is keyed by the ROW'S IDENTITY — its heading carries the row's own cells (AttachDimValue);
 //   * a level is read BY PERIODS — padded from its figures by a pass of its own;
 //   * an aggregate is DISTINCT (different values are not a sum of parts), has an AREA (OVER — folded over
-//     nodes), or shares its slot with another one or with a key (the part would overwrite what the other
-//     reads). AVG is folded from two parts — a sum in its slot, a count beside it — and divided once the tree
-//     is built (FoldByKeysFirst's `averages`).
+//     nodes), is a BALANCE (a key's reading at its first or last moment — the rows folded first would have
+//     lost the moment they stood at), or shares its slot with another one or with a key (the part would
+//     overwrite what the other reads). AVG is folded from two parts — a sum in its slot, a count beside it —
+//     and divided once the tree is built (FoldByKeysFirst's `averages`).
 bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates, const ibBackendQueryable* source)
 {
@@ -4651,7 +4935,7 @@ bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 	}
 	for (size_t i = 0; i < aggregates.size(); ++i) {
 		const ibDataQueryBuilder::AggregateItem& a = aggregates[i];
-		if (a.m_distinct || a.m_scopeDepth > 0)
+		if (a.m_distinct || a.m_scopeDepth > 0 || a.m_balance != ibBalanceRole::None)
 			return false;
 		const ibMetaID slot = AggSlotId(aggregates, i);
 		if (std::find(taken.begin(), taken.end(), slot) != taken.end())

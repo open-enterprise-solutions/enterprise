@@ -182,21 +182,7 @@ wxPG_IMPLEMENT_PROPERTY_CLASS(wxFormatStringProperty, wxTStringProperty, TextCtr
 
 ibDialogTranslateConstructor::ibBoxEditor wxFormatStringProperty::GetBoxEditor() const
 {
-	const bool readOnly = HasFlag(wxPGFlags::ReadOnly);
-	return [readOnly](wxWindow* parent, const wxString& language, wxString& text) -> bool {
-		// THE CODE EDITOR'S RULE (codeEditor.cpp): a string that comes back unchanged is not written, so it
-		// keeps its author's spelling.
-		const ibFormatString before = ibFormatString::Parse(text);
-		ibDialogFormatConstructor dialog(parent,
-			wxString::Format(wxT("%s (%s)"), _("Format string constructor"), language), before, readOnly);
-		if (dialog.ShowModal() != wxID_OK)
-			return false;
-		const ibFormatString after = dialog.GetFormat();
-		if (after == before)
-			return false;
-		text = after.Render();
-		return true;
-	};
+	return ibFormatBoxEditor(HasFlag(wxPGFlags::ReadOnly));
 }
 
 // -----------------------------------------------------------------------

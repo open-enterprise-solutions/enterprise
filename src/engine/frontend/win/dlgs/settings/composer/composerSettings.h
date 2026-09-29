@@ -265,6 +265,17 @@ private:
 	wxWindow* BuildOutputPage(wxWindow* parent);    // variants | structure / settings
 	wxWindow* BuildResourcePage(wxWindow* parent);  // WHAT THE LEVELS FOLD — the aggregates
 	wxWindow* BuildQueryPage(wxWindow* parent);     // developer only — what is READ
+	// WHAT EACH FIELD THE QUERY READS IS — everything generated (the title from the name, the type
+	// from the query) and overruled one field at a time; only what a person said is kept.
+	wxWindow* BuildFieldPage(wxWindow* parent);
+	// The "..." behind a field's title: every language of it at once, in the translation constructor.
+	bool EditFieldTitle(wxString& text);
+	// The "..." behind a field's role: the role editor, the same window the query constructor opens.
+	bool EditFieldRole(wxString& text);
+	// The "..." behind a field's appearance: the platform's parameters, each ticked and given a value.
+	bool EditFieldAppearance(wxString& text);
+	// A field's entry was written — the document is told, and every picker re-reads the titles.
+	void OnFieldDescribed();
 	// WHAT THE QUERY ASKS FOR — and how each behaves. `forReader` builds the RUNTIME face of the same
 	// page: only the parameters the author offered ("For user"), read by their presentation, with the
 	// value beside it and nothing else.
@@ -663,6 +674,9 @@ private:
 	class ibDataViewCtrl*  m_resourceView = nullptr;
 	class ibResourceModel* m_resourceModel = nullptr;
 	int SelectedResourceIndex() const;
+	// The fields page: the query's fields are the rows, the description's field entries what they say.
+	class ibDataViewCtrl* m_fieldView  = nullptr;
+	class ibFieldModel*   m_fieldModel = nullptr;
 
 
 	// THE SAME STYLED EDITOR the query constructor and the list settings use: SQL lexer, the

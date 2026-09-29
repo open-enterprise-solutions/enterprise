@@ -19,6 +19,7 @@
 
 #include "frontend/frontend.h"
 #include "backend/formatString.h"
+#include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // ibBoxEditor — a language's box, edited here
 
 #include <wx/dialog.h>
 #include <wx/checkbox.h>
@@ -98,5 +99,10 @@ private:
 
 	bool m_filling = false;                  // the controls are being set, not edited
 };
+
+// ⭐ A FORMAT IN SEVERAL LANGUAGES IS EDITED A LANGUAGE AT A TIME, in this window — the "..." beside each box
+// of the translation constructor. One function for everybody who opens a translated format: the format
+// property (advpropString.cpp) and a field's appearance (settingsAppearanceEditor.cpp).
+FRONTEND_API ibDialogTranslateConstructor::ibBoxEditor ibFormatBoxEditor(bool readOnly);
 
 #endif

@@ -73,6 +73,13 @@ public:
 	// column belongs to.
 	ibTempColumn& StandsFor(const ibBackendSourceColumn* declared) { m_standsFor = declared; return *this; }
 
+	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole), handed over at the same moment by the view that
+	// publishes it. An ordinary temp table's column is an ordinary value.
+	// `rank` — a period's seniority (GetPeriodRank): 1 the period, 2 a recorder, 3 a line number.
+	ibTempColumn& PlaysInBalance(ibBalanceRole role, int rank = 0) { m_balanceRole = role; m_periodRank = rank; return *this; }
+	ibBalanceRole GetBalanceRole() const override { return m_balanceRole; }
+	int           GetPeriodRank()  const override { return m_periodRank; }
+
 	// ⭐ AVAILABLE AS WHAT IT STANDS FOR (functional options) — asked live, so a view column of a dimension this
 	// base does not use goes with the dimension. An ordinary temp table's column stands for nothing: available.
 	bool IsAvailable() const override { return m_standsFor == nullptr || m_standsFor->IsAvailable(); }
@@ -86,6 +93,8 @@ private:
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
 	wxIcon                    m_icon;       // none = the base's default
 	const ibBackendSourceColumn* m_standsFor = nullptr;   // see StandsFor
+	ibBalanceRole                m_balanceRole = ibBalanceRole::None;   // see PlaysInBalance
+	int                          m_periodRank  = 0;
 };
 
 class ibTempTableQueryable : public ibBackendQueryable
@@ -374,6 +383,10 @@ public:
 		// across the declaration. A CTE has no storage to ask, so the only honest moment to know it is
 		// where the declaration is built and the inner source is still in hand.
 		bool                        m_isKey = false;
+		// …and what it is in a balance, carried across the declaration as the type is: a register's period
+		// read one level down is still the moment its totals are taken at.
+		ibBalanceRole               m_balanceRole = ibBalanceRole::None;
+		int                         m_periodRank  = 0;
 	};
 
 	// `firstOrdinal` — the ORDINARY number the minted columns are counted from, one per declaration
@@ -407,6 +420,7 @@ public:
 				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type,
 				ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery, ordinal++),
 				wxEmptyString, field.m_kind));
+			m_owned.back()->PlaysInBalance(field.m_balanceRole, field.m_periodRank);
 			m_columns.push_back(m_owned.back().get());
 			if (field.m_isKey) m_keys.push_back(m_columns.back());
 		}

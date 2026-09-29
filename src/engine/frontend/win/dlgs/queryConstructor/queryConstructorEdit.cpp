@@ -2197,6 +2197,12 @@ void ibDialogQueryConstructor::OnEditFieldExpression(wxCommandEvent&)
 	ibQueryProjection& projection = select->m_projections[index];
 	ibDialogQueryExpression dialog(this, _("Field expression"), AvailableFields(), projection.m_expr,
 		m_metaData, m_readOnly);
+	// ⭐ A FIELD HAS A ROLE — the "Role..." button beside the expression (Max, 2026-09-29), written into the
+	// query as `ROLE <word>` by the constructor, never typed into the expression. Not where the host keeps
+	// roles itself (ibQueryExclude_Roles — a composition's Fields page).
+	const bool offersRole = (m_exclude & ibQueryExclude_Roles) == 0;
+	if (offersRole)
+		dialog.OfferRole(projection.m_roleSaid, projection.m_role, projection.m_periodRank);
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 
@@ -2204,6 +2210,11 @@ void ibDialogQueryConstructor::OnEditFieldExpression(wxCommandEvent&)
 	if (!expression)
 		return;   // an empty expression is not a field — the old one stays
 	projection.m_expr = expression;
+	if (offersRole) {
+		projection.m_roleSaid   = dialog.RoleSaid();
+		projection.m_role       = dialog.Role();
+		projection.m_periodRank = dialog.PeriodRank();
+	}
 	select->m_selectAll = false;
 	// AND IT GETS A NAME. Editing a column into an expression takes its natural name away, and a
 	// field with no name is one nothing else can refer to — the same reason an ADDED field is

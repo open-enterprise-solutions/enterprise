@@ -57,7 +57,7 @@ class ibBackendQueryColumn;
 
 struct ibReadPageRequest;
 struct ibRenderedPageCache;
-struct ibQueryConstructorField;   // queryConstructorModel.h — held by pointer (m_fieldAvailability)
+struct ibQueryConstructorField;   // queryConstructorModel.h — held by pointer (m_sourceFields)
 
 // (WHAT AN OUTPUT IS, and WHAT A DRIVER IS HANDED, are stated in compositionDriver.h — cut out on
 //  2026-08-28 so that everything which DRAWS a result stops including everything which produces one.)
@@ -837,8 +837,10 @@ public:
 	const std::vector<ibSelectDescription>& Selects() const { return m_selects; }
 
 	// THE TITLE IN FORCE FOR A PATH — through the SAME function the description answers with, so the
-	// two cannot drift (ibTitleForPath).
-	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path); }
+	// two cannot drift (ibTitleForPath) — generated from what the SOURCE calls the field, where it says.
+	wxString TitleForPath(const wxString& path) const { return ibTitleForPath(m_selects, path, SourceCaptionOf(path)); }
+	// …AND HOW IT IS SHOWN — the field's appearance, what a person set (ibAppearanceForPath).
+	ibAppearanceDescription AppearanceForPath(const wxString& path) const { return ibAppearanceForPath(m_selects, path); }
 
 	// ⚠ THE OUTPUTS AND THEIR LEVELS ARE EDITED WHERE THEY ARE HELD — `Outputs()` hands over the
 	// vector, and the settings window builds a node whole (several fields, a kind, its own filter
@@ -1227,7 +1229,7 @@ protected:
 	// ⭐ A MEMO, and `mutable` for that reason alone: IsAvailable is a question whose answer for a path does not
 	// change within one reading of the options, and a run asks the same few paths again and again (every
 	// GetAvailableGroupDesc, SelectedFor, level of the ladder). Each different path is laid out and walked once.
-	// Dropped wherever an answer can change: a new source or configuration (RefreshFieldAvailability, SetMetaData,
+	// Dropped wherever an answer can change: a new source or configuration (RefreshSourceFields, SetMetaData,
 	// the RAM composer's FromStorage) and a run starting (ApplyAvailableStructure, the RAM composer's ComputeOrder
 	// and Run).
 	mutable std::map<wxString, bool> m_availablePaths;
@@ -1246,6 +1248,12 @@ public:
 	// class, so no slot moves.
 	bool IsAvailable(const wxString& path) const;
 	virtual bool IsWalkAvailable(const std::vector<wxString>& /*hops*/) const { return true; }
+
+	// ⭐ WHAT THE SOURCE CALLS A FIELD, asked the way availability is: a composer answers from its source's own
+	// fields, and one whose source says nothing (a RAM model's column) answers nothing. Read by the title a
+	// column is printed under (TitleForPath). (What a field IS in a balance needs no such door: it travels with
+	// the column into the totals.)
+	virtual wxString SourceCaptionOf(const wxString& /*path*/) const { return wxString(); }
 };
 
 // The DB composer — the schema verbs render into L4-1 query TEXT, then the standard parse → lower → walk
@@ -1278,9 +1286,11 @@ public:
 
 	bool HasSource() const override { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
 
-	// The source's own answer — see m_fieldAvailability — walked the way every holder of fields walks a path
+	// The source's own answer — see m_sourceFields — walked the way every holder of fields walks a path
 	// (ibQueryConstructorModel::WalkPath: where it starts, then each hop by its type).
 	bool IsWalkAvailable(const std::vector<wxString>& hops) const override;
+	// …and what it calls a field, from the same list.
+	wxString SourceCaptionOf(const wxString& path) const override;
 
 	// Render the schema into L4-1 text (the debug view / the AI seam). Throws when it does not render.
 	wxString RenderText() const;
@@ -1445,7 +1455,7 @@ public:
 		  m_sourceText(other.m_sourceText),
 		  m_sources(other.m_sources),
 		  m_directSources(other.m_directSources),
-		  m_fieldAvailability(other.m_fieldAvailability) {}
+		  m_sourceFields(other.m_sourceFields) {}
 
 	// …and a copy of itself — see ibDataComposer::Clone. Covariant, so a caller that already knows it holds
 	// a DB composer gets one back without a cast.
@@ -1591,13 +1601,16 @@ private:
 	// keyed by the unique local name rendered into the text (t0, t1, …). NON-OWNING.
 	std::map<wxString, const ibBackendQueryable*> m_directSources;
 
-	// ⭐ WHAT THE SOURCE'S FIELDS ARE, as the functional options of this base leave them — worked out when the
-	// source is bound (FromText / FromSource), and only while something IS off: none answers "everything is
-	// available", which is every base that switched nothing off. A path is walked from them the way every
-	// holder of fields walks one (ibQueryConstructorModel::WalkPath). Held by pointer, so this header does not
-	// pull the query model in (48 headers to 121); a copy reads the same list, which is replaced, never changed.
-	std::shared_ptr<const std::vector<ibQueryConstructorField>> m_fieldAvailability;
-	void RefreshFieldAvailability();
+	// ⭐ WHAT THE SOURCE'S FIELDS ARE, and what the source says of each — whether this base's functional options
+	// leave it available, what it is called, what it is in a balance. Worked out when the source is bound
+	// (FromText / FromSource). A path is walked from them the way every holder of fields walks one
+	// (ibQueryConstructorModel::WalkPath). Held by pointer, so this header does not pull the query model in
+	// (48 headers to 121); a copy reads the same list, which is replaced, never changed.
+	std::shared_ptr<const std::vector<ibQueryConstructorField>> m_sourceFields;
+	void RefreshSourceFields();
+	const ibQueryConstructorField* SourceField(const wxString& path) const;
+	// ` ROLE <word>` for a field a person gave a role in the composition — written into the composer's select.
+	wxString RoleSaidFor(const wxString& path) const;
 };
 
 

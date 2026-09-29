@@ -2929,6 +2929,9 @@
     <ClInclude Include="query\queryUnfold.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryBalanceRole.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>

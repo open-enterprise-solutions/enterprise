@@ -558,6 +558,33 @@ ibQueryProjection ibQueryParser::ParseProjection()
 	// instead of parsing it.
 	p.m_expr = ParsePredicate();
 
+	// ⭐⭐ `ROLE <word>` — WHAT THE FIELD IS IN A BALANCE, between the expression and its name (Max, 2026-09-29:
+	// `field1 ROLE <word> AS Field1`). Optional: unsaid, the field is what its source says. Contextual, not
+	// reserved — `ROLE` is this only when one of the five words follows it, so a field named `Role` stays a
+	// name, with or without AS.
+	if (Cur().m_kind == ibQueryTokenKind::Ident && Cur().m_text.IsSameAs(wxT("ROLE"), false)) {
+		const ibQueryToken& word = Peek();
+		if (word.m_kind == ibQueryTokenKind::Ident || word.m_kind == ibQueryTokenKind::Keyword)
+			for (const ibBalanceRole role : { ibBalanceRole::None, ibBalanceRole::Moment, ibBalanceRole::Dimension,
+			                                  ibBalanceRole::Opening, ibBalanceRole::Closing })
+				if (word.m_text.IsSameAs(ibBalanceRoleWord(role), false)) {   // the words the renderer writes
+					Next();
+					Next();
+					p.m_roleSaid = true;
+					p.m_role     = role;
+					// `PERIOD <n>` — its seniority, a whole number from 1, counted before any order a source gives
+					// its own periods (ibSourcePeriodRank); left out, the field keeps the order it had.
+					if (role == ibBalanceRole::Moment && Cur().m_kind == ibQueryTokenKind::Number) {
+						long rank = 0;
+						if (!Cur().m_text.ToLong(&rank) || rank < 1 || rank >= ibSourcePeriodRank(0))
+							ThrowQueryException(Cur(), _("ROLE PERIOD takes a whole number from 1 to 999: which period is compared first"));
+						p.m_periodRank = static_cast<int>(rank);
+						Next();
+					}
+					break;
+				}
+	}
+
 	// AS alias, or an implicit bare-identifier alias (SELECT Code c)
 	//
 	// ⭐ AFTER AN EXPLICIT `AS`, A KEYWORD IS A NAME — the same rule the dotted path already lives by

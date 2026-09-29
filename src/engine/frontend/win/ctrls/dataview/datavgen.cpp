@@ -2102,6 +2102,19 @@ ibDataViewCtrl::StartEditing(const ibDataViewItem& item,
 	if (!IsCellEditableInMode(item, col, wxDATAVIEW_CELL_EDITABLE))
 		return;
 
+	// ⭐ ONE EDITOR AT A TIME — asked here, the door every start goes through (a click, a key, EditItem). A
+	// renderer holds ONE editor, and a double-click on a cell that edits on one click starts it twice: the first
+	// click opens the editor, the second arrives as an activation whose handler asks for the cell again. The second
+	// editor took the renderer's place and the first stayed on the screen with nobody left to close it, over a box
+	// read again from the model (Max, 2026-09-29, the composer's Fields page: "the editor either resets all the time,
+	// or it cannot be closed"). An editor still shown for this column is the cell already being edited — a click
+	// elsewhere would have closed it first; one of another column is finished before this one opens.
+	if (m_editorCtrl && m_editorCtrl->IsShown()) {
+		if (m_editorRenderer == renderer)
+			return;
+		m_editorRenderer->FinishEditing();
+	}
+
 	wxRect itemRect = GetItemRect(item, col);
 
 	if (renderer->StartEditing(item, itemRect))

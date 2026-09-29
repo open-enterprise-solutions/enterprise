@@ -394,6 +394,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// the resources and the levels by name.
 	info.m_titles.assign(schema.size(), wxString());
 	info.m_paths.assign(schema.size(), wxString());
+	info.m_appearances.assign(schema.size(), ibAppearanceDescription());
 	{
 		size_t measure = 0;
 		std::map<int, size_t> filledInLevel;   // level -> how many of its fields are already titled
@@ -448,6 +449,10 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			if (info.m_paths[i].IsEmpty()
 				&& schema[i].m_role != ibQueryLowering::ibColumnRole::Measure)
 				info.m_paths[i] = schema[i].m_name;
+			// …AND HOW IT IS SHOWN — the appearance of the field it is a reading of, a figure's field too
+			// (a SUM of Amount is written as Amount is). No field, no appearance.
+			if (!info.m_paths[i].IsEmpty())
+				info.m_appearances[i] = AppearanceForPath(info.m_paths[i]);
 		}
 	}
 	// ⭐⭐ WHICH COLUMNS ARE SHOWN AT ALL — the union of what the output and every node under it shows.
@@ -488,19 +493,25 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		for (size_t i = 0; i < schema.size(); ++i)
 			if (!placed[i]) order.push_back(i);
 
+		// 🛑 EVERYTHING WORKED OUT PER COLUMN MOVES WITH IT — the appearance too. Left in the query's order, the
+		// formats went to whichever column stood there afterwards: a report's expense in money, its closing
+		// quantity in its type's format and its value in none (Max, 2026-09-29: "did you set that on purpose?").
 		std::vector<ibQueryLowering::OutputColumn> columns;
 		std::vector<wxString> titles, paths;
+		std::vector<ibAppearanceDescription> appearances;
 		std::vector<bool> shown;
 		for (const size_t i : order) {
 			columns.push_back(schema[i]);
 			titles.push_back(info.m_titles[i]);
 			paths.push_back(info.m_paths[i]);
+			appearances.push_back(info.m_appearances[i]);
 			shown.push_back(info.m_shown[i]);
 		}
 		schema = columns;
 		info.m_schema = std::move(columns);
 		info.m_titles = std::move(titles);
 		info.m_paths = std::move(paths);
+		info.m_appearances = std::move(appearances);
 		info.m_shown = std::move(shown);
 	}
 
@@ -805,6 +816,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				if (!level.HasNodesUnder()) {
 					line.m_hasChildren      = level.HasChildren();
 					line.m_showsWhatIsUnder = false;
+					// …a period nothing moved in, among them: still a heading of a rung the output reads below.
+					line.m_levelReadsDeeper = level.Level() < rowLevels
+						|| OutputWrites(output, ibSelectorNodeKind::Detail);
 					if (level.Level() > rowLevels)
 						driver.OnColumn(line, row);
 					else {
@@ -857,6 +871,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// answer this walk already has.
 				line.m_hasChildren      = level.HasChildren();
 				line.m_showsWhatIsUnder = showsWhatIsUnder;
+				line.m_levelReadsDeeper = level.Level() < rowLevels
+					|| OutputWrites(output, ibSelectorNodeKind::Detail);
 				if (level.Level() > rowLevels)
 					driver.OnColumn(line, row);
 				else

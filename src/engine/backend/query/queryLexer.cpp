@@ -5,6 +5,7 @@
 #include "queryLexer.h"
 
 #include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
+#include "queryBalanceRole.h"  // ibBalanceRoleWord — the contextual words the painter shows as words
 
 #include <map>
 
@@ -292,6 +293,15 @@ wxString ibAllQueryKeywords()
 		if (!out.IsEmpty())
 			out += wxT(" ");
 		out += entry.m_text;
+	}
+	// …AND THE CONTEXTUAL WORDS, which the lexer does not reserve but a person reads as words of the language:
+	// `ROLE` and the words of a role (`<expr> ROLE PERIOD 1 AS …`). Painted as words, still free as names —
+	// the painter matches the case they are written in, so a field called `Period` stays a name to the eye too.
+	out += wxT(" ROLE");
+	for (const ibBalanceRole role : { ibBalanceRole::None, ibBalanceRole::Moment, ibBalanceRole::Dimension,
+	                                  ibBalanceRole::Opening, ibBalanceRole::Closing }) {
+		out += wxT(" ");
+		out += ibBalanceRoleWord(role);
 	}
 	return out;
 }

@@ -92,6 +92,12 @@ struct ibQueryConstructorField
 	// alone. The settings pickers and a composition's run do, since what they offer or print is what a
 	// person may see.
 	bool m_available = true;
+	// ⭐ WHAT THE SOURCE CALLS IT, and WHAT IT IS IN A BALANCE — asked of the COLUMN a plain projection reads
+	// (its synonym, ibBackendSourceColumn::GetBalanceRole), empty / None for anything computed. The
+	// constructor still shows the NAME (m_presentation); these are what a composition fills a field in
+	// with before anybody says otherwise — its generated title, and its role.
+	wxString      m_caption;
+	ibBalanceRole m_balanceRole = ibBalanceRole::None;
 };
 
 class BACKEND_API ibQueryConstructorModel
@@ -284,5 +290,16 @@ private:
 // saying out loud.
 BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 	const ibMetaData* metaData, wxString* error = nullptr);
+
+// ⭐⭐ …AND NO ROLE THE TEXT SAYS. What a field is in a balance is a composition's word on its Fields page
+// (ibFieldDescription::m_role), and a `ROLE` in the query under it would be a second place to say one thing
+// (Max, 2026-09-29). So a composition reads its query without them — the fields above offer the SOURCE's
+// roles only, and the composer stands on this text (ibDataDBComposer::FromText). Every select the text holds
+// forgets them, the ones it reads FROM included, since a role travels up with its column. A text that says no
+// role — or does not parse yet — comes back as it was, byte for byte.
+BACKEND_API wxString ibQueryTextWithoutRoles(const wxString& text);
+// …the same over a parsed package (the query constructor's, opened by a host that keeps roles itself —
+// ibQueryExclude_Roles). True when one was said.
+BACKEND_API bool ibQueryDropRoles(ibQueryPackage& package);
 
 #endif

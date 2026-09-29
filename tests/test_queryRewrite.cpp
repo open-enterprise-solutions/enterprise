@@ -7,11 +7,15 @@
 // flags / De Morgan; truthy NOT col -> col = FALSE.
 // Rule 2 — FROM-subquery flattening: a plain inner projection merges into the outer
 // query (one server-side SELECT instead of a RAM-materialised ibSubqueryQueryable).
+// Rule 3 — the rows one level down: an expression the row road cannot compute where it
+// stands (through a walk, or folded / filtered / sorted over a join) is computed over them.
 
 #include <gtest/gtest.h>
 
 #include "backend/query/queryParser.h"
 #include "backend/query/queryRewrite.h"
+
+#include <algorithm>   // std::find — what the rows one level down carry
 
 namespace {
 
@@ -315,6 +319,128 @@ TEST(QueryRewrite, ACycleIsLeftExactlyAsWritten)
 	ASSERT_EQ(sel->m_joins.size(), 2u);
 	EXPECT_EQ(JoinedName(*sel, 0), wxT("b"));
 	EXPECT_EQ(JoinedName(*sel, 1), wxT("c"));
+}
+
+//////////////////////////////////////////////////////////////////////
+// Rule 3 — an expression the row road cannot compute reads the rows one level down
+//////////////////////////////////////////////////////////////////////
+
+namespace {
+// Every path the nested rows publish, as written — the fields the statement carried down.
+std::vector<wxString> CarriedDown(const ibQuerySelect& sel)
+{
+	std::vector<wxString> out;
+	if (sel.m_from.m_subquery)
+		for (const ibQueryProjection& p : sel.m_from.m_subquery->m_projections)
+			if (p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Column) {
+				wxString path;
+				for (const wxString& segment : p.m_expr->m_path)
+					path += (path.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
+				out.push_back(path);
+			}
+	return out;
+}
+bool Carries(const ibQuerySelect& sel, const wxString& path)
+{
+	const std::vector<wxString> carried = CarriedDown(sel);
+	return std::find(carried.begin(), carried.end(), path) != carried.end();
+}
+} // namespace
+
+TEST(QueryRewrite, AWalkInsideAnExpression_ReadsTheRowsOneLevelDown)
+{
+	// `T.Item.Price` is a join, and no expression carries one: below, it is a plain field of the rows.
+	auto sel = ParseAndRewrite(wxT("SELECT T.Qty * T.Item.Price AS Amount FROM Document.Sale.Goods AS T"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_EQ(sel->m_from.m_alias, wxT("q_rows"));
+	EXPECT_TRUE(Carries(*sel, wxT("T.Qty")));
+	EXPECT_TRUE(Carries(*sel, wxT("T.Item.Price")));
+	ASSERT_EQ(sel->m_projections.size(), 1u);
+	EXPECT_EQ(sel->m_projections[0].m_alias, wxT("Amount"));
+	const ibQueryAstExprPtr& amount = sel->m_projections[0].m_expr;
+	ASSERT_EQ(amount->m_kind, ibQueryAstExprKind::Arith);
+	EXPECT_EQ(amount->m_lhs->m_path.front(), wxT("q_rows"));   // …and the arithmetic reads the rows
+	EXPECT_EQ(amount->m_rhs->m_path.front(), wxT("q_rows"));
+}
+
+TEST(QueryRewrite, AFoldOfAnExpressionOverAJoin_ReadsTheRowsOneLevelDown)
+{
+	// The stitched rows of a join carry columns, not expressions: one level up the join is ONE source.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT B.Item AS Item, SUM(B.Qty * G.Price) AS Amount FROM AccumulationRegister.Stock AS B ")
+		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item WHERE B.Qty > 0 GROUP BY B.Item"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_TRUE(sel->m_joins.empty());
+	EXPECT_EQ(sel->m_from.m_subquery->m_joins.size(), 1u);             // the join went down whole
+	EXPECT_TRUE(sel->m_from.m_subquery->m_where != nullptr);           // …with the condition it could place
+	EXPECT_TRUE(sel->m_where == nullptr);
+	EXPECT_TRUE(Carries(*sel, wxT("B.Qty")));
+	EXPECT_TRUE(Carries(*sel, wxT("G.Price")));
+	ASSERT_EQ(sel->m_groupBy.size(), 1u);
+	EXPECT_EQ(sel->m_groupBy[0]->m_path.front(), wxT("q_rows"));       // the grouping stays up, over the rows
+}
+
+TEST(QueryRewrite, AComparisonComputedOverAJoin_GoesUpOverTheRows)
+{
+	auto sel = ParseAndRewrite(
+		wxT("SELECT B.Item AS Item FROM AccumulationRegister.Stock AS B LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item ")
+		wxT("WHERE B.Qty * G.Price > 100 AND B.Qty > 0"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	ASSERT_TRUE(sel->m_where != nullptr);
+	EXPECT_EQ(sel->m_where->m_kind, ibQueryAstExprKind::Compare);      // only the computed term went up
+	EXPECT_EQ(sel->m_where->m_lhs->m_kind, ibQueryAstExprKind::Arith);
+	ASSERT_TRUE(sel->m_from.m_subquery->m_where != nullptr);           // the plain one filters below
+	EXPECT_EQ(sel->m_from.m_subquery->m_where->m_kind, ibQueryAstExprKind::Compare);
+}
+
+TEST(QueryRewrite, ASortByAnExpressionOverAJoin_GoesDownWhole)
+{
+	// A computed source sorts by fields: the expression is read back as one.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT B.Item AS Item FROM AccumulationRegister.Stock AS B LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item ")
+		wxT("ORDER BY B.Qty * G.Price DESC"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	ASSERT_EQ(sel->m_orderBy.size(), 1u);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_kind, ibQueryAstExprKind::Column);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_path.front(), wxT("q_rows"));
+	EXPECT_FALSE(sel->m_orderBy[0].m_ascending);
+}
+
+TEST(QueryRewrite, ASortThroughAWalk_IsComputedOneLevelFurtherDown)
+{
+	// Carried down whole, the sort still reads through a walk — so the rows it is computed over go one level lower.
+	auto sel = ParseAndRewrite(wxT("SELECT T.Qty AS Qty FROM Document.Sale.Goods AS T ORDER BY T.Qty * T.Item.Price"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	ASSERT_EQ(sel->m_orderBy.size(), 1u);
+	EXPECT_EQ(sel->m_orderBy[0].m_expr->m_kind, ibQueryAstExprKind::Column);
+	const ibQuerySelect& middle = *sel->m_from.m_subquery;
+	ASSERT_TRUE(middle.m_from.m_subquery != nullptr);
+	EXPECT_TRUE(Carries(middle, wxT("T.Item.Price")));
+}
+
+TEST(QueryRewrite, WhatTheRowRoadComputesItself_StaysWhereItWasWritten)
+{
+	const wxChar* const standing[] = {
+		wxT("SELECT T.Qty * T.Price AS Amount FROM Document.Sale.Goods AS T"),                         // no walk, no join
+		wxT("SELECT T.Item.Price AS Price FROM Document.Sale.Goods AS T"),                              // a walk alone
+		wxT("SELECT SUM(T.Item.Weight) AS W FROM Document.Sale.Goods AS T"),                            // a walk folded alone
+		wxT("SELECT PRESENTATION(T.Item.Parent) AS P FROM Document.Sale.Goods AS T"),                   // a value asked
+		wxT("SELECT T.Qty FROM Document.Sale.Goods AS T WHERE T.Item.Kind = 1"),                        // a walk filtered
+		wxT("SELECT B.Qty * G.Price AS Amount FROM AccumulationRegister.Stock AS B ")
+		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item"),                                          // computed over a join: the stitch does it
+		wxT("SELECT SUM(1) AS N FROM AccumulationRegister.Stock AS B LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item"),
+		wxT("SELECT B.Item AS Item, SUM(G.Price) AS P FROM AccumulationRegister.Stock AS B ")
+		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item GROUP BY B.Item"),                          // a field folded over a join
+	};
+	for (const wxChar* text : standing) {
+		auto sel = ParseAndRewrite(text);
+		EXPECT_TRUE(sel->m_from.m_subquery == nullptr) << wxString(text).ToStdString();
+	}
 }
 
 TEST(QueryRewrite, AlreadyOrderedJoins_AreLeftAlone)

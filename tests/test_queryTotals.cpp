@@ -129,6 +129,61 @@ TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 	EXPECT_TRUE(tree.Root().m_children.empty());
 }
 
+// ⭐⭐ A BALANCE IS TAKEN AT A MOMENT, NOT ADDED UP. The rows are a key's readings over time — an item on a
+// warehouse, a day, what stood before it and what stands after. A group's OPENING is, for each key, its
+// reading at the key's FIRST period, and those added up; its CLOSING the same at the LAST. A warehouse whose
+// first row is on the second day still stood at its opening before it (nothing moved in between). Added up
+// instead, the openings of every day would be the answer — 30 here where the balance is 18.
+TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
+{
+	const ibMetaID ITEM = 1, STORE = 2, DAY = 3, OPENING = 4, CLOSING = 5;
+	ibQueryRamTable detail;
+	for (const auto& c : { std::make_pair(ITEM, wxT("item")), std::make_pair(STORE, wxT("store")),
+	                       std::make_pair(DAY, wxT("day")), std::make_pair(OPENING, wxT("opening")),
+	                       std::make_pair(CLOSING, wxT("closing")) })
+		detail.AddColumn(c.first, c.second, ibTypeDescription());
+	auto add = [&](const wxString& item, const wxString& store, long day, long opening, long closing) {
+		const long row = detail.AppendRow();
+		detail.SetCell(row, ITEM,    ibValue(item));
+		detail.SetCell(row, STORE,   ibValue(store));
+		detail.SetCell(row, DAY,     ibValue(ibNumber(day)));
+		detail.SetCell(row, OPENING, ibValue(ibNumber(opening)));
+		detail.SetCell(row, CLOSING, ibValue(ibNumber(closing)));
+	};
+	add(wxT("A"), wxT("W1"), 1, 10, 12);
+	add(wxT("A"), wxT("W1"), 2, 12, 15);
+	add(wxT("A"), wxT("W2"), 2,  5,  4);   // W2 moves only on day 2 — its opening stood from the start
+	add(wxT("B"), wxT("W1"), 1,  3,  3);
+
+	TestCol item(wxT("item"), ITEM), store(wxT("store"), STORE), day(wxT("day"), DAY),
+	        opening(wxT("opening"), OPENING), closing(wxT("closing"), CLOSING);
+
+	auto balance = [&](const TestCol& column, ibBalanceRole edge) {
+		ibDataQueryBuilder::AggregateItem a;
+		a.m_fn = ibDataQueryBuilder::AggregateFn::Sum; a.m_col = &column; a.m_alias = column.GetName();
+		a.m_balance        = edge;
+		a.m_balanceMoments = { &day };
+		a.m_balanceKeys    = { &item, &store };
+		return a;
+	};
+	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, { &item },
+		{ balance(opening, ibBalanceRole::Opening), balance(closing, ibBalanceRole::Closing) });
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_TRUE(NumEq(root.m_values.at(OPENING), 18));   // A: W1 10 + W2 5, B: 3
+	EXPECT_TRUE(NumEq(root.m_values.at(CLOSING), 22));   // A: W1 15 + W2 4, B: 3
+	ASSERT_EQ(root.m_children.size(), 2u);
+	EXPECT_TRUE(NumEq(root.m_children[0]->m_values.at(OPENING), 15));   // A
+	EXPECT_TRUE(NumEq(root.m_children[0]->m_values.at(CLOSING), 19));
+	EXPECT_TRUE(NumEq(root.m_children[1]->m_values.at(OPENING), 3));    // B
+	EXPECT_TRUE(NumEq(root.m_children[1]->m_values.at(CLOSING), 3));
+
+	// …and the same figures as ordinary sums add every day's reading up — the number a role exists to prevent.
+	ibDataQueryBuilder::AggregateItem plain;
+	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = &opening; plain.m_alias = wxT("opening");
+	EXPECT_TRUE(NumEq(ibQueryComposer::BuildTotalsTree(detail, {}, { plain }).Root().m_values.at(OPENING), 30));
+}
+
 // RAM inner JOIN: orders ⋈ customers ON orders.custId = customers.custKey, projecting
 // (orders.amount, customers.name). Customer 300 (Carol) has no orders -> dropped (inner).
 TEST(QueryCompose, InnerJoinByKey)

@@ -41,6 +41,9 @@ struct ibSettingsPlainField {
 	// The column's own answer (functional options): an unavailable field is known to the tree — a line
 	// standing on it is recognised — and not put up.
 	bool              m_available = true;
+	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
+	// one printed over its column). Empty reads as the name. What a pick STORES stays the name above.
+	wxString          m_presentation;
 };
 
 class ibSettingsFieldTree {

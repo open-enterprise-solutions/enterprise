@@ -147,7 +147,7 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 
 `ibValueMetaObject` extends `ibValue`, meaning metadata objects (Catalog definitions, Document definitions, etc.) can be stored in and returned from script variables.
 
-The payload is ONE union word: `bool` / date / reference / `ibString m_sData` / `ibNumber m_fData`. The string and the number are each a pointer-sized handle to a shared, counted block (copy = atomic `+1`, a write detaches), so `sizeof(ibValue)` is 32 on x64 and 24 on x86 (2026-09-26). The union's empty state is all-zero bits, valid as an empty string and as the number 0 at once; every change of kind destroys the old one and zeroes the word. `GetString()` returns `ibString` by value; `wxString` is a conversion at the widget edge (`ToWxString()`).
+The payload is ONE union word: `bool` / date / reference / `ibString m_sData` / `ibNumber m_fData`. The string and the number are each a pointer-sized handle to a shared, counted block (copy = atomic `+1`, a write detaches), so `sizeof(ibValue)` is 24 on x64 (2026-09-29: the reference count sits in the padding before the union; pinned by `tests/test_value.cpp`, the 32-bit layout is not). The union's empty state is all-zero bits, valid as an empty string and as the number 0 at once; every change of kind destroys the old one and zeroes the word. `GetString()` returns `ibString` by value; `wxString` is a conversion at the widget edge (`ToWxString()`).
 
 ### 2a. ibNumber — exact-decimal lazy-grow
 

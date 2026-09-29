@@ -805,6 +805,125 @@ TEST(CompositionFields, AnUnqualifiedPathNamesNothingOnceThereAreTwoSelects)
 	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(sales.m_id + wxT(".Qty")));
 }
 
+// ⭐ ONE DOOR FOR EVERY WRITER — the settings window's Fields page and report_field both go through
+// ibFieldEntryForPath. It finds the entry a field already has rather than adding a second one, makes
+// the first select of a composition that said nothing yet, and refuses a path that could be either of
+// two selects. An entry made and left saying nothing is not stored.
+TEST(CompositionFields, OneDoorFindsOrMakesTheEntryAFieldIsDescribedIn)
+{
+	ibCompositionDescription composition;
+
+	ibFieldDescription* made = ibFieldEntryForPath(composition.m_selects, wxT("Qty"));
+	ASSERT_NE(nullptr, made);
+	ASSERT_EQ(1u, composition.m_selects.size());
+	EXPECT_EQ(made, ibFieldEntryForPath(composition.m_selects, wxT("Qty")));   // found, not made twice
+	EXPECT_EQ(1u, composition.m_selects.front().m_fields.size());
+
+	// Said nothing yet — the store writes no such entry.
+	{
+		ibDataNode node;
+		ibCompositionDescriptionMemory::WriteNode(node, composition);
+		ibCompositionDescription read;
+		ibCompositionDescriptionMemory::ReadNode(node, read);
+		EXPECT_TRUE(read.m_selects.empty());
+	}
+
+	made->m_useTitle = true;
+	made->m_title    = wxT("Sold");
+	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(wxT("Qty")));
+
+	// Two selects: unqualified names nothing, qualified finds its own.
+	ibSelectDescription stock;
+	stock.m_id   = ibSelectDescription::NewId();
+	stock.m_name = wxT("Stock");
+	composition.m_selects.front().m_name = wxT("Sales");
+	composition.m_selects.push_back(stock);
+	EXPECT_EQ(nullptr, ibFieldEntryForPath(composition.m_selects, wxT("Amount")));
+	ibFieldDescription* onHand = ibFieldEntryForPath(composition.m_selects, wxT("Stock.Qty"));
+	ASSERT_NE(nullptr, onHand);
+	EXPECT_EQ(1u, composition.m_selects.back().m_fields.size());
+	EXPECT_EQ(wxT("Sold"), composition.TitleForPath(wxT("Sales.Qty")));   // the other select's entry untouched
+}
+
+// ⭐ A ROLE IS A PERSON'S WORD OVER THE SOURCE'S, kept only where it differs — SayRole, the door the Fields
+// page and report_field both say it through — and it survives the store.
+TEST(CompositionFields, ARoleIsKeptOnlyWhereItDiffersFromTheSource)
+{
+	ibCompositionDescription composition;
+	ibFieldDescription* field = ibFieldEntryForPath(composition.m_selects, wxT("Start"));
+	ASSERT_NE(nullptr, field);
+
+	field->SayRole(ibBalanceRole::Opening, ibBalanceRole::Opening);   // what the source says already
+	EXPECT_FALSE(field->m_useRole);
+	EXPECT_EQ(ibBalanceRole::Opening, ibRoleForPath(composition.m_selects, wxT("Start"), ibBalanceRole::Opening));
+
+	field->SayRole(ibBalanceRole::None, ibBalanceRole::Opening);      // taken away — a word of its own
+	EXPECT_TRUE(field->m_useRole);
+	EXPECT_EQ(ibBalanceRole::None, ibRoleForPath(composition.m_selects, wxT("Start"), ibBalanceRole::Opening));
+
+	ibDataNode node;
+	ibCompositionDescriptionMemory::WriteNode(node, composition);
+	ibCompositionDescription read;
+	ibCompositionDescriptionMemory::ReadNode(node, read);
+	EXPECT_EQ(ibBalanceRole::None, ibRoleForPath(read.m_selects, wxT("Start"), ibBalanceRole::Opening));
+	// …and a field nobody spoke of follows its source.
+	EXPECT_EQ(ibBalanceRole::Moment, ibRoleForPath(read.m_selects, wxT("Day"), ibBalanceRole::Moment));
+
+	// A PERIOD'S NUMBER is always a person's word — even over a source that says "period" already — and it
+	// is what a report numbers its periods with, its query saying no roles.
+	ibFieldDescription* day = ibFieldEntryForPath(composition.m_selects, wxT("Day"));
+	ASSERT_NE(nullptr, day);
+	day->SayRole(ibBalanceRole::Moment, ibBalanceRole::Moment, 2);
+	EXPECT_TRUE(day->m_useRole);
+	ibDataNode ranked;
+	ibCompositionDescriptionMemory::WriteNode(ranked, composition);
+	ibCompositionDescription back;
+	ibCompositionDescriptionMemory::ReadNode(ranked, back);
+	const ibFieldDescription* dayBack = back.m_selects.front().Find(wxT("Day"));
+	ASSERT_NE(nullptr, dayBack);
+	EXPECT_EQ(2, dayBack->m_periodRank);
+	day->SayRole(ibBalanceRole::Moment, ibBalanceRole::Moment, 0);   // no number, the source's word — back to it
+	EXPECT_FALSE(day->m_useRole);
+}
+
+// ⭐ A FIELD POINTS AT AN APPEARANCE — the platform's parameters, each ticked and given a value through one door
+// (Say). Unticked is kept and not applied; unticked and emptied is forgotten, and an entry left saying nothing
+// else is not stored. What is set survives the store.
+TEST(CompositionFields, AnAppearanceKeepsWhatWasTickedThroughTheStore)
+{
+	const wxString format = wxT("en = 'NFD=2'; ru = 'NFD=3'");
+	ibCompositionDescription composition;
+	ibFieldDescription* field = ibFieldEntryForPath(composition.m_selects, wxT("Amount"));
+	ASSERT_NE(nullptr, field);
+
+	field->m_appearance.Say(ibAppearanceParameter::Format, true, ibValue(format));
+	EXPECT_EQ(format, ibAppearanceForPath(composition.m_selects, wxT("Amount"))
+		.ValueInForce(ibAppearanceParameter::Format).GetString());
+	EXPECT_TRUE(ibAppearanceForPath(composition.m_selects, wxT("Qty")).IsEmpty());   // nobody spoke of it
+
+	{
+		ibDataNode node;
+		ibCompositionDescriptionMemory::WriteNode(node, composition);
+		ibCompositionDescription read;
+		ibCompositionDescriptionMemory::ReadNode(node, read);
+		EXPECT_EQ(composition.m_selects, read.m_selects);
+	}
+
+	field->m_appearance.Say(ibAppearanceParameter::Format, false, ibValue(format));
+	EXPECT_TRUE(field->m_appearance.ValueInForce(ibAppearanceParameter::Format).IsEmpty());
+	EXPECT_NE(nullptr, field->m_appearance.Find(ibAppearanceParameter::Format));   // kept
+
+	field->m_appearance.Say(ibAppearanceParameter::Format, false, ibValue());
+	EXPECT_TRUE(field->m_appearance.IsEmpty());
+	{
+		ibDataNode node;
+		ibCompositionDescriptionMemory::WriteNode(node, composition);
+		ibCompositionDescription read;
+		ibCompositionDescriptionMemory::ReadNode(node, read);
+		EXPECT_TRUE(read.m_selects.empty());
+	}
+}
+
 // ⭐⭐ A RENAME IS ONE WRITE, and everything that referred to the select BY ID still does. The name
 // is what the select is rendered with; the id is what it IS.
 //
