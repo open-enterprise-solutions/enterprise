@@ -69,7 +69,7 @@ public:
 	static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
 	static ibDataValue Int(s64 value);    // small-int convenience over Number
 	static ibDataValue UInt(u64 value);   // unsigned-int convenience over Number
-	static ibDataValue Date(s64 ticks);   // date/time scalar (ms ticks since epoch)
+	static ibDataValue Date(s64 ticks);   // date/time scalar (the wall-clock reading, fdate.h: ms with no zone)
 	static ibDataValue Binary(const wxMemoryBuffer& data);
 	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
@@ -101,7 +101,7 @@ private:
 	wxString       m_text;     // String payload
 	bool           m_bool = false; // Bool payload
 	ibNumber       m_number;   // Number payload (exact decimal, huge-capable)
-	s64            m_date = 0; // Date payload (ms ticks since epoch) — never mixed with Number
+	s64            m_date = 0; // Date payload (the wall-clock reading, fdate.h) — never mixed with Number
 	wxMemoryBuffer m_binary;   // Binary payload
 	std::shared_ptr<ibDataNode> m_child; // Child payload (composite sub-node)
 	std::vector<ibDataValue>    m_array; // Array payload (ordered list of values)
@@ -143,9 +143,11 @@ template<> struct ibDataCodec<ibNumber> {         // exact decimal — the Numbe
 	static ibDataValue To(const ibNumber& v) { return ibDataValue::Number(v); }
 	static ibNumber    From(const ibDataValue& v) { return v.AsNumber(); }
 };
-template<> struct ibDataCodec<wxDateTime> {       // a date/time — the Date scalar (ms ticks)
-	static ibDataValue To(const wxDateTime& v) { return ibDataValue::Date(v.IsValid() ? v.GetValue().GetValue() : 0); }
-	static wxDateTime  From(const ibDataValue& v) { const s64 ms = v.AsDate(); return ms != 0 ? wxDateTime(wxLongLong(ms)) : wxDateTime(); }
+template<> struct ibDataCodec<wxDateTime> {       // a date/time — the Date scalar, the wall reading of its parts (fdate.h)
+	// Through the bridge, by the local parts: what is stored is the reading a date value holds, not
+	// the instant of this machine's clock. 0 stands for an invalid wxDateTime, as it always did.
+	static ibDataValue To(const wxDateTime& v) { return ibDataValue::Date(v.IsValid() ? ibWallOfDateTime(v) : 0); }
+	static wxDateTime  From(const ibDataValue& v) { const s64 ms = v.AsDate(); return ms != 0 ? ibDateTimeOfWall(static_cast<wxLongLong_t>(ms)) : wxDateTime(); }
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -340,14 +342,14 @@ private:
 	void WriteNode(const ibDataNode& node, ibWriter& writer) const;  // identity-framed node; CHILD path
 	void ReadNode(ibReader& reader, ibDataNode& node) const; // reads the inner; node.clsid/metaId pre-set by caller
 	void WriteFields(const ibDataNode& node, ibWriter& writer) const;
-	void ReadFields(ibReader& reader, ibDataNode& node) const;
+	void ReadFields(ibReader& reader, ibDataNode& node, u32 version) const;   // version = the node's format stamp (kFormatVersion when written)
 	void WriteProps(const ibDataNode& node, ibWriter& writer) const;   // the property bag, separate area
-	void ReadProps(ibReader& reader, ibDataNode& node) const;
+	void ReadProps(ibReader& reader, ibDataNode& node, u32 version) const;
 	void WriteChildren(const ibDataNode& node, ibWriter& writer) const; // a Child value's subtree (form control tree)
-	void ReadChildren(ibReader& reader, ibDataNode& node) const;
+	void ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
 	void WriteEntry(ibWriter& writer, const wxString& name, const ibDataValue& value) const; // name + value payload
 	void WriteValue(ibWriter& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
-	ibDataValue ReadEntry(ibReader& reader) const;                                            // kind + value (name read by the caller)
+	ibDataValue ReadEntry(ibReader& reader, u32 version) const;                               // kind + value (name read by the caller)
 };
 
 ////////////////////////////////////////////////////////////////////////////

@@ -21,6 +21,8 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_pagination = ibPagination::LimitOffset;
 		d.m_boolForm   = ibBoolForm::TrueFalse;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
+		d.m_localTimestamp = wxT("LOCALTIMESTAMP");   // the server's clock in the session's TimeZone
+		d.m_timeZoneNames  = wxT("SELECT name FROM pg_timezone_names ORDER BY name");
 		d.m_features.m_window        = true;
 		d.m_features.m_cte           = true;
 		d.m_features.m_recursiveCte      = true;
@@ -409,6 +411,22 @@ ibDatabaseLayerPostgres::~ibDatabaseLayerPostgres()
 }
 
 // open database
+bool ibDatabaseLayerPostgres::SetSessionTimeZone(const wxString& zone)
+{
+	if (!IsOpen())
+		return false;
+	if (zone.Contains(wxT("'")))
+		return false;
+	try {
+		RunQuery(zone.IsEmpty() ? wxString(wxT("SET TIME ZONE DEFAULT")) : wxT("SET TIME ZONE '") + zone + wxT("'"));
+	}
+	catch (const ibBackendException&) {
+		return false;
+	}
+	m_sessionTimeZone = zone;
+	return true;
+}
+
 bool ibDatabaseLayerPostgres::Open()
 {
 	ResetErrorCodes();
@@ -576,6 +594,7 @@ bool ibDatabaseLayerPostgres::Close()
 {
 	CloseResultSets();
 	CloseStatements();
+	m_sessionTimeZone.clear();   // the zone goes with the session; a fresh Open stands in the server's own
 
 	{
 		std::lock_guard<std::mutex> guard(m_cancelGuard);   // not under a Cancel still using it

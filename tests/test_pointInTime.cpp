@@ -24,14 +24,15 @@
 
 namespace {
 
-wxDateTime At(int day, int hour, int minute = 0)
+// A reading in March 2026 - the date as the engine keeps it (fdate.h).
+wxLongLong_t At(int day, int hour, int minute = 0)
 {
-	return wxDateTime(day, wxDateTime::Mar, 2026, hour, minute, 0);
+	return ibWallFromParts(2026, 3, static_cast<unsigned>(day), static_cast<unsigned>(hour), static_cast<unsigned>(minute));
 }
 
 using MomentPtr = ibValuePtr<ibValuePointInTime>;
 
-MomentPtr Moment(const wxDateTime& when, const ibValue& record = ibValue())
+MomentPtr Moment(wxLongLong_t when, const ibValue& record = ibValue())
 {
 	return MomentPtr(new ibValuePointInTime(when, record));
 }

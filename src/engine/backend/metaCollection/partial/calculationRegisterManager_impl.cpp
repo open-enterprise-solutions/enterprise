@@ -92,10 +92,10 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cFil
 			record.m_line = selection.GetValue(m_metaObject->GetRegisterLineNumber()->GetQueryColumn());
 			record.m_type = selection.GetValue(m_metaObject->GetCalculationType()->GetQueryColumn());
 			if (m_metaObject->IsUseBasePeriod()) {   // without one they are not columns of the table (ibCalcReadBase)
-				record.m_from = selection.GetValue(m_metaObject->GetBasePeriodStart()->GetQueryColumn()).GetDateTime();
-				record.m_to = selection.GetValue(m_metaObject->GetBasePeriodEnd()->GetQueryColumn()).GetDateTime();
+				record.m_from = selection.GetValue(m_metaObject->GetBasePeriodStart()->GetQueryColumn()).GetDate();
+				record.m_to = selection.GetValue(m_metaObject->GetBasePeriodEnd()->GetQueryColumn()).GetDate();
 			}
-			record.m_registration = selection.GetValue(m_metaObject->GetRegistrationPeriod()->GetQueryColumn()).GetDateTime();
+			record.m_registration = selection.GetValue(m_metaObject->GetRegistrationPeriod()->GetQueryColumn()).GetDate();
 			for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions)
 				record.m_dimensions.push_back(selection.GetValue(pairing.m_own->GetQueryColumn()));
 			records.push_back(std::move(record));

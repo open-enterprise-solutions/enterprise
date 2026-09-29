@@ -1093,12 +1093,12 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 		// It carries THIS reference, not a copy: `GetValue(true)` is the verb for handing out this
 		// very value, where a second ibValueReferenceDataObject over the same (type, guid) would be
 		// a second object for one identity -- the thing a reference exists to prevent.
-		wxDateTime when;
+		wxLongLong_t when = emptyDate;
 		const ibValueMetaObjectRecordDataRecorderRef* recorder = nullptr;
 		if (!IsEmptyRef() && m_metaObject->ConvertToValue(recorder) && recorder != nullptr) {
 			ibValue date;
 			if (GetValueByMetaID(recorder->GetDocumentDate()->GetMetaID(), date) && date.GetType() == ibValueTypes::TYPE_DATE)
-				when = date.GetDateTime();
+				when = date.GetDate();
 		}
 		pvarRetValue = new ibValuePointInTime(when, GetValue(true));
 		return true;

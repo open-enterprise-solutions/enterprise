@@ -152,7 +152,7 @@ bool RunDump(const wxString& tableName, const ibMetaData* metaData,
 
 bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 	const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* keyColumn, bool upsert,
-	const ibReaderMemory& rows)
+	const ibReaderMemory& rows, bool datesAreInstants)
 {
 	// Build the bind layout once: the statement column list (the separate key first when there is one,
 	// then each column's physical field spread) + the column-id -> (start position, column) maps the
@@ -231,7 +231,7 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 				}
 				else {
 					int pos = positionOf[col];
-					ibDataMover::BinaryToStatement(column, metaData, *colReader, &statement, pos);
+					ibDataMover::BinaryToStatement(column, metaData, *colReader, &statement, pos, datesAreInstants);
 				}
 			}
 			else if (keyColumn != nullptr) {
@@ -239,7 +239,7 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 				// written when the key rode BOTH ways carries this chunk for a table that no longer wants
 				// one — there is nothing to bind it to, and the row's own column already has the value.
 				int keyPosition = 1;
-				ibDataMover::BinaryToStatement(keyColumn, metaData, *colReader, &statement, keyPosition);
+				ibDataMover::BinaryToStatement(keyColumn, metaData, *colReader, &statement, keyPosition, datesAreInstants);
 			}
 
 			colReaderPrev = colReader;
@@ -268,7 +268,7 @@ bool ibDataMover::Dump(const ibSchemaTable& table, ibWriterMemory& out)
 	return RunDump(table.m_name, MetaOf(table), ColumnsOf(table), KeyOf(table).col, out);
 }
 
-bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows)
+bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows, bool datesAreInstants)
 {
 	// Nothing was dumped for a derived table, so there is nothing to load. It comes back through
 	// L3-4 regeneration once the source rows are in place — which is also the only order that can
@@ -278,7 +278,7 @@ bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows
 	if (table.m_columns.empty())
 		return true;
 	const KeyInfo key = KeyOf(table);
-	return RunRestore(table.m_name, MetaOf(table), ColumnsOf(table), key.col, key.unique, rows);
+	return RunRestore(table.m_name, MetaOf(table), ColumnsOf(table), key.col, key.unique, rows, datesAreInstants);
 }
 
 // ==========================================================================
@@ -310,7 +310,7 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 		n.GetBuffer(writer);
 		break;
 	}
-	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(result.GetResultDate(f).GetValue().GetValue()); break;
+	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(static_cast<u64>(result.GetResultDate(f))); break;
 	case ibBackendColumnRawDB::RawType::String:  writer.w_stringZ(result.GetResultString(f)); break;
 	default: {   // Guid / Reference / Blob — bytes, as they are stored
 		wxMemoryBuffer buffer;
@@ -322,8 +322,17 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 	return true;
 }
 
+wxLongLong_t ibDataMover::DateOfWire(wxLongLong_t raw, bool wasAnInstant)
+{
+	if (raw == -62135604000000ll)   // the empty date as a build before 2026-09 wrote it (backend_core.h then)
+		return emptyDate;
+	if (!wasAnInstant || raw == 0)
+		return raw;
+	return ibWallOfDateTime(wxDateTime(wxLongLong(raw)));   // the instant's parts on this machine's clock
+}
+
 static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory& reader,
-	ibQueryStatement* statement, int& position)
+	ibQueryStatement* statement, int& position, bool datesAreInstants)
 {
 	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
 	if (raw == nullptr)
@@ -337,7 +346,7 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 		statement->SetParamNumber(position++, value);
 		break;
 	}
-	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, wxLongLong(reader.r_u64())); break;
+	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, ibDataMover::DateOfWire(static_cast<wxLongLong_t>(reader.r_u64()), datesAreInstants)); break;
 	case ibBackendColumnRawDB::RawType::String:  statement->SetParamString(position++, reader.r_stringZ()); break;
 	default: {
 		wxMemoryBuffer buffer;
@@ -350,9 +359,9 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 }
 
 void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
-	const ibReaderMemory& reader, ibQueryStatement* statement, int& position)
+	const ibReaderMemory& reader, ibQueryStatement* statement, int& position, bool datesAreInstants)
 {
-	if (RawToStatement(col, reader, statement, position))
+	if (RawToStatement(col, reader, statement, position, datesAreInstants))
 		return;
 
 	const int tag = reader.r_s32();
@@ -369,7 +378,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 				statement->SetParamNumber(p++, value);
 				break;
 			}
-			case ibColumnRole::Date:   statement->SetParamDate(p++, wxLongLong(reader.r_u64())); break;
+			case ibColumnRole::Date:   statement->SetParamDate(p++, DateOfWire(static_cast<wxLongLong_t>(reader.r_u64()), datesAreInstants)); break;
 			case ibColumnRole::String: statement->SetParamString(p++, reader.r_stringZ()); break;
 			case ibColumnRole::Enum:   statement->SetParamInt(p++, reader.r_s32()); break;
 			case ibColumnRole::Schedule: {
@@ -444,7 +453,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 	}
 	case ibFieldTypes_Date:
 		if (td.ContainType(ibValueTypes::TYPE_DATE))
-			writer.w_u64(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date)).GetValue().GetValue());
+			writer.w_u64(static_cast<u64>(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date))));
 		else
 			writer.w_u64(emptyDate);
 		break;

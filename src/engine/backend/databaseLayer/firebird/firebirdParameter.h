@@ -41,7 +41,7 @@ public:
 	void Set(int nValue);
 	void Set(double dblValue);
 	void Set(bool bValue);
-	void Set(const wxDateTime& dateValue);
+	void Set(const ibDateParts& date);   // a date by its parts (fdate.h) - no clock on the way to the TIMESTAMP
 	void Set(const void* pData, long nDataLength);
 
 	enum {

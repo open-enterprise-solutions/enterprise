@@ -74,7 +74,7 @@ bool ibValuePreparedStatement::CallAsProc(const long lMethodNum, ibValue** paPar
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_NUMBER)
 			m_preparedStatement->SetParamNumber(position, paParams[1]->GetNumber());
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_DATE)
-			m_preparedStatement->SetParamDate(position, paParams[1]->GetDateTime());
+			m_preparedStatement->SetParamDate(position, paParams[1]->GetDate());
 		else if (paParams[1]->GetType() == ibValueTypes::TYPE_STRING)
 			m_preparedStatement->SetParamString(position, paParams[1]->GetString());
 		else

@@ -1374,7 +1374,7 @@ public:
 	virtual int GetInteger() const { return GetNumber().ToInt(); }
 	virtual unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	virtual double GetDouble() const { return GetNumber().ToDouble(); }
-	virtual wxDateTime GetDateTime() const { return wxLongLong(GetDate()); }
+	virtual wxDateTime GetDateTime() const;   // the wxDateTime with this date's parts (fdate.h - the bridge)
 
 	virtual ibNumber GetNumber() const;
 	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one

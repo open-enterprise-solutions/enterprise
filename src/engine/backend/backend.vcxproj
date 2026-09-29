@@ -50,6 +50,8 @@
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
+    <ClInclude Include="session\serverClock.h" />
+    <ClInclude Include="session\regionalSettings.h" />
     <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
     <ClInclude Include="session\sessionRegistry.h" />
@@ -329,6 +331,7 @@
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
     <ClInclude Include="fnumber.h" />
+    <ClInclude Include="fdate.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="picturePredefined.h" />
@@ -474,6 +477,8 @@
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\serverClock.cpp" />
+    <ClCompile Include="session\regionalSettings.cpp" />
     <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />
@@ -899,6 +904,7 @@
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
+    <ClCompile Include="fdate.cpp" />
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
@@ -1088,6 +1094,45 @@
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb</DestinationFolders>
       <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb</DestinationFolders>
+    </CopyFileToFolders>
+    <!-- The zone rules ICU counts a region's time by (tzdata/ beside the engine, as the Linux kit lays
+         them out), and ids.dat, the list of zone names the engine reads from the same folder. Without
+         the rules the ICU built into the kit knows 2018's: a zone named since then - Europe/Kyiv - is
+         accepted by the engine and counted as UTC, silently. -->
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\metaZones.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\timezoneTypes.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\windowsZones.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\zoneinfo64.res">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="databaseLayer\firebird\engine\dll\tzdata\ids.dat">
+      <FileType>Document</FileType>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
+      <DestinationFolders Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)\_fb\tzdata</DestinationFolders>
     </CopyFileToFolders>
     <!-- Phase 6 — security5.fdb is FB's user-credentials store. The spawned
          firebird.exe authenticates incoming TCP connects against it; without

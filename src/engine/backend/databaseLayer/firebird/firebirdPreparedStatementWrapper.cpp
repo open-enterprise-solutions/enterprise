@@ -153,9 +153,9 @@ void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const void* pDa
 	m_pParameterCollection->SetParam(nPosition, pData, nDataLength);
 }
 
-void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibDateParts& date)
 {
-	m_pParameterCollection->SetParam(nPosition, dateValue);
+	m_pParameterCollection->SetParam(nPosition, date);
 }
 
 void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, bool bValue)

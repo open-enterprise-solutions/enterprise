@@ -4,6 +4,9 @@
     <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\settings\regionalsettingspanel.cpp">
+      <Filter>mainFrame\settings</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolForms.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
@@ -1097,6 +1100,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\settings\regionalsettingspanel.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="settings\formSettings.h">

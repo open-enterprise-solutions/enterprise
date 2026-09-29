@@ -1,4 +1,5 @@
 #include "session.h"
+#include "serverClock.h"   // ibServerClock::Now - a session's working date starts from the server's clock
 #include "sessionRegistry.h"
 #include "sessionException.h"   // the session's own refusals — exclusive held / others active
 
@@ -519,7 +520,7 @@ void BindingsChanged() noexcept
 ibSession::ibSession(wxString id, ibSessionKind kind)
 	: m_id(std::move(id))
 	, m_kind(kind)
-	, m_workDate(wxDateTime::Now())
+	, m_workDate(ibDateTimeOfWall(ibServerClock::Now()))
 {
 }
 

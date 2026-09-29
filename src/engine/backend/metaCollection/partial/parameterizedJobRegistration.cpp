@@ -11,6 +11,7 @@
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/userInfo.h"                        // ibUserInfo — the identity the job inherits
 #include "backend/job/jobManager.h"                  // ibJobManager / ibJobDescription
+#include "backend/session/serverClock.h"             // ibServerClock::Now - a row's last run, and its first "now", are the base's clock
 
 //***********************************************************************
 //*                    NextRun — the moved computation                  *
@@ -25,7 +26,7 @@ wxDateTime ibValueMetaObjectParameterizedJob::ComputeNextRun(const ibJobSchedule
 	// inherits "a time of day means NOT BEFORE" rather than inventing a stricter reading.
 	const wxDateTime countFrom = lastRun.IsValid()
 		? lastRun + wxTimeSpan::Seconds(schedule.m_intervalSeconds > 0 ? schedule.m_intervalSeconds : 0)
-		: wxDateTime::Now();
+		: ibDateTimeOfWall(ibServerClock::Now());
 
 	return ibJobScheduleRules::NextAllowedAfter(schedule, countFrom);
 }
@@ -130,7 +131,7 @@ void ibValueMetaObjectParameterizedJob::StampLastRun(const ibGuid& objGuid) cons
 	//     so an open card would be told its data "was changed by another user" — by itself.
 	//   * RUNNING IS NOT EDITING. Execute is its own right; a stamp through the object write would
 	//     silently require Write as well.
-	ibJobManager::WriteSharedLastRun(objGuid, GetRowJobName(objGuid), wxDateTime::Now());
+	ibJobManager::WriteSharedLastRun(objGuid, GetRowJobName(objGuid), ibDateTimeOfWall(ibServerClock::Now()));
 }
 
 bool ibValueMetaObjectParameterizedJob::RunJobByReference(const ibGuid& objGuid) const

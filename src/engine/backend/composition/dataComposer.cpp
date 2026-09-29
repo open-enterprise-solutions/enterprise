@@ -1537,7 +1537,7 @@ wxString ValueSig(const ibValue& v)
 	switch (v.GetType()) {
 	case TYPE_BOOLEAN: return v.GetBoolean() ? wxT("B1") : wxT("B0");
 	case TYPE_NUMBER:  return wxT("N") + v.GetNumber().ToString();
-	case TYPE_DATE:    return wxT("D") + v.GetDateTime().GetValue().ToString();
+	case TYPE_DATE:    return wxString::Format(wxT("D%lld"), static_cast<long long>(v.GetDate()));
 	case TYPE_STRING:  return wxT("S") + v.GetString();
 	default:           return wxT("_");
 	}

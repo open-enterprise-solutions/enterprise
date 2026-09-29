@@ -96,7 +96,7 @@ ibMaterializeReadSpec BalanceRead(bool rows, const wxDateTime& moment, bool excl
 	r.m_to           = ibValue(moment);
 	r.m_toExcluding  = excluding;
 	r.m_markColumn   = wxT("rec_");
-	r.m_floor        = ibValue(ibTruncateToPeriod(moment, ibTotalsPeriod::Day));
+	r.m_floor        = ibValue(ibTruncateToPeriod(ibWallOfDateTime(moment), ibTotalsPeriod::Day));
 	r.m_dropZeroRows = true;
 	r.m_columns = {
 		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },

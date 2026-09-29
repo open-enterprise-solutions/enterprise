@@ -5,6 +5,7 @@
 #include "databaseLayer/databaseErrorCodes.h"
 #include "fileSystem/fs.h"
 #include "guid.h"
+#include "session/serverClock.h"   // ibServerClock::Now - a user row's `changed` is the base's clock
 
 namespace {
 
@@ -233,7 +234,7 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
 			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
 			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
-			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("changed"),    ibConst(ibValue(ibServerClock::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
 		}, { wxT("guid") }));

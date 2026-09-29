@@ -137,7 +137,7 @@ struct SequenceBorderFix : ::testing::Test {
 		return ibValue(ibValueReferenceDataObject::Create(cfg.get(), document->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	}
 	static ibValue Moment(const wxDateTime& when, const ibValue& recorder) {
-		return ibValue(new ibValuePointInTime(when, recorder));
+		return ibValue(new ibValuePointInTime(ibWallOfDateTime(when), recorder));
 	}
 
 	// What a posting does: the document's registration is written, then the border is told.

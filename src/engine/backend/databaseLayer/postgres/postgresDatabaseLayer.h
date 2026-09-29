@@ -64,6 +64,11 @@ public:
 	/// clone database
 	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerPostgres(*this); }
 
+	// The session's zone (the base): SET TIME ZONE on the connection. A clone starts in the server's
+	// own zone (the copy carries no session state); the pool puts it into the base's.
+	virtual bool HasSessionTimeZone() const override { return true; }
+	virtual bool SetSessionTimeZone(const wxString& zone) override;
+
 	// IsActiveTransaction uses the base-class default (m_txDepth > 0).
 	// Driver transaction primitives (DoBeginTransaction / DoCommit /
 	// DoRollBack) are protected — see below.

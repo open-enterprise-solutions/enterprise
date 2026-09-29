@@ -141,7 +141,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 		node.SetValue(kFieldData, GetString());
 		return true;
 	case ibValueTypes::TYPE_DATE:
-		node.SetValue(kFieldData, GetDateTime());
+		node.AddField(kFieldData, ibDataValue::Date(GetDate()));   // the reading itself (fdate.h) - no zone to lose
 		return true;
 	default:
 		break;
@@ -196,7 +196,7 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 			m_dData = text.GetDate();
 			return true;
 		}
-		m_dData = node.GetValue<wxDateTime>(kFieldData).GetValue().GetValue();
+		m_dData = stored != nullptr && stored->Kind() == ibDataKind::Date ? static_cast<wxLongLong_t>(stored->AsDate()) : emptyDate;
 		return true;
 	}
 	default:

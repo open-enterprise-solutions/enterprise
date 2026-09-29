@@ -1239,7 +1239,7 @@ public:
 	int         GetResultInt(const wxString& name);
 	long long   GetResultLong(const wxString& name);
 	bool        GetResultBool(const wxString& name);
-	wxDateTime  GetResultDate(const wxString& name);
+	wxLongLong_t GetResultDate(const wxString& name);   // the reading (fdate.h); NULL is the empty date
 	double      GetResultDouble(const wxString& name);
 	ibNumber    GetResultNumber(const wxString& name);
 	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
@@ -1269,7 +1269,7 @@ public:
 	int         GetResultInt(int field);
 	long long   GetResultLong(int field);
 	bool        GetResultBool(int field);
-	wxDateTime  GetResultDate(int field);
+	wxLongLong_t GetResultDate(int field);
 	ibNumber    GetResultNumber(int field);
 	void*       GetResultBlob(int field, wxMemoryBuffer& buffer);
 	bool        IsResultNull(int field);
@@ -1460,8 +1460,7 @@ public:
 	                 ibDatabaseConnectionHolder* holder = nullptr);
 	~ibQueryStatement() override = default;
 
-	// Keep the base's non-pure overloads visible alongside our overrides.
-	using ibPreparedStatement::SetParamDate;
+	// Keep the base's non-pure overload visible alongside our overrides.
 	using ibPreparedStatement::SetParamBlob;
 
 	// --- ibPreparedStatement: bind -> capture as an L2-1 value node ----------
@@ -1472,7 +1471,7 @@ public:
 	void SetParamString(int nPosition, const wxString& strValue) override;
 	void SetParamNull(int nPosition) override;
 	void SetParamBlob(int nPosition, const void* pData, long nDataLength) override;
-	void SetParamDate(int nPosition, const wxDateTime& dateValue) override;
+	void SetParamDate(int nPosition, wxLongLong_t dateValue) override;
 	void SetParamBool(int nPosition, bool bValue) override;
 	int  GetParameterCount() override { return static_cast<int>(m_columns.size()); }
 
@@ -1546,8 +1545,7 @@ public:
 	ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder = nullptr);
 	~ibBatchInsert() override;
 
-	// Keep the base's non-pure overloads visible alongside our overrides.
-	using ibQueryStatement::SetParamDate;
+	// Keep the base's non-pure overload visible alongside our overrides.
 	using ibQueryStatement::SetParamBlob;
 
 	// --- the row being bound: into the prepared INSERT, or captured as the template's values ---------
@@ -1557,7 +1555,7 @@ public:
 	void SetParamString(int nPosition, const wxString& strValue) override;
 	void SetParamNull(int nPosition) override;
 	void SetParamBlob(int nPosition, const void* pData, long nDataLength) override;
-	void SetParamDate(int nPosition, const wxDateTime& dateValue) override;
+	void SetParamDate(int nPosition, wxLongLong_t dateValue) override;
 	void SetParamBool(int nPosition, bool bValue) override;
 
 	// The row is bound: it runs, or is held for the next statement. Answers the rows this call wrote — 0 while

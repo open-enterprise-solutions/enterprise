@@ -1,4 +1,5 @@
 #include "settingsStorage.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - `changed` is the server's "now"
 
 #include "backend/appData.h"                              // settings_table
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — DML + typed row reads
@@ -44,7 +45,7 @@ wxString ibSettingsStorage::HashKey(const ibSettingsKey& key)
 	});
 }
 
-bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
+bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node, ibDatabaseConnectionHolder* holder)
 {
 	if (!key.IsOk())
 		return false;
@@ -60,14 +61,14 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 		// ONE UPSERT, matched on the address hash — re-saving a setting updates
 		// its row rather than growing a second one, and the per-driver spelling
 		// (ON CONFLICT / UPDATE OR INSERT … MATCHING) is closed by the door.
-		ibDatabaseQueryBuilder q;
+		ibDatabaseQueryBuilder q = holder != nullptr ? ibDatabaseQueryBuilder(holder) : ibDatabaseQueryBuilder();
 		q.Execute(ibUpsert(settings_table, {
 			{ wxT("entryKey"),   ibConst(ibValue(HashKey(key))) },
 			{ wxT("category"),   ibConst(ibValue(static_cast<signed int>(key.m_category))) },
 			{ wxT("objectKey"),  ibConst(Text(key.m_objectKey))  },
 			{ wxT("settingKey"), ibConst(Text(key.m_settingKey)) },
 			{ wxT("userKey"),    ibConst(Text(key.m_userKey))    },
-			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("changed"),    ibConst(ibValue(ibServerClock::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			// Opaque bytes bound as a blob constant — L2 never interprets them,
 			// which is right for a payload whose format belongs to the value.
@@ -86,14 +87,16 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 	}
 }
 
-bool ibSettingsStorage::Restore(const ibSettingsKey& key, ibDataNode& node) const
+bool ibSettingsStorage::Restore(const ibSettingsKey& key, ibDataNode& node, ibDatabaseConnectionHolder* holder, bool* failed) const
 {
+	if (failed != nullptr)
+		*failed = false;
 	if (!key.IsOk())
 		return false;
 
 	wxMemoryBuffer blob;
 	try {
-		ibDatabaseQueryBuilder q;
+		ibDatabaseQueryBuilder q = holder != nullptr ? ibDatabaseQueryBuilder(holder) : ibDatabaseQueryBuilder();
 		ibQueryResult rs = q.From(settings_table)
 			.Select({ wxT("binaryData") })
 			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("entryKey")), ibParam(0)))
@@ -107,7 +110,10 @@ bool ibSettingsStorage::Restore(const ibSettingsKey& key, ibDataNode& node) cons
 	catch (...) {
 		// No table, no base, a passive scope: NO OPINION, the same answer as an
 		// absent row. What "no setting" means belongs to the caller — an author's
-		// variant stands, a window opens with its defaults.
+		// variant stands, a window opens with its defaults. A caller that keeps
+		// something in force asks `failed` and keeps it.
+		if (failed != nullptr)
+			*failed = true;
 		return false;
 	}
 
@@ -152,7 +158,7 @@ std::vector<ibSettingsEntry> ibSettingsStorage::List(ibSettingsCategory category
 
 			const ibValue changed = rs.GetValue(2);
 			if (!changed.IsNull() && !changed.IsEmpty())
-				entry.m_changed = wxDateTime(wxLongLong(changed.GetDate()));
+				entry.m_changed = changed.GetDateTime();
 
 			entries.push_back(entry);
 		}

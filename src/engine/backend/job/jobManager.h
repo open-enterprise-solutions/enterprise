@@ -514,11 +514,12 @@ private:
 		// When this job entered the schedule. A job that has never run counts its
 		// first interval FROM HERE — see IsDue.
 		std::chrono::steady_clock::time_point m_registeredAt = std::chrono::steady_clock::now();
-		// The same moment on the WALL clock — the calendar speaks in local time, so a question like
-		// "was there a 02:00 between when we started watching and now?" cannot be asked on a steady
-		// clock. Used only for the first-run decision; every later one measures on the steady clock,
-		// where moving the system time cannot make a job fire twice.
-		wxDateTime                            m_registeredAtWall = wxDateTime::Now();
+		// The same moment on the base's clock (serverClock.h; set by Register) — the calendar speaks
+		// in the base's local time, so a question like "was there a 02:00 between when we started
+		// watching and now?" cannot be asked on a steady clock. Used only for the first-run decision;
+		// every later one measures on the steady clock, where moving the system time cannot make a
+		// job fire twice.
+		wxDateTime                            m_registeredAtWall;
 		bool                                  m_everRun     = false;
 		// Set from the body's return value: the previous pass left work behind, so
 		// the interval is skipped and the job is due on the next tick.

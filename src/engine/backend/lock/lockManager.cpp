@@ -23,6 +23,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "backend/lock/lockManager.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - acquiredAt is the server's "now", like every other stamp
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
@@ -107,7 +108,10 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 
 	try {
 		const wxString ownerGuidStr = ownerGuid.str();
-		const wxDateTime nowUtc = wxDateTime::UNow();
+		// The server's "now" (serverClock.h). This was UNow() - the one stamp in the base written in
+		// UTC while every other one was local, so a lock always looked hours older or younger than the
+		// session that held it.
+		const wxDateTime now = ibDateTimeOfWall(ibServerClock::Now());
 
 		for (const auto& item : items) {
 			// Hash + canonical now owned by the item (lazy-cached) —
@@ -195,7 +199,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 					{ wxT("keyHash"),     ibConst(ibValue(keyHash)) },
 					{ wxT("keyData"),     ibConst(ibValue(keyData)) },
 					{ wxT("lockMode"),    ibConst(ibValue(static_cast<int>(item.lockMode))) },
-					{ wxT("acquiredAt"),  ibConst(ibValue(nowUtc)) },
+					{ wxT("acquiredAt"),  ibConst(ibValue(now)) },
 					{ wxT("userName"),    ibConst(ibValue(ownerName)) },
 					{ wxT("computer"),    ibConst(ibValue(ownerComputer)) },
 				})) < 1) {   // the lock row must land; 0 is a row count, not a failure code
@@ -358,7 +362,7 @@ std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 			r.namespaceName = rs.GetResultString(wxT("namespace"));
 			r.keyData       = rs.GetResultString(wxT("keyData"));
 			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(wxT("lockMode")));
-			r.acquiredAt    = rs.GetResultDate(wxT("acquiredAt"));
+			r.acquiredAt    = ibDateTimeOfWall(rs.GetResultDate(wxT("acquiredAt")));
 			r.userName      = rs.GetResultString(wxT("userName"));
 			r.computer      = rs.GetResultString(wxT("computer"));
 			rows.push_back(std::move(r));

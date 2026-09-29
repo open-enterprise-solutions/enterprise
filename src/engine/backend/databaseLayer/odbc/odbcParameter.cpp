@@ -35,16 +35,19 @@ ibDatabaseParameterODBC::ibDatabaseParameterODBC(bool bValue) : m_nParameterType
 	m_nBufferLength = 0;
 }
 
-ibDatabaseParameterODBC::ibDatabaseParameterODBC(const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterODBC::PARAM_DATETIME)
+ibDatabaseParameterODBC::ibDatabaseParameterODBC(const ibDateParts& date) : m_nParameterType(ibDatabaseParameterODBC::PARAM_DATETIME)
 {
-	m_DateValue.year = dateValue.GetYear();
-	m_DateValue.month = dateValue.GetMonth() + 1;
-	m_DateValue.day = dateValue.GetDay();
+	m_DateValue.year = static_cast<SQLSMALLINT>(date.m_year);
+	m_DateValue.month = static_cast<SQLUSMALLINT>(date.m_month);
+	m_DateValue.day = static_cast<SQLUSMALLINT>(date.m_day);
 
-	m_DateValue.hour = dateValue.GetHour();
-	m_DateValue.minute = dateValue.GetMinute();
-	m_DateValue.second = dateValue.GetSecond();
-	m_DateValue.fraction = dateValue.GetMillisecond();
+	m_DateValue.hour = static_cast<SQLUSMALLINT>(date.m_hour);
+	m_DateValue.minute = static_cast<SQLUSMALLINT>(date.m_minute);
+	m_DateValue.second = static_cast<SQLUSMALLINT>(date.m_second);
+	// TIMESTAMP_STRUCT::fraction counts NANOSECONDS (ODBC); it used to be handed the milliseconds as they
+	// were, a thousandth of the value, and read back the same way - which cancelled out only between two
+	// copies of this driver.
+	m_DateValue.fraction = static_cast<SQLUINTEGER>(date.m_millisecond) * 1000000u;
 
 	m_nBufferLength = 0;
 }

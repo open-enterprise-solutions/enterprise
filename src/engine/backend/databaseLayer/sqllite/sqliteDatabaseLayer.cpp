@@ -17,6 +17,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 	static const ibDialectDictionary s_dialect = [] {
 		ibDialectDictionary d;
 		d.m_paramStyle = ibParamStyle::QuestionMark;
+		d.m_localTimestamp = wxT("datetime('now','localtime')");   // no server: the process's own clock, spelled the ISO way
 		d.m_pagination = ibPagination::LimitOffset;  // LIMIT n OFFSET m
 		d.m_boolForm   = ibBoolForm::OneZero;
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
@@ -130,7 +131,9 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 			{ ibDatePart::Month,     wxT("CAST(strftime('%m', {expr}) AS INTEGER)") },
 			{ ibDatePart::DayOfYear, wxT("(CAST(strftime('%j', {expr}) AS INTEGER))") },
 			{ ibDatePart::Day,       wxT("CAST(strftime('%d', {expr}) AS INTEGER)") },
-			{ ibDatePart::Week,      wxT("CAST(strftime('%W', {expr}) AS INTEGER)") },
+			// %V is the ISO week (SQLite 3.46+; the vendored one is 3.48) - what the script's GetWeekOfYear
+			// and the other dialects' WEEK count. %W counted from the year's first Monday and had a week 0.
+			{ ibDatePart::Week,      wxT("CAST(strftime('%V', {expr}) AS INTEGER)") },
 			{ ibDatePart::WeekDay,   wxT("(((CAST(strftime('%w', {expr}) AS INTEGER) + 6) % 7) + 1)") },
 			{ ibDatePart::Hour,      wxT("CAST(strftime('%H', {expr}) AS INTEGER)") },
 			{ ibDatePart::Minute,    wxT("CAST(strftime('%M', {expr}) AS INTEGER)") },

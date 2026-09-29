@@ -330,6 +330,9 @@ public:
 
 	wxString GetComputerName() const { return m_strComputer; }
 	const wxString& GetFile() const { return m_strFile; } // file-mode config/db path (VCS working copy root)
+	// The platform's default locale - `Locale` in backend.conf; empty when it names none. A base's own
+	// (session/regionalSettings.h) comes before it.
+	const wxString& GetPlatformLocale() const { return m_configInfo.m_strLocale; }
 
 	wxString GetLocale() const { return m_locale.GetCanonicalName(); }
 
@@ -408,11 +411,6 @@ private:
 	// jobs had any. Nullable, and a NULL active reads as ON: silence must never switch a job off.
 	static void MigrateTableJob();
 	static void MigrateTableSession();
-	// Additive — creates sys_settings if missing. One row per saved setting,
-	// addressed by category + object + name + user. Independent table, not part
-	// of TableAlreadyCreated()'s init contract, so existing databases pick it up
-	// on next open. See backend/settings/settingsStorage.h.
-	static void CreateTableSettings();
 	// Additive — creates sys_bytecode_cache if missing. Runs in any
 	// runMode after the existing-tables gate, so DBs initialised before
 	// AOT cache landed pick the table up on next open. Independent
@@ -613,6 +611,13 @@ public:
 	static class ibSettingsStorage* GetSettingsStorage() {
 		return s_instance != nullptr ? s_instance->m_settingsStorage.get() : nullptr;
 	}
+	// Additive — creates sys_settings if missing. One row per saved setting,
+	// addressed by category + object + name + user. Independent table, not part
+	// of TableAlreadyCreated()'s init contract, so existing databases pick it up
+	// on next open. See backend/settings/settingsStorage.h. Public, unlike its
+	// siblings below: a test of what is kept in the base (the regional settings)
+	// brings a base of its own up over SQLite, and this is the table it needs.
+	static void CreateTableSettings();
 
 private:
 

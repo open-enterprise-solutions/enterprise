@@ -237,43 +237,54 @@ bool ibDatabaseResultSetFirebird::GetResultBool(int nField)
 	return (nValue != 0);
 }
 
-wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
+wxLongLong_t ibDatabaseResultSetFirebird::GetResultDate(int nField)
 {
 	ResetErrorCodes();
 
-	wxDateTime dateReturn = wxDefaultDateTime;
+	// The parts the column holds, as the reading they are (fdate.h): what isc_decode_* hands back is a
+	// calendar reading with no zone, and it becomes the value's number without a clock in between.
+	const auto readingOf = [](const struct tm& t) {
+		return ibWallFromParts(t.tm_year + 1900, static_cast<unsigned>(t.tm_mon + 1), static_cast<unsigned>(t.tm_mday),
+			static_cast<unsigned>(t.tm_hour), static_cast<unsigned>(t.tm_min), static_cast<unsigned>(t.tm_sec));
+	};
+
+	wxLongLong_t dateReturn = emptyDate;
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		dateReturn = wxDefaultDateTime;
+		dateReturn = emptyDate;
 	}
 	else
 	{
 		short nType = pVar->sqltype & ~1;
 		if (nType == SQL_TIMESTAMP)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeTimestamp()((ISC_TIMESTAMP*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_DATE)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlDate()((ISC_DATE*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_TIME)
 		{
-			struct tm timeInTm;
+			// A time of day alone: that time on the empty date's day (0001-01-01), the reading the
+			// reference system keeps for a time with no date - filled, and nothing but the time in it.
+			// (isc_decode_sql_time leaves the day fields as it found them: a day 0, which is no day.)
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlTime()((ISC_TIME*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = ibWallFromParts(1, 1, 1, static_cast<unsigned>(timeInTm.tm_hour),
+				static_cast<unsigned>(timeInTm.tm_min), static_cast<unsigned>(timeInTm.tm_sec));
 		}
 		else
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			dateReturn = wxDefaultDateTime;
+			dateReturn = emptyDate;
 
 			SetErrorMessage(wxT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -283,11 +294,6 @@ wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 	}
 
 	return dateReturn;
-}
-
-void ibDatabaseResultSetFirebird::SetDateTimeFromTm(wxDateTime& dateReturn, struct tm& timeInTm)
-{
-	dateReturn.Set(timeInTm.tm_mday, wxDateTime::Month(timeInTm.tm_mon), timeInTm.tm_year + 1900, timeInTm.tm_hour, timeInTm.tm_min, timeInTm.tm_sec);
 }
 
 double ibDatabaseResultSetFirebird::GetResultDouble(int nField)

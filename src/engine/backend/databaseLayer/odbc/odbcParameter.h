@@ -29,7 +29,7 @@ public:
 	ibDatabaseParameterODBC(int nValue);
 	ibDatabaseParameterODBC(double dblValue);
 	ibDatabaseParameterODBC(bool bValue);
-	ibDatabaseParameterODBC(const wxDateTime& dateValue);
+	ibDatabaseParameterODBC(const ibDateParts& date);   // a date by its parts (fdate.h)
 	ibDatabaseParameterODBC(const void* pData, long nDataLength);
 
 	// dtor

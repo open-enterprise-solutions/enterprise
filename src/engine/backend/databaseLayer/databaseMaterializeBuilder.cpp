@@ -11,219 +11,180 @@
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
 
+#include "backend/fdate.h"          // the calendar without a clock — what the wall-clock twins count over
+
 #include <algorithm>   // std::find — the columns both halves of a cut carry, each named once
 
-// The RAM twin of the dialect truncation expressions. Every branch mirrors what the SQL does, and
-// the mirroring is the requirement: if these two ever disagree, the same query returns different
-// numbers depending on whether the read pushed down or folded in memory — a discrepancy that looks
-// like a rounding bug and is not one.
-wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit)
-{
-	if (!moment.IsValid())
-		return moment;
+// ===========================================================================================================
+// ⭐⭐ THE RAM TWINS OF THE DIALECT'S CALENDAR - truncation, next period, end of period, DATEADD, DATEDIFF and
+// the date parts - over a WALL-CLOCK READING (fdate.h): milliseconds that carry no zone, where an hour is
+// 3 600 000 of them, a day 86 400 000, a week seven days, and the calendar units go through the parts.
+// Every branch mirrors what the SQL does, and the mirroring is the requirement: if the two ever disagree,
+// the same query returns different numbers depending on whether the read pushed down or folded in memory -
+// a discrepancy that looks like a rounding bug and is not one. Nothing here asks the machine's clock, so
+// the answer is the one the server's TIMESTAMP arithmetic gives, on every machine. (The forms over a
+// wxDateTime that stood here before could not meet that across a clock change: `+ wxTimeSpan::Hours(1)`
+// is an hour of real time, and 02:30 + 1 on the morning the clocks go forward read 04:30 on the wall,
+// where the server says 03:30. DATEDIFF in days across that morning was a day short for the same reason.)
+// ===========================================================================================================
 
-	const wxDateTime start = ibTruncateToPeriod(moment, unit);
+namespace {
+
+// The calendar day of a reading, and the reading of a calendar day at midnight.
+wxLongLong_t WallDay(wxLongLong_t wall)
+{
+	wxLongLong_t days = wall / ibWallMsPerDay;
+	if (wall % ibWallMsPerDay < 0) --days;
+	return days;
+}
+
+wxLongLong_t WallMidnight(wxLongLong_t wall) { return WallDay(wall) * ibWallMsPerDay; }
+
+// ISO weekday of a reading: Monday = 1 ... Sunday = 7 - the parts say it (fdate.h).
+long WallWeekDay(wxLongLong_t wall)
+{
+	ibDateParts p;
+	ibWallToParts(wall, p);
+	return static_cast<long>(p.m_weekDay);
+}
+
+// The first day of the period a reading falls in, for the calendar units - as parts.
+void FirstOfPeriod(ibDateParts& parts, ibTotalsPeriod unit)
+{
+	parts.m_hour = parts.m_minute = parts.m_second = parts.m_millisecond = 0;
 	switch (unit) {
-		case ibTotalsPeriod::Second:   return start + wxTimeSpan::Seconds(1);
-		case ibTotalsPeriod::Minute:   return start + wxTimeSpan::Minutes(1);
-		case ibTotalsPeriod::Hour:     return start + wxTimeSpan::Hours(1);
-		case ibTotalsPeriod::Day:      return start + wxDateSpan::Days(1);
-		case ibTotalsPeriod::Week:     return start + wxDateSpan::Weeks(1);
-		case ibTotalsPeriod::TenDays: {
-			// The third bucket runs to the END of the month, however long that is — so what follows
-			// it is the 1st of the next month, not "ten days later". Same cap as the truncation,
-			// read from the other side.
-			if (start.GetDay() >= 21) {
-				wxDateTime first = start;
-				first.SetDay(1);
-				return first + wxDateSpan::Months(1);
-			}
-			return start + wxDateSpan::Days(10);
+		case ibTotalsPeriod::TenDays:  parts.m_day = 1 + 10 * wxMin((parts.m_day - 1) / 10, 2u); break;
+		case ibTotalsPeriod::Month:    parts.m_day = 1; break;
+		case ibTotalsPeriod::Quarter:  parts.m_day = 1; parts.m_month = ((parts.m_month - 1) / 3) * 3 + 1; break;
+		case ibTotalsPeriod::HalfYear: parts.m_day = 1; parts.m_month = parts.m_month < 7 ? 1 : 7; break;
+		case ibTotalsPeriod::Year:     parts.m_day = 1; parts.m_month = 1; break;
+		default: break;
+	}
+}
+
+wxLongLong_t OfParts(const ibDateParts& p)
+{
+	return ibWallFromParts(p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second, p.m_millisecond);
+}
+
+// Months added to a reading, the day clamped to the month it lands in - Jan 31 + 1 is Feb 28 (29), as
+// wxDateSpan::Months and every engine's DATEADD have it.
+wxLongLong_t AddMonths(wxLongLong_t wall, long months)
+{
+	ibDateParts p;
+	ibWallToParts(wall, p);
+	const long long total = static_cast<long long>(p.m_year) * 12 + static_cast<long long>(p.m_month) - 1 + months;
+	const long long year = (total >= 0 ? total : total - 11) / 12;
+	p.m_year = static_cast<int>(year);
+	p.m_month = static_cast<unsigned>(total - year * 12) + 1;
+	p.m_day = wxMin(p.m_day, ibDaysInMonth(p.m_year, p.m_month));
+	return OfParts(p);
+}
+
+} // namespace
+
+wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit)
+{
+	switch (unit) {
+		case ibTotalsPeriod::Second: return wall - ((wall % 1000) + 1000) % 1000;
+		case ibTotalsPeriod::Minute: return wall - ((wall % 60000ll) + 60000ll) % 60000ll;
+		case ibTotalsPeriod::Hour:   return wall - ((wall % 3600000ll) + 3600000ll) % 3600000ll;
+		case ibTotalsPeriod::Day:    return WallMidnight(wall);
+		case ibTotalsPeriod::Week:   return WallMidnight(wall) - (WallWeekDay(wall) - 1) * ibWallMsPerDay;
+		case ibTotalsPeriod::TenDays:
+		case ibTotalsPeriod::Month:
+		case ibTotalsPeriod::Quarter:
+		case ibTotalsPeriod::HalfYear:
+		case ibTotalsPeriod::Year: {
+			ibDateParts p;
+			ibWallToParts(wall, p);
+			FirstOfPeriod(p, unit);
+			return OfParts(p);
 		}
-		case ibTotalsPeriod::Month:    return start + wxDateSpan::Months(1);
-		case ibTotalsPeriod::Quarter:  return start + wxDateSpan::Months(3);
-		case ibTotalsPeriod::HalfYear: return start + wxDateSpan::Months(6);
-		case ibTotalsPeriod::Year:     return start + wxDateSpan::Years(1);
+	}
+	return wall;
+}
+
+wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit)
+{
+	const wxLongLong_t start = ibTruncateToPeriod(wall, unit);
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return start + 1000;
+		case ibTotalsPeriod::Minute:   return start + 60000ll;
+		case ibTotalsPeriod::Hour:     return start + 3600000ll;
+		case ibTotalsPeriod::Day:      return start + ibWallMsPerDay;
+		case ibTotalsPeriod::Week:     return start + 7 * ibWallMsPerDay;
+		case ibTotalsPeriod::TenDays: {
+			// The third bucket runs to the END of the month: what follows it is the 1st of the next.
+			ibDateParts p;
+			ibWallToParts(start, p);
+			if (p.m_day >= 21) { p.m_day = 1; return AddMonths(OfParts(p), 1); }
+			return start + 10 * ibWallMsPerDay;
+		}
+		case ibTotalsPeriod::Month:    return AddMonths(start, 1);
+		case ibTotalsPeriod::Quarter:  return AddMonths(start, 3);
+		case ibTotalsPeriod::HalfYear: return AddMonths(start, 6);
+		case ibTotalsPeriod::Year:     return AddMonths(start, 12);
 	}
 	return start;
 }
 
-wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit)
+wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit)
 {
-	if (!moment.IsValid())
-		return moment;
+	return ibNextPeriodStart(wall, unit) - 1000;
+}
 
-	wxDateTime d = moment;
+wxLongLong_t ibDateAddUnits(wxLongLong_t wall, ibTotalsPeriod unit, long count)
+{
 	switch (unit) {
-		case ibTotalsPeriod::Second:
-			d.SetMillisecond(0);
-			return d;
-		case ibTotalsPeriod::Minute:
-			d.SetMillisecond(0); d.SetSecond(0);
-			return d;
-		case ibTotalsPeriod::Hour:
-			d.SetMillisecond(0); d.SetSecond(0); d.SetMinute(0);
-			return d;
-		case ibTotalsPeriod::Day:
-			return d.GetDateOnly();
-		case ibTotalsPeriod::Week: {
-			// ISO: back up to Monday. wxDateTime's Sun==0, so Sunday is 6 days past Monday.
-			const int wd = static_cast<int>(d.GetWeekDay());
-			const int back = (wd == wxDateTime::Sun) ? 6 : (wd - wxDateTime::Mon);
-			return d.GetDateOnly() - wxDateSpan::Days(back);
-		}
+		case ibTotalsPeriod::Second:   return wall + static_cast<wxLongLong_t>(count) * 1000;
+		case ibTotalsPeriod::Minute:   return wall + static_cast<wxLongLong_t>(count) * 60000ll;
+		case ibTotalsPeriod::Hour:     return wall + static_cast<wxLongLong_t>(count) * 3600000ll;
+		case ibTotalsPeriod::Day:      return wall + static_cast<wxLongLong_t>(count) * ibWallMsPerDay;
+		case ibTotalsPeriod::Week:     return wall + static_cast<wxLongLong_t>(count) * 7 * ibWallMsPerDay;
 		case ibTotalsPeriod::TenDays: {
-			// 1st / 11th / 21st. The offset is CAPPED at 2 for the same reason the SQL caps it: day
-			// 31 must fold into the third ten-day period, not open a fourth one-day bucket.
-			const int day = d.GetDay();
-			const int idx = wxMin((day - 1) / 10, 2);
-			wxDateTime first = d.GetDateOnly();
-			first.SetDay(1);
-			return first + wxDateSpan::Days(idx * 10);
+			wxLongLong_t d = wall;
+			for (long i = 0; i < count; ++i) d = ibNextPeriodStart(d, unit);
+			for (long i = 0; i > count; --i) d = ibTruncateToPeriod(d, unit) - 1000;
+			return d;
 		}
-		case ibTotalsPeriod::Month: {
-			wxDateTime first = d.GetDateOnly();
-			first.SetDay(1);
-			return first;
-		}
-		case ibTotalsPeriod::Quarter: {
-			wxDateTime first = d.GetDateOnly();
-			first.SetDay(1);
-			first.SetMonth(static_cast<wxDateTime::Month>((d.GetMonth() / 3) * 3));
-			return first;
-		}
-		case ibTotalsPeriod::HalfYear: {
-			wxDateTime first = d.GetDateOnly();
-			first.SetDay(1);
-			first.SetMonth(d.GetMonth() < wxDateTime::Jul ? wxDateTime::Jan : wxDateTime::Jul);
-			return first;
-		}
-		case ibTotalsPeriod::Year: {
-			wxDateTime first = d.GetDateOnly();
-			first.SetDay(1);
-			first.SetMonth(wxDateTime::Jan);
-			return first;
-		}
+		case ibTotalsPeriod::Month:    return AddMonths(wall, count);
+		case ibTotalsPeriod::Quarter:  return AddMonths(wall, count * 3);
+		case ibTotalsPeriod::HalfYear: return AddMonths(wall, count * 6);
+		case ibTotalsPeriod::Year:     return AddMonths(wall, count * 12);
 	}
-	return d;
+	return wall;
 }
 
-// ⭐ THE REST OF THE CALENDAR, IN RAM — the twins of the dialect's m_periodEnd / m_dateAdd /
-// m_dateDiff / m_datePart templates, and they carry the same obligation the truncation pair does:
-// the two roads must answer identically, or one query gives two numbers depending on whether it
-// pushed down. Written through ibTruncateToPeriod / ibNextPeriodStart wherever the answer IS one of
-// those, so a calendar rule fixed once is fixed everywhere.
-
-wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit)
+long ibDateDiffUnits(wxLongLong_t from, wxLongLong_t to, ibTotalsPeriod unit)
 {
-	if (!moment.IsValid())
-		return moment;
-	// The last instant the period still covers. A second before the next one starts — the boundary
-	// belongs to the period that contains it, which is the reading every "as of the end of the
-	// month" filter depends on.
-	return ibNextPeriodStart(moment, unit) - wxTimeSpan::Seconds(1);
-}
-
-wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count)
-{
-	if (!moment.IsValid())
-		return moment;
-	const int n = static_cast<int>(count);
+	// Every sub-day unit is one wall-clock difference, so none can disagree with Day about a boundary;
+	// the calendar units count the boundaries between the periods the two readings fall in.
+	const wxLongLong_t dayDelta = WallDay(to) - WallDay(from);
+	const wxLongLong_t secDelta = (to - WallMidnight(to)) / 1000 - (from - WallMidnight(from)) / 1000 + dayDelta * 86400;
 	switch (unit) {
-		case ibTotalsPeriod::Second:   return moment + wxTimeSpan::Seconds(count);
-		case ibTotalsPeriod::Minute:   return moment + wxTimeSpan::Minutes(count);
-		case ibTotalsPeriod::Hour:     return moment + wxTimeSpan::Hours(count);
-		case ibTotalsPeriod::Day:      return moment + wxDateSpan::Days(n);
-		case ibTotalsPeriod::Week:     return moment + wxDateSpan::Weeks(n);
-		// Ten days is a bucket, not a length — the third one of a month runs 8 to 11 days. Moving BY
-		// it means moving by that many ten-day steps of the calendar, which is what the truncation
-		// draws: land on the bucket, then walk forward bucket by bucket.
+		case ibTotalsPeriod::Second:   return static_cast<long>(secDelta);
+		case ibTotalsPeriod::Minute:   return static_cast<long>(secDelta / 60);
+		case ibTotalsPeriod::Hour:     return static_cast<long>(secDelta / 3600);
+		case ibTotalsPeriod::Day:      return static_cast<long>(dayDelta);
+		case ibTotalsPeriod::Week:     return static_cast<long>((WallDay(ibTruncateToPeriod(to, unit))
+		                                                       - WallDay(ibTruncateToPeriod(from, unit))) / 7);
 		case ibTotalsPeriod::TenDays: {
-			wxDateTime d = moment;
-			for (int i = 0; i < n; ++i)  d = ibNextPeriodStart(d, unit);
-			for (int i = 0; i > n; --i)  d = ibTruncateToPeriod(d, unit) - wxTimeSpan::Seconds(1);
-			return d;
-		}
-		case ibTotalsPeriod::Month:    return moment + wxDateSpan::Months(n);
-		case ibTotalsPeriod::Quarter:  return moment + wxDateSpan::Months(n * 3);
-		case ibTotalsPeriod::HalfYear: return moment + wxDateSpan::Months(n * 6);
-		case ibTotalsPeriod::Year:     return moment + wxDateSpan::Years(n);
-	}
-	return moment;
-}
-
-// ⭐⭐ A DAY NUMBER READ OFF THE CALENDAR, NOT OFF A DURATION.
-//
-// 🛑 The difference is not academic. Counting days as `(to - from).GetDays()` measures a SPAN in
-// hours and divides — and a span that crosses a daylight-saving change is one hour short, so the
-// division truncates a whole day away. `DATEDIFF(01.01.2026, 01.04.2026, Day)` answered **89** in RAM
-// and **90** on the server, on the same two constants, because the clocks go forward in late March
-// (measured 2026-09-06). It appears and disappears with the dates, which is the worst way for a
-// number to be wrong.
-//
-// A TIMESTAMP is a wall-clock reading with no zone in it — the engines treat it that way and so must
-// its twin. This is the standard days-from-civil arithmetic: pure integers over (year, month, day),
-// with nothing for a timezone or a leap second to reach.
-long ibCivilDayNumber(const wxDateTime& d)
-{
-	long y = static_cast<long>(d.GetYear());
-	const unsigned m = static_cast<unsigned>(d.GetMonth()) + 1;   // wxDateTime::Jan == 0
-	const unsigned day = static_cast<unsigned>(d.GetDay());
-
-	y -= (m <= 2 ? 1 : 0);
-	const long era = (y >= 0 ? y : y - 399) / 400;
-	const unsigned long yoe = static_cast<unsigned long>(y - era * 400);              // [0, 399]
-	const unsigned long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + day - 1;       // [0, 365]
-	const unsigned long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;                  // [0, 146096]
-	return era * 146097 + static_cast<long>(doe) - 719468;                            // days since 1970-01-01
-}
-
-// …AND THE SECONDS WITHIN THE DAY, for the same reason: an hour of the day is what the clock reads,
-// not how far the moment is from midnight in real time.
-long ibSecondsOfDay(const wxDateTime& d)
-{
-	return static_cast<long>(d.GetHour()) * 3600 + static_cast<long>(d.GetMinute()) * 60
-	     + static_cast<long>(d.GetSecond());
-}
-
-long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit)
-{
-	if (!from.IsValid() || !to.IsValid())
-		return 0;
-
-	// Every sub-day unit is derived from the SAME wall-clock difference, so they cannot disagree with
-	// each other or with Day about where a boundary is.
-	const long dayDelta = ibCivilDayNumber(to) - ibCivilDayNumber(from);
-	const long secDelta = dayDelta * 86400 + (ibSecondsOfDay(to) - ibSecondsOfDay(from));
-
-	// ⭐ WHOLE UNITS BETWEEN THE UNITS THEY FALL IN — not a span divided by a length. "How many
-	// months from the 31st of January to the 1st of February" is one, because they are in different
-	// months; a division by 30 days would answer zero. Sub-day units have a fixed length and are
-	// measured directly; calendar units count the boundaries between them.
-	switch (unit) {
-		case ibTotalsPeriod::Second:   return secDelta;
-		case ibTotalsPeriod::Minute:   return secDelta / 60;
-		case ibTotalsPeriod::Hour:     return secDelta / 3600;
-		case ibTotalsPeriod::Day:      return dayDelta;
-		case ibTotalsPeriod::Week:     return (ibCivilDayNumber(ibTruncateToPeriod(to, unit))
-		                                     - ibCivilDayNumber(ibTruncateToPeriod(from, unit))) / 7;
-		case ibTotalsPeriod::TenDays: {
-			// Count the buckets by walking, for the same reason DateAdd does: they are not all the
-			// same length, so no division answers this.
-			wxDateTime cur = ibTruncateToPeriod(from, unit);
-			const wxDateTime end = ibTruncateToPeriod(to, unit);
+			wxLongLong_t cur = ibTruncateToPeriod(from, unit);
+			const wxLongLong_t end = ibTruncateToPeriod(to, unit);
 			long steps = 0;
 			while (cur < end) { cur = ibNextPeriodStart(cur, unit); ++steps; }
-			while (cur > end) { cur = ibTruncateToPeriod(cur - wxTimeSpan::Seconds(1), unit); --steps; }
+			while (cur > end) { cur = ibTruncateToPeriod(cur - 1000, unit); --steps; }
 			return steps;
 		}
 		case ibTotalsPeriod::Month:
 		case ibTotalsPeriod::Quarter:
 		case ibTotalsPeriod::HalfYear:
 		case ibTotalsPeriod::Year: {
-			const wxDateTime a = ibTruncateToPeriod(from, unit);
-			const wxDateTime b = ibTruncateToPeriod(to, unit);
-			const long months = (b.GetYear() - a.GetYear()) * 12 + (static_cast<int>(b.GetMonth()) - static_cast<int>(a.GetMonth()));
+			ibDateParts a, b;
+			ibWallToParts(ibTruncateToPeriod(from, unit), a);
+			ibWallToParts(ibTruncateToPeriod(to, unit), b);
+			const long months = (b.m_year - a.m_year) * 12 + (static_cast<long>(b.m_month) - static_cast<long>(a.m_month));
 			switch (unit) {
 				case ibTotalsPeriod::Month:    return months;
 				case ibTotalsPeriod::Quarter:  return months / 3;
@@ -235,27 +196,24 @@ long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPerio
 	return 0;
 }
 
-long ibReadDatePart(const wxDateTime& moment, ibDatePart part)
+long ibReadDatePart(wxLongLong_t wall, ibDatePart part)
 {
-	if (!moment.IsValid())
-		return 0;
+	ibDateParts p;
+	ibWallToParts(wall, p);
 	switch (part) {
-		case ibDatePart::Year:      return moment.GetYear();
-		case ibDatePart::Quarter:   return static_cast<int>(moment.GetMonth()) / 3 + 1;
-		case ibDatePart::Month:     return static_cast<int>(moment.GetMonth()) + 1;   // wx counts from Jan = 0
-		case ibDatePart::DayOfYear: return moment.GetDayOfYear();
-		case ibDatePart::Day:       return moment.GetDay();
-		// ISO week, pinned here so every engine's own numbering is irrelevant.
-		case ibDatePart::Week:      return moment.GetWeekOfYear(wxDateTime::Monday_First);
-		// Monday = 1 … Sunday = 7. wx has Sunday = 0, which is the one place this differs from the
-		// platform underneath and therefore the one worth stating out loud.
-		case ibDatePart::WeekDay: {
-			const int wd = static_cast<int>(moment.GetWeekDay());
-			return wd == wxDateTime::Sun ? 7 : wd;
-		}
-		case ibDatePart::Hour:      return moment.GetHour();
-		case ibDatePart::Minute:    return moment.GetMinute();
-		case ibDatePart::Second:    return moment.GetSecond();
+		case ibDatePart::Year:      return p.m_year;
+		case ibDatePart::Quarter:   return static_cast<long>((p.m_month - 1) / 3 + 1);
+		case ibDatePart::Month:     return static_cast<long>(p.m_month);
+		case ibDatePart::DayOfYear: return static_cast<long>(p.m_yearDay);
+		case ibDatePart::Day:       return static_cast<long>(p.m_day);
+		// ISO 8601, as the parts number it (fdate.h): week 1 is the week with the year's first Thursday;
+		// the days before it belong to the last week (52 or 53) of the year before. Pinned there so every
+		// engine's own numbering is irrelevant, and so the script's GetWeekOfYear cannot say otherwise.
+		case ibDatePart::Week:      return static_cast<long>(p.m_isoWeek);
+		case ibDatePart::WeekDay:   return static_cast<long>(p.m_weekDay);
+		case ibDatePart::Hour:      return static_cast<long>(p.m_hour);
+		case ibDatePart::Minute:    return static_cast<long>(p.m_minute);
+		case ibDatePart::Second:    return static_cast<long>(p.m_second);
 	}
 	return 0;
 }

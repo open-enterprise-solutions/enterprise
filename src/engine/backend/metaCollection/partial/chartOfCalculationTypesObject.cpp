@@ -202,7 +202,7 @@ bool ibValueRecordDataObjectChartOfCalculationTypes::CallAsFunc(const long lMeth
 		DeleteObject();
 		return true;
 	case enPointInTime:
-		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetReference());
+		pvarRetValue = new ibValuePointInTime(emptyDate, GetReference());   // a moment with no date: the empty date, the smallest there is
 		return true;
 	case enModified:
 		pvarRetValue = m_objModified;

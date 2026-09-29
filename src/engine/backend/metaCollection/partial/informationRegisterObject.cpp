@@ -14,9 +14,9 @@
 // A period as the register keeps it — truncated to its periodicity; anything but a date as it is.
 static ibValue TruncateToPeriod(const ibValue& period, ibTotalsPeriod unit)
 {
-	if (period.GetType() != TYPE_DATE || !period.GetDateTime().IsValid())
+	if (period.GetType() != TYPE_DATE)
 		return period;
-	return ibValue(ibTruncateToPeriod(period.GetDateTime(), unit));
+	return ibValue(ibTruncateToPeriod(period.GetDate(), unit));
 }
 
 // …and the manager's own line, before anything asks by its key: a write, a read, a delete all name the month a

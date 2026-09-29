@@ -304,16 +304,13 @@ bool ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& pvarRetValue) c
 	case VT_DATE:
 	{
 		pvarRetValue.SetType(ibValueTypes::TYPE_DATE);
-#if wxUSE_DATETIME
 		{
+			// A VT_DATE is a wall-clock reading with no zone in it, exactly as the engine's date is
+			// (fdate.h): the parts cross over as they are, nothing asks the machine's clock.
 			SYSTEMTIME st;
 			VariantTimeToSystemTime(oleVariant.date, &st);
-			wxDateTime date;
-			date.SetFromMSWSysTime(st);
-			wxLongLong llValue = date.GetValue();
-			pvarRetValue.m_dData = llValue.GetValue();
+			pvarRetValue.m_dData = ibWallFromParts(st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 		}
-#endif // wxUSE_DATETIME
 		return true;
 	}
 	case VT_DISPATCH:
@@ -407,13 +404,19 @@ VARIANT ibValueOLE::FromValue(const ibValue& varRetValue) const
 	}
 	case ibValueTypes::TYPE_DATE:
 	{
-#if wxUSE_DATETIME
-		wxDateTime date(wxLongLong(varRetValue.GetDate()));
+		ibDateParts p;
+		ibWallToParts(varRetValue.GetDate(), p);
+		SYSTEMTIME st = {};
+		st.wYear = static_cast<WORD>(p.m_year);
+		st.wMonth = static_cast<WORD>(p.m_month);
+		st.wDay = static_cast<WORD>(p.m_day);
+		st.wDayOfWeek = static_cast<WORD>(p.m_weekDay % 7);   // SYSTEMTIME counts Sunday as 0
+		st.wHour = static_cast<WORD>(p.m_hour);
+		st.wMinute = static_cast<WORD>(p.m_minute);
+		st.wSecond = static_cast<WORD>(p.m_second);
+		st.wMilliseconds = static_cast<WORD>(p.m_millisecond);
 		oleVariant.vt = VT_DATE;
-		SYSTEMTIME st;
-		date.GetAsMSWSysTime(&st);
 		SystemTimeToVariantTime(&st, &oleVariant.date);
-#endif
 		break;
 	}
 	case ibValueTypes::TYPE_OLE: {

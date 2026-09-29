@@ -214,11 +214,14 @@ void ibPreparedStatementFirebird::SetParamBlob(int nPosition, const void* pData,
 		SetInvalidParameterPositionError(nPosition);
 }
 
-void ibPreparedStatementFirebird::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebird::SetParamDate(int nPosition, wxLongLong_t dateValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-	if (nIndex > -1)
-		m_Statements[nIndex]->SetParam(nPosition, dateValue);
+	if (nIndex > -1) {
+		ibDateParts parts;
+		ibWallToParts(dateValue, parts);
+		m_Statements[nIndex]->SetParam(nPosition, parts);
+	}
 	else
 		SetInvalidParameterPositionError(nPosition);
 }

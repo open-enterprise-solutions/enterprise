@@ -31,9 +31,10 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(bool bValue) : m_nParam
 	m_strValue = wxString::Format(wxT("%d"), bValue);
 }
 
-ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
+ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibDateParts& date) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
 {
-	m_strDateValue = dateValue.Format(wxT("%Y-%m-%d %H:%M:%S"));
+	m_strDateValue = wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+		date.m_year, date.m_month, date.m_day, date.m_hour, date.m_minute, date.m_second);
 	m_nBufferLength = m_strDateValue.Length();
 }
 

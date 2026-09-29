@@ -239,7 +239,7 @@ bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& 
 	ibColumnCodec::ReadField(ref->GetPhysicalName(), ibFieldTypes_Reference,
 	                         ref, metaData, vReference, result, createData);
 
-	retValue = new ibValuePointInTime(vDate.GetDateTime(), vReference);
+	retValue = new ibValuePointInTime(vDate.GetDate(), vReference);
 	return true;
 }
 
@@ -262,15 +262,15 @@ bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const wxString& 
 void ibRecorderQueryable::ibBackendColumnPointInTime::BindValue(ibQueryStatement& statement,
 	const ibMetaData* /*metaData*/, const ibValue& value, int& position) const
 {
-	wxDateTime date;
-	ibValue    reference;
+	wxLongLong_t date = emptyDate;
+	ibValue      reference;
 	ibValuePointInTime* moment = nullptr;
 	if (value.ConvertToValue(moment) && moment != nullptr) {
 		date      = moment->m_date;
 		reference = moment->m_reference;
 	}
 	else {
-		date = value.GetDateTime();
+		date = value.GetDate();
 	}
 
 	// The reference pair, resolved once — the same two things the codec binds for a reference slot:

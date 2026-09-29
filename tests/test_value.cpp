@@ -10,6 +10,8 @@
 #include "backend/compiler/value.h"
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
+#include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date
+#include "backend/serialize/dataBuilder.h"     // ibDataNode — a date packed and unpacked
 
 #include <utility>   // std::move — the ValueMove cases
 
@@ -217,6 +219,130 @@ TEST(ValueTest, DateFromDateTime) {
     EXPECT_EQ(recovered.GetYear(), 2025);
     EXPECT_EQ(recovered.GetMonth(), wxDateTime::Jan);
     EXPECT_EQ(recovered.GetDay(), 15);
+}
+
+// ⭐⭐ A DATE IS A WALL-CLOCK READING (fdate.h) - the number a date holds is what a calendar and a
+// clock show, and it is the same number wherever it is computed. Nothing below consults the
+// machine's clock or zone: every expected value is written out as parts.
+
+// The empty date is one value on every clock: Date(1, 1, 1) IS it, whichever zone the process
+// stands in. (It used to be the instant of that midnight on a UTC+2 machine, and a UTC runner built
+// a different number for the same parts - so `d = Date(1, 1, 1)` for "no date" held on one machine
+// and not on the next.)
+TEST(ValueTest, TheEmptyDateIsOneValueOnEveryClock) {
+    EXPECT_EQ(emptyDate, ibWallFromParts(1, 1, 1));
+    EXPECT_TRUE(ibValue(1, 1, 1, 0, 0, 0).IsEmpty());
+    EXPECT_EQ(emptyDate, ibValue(1, 1, 1).GetDate());
+    EXPECT_FALSE(ibValue(1, 1, 1, 0, 0, 1).IsEmpty());   // a second past the empty date is a date
+    EXPECT_FALSE(ibValue(1, 1, 2).IsEmpty());
+    EXPECT_FALSE(ibValue(1, 2, 1).IsEmpty());
+    EXPECT_TRUE(ibValue(ibValueTypes::TYPE_DATE).IsEmpty());
+
+    // The script's Date(), a text read as a date and the wxDateTime bridge all give the same reading.
+    EXPECT_EQ(emptyDate, ibValueSystemFunction::Date(1, 1, 1, 0, 0, 0));
+    EXPECT_NE(emptyDate, ibValueSystemFunction::Date(1, 1, 1, 0, 0, 1));
+    ibValue text;
+    EXPECT_TRUE(text.SetDate(wxT("01.01.0001 00:00:00")));
+    EXPECT_TRUE(text.IsEmpty());
+    EXPECT_TRUE(text.SetDate(wxT("00010101")));
+    EXPECT_TRUE(text.IsEmpty());
+    EXPECT_TRUE(text.SetDate(wxT("00010101000001")));
+    EXPECT_FALSE(text.IsEmpty());
+    EXPECT_TRUE(ibValue(wxDateTime()).IsEmpty());   // an invalid wxDateTime crosses as the empty date
+    EXPECT_EQ(wxT("01.01.0001 00:00:00"), ibValue(ibValueTypes::TYPE_DATE).GetString());
+}
+
+// The reading holds the parts exactly - including a time that does not exist on the machine's own
+// clock. 02:30 on 2026-03-29 is the hour the clocks skip in most of Europe; a date that was an instant
+// could not hold it there, and a wxDateTime still cannot. The value can.
+TEST(ValueTest, ADateHoldsItsPartsWhateverTheMachineClockDoes) {
+    const ibValue gap(2026, 3, 29, 2, 30, 0);
+    EXPECT_EQ(ibWallFromParts(2026, 3, 29, 2, 30), gap.GetDate());
+    EXPECT_EQ(wxT("29.03.2026 02:30:00"), gap.GetString());
+    int y, m, d; unsigned short hh, mm, ss;
+    gap.FromDate(y, m, d, hh, mm, ss);
+    EXPECT_EQ(2026, y); EXPECT_EQ(3, m); EXPECT_EQ(29, d); EXPECT_EQ(2, hh); EXPECT_EQ(30, mm); EXPECT_EQ(0, ss);
+
+    // An hour of seconds added is an hour on the wall; a day is 86 400 seconds, the morning the
+    // clocks go forward included; the difference of two dates is counted the same way.
+    EXPECT_EQ(ibWallFromParts(2026, 3, 29, 3, 30), ibValue::ShiftDate(gap.GetDate(), 3600 * 1000));
+    EXPECT_EQ(ibWallFromParts(2026, 3, 30), ibValue::ShiftDate(ibWallFromParts(2026, 3, 29), 86400 * 1000));
+    EXPECT_EQ(86400 * 1000, ibValue::DateSpan(ibWallFromParts(2026, 3, 30), ibWallFromParts(2026, 3, 29)));
+    EXPECT_EQ(ibWallFromParts(2026, 3, 28, 23, 0), ibValue::ShiftDate(ibWallFromParts(2026, 3, 29), -3600 * 1000));
+
+    // The text of the reading reads back as the same reading - by digits, not through a clock.
+    ibValue read;
+    EXPECT_TRUE(read.SetDate(gap.GetString()));
+    EXPECT_EQ(gap.GetDate(), read.GetDate());
+    EXPECT_EQ(gap.GetDate(), ibValue(wxT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
+
+    // Two readings compare by the calendar, and a date hashes as its reading.
+    EXPECT_TRUE(ibValue(2026, 3, 29, 2, 30, 0).CompareValueLS(ibValue(2026, 3, 29, 3, 30, 0)) < 0);
+    EXPECT_EQ(ibValue(2026, 3, 29, 2, 30, 0).GetValueHash(), gap.GetValueHash());
+}
+
+// The doors a text comes through: the reference system's forms by digits, the free-form reader for
+// the rest, and a day the calendar does not have refused at every one of them.
+TEST(ValueTest, ATextBecomesADateByItsDigits) {
+    ibValue v;
+    EXPECT_TRUE(v.SetDate(wxT("15.03.2026")));            EXPECT_EQ(ibWallFromParts(2026, 3, 15), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("5.3.2026 9:5:7")));         EXPECT_EQ(ibWallFromParts(2026, 3, 5, 9, 5, 7), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("15.03.2026 23:59:59")));   EXPECT_EQ(ibWallFromParts(2026, 3, 15, 23, 59, 59), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("20260315")));              EXPECT_EQ(ibWallFromParts(2026, 3, 15), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("20260315235959")));        EXPECT_EQ(ibWallFromParts(2026, 3, 15, 23, 59, 59), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxT("29.02.2024")));            EXPECT_EQ(ibWallFromParts(2024, 2, 29), v.GetDate());
+    EXPECT_TRUE(v.SetDate(wxEmptyString));                EXPECT_TRUE(v.IsEmpty());
+    EXPECT_FALSE(v.SetDate(wxT("29.02.2023")));   // not a leap year
+    EXPECT_FALSE(v.SetDate(wxT("31.04.2026")));
+    EXPECT_FALSE(v.SetDate(wxT("15.13.2026")));
+    EXPECT_FALSE(v.SetDate(wxT("15.03.2026 24:00:00")));
+    EXPECT_FALSE(v.SetDate(wxT("20260231")));
+    EXPECT_FALSE(v.SetDate(wxT("not a date at all")));
+    // The same text through the string branch of GetDate - one reading, not two.
+    EXPECT_EQ(ibWallFromParts(2026, 3, 15), ibValue(wxT("20260315")).GetDate());
+    EXPECT_EQ(emptyDate, ibValue(wxT("31.04.2026")).GetDate());
+    // Parts that are no date are the empty date, not a rolled-over one.
+    EXPECT_TRUE(ibValue(2026, 2, 30).IsEmpty());
+    EXPECT_TRUE(ibValue(2026, 13, 1).IsEmpty());
+    EXPECT_TRUE(ibValue(2026, 3, 15, 24, 0, 0).IsEmpty());
+}
+
+// The day's place in the week and the year, ISO-numbered, off the same reading as the date.
+TEST(ValueTest, ADateKnowsItsWeekAndItsDayOfTheYear) {
+    int y, m, d, weekDay, yearDay, week;
+    ibValue(2024, 1, 1).FromDate(y, m, d, weekDay, yearDay, week);
+    EXPECT_EQ(1, weekDay); EXPECT_EQ(1, yearDay); EXPECT_EQ(1, week);           // a Monday, week 1
+    ibValue(2021, 1, 3).FromDate(y, m, d, weekDay, yearDay, week);
+    EXPECT_EQ(7, weekDay); EXPECT_EQ(3, yearDay); EXPECT_EQ(53, week);          // a Sunday, still week 53 of 2020
+    ibValue(2024, 12, 30).FromDate(y, m, d, weekDay, yearDay, week);
+    EXPECT_EQ(1, weekDay); EXPECT_EQ(365, yearDay); EXPECT_EQ(1, week);         // a Monday, already week 1 of 2025
+    ibValue(2024, 12, 31).FromDate(y, m, d, weekDay, yearDay, week);
+    EXPECT_EQ(2, weekDay); EXPECT_EQ(366, yearDay); EXPECT_EQ(1, week);
+    EXPECT_EQ(2024, y); EXPECT_EQ(12, m); EXPECT_EQ(31, d);
+    // BegOfWeek / EndOfWeek stand on it: the Monday of the week and the last second of its Sunday.
+    EXPECT_EQ(ibWallFromParts(2026, 3, 23), ibValueSystemFunction::BegOfWeek(ibValue(2026, 3, 29, 2, 30, 0)).GetDate());
+    EXPECT_EQ(ibWallFromParts(2026, 3, 29, 23, 59, 59), ibValueSystemFunction::EndOfWeek(ibValue(2026, 3, 23, 10, 0, 0)).GetDate());
+}
+
+// A date packed into a node and unpacked is the same reading: the number travels, no zone with it.
+TEST(ValueTest, ADatePackedIntoANodeComesBackAsTheSameReading) {
+    const ibValue written(2026, 3, 29, 2, 30, 0);
+    ibDataNode node;
+    ASSERT_TRUE(written.Serialize(node));
+    ibValue read(ibValueTypes::TYPE_DATE);   // Deserialize fills a value whose type the node's creator already resolved
+    ASSERT_TRUE(read.Deserialize(node));
+    EXPECT_EQ(ibValueTypes::TYPE_DATE, read.GetType());
+    EXPECT_EQ(written.GetDate(), read.GetDate());
+    const ibDataValue* stored = node.FindField(kValueFieldData);
+    ASSERT_TRUE(stored != nullptr && stored->Kind() == ibDataKind::Date);
+    EXPECT_EQ(static_cast<s64>(ibWallFromParts(2026, 3, 29, 2, 30)), stored->AsDate());
+
+    const ibValue none(ibValueTypes::TYPE_DATE);
+    ibDataNode empty;
+    ASSERT_TRUE(none.Serialize(empty));
+    ibValue readEmpty(ibValueTypes::TYPE_DATE);
+    ASSERT_TRUE(readEmpty.Deserialize(empty));
+    EXPECT_TRUE(readEmpty.IsEmpty());
 }
 
 // ===========================================================================

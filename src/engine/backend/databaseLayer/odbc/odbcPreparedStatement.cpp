@@ -137,11 +137,13 @@ void ibPreparedStatementODBC::SetParamBlob(int nPosition, const void* pData, lon
 	SetParam(nPosition, pParameter);
 }
 
-void ibPreparedStatementODBC::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementODBC::SetParamDate(int nPosition, wxLongLong_t dateValue)
 {
 	ResetErrorCodes();
 
-	ibDatabaseParameterODBC* pParameter = new ibDatabaseParameterODBC(dateValue);
+	ibDateParts parts;
+	ibWallToParts(dateValue, parts);
+	ibDatabaseParameterODBC* pParameter = new ibDatabaseParameterODBC(parts);
 	SetParam(nPosition, pParameter);
 }
 

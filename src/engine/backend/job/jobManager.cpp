@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "jobManager.h"
+#include "backend/session/serverClock.h"   // ibServerClock::Now - a job is due, retried and stamped by the server's clock
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -148,7 +149,7 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	const wxDateTime dueAt = ibJobScheduleRules::NextAllowedAfter(sched, countFrom);
 	if (!dueAt.IsValid())
 		return false;   // the calendar names no moment at all — a schedule that can never run
-	if (dueAt.IsLaterThan(wxDateTime::Now()))
+	if (dueAt.IsLaterThan(ibDateTimeOfWall(ibServerClock::Now())))
 		return false;   // still ahead
 
 	// The due moment has arrived. One guard left: a WALL clock decided that, and a wall clock can be
@@ -193,7 +194,7 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 		else if (e.m_outcome == ibJobOutcome::Failed && e.m_retriesLeft > 0) {
 			--e.m_retriesLeft;
 			const int wait = e.m_desc.m_retryIntervalSeconds > 0 ? e.m_desc.m_retryIntervalSeconds : 1;
-			e.m_retryAt = wxDateTime::Now() + wxTimeSpan::Seconds(wait);
+			e.m_retryAt = ibDateTimeOfWall(ibServerClock::Now()) + wxTimeSpan::Seconds(wait);
 		}
 		else {
 			e.m_retryAt = wxDateTime();
@@ -298,7 +299,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	if (!e.m_workRemains && e.m_desc.m_exclusive) {
 		const wxDateTime sharedLast = ReadSharedLastRun(KeyOf(e.m_desc));
 		if (sharedLast.IsValid()) {
-			const wxTimeSpan since    = wxDateTime::Now() - sharedLast;
+			const wxTimeSpan since    = ibDateTimeOfWall(ibServerClock::Now()) - sharedLast;
 			const wxTimeSpan interval = wxTimeSpan::Seconds(e.m_desc.m_schedule.m_intervalSeconds);
 			if (since < interval) {
 				// Somebody already did it. Adopt their time as ours so the local
@@ -376,7 +377,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			// down. It also took the run with it, which is why these sessions
 			// looked like they were hanging: the task died here and never reached
 			// the line that releases the session.
-			const wxTimeSpan since    = wxDateTime::Now() - sharedLast;
+			const wxTimeSpan since    = ibDateTimeOfWall(ibServerClock::Now()) - sharedLast;
 			const wxTimeSpan interval = wxTimeSpan::Seconds(desc.m_schedule.m_intervalSeconds);
 			if (since < interval) {
 				result->m_skipped.store(true, std::memory_order_release);
@@ -390,7 +391,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		// flight must see the job as taken. The claim covers that window too, but
 		// the stamp is what survives this process letting go — including by dying.
 		if (desc.m_exclusive)
-			WriteSharedLastRun(KeyOf(desc), desc.m_name, wxDateTime::Now());
+			WriteSharedLastRun(KeyOf(desc), desc.m_name, ibDateTimeOfWall(ibServerClock::Now()));
 
 		// 4. THE BODY, wrapped. Visible in Active Users while it lasts.
 		session->SetActivity(wxString::Format(wxT("job: %s"), desc.m_name));
@@ -451,7 +452,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	e.m_result    = std::move(result);
 	e.m_everRun   = true;
 	e.m_lastRun   = std::chrono::steady_clock::now();
-	e.m_lastRunAt = wxDateTime::Now();
+	e.m_lastRunAt = ibDateTimeOfWall(ibServerClock::Now());
 	e.m_outcome   = ibJobOutcome::Running;
 	e.m_error.clear();
 	// Cleared here rather than after: the pass is under way, so "work remained
@@ -557,6 +558,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 
 	auto entry = std::make_unique<ibJobEntry>();
 	entry->m_desc = std::move(desc);
+	entry->m_registeredAtWall = ibDateTimeOfWall(ibServerClock::Now());
 	// The allowance starts full — a job declared today has spent no attempts.
 	entry->m_retriesLeft = entry->m_desc.m_retryCount;
 	m_entries.push_back(std::move(entry));

@@ -34,6 +34,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/mcp/mcpServer.h"
+#include "backend/session/serverClock.h"   // ibServerClock - platform_state names the clock
+#include "backend/session/regionalSettings.h"   // ibRegionalSettings - ...and the base's zone and locale
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
@@ -1620,6 +1622,16 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
 	// else had open). The mode is said beside it because a path means a file base and nothing else does.
 	into.SetValue(wxT("connection"), appData->GetDatabaseModeDescr());
+	// The base's clock - what CurrentDate() answers and every stamp is written by (serverClock.h) -
+	// and how far it stands from this machine's, so a reader knows which "now" it is looking at.
+	into.SetValue(wxT("serverNow"), ibValue(ibServerClock::Now()).GetString());
+	into.AddField(wxT("serverClockOffsetMs"), ibDataValue::Int(static_cast<s64>(ibServerClock::Offset())));
+	// ...and what that clock's reading means: the base's zone and locale (regionalSettings.h), empty
+	// where the base names none (the process's zone; the platform's locale, given beside it).
+	const ibRegionalSettings regional = ibRegionalSettings::Current();
+	into.SetValue(wxT("timeZone"), regional.m_timeZone);
+	into.SetValue(wxT("locale"), regional.m_locale);
+	into.SetValue(wxT("platformLocale"), appData->GetPlatformLocale());
 	if (!appData->GetFile().IsEmpty())
 		into.SetValue(wxT("base"), appData->GetFile());
 

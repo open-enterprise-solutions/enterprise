@@ -564,7 +564,7 @@
         "global_functions"
       ],
       "signature": "CurrentDate()",
-      "description": "The current date and time of the machine the code runs on. For the date a person is POSTING under — which may deliberately differ — use WorkingDate.",
+      "description": "The current date and time as the DATABASE SERVER's clock shows them — its local time, measured when the process connected to the base and kept in step while it stays connected — not the clock of the machine the code runs on: every client of a base reads the same \"now\", whatever zone it sits in. The clock stands in the base's time zone - a regional setting of the base, set in the designer - so the same document written from two zones carries one time. On Firebird and PostgreSQL the base's clock is measured only once the base names its time zone; until then, and on a driver that cannot say its clock, it is the machine's clock. For the date a person is POSTING under — which may deliberately differ — use WorkingDate.",
       "syntax_block": "CurrentDate()",
       "parameters": "None.",
       "return_descr": "Date, with the time of day.",

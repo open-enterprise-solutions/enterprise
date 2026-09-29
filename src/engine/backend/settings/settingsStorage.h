@@ -73,6 +73,10 @@ enum class ibSettingsCategory : int {
 	// ⚠ APPENDED, as the rule above requires — taken in the middle it would have re-read every
 	// Default row as this one.
 	Mcp,
+	// ⭐ THE BASE ITSELF IS A TENANT TOO: its regional settings - the zone its clock stands in and the
+	// locale its dates print in - belong to the base and every client of it, so the row has NO user
+	// (session/regionalSettings.h). One well-known object key, as the platform's above.
+	Regional,
 };
 
 // THE ADDRESS OF ONE SETTING. Four parts, each a question of its own, because a
@@ -121,6 +125,8 @@ struct BACKEND_API ibSettingsEntry {
 	wxDateTime m_changed;
 };
 
+class ibDatabaseConnectionHolder;
+
 class BACKEND_API ibSettingsStorage {
 public:
 	// Construction restricted to ibApplicationData via the token gate — the same
@@ -136,7 +142,8 @@ public:
 	//
 	// A setting saved twice is one row, not two: the upsert matches on the
 	// address, so re-saving is an update whatever the driver spells it as.
-	bool Save(const ibSettingsKey& key, const ibDataNode& node);
+	// `holder`: whose connection the row goes through - the calling thread's channel when none is named.
+	bool Save(const ibSettingsKey& key, const ibDataNode& node, ibDatabaseConnectionHolder* holder = nullptr);
 
 	// RESTORE — false when there is no such row, so the caller keeps whatever it
 	// had. That is the answer a reader wants: "nobody saved anything here" is not
@@ -146,7 +153,10 @@ public:
 	// What the node MEANS is the caller's: a composition reads it back through its
 	// *Memory pair and its own configuration, a value through ibValue::FromNode or
 	// the metadata door. Both already exist; neither belongs here.
-	bool Restore(const ibSettingsKey& key, ibDataNode& node) const;
+	// `failed`, when given, tells a read that FAILED (no table, no connection, a statement refused) from a row
+	// that is not there: both answer false, and a caller that keeps state in force must not mistake the first
+	// for the second.
+	bool Restore(const ibSettingsKey& key, ibDataNode& node, ibDatabaseConnectionHolder* holder = nullptr, bool* failed = nullptr) const;
 
 	// REMOVE — clearing a setting has to reach the base too, or the next open
 	// brings back what the person just cleared. True also when the row was

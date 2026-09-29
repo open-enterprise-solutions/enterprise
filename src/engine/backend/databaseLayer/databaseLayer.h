@@ -184,39 +184,42 @@ enum class ibDatePart
 	Second
 };
 
-// The RAM twin of the dialect's truncation expression: same answer, computed in C++ for the paths
-// that cannot push down (a multi-source read materialises its leaves and folds them here).
+// ⭐⭐ THE RAM TWINS OF THE DIALECT'S CALENDAR, over a date's reading - the wall-clock milliseconds a
+// date value holds (fdate.h), with no zone in them. A TIMESTAMP is a wall-clock reading and the
+// engines fold it as one; these count the same way, so a period folded in memory is the period the
+// server folds on any machine, including one whose clock goes forward an hour in March.
 //
-// The two MUST agree exactly, or a query answers differently depending on whether it happened to
-// co-locate — a difference that shows up as totals that reconcile in one deployment and not in
-// another. So this walks the calendar (month lengths, leap years) rather than approximating with
-// fixed-length arithmetic, exactly as the SQL expressions do.
-BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
+// The two roads MUST agree exactly, or a query answers differently depending on whether it happened
+// to push down - a difference that shows up as totals that reconcile in one deployment and not in
+// another. So these walk the calendar (month lengths, leap years, the ten-day bucket that ends a
+// month) rather than approximating with fixed-length arithmetic, exactly as the SQL expressions do.
 
-// The start of the NEXT period after the one holding `moment` — the first instant a stored row of
+// The period holding the reading, at its start: the dialect's truncation expression.
+BACKEND_API wxLongLong_t ibTruncateToPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
+
+// The start of the NEXT period after the one holding the reading - the first instant a stored row of
 // that grain no longer covers. A read whose lower boundary falls inside a grain cannot use that
-// grain's stored row (it holds the part before the boundary too), so it starts at this instant and
-// takes the head from the movements instead. Calendar-walking for the same reason as the truncation:
-// months differ in length, and the ten-day bucket ending a month is not ten days long.
-BACKEND_API wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit);
+// grain's stored row (it holds the part before the boundary too), so it starts here and takes the
+// head from the movements instead.
+BACKEND_API wxLongLong_t ibNextPeriodStart(wxLongLong_t wall, ibTotalsPeriod unit);
 
-// The LAST instant the period holding `moment` still covers — `ENDOFPERIOD(x, Month)`. Written as
-// the start of the next period less one second, and said here ONCE so the RAM road and the SQL one
-// cannot disagree about whether the boundary belongs to the period (it does).
-BACKEND_API wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
+// The LAST second the period holding the reading still covers - `ENDOFPERIOD(x, Month)`. Written as
+// the start of the next period less one second, and said ONCE so the RAM road and the SQL one cannot
+// disagree about whether the boundary belongs to the period (it does).
+BACKEND_API wxLongLong_t ibEndOfPeriod(wxLongLong_t wall, ibTotalsPeriod unit);
 
-// Move a date by whole units, calendar-aware — `DATEADD(x, Month, 3)`. Adding a month to the 31st of
+// Move a date by whole units, calendar-aware - `DATEADD(x, Month, 3)`. Adding a month to the 31st of
 // a 31-day month lands on the last day of a shorter one, which is what a person means by "a month
 // later" and what fixed-length arithmetic gets wrong.
-BACKEND_API wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count);
+BACKEND_API wxLongLong_t ibDateAddUnits(wxLongLong_t wall, ibTotalsPeriod unit, long count);
 
-// How many WHOLE units lie between two moments — `DATEDIFF(a, b, Day)`. Negative when `to` is
+// How many WHOLE units lie between two readings - `DATEDIFF(a, b, Day)`. Negative when `to` is
 // earlier, zero when they fall in the same unit.
-BACKEND_API long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit);
+BACKEND_API long ibDateDiffUnits(wxLongLong_t from, wxLongLong_t to, ibTotalsPeriod unit);
 
-// One piece of a date as a number — `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
+// One piece of a date as a number - `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
 // m_datePart expression, and it must agree with it to the digit.
-BACKEND_API long ibReadDatePart(const wxDateTime& moment, ibDatePart part);
+BACKEND_API long ibReadDatePart(wxLongLong_t wall, ibDatePart part);
 
 struct ibDialectDictionary
 {
@@ -402,6 +405,14 @@ struct ibDialectDictionary
 	// write-time WITH CHECK builds). Most engines allow a bare FROM-less SELECT (empty here); Firebird
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
 	wxString m_selectFromDual = wxEmptyString;
+
+	// THE SERVER'S OWN CLOCK, as a wall-clock reading in the session's zone - what ibServerClock asks
+	// for to keep every client's "now" the base's (LOCALTIMESTAMP on Firebird and PostgreSQL). Empty
+	// = the dialect has no word for it, and the machine's clock stands.
+	wxString m_localTimestamp = wxEmptyString;
+	// THE ZONES THE SERVER KNOWS BY NAME, one per row of this statement (Firebird: RDB$TIME_ZONES,
+	// PostgreSQL: pg_timezone_names) - what the designer's regional page lists. Empty = it cannot say.
+	wxString m_timeZoneNames = wxEmptyString;
 
 	// HOW A PLACEHOLDER STATES ITS TYPE inside the UNION-ALL spelling of a batched INSERT.
 	// Placeholders: {value} — the rendered value (a bind marker); {table} / {column} — where it is
@@ -1035,8 +1046,8 @@ public:
 	/// Retrieve a single date/time value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual wxDateTime GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual wxDateTime GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
+	virtual wxLongLong_t GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
+	virtual wxLongLong_t GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
 
 	/// Retrieve a single Blob value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
@@ -1152,6 +1163,16 @@ public:
 	/// Close all prepared statement objects that have been generated but not yet closed
 	void CloseStatements();
 
+	// ⭐ THE SESSION'S ZONE - the one the base names (session/regionalSettings.h). A driver whose
+	// engine has a session zone puts the connection into it (Firebird, PostgreSQL: SET TIME ZONE) and
+	// answers true; a name the engine refuses answers false and leaves the zone in force alone. A
+	// driver without one (SQLite, the ODBC baseline) answers false to everything and keeps no name.
+	// Empty = the engine's own default (UTC on a Firebird attach, the server's setting on PostgreSQL).
+	// Close forgets the name: the zone goes with the session it was put on.
+	virtual bool HasSessionTimeZone() const { return false; }
+	virtual bool SetSessionTimeZone(const wxString& WXUNUSED(zone)) { return false; }
+	const wxString& GetSessionTimeZone() const { return m_sessionTimeZone; }
+
 protected:
 
 	// query database
@@ -1187,6 +1208,7 @@ protected:
 	/// that last mutated it. Access is still logically serial per session;
 	/// atomicity buys memory visibility, not contention handling.
 	std::atomic<int> m_txDepth{0};
+	wxString m_sessionTimeZone;   // the zone the session was put into (SetSessionTimeZone); empty = the engine's default
 
 	/// "Aborted" flag — set by any RollBack while a transaction is
 	/// still open, cleared when the outermost level finally resolves.
@@ -1254,7 +1276,7 @@ private:
 	wxString GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	long GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	bool GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	wxDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
+	wxLongLong_t GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 	double GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	ibNumber GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);

@@ -205,9 +205,13 @@ if(WIN32)
     if(OES_USE_FIREBIRD)
         set(OES_FB_KIT "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/firebird/engine/dll")
         list(APPEND OES_CLIENT_COPY
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${OES_BIN_DIR}/_fb/intl" "${OES_BIN_DIR}/_fb/plugins")
-        # The same file for either architecture.
-        foreach(OES_FB_FILE firebird.conf firebird.msg security5.fdb icudt63l.dat intl/fbintl.conf)
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OES_BIN_DIR}/_fb/intl" "${OES_BIN_DIR}/_fb/plugins" "${OES_BIN_DIR}/_fb/tzdata")
+        # The same file for either architecture. tzdata/ is the zone rules ICU counts a region's time by -
+        # without it ICU falls back to the rules it was built with (2018e), which do not know Europe/Kyiv
+        # and count it as UTC without a word (docs/public/date-model.md).
+        foreach(OES_FB_FILE firebird.conf firebird.msg security5.fdb icudt63l.dat intl/fbintl.conf
+                            tzdata/ids.dat tzdata/metaZones.res tzdata/timezoneTypes.res
+                            tzdata/windowsZones.res tzdata/zoneinfo64.res)
             list(APPEND OES_CLIENT_COPY
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OES_FB_KIT}/${OES_FB_FILE}" "${OES_BIN_DIR}/_fb/${OES_FB_FILE}")
         endforeach()
