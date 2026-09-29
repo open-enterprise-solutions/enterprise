@@ -61,7 +61,7 @@ void ibApplicationData::CreateTableSession()
 			{ wxT("computer"),        ibTypeString(128), true,  false, wxEmptyString },
 			{ wxT("pid"),             ibTypeInteger(),   false, false, wxEmptyString },
 			{ wxT("address"),         ibTypeString(256), false, false, wxEmptyString },
-			{ wxT("currentActivity"), ibTypeString(128), false, false, wxEmptyString },
+			{ wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth), false, false, wxEmptyString },
 			// NOT NULL with a default: "not exclusive" gets ONE spelling, decided by the column rather
 			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
 			// as long as every reader remembers to make them agree.
@@ -264,7 +264,7 @@ void ibApplicationData::MigrateTableSession()
 
 	if (!has(wxT("pid")))             addColumn(wxT("pid"),             ibTypeInteger());
 	if (!has(wxT("address")))         addColumn(wxT("address"),         ibTypeString(256));
-	if (!has(wxT("currentActivity"))) addColumn(wxT("currentActivity"), ibTypeString(128));
+	if (!has(wxT("currentActivity"))) addColumn(wxT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth));
 	// kind — ibSessionKind session-level role (WebServer=5, WebClient=100; desktop kinds share
 	// numeric values with ibRunMode). Distinct from `application` (process-level ibRunMode).
 	if (!has(wxT("kind")))            addColumn(wxT("kind"),            ibTypeInteger());

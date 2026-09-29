@@ -1543,10 +1543,14 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	if (!req.session->Inserted()) return;   // nothing to update yet
 
 	const wxString guidStr = req.session->GetId();
+	// ⚠ FITTED TO THE COLUMN, because a longer label is not cut by the engine but refused (`-303 string
+	// right truncation`), and the refusal is swallowed below: a run whose label names a long script path
+	// never showed at all, and the journal took a thrown exception per label (2026-09-29).
+	const wxString label = req.activity.Left(kActivityWidth);
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
 		q.Execute(ibUpdate(session_table,
-			{ { wxT("currentActivity"), ibConst(ibValue(req.activity)) } },
+			{ { wxT("currentActivity"), ibConst(ibValue(label)) } },
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guidStr)))));
 	} catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }

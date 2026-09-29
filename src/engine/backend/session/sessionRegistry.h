@@ -201,6 +201,11 @@ public:
 	// A caller serving somebody who is already waiting names a shorter one.
 	static constexpr std::chrono::seconds kConnectTimeout { 20 };
 
+	// The width of `sys_session.currentActivity` — the one number the table is created with, migrated
+	// to, and the label is fitted to (ProcessSetActivity). A label written longer is refused by the
+	// engine whole, and the row went on showing the label before it.
+	static constexpr int kActivityWidth = 128;
+
 	// ---- Session factory facade ----
 	// Wraps the EnsureStartedForCreateSession + Connect(req) handshake.
 	// `appData->CreateSession*` forward here; per-tab web flow uses the
