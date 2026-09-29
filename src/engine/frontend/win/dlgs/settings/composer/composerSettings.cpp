@@ -5,6 +5,7 @@
 #include "frontend/win/dlgs/settings/settingsFieldTree.h"      // which fields this composition offers — one answer
 #include "frontend/win/dlgs/settings/settingsFilterEditor.h"   // SHARED with the list's world
 #include "frontend/win/dlgs/settings/settingsSortEditor.h"     // …and so is this one
+#include "frontend/win/dlgs/settings/settingsOutputParametersEditor.h"   // the other settings — theme, heading
 #include "frontend/win/dlgs/settings/settingsStyle.h"          // how a settings surface LOOKS — said once, for both worlds
 #include "frontend/win/dlgs/settings/savedSettings.h"          // the shelf window — shared with the list's world
 #include "backend/settings/settingsComposer.h"                 // saving / restoring a composer's settings
@@ -1918,6 +1919,8 @@ void ibComposerSettingsPanel::SetReadOnly(bool readOnly)
 		m_filterEditor->SetReadOnly(readOnly);
 	if (m_sortEditor != nullptr)
 		m_sortEditor->SetReadOnly(readOnly);
+	if (m_outputParametersEditor != nullptr)
+		m_outputParametersEditor->SetReadOnly(readOnly);
 
 	// …AND THE ACTIVATABLE CELL, which no veto reaches — the model is the one gate the fork asks on
 	// both the click and the Space road. See ibParameterModel::IsEnabledByRow.
@@ -3261,6 +3264,12 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	tabs->AddPage(m_filterEditor, _("Filter"), false, ibSettingsTabArt(ibSettingsTab::Filter));
 	m_sortEditor = new ibSortEditor(tabs, &EditedSettings().m_sort, m_fieldSource.get());
 	tabs->AddPage(m_sortEditor, _("Sort"), false, ibSettingsTabArt(ibSettingsTab::Sort));
+	// ⭐ …AND HOW THE REPORT BEHAVES — its theme, its heading (Max, 2026-09-29: "after Sort a tab appears").
+	// Pointed at the storey selected as the two before it are; a grouping lists only what it can hold.
+	m_outputParametersEditor = new ibOutputParametersEditor(tabs, &EditedSettings().m_outputParameters,
+		ibOutputParameterScope::Report, [this] { return GetEditedMetaData(); });
+	tabs->AddPage(m_outputParametersEditor, _("Other settings"), false,
+		ibSettingsTabArt(ibSettingsTab::OtherSettings));
 
 	// ⭐ THESE TWO EDIT A BUFFER, so nothing they do reaches the composition until this window is
 	// accepted — but the CHANGE is a fact the moment it is made (Max, 2026-08-20: "we changed the
@@ -3275,6 +3284,7 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	// setting handed in means a reader, and an inaccessible line is hidden from them.
 	m_filterEditor->SetAuthoring(!m_readerRoad);
 	m_sortEditor->SetOnChanged([this] { MarkSettingsTouched(); });
+	m_outputParametersEditor->SetOnChanged([this] { MarkSettingsTouched(); });
 	sizer->Add(tabs, 1, wxEXPAND);
 
 	pane->SetSizer(sizer);
@@ -4327,6 +4337,8 @@ void ibComposerSettingsPanel::ReloadSettings()
 		AddOutput();   // …and a variant nobody authored still gets its output
 	if (m_filterEditor != nullptr) m_filterEditor->SetFilter(&EditedSettings().m_filter);
 	if (m_sortEditor   != nullptr) m_sortEditor->SetSort(&EditedSettings().m_sort);
+	if (m_outputParametersEditor != nullptr)
+		m_outputParametersEditor->SetParameters(&EditedSettings().m_outputParameters, ibOutputParameterScope::Report);
 	ReloadResources();
 	ReloadParameters();
 }
@@ -4376,6 +4388,9 @@ void ibComposerSettingsPanel::BindNodeEditors()
 		? level->m_settings : EditedSettings();
 	m_filterEditor->SetFilter(&target.m_filter);
 	m_sortEditor->SetSort(&target.m_sort);
+	if (m_outputParametersEditor != nullptr)
+		m_outputParametersEditor->SetParameters(&target.m_outputParameters,
+			level != nullptr ? ibOutputParameterScope::Node : ibOutputParameterScope::Report);
 }
 
 // (CommitNodeSettings REMOVED. There is nothing to write back: the editors work on the node's own

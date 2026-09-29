@@ -67,6 +67,11 @@ const wxString  kSelectedNode   = wxT("Selected");
 // level's settings carry no fields and nothing collides; a name apart is what keeps that true when
 // somebody fills them.
 const wxString  kSelectedFieldsNode = wxT("SelectedFields");
+// …and the other settings of a setting — a node of their own for the same reason.
+const wxString  kOutputParametersNode = wxT("OutputParameters");
+// Read and written as every list of the platform's parameters is — the pair stands with them, further down.
+void ReadOutputParameters(const ibDataNode& node, ibOutputParametersDescription& parameters);
+void WriteOutputParameters(ibDataNode& node, const ibOutputParametersDescription& parameters);
 const wxString  kPathName       = wxT("Path");
 const wxString  kKindName       = wxT("Kind");
 // A LEVEL'S OWN SORT AND FILTER — written inside the level, because that is where they belong.
@@ -632,6 +637,9 @@ bool ibSettingsDescriptionMemory::ReadNode(const ibDataNode& node, ibSettingsDes
 	// ⭐ …AND THE VALUES THE READER FILLED IN. Only the parameters the author offered them ever land
 	// here, and only the name and the packed value travel: the declaration stays with the author.
 	ibParameterDescriptionMemory::ReadNode(node, settings.m_parameters, metaData);
+	// ⭐ …AND HOW THE REPORT BEHAVES — the other settings. Absent from every record written before 2026-09-29,
+	// which reads as "nobody said anything": the platform's own answers.
+	ReadOutputParameters(node, settings.m_outputParameters);
 	return ok;
 }
 
@@ -640,6 +648,7 @@ bool ibSettingsDescriptionMemory::WriteNode(ibDataNode& node, const ibSettingsDe
 	WriteSelectedList(node, kSelectedFieldsNode, settings.m_selected);   // see ReadNode
 	// …and the reader's parameter values, written as a VARIANT's are: name and value, no declaration.
 	ibParameterDescriptionMemory::WriteNode(node, settings.m_parameters, /*full*/false);
+	WriteOutputParameters(node, settings.m_outputParameters);
 	return ibFilterDescriptionMemory::WriteNode(node, settings.m_filter)
 		&& ibSortDescriptionMemory::WriteNode(node, settings.m_sort)
 		&& ibGroupDescriptionMemory::WriteNode(node, settings.m_group)
@@ -757,40 +766,84 @@ const wxString  kFieldInfoRole     = wxT("Role");   // present = a person's word
 const wxString  kFieldInfoPeriodRank = wxT("PeriodRank");   // a period's number; absent = in order
 const wxString  kFieldInfoAppearance = wxT("Appearance");   // the sub-node the field's appearance is written in
 
-// AN APPEARANCE — one child per parameter a person touched, under whoever points at it.
-constexpr ibClassID g_appearanceNodeClsid = make_clsid("CompositionAppearance", ibClassKind_None);
+// A LIST OF THE PLATFORM'S PARAMETERS — one child per parameter a person touched, under whoever holds it. Each
+// list is written under a class of its own, so a reader walking children by class meets only its own.
+constexpr ibClassID g_appearanceNodeClsid      = make_clsid("CompositionAppearance", ibClassKind_None);
+constexpr ibClassID g_outputParameterNodeClsid = make_clsid("CompositionOutputParameter", ibClassKind_None);
 const wxString  kAppearanceParameter = wxT("Parameter");
 const wxString  kAppearanceUse       = wxT("Use");
 const wxString  kAppearanceValue     = wxT("Value");
 
-void ReadAppearance(const ibDataNode& node, ibAppearanceDescription& appearance)
+// `known` — every parameter the platform defines on this list: a stored one it does not define shows nothing.
+template <class Parameter>
+void ReadParameterValues(const ibDataNode& node, ibClassID clsid, const std::vector<Parameter>& known,
+	ibParameterValuesDescription<Parameter>& values)
 {
-	appearance.m_values.clear();
-	const std::vector<ibAppearanceParameter>& known = ibAppearanceParameters();
+	values.m_values.clear();
 	for (const ibDataNode& child : node.Children()) {
-		if (child.GetClsid() != g_appearanceNodeClsid)
+		if (child.GetClsid() != clsid)
 			continue;
-		const ibAppearanceParameter parameter = static_cast<ibAppearanceParameter>(child.GetValue<s32>(kAppearanceParameter));
+		const Parameter parameter = static_cast<Parameter>(child.GetValue<s32>(kAppearanceParameter));
 		if (std::find(known.begin(), known.end(), parameter) == known.end())
-			continue;   // a parameter this platform does not define shows nothing
-		ibAppearanceValueDescription value;
+			continue;
+		ibParameterValueDescription<Parameter> value;
 		value.m_parameter = parameter;
 		value.m_use       = child.GetValue<bool>(kAppearanceUse);
 		if (const ibDataNode* stored = child.FindChild(kAppearanceValue))
 			value.m_value = *stored;
-		appearance.m_values.push_back(std::move(value));
+		values.m_values.push_back(std::move(value));
 	}
 }
 
-void WriteAppearance(ibDataNode& node, const ibAppearanceDescription& appearance)
+template <class Parameter>
+void WriteParameterValues(ibDataNode& node, ibClassID clsid, const ibParameterValuesDescription<Parameter>& values)
 {
-	for (size_t i = 0; i < appearance.m_values.size(); ++i) {
-		const ibAppearanceValueDescription& value = appearance.m_values[i];
-		ibDataNode& sub = node.AddChild(g_appearanceNodeClsid, static_cast<ibMetaID>(i));
+	for (size_t i = 0; i < values.m_values.size(); ++i) {
+		const ibParameterValueDescription<Parameter>& value = values.m_values[i];
+		ibDataNode& sub = node.AddChild(clsid, static_cast<ibMetaID>(i));
 		sub.SetValue<s32>(kAppearanceParameter, static_cast<s32>(value.m_parameter));
 		sub.SetValue<bool>(kAppearanceUse, value.m_use);
 		sub.Child(kAppearanceValue) = value.m_value;
 	}
+}
+
+void ReadAppearance(const ibDataNode& node, ibAppearanceDescription& appearance)
+{
+	ReadParameterValues(node, g_appearanceNodeClsid, ibAppearanceParameters(), appearance);
+}
+
+void WriteAppearance(ibDataNode& node, const ibAppearanceDescription& appearance)
+{
+	WriteParameterValues(node, g_appearanceNodeClsid, appearance);
+}
+
+// THE OTHER SETTINGS OF A STOREY — every parameter either storey may hold, because a record is read before
+// anybody says which storey it is.
+const std::vector<ibOutputParameter>& EveryOutputParameter()
+{
+	static const std::vector<ibOutputParameter> s_every = [] {
+		std::vector<ibOutputParameter> every = ibOutputParameters(ibOutputParameterScope::Report);
+		for (const ibOutputParameter parameter : ibOutputParameters(ibOutputParameterScope::Node))
+			if (std::find(every.begin(), every.end(), parameter) == every.end())
+				every.push_back(parameter);
+		return every;
+	}();
+	return s_every;
+}
+
+void ReadOutputParameters(const ibDataNode& node, ibOutputParametersDescription& parameters)
+{
+	parameters.Clear();
+	if (const ibDataNode* sub = node.FindChild(kOutputParametersNode))
+		ReadParameterValues(*sub, g_outputParameterNodeClsid, EveryOutputParameter(), parameters);
+}
+
+// Written only when somebody said anything — an empty node on every setting would be a way for two files to
+// look different without meaning anything different.
+void WriteOutputParameters(ibDataNode& node, const ibOutputParametersDescription& parameters)
+{
+	if (!parameters.IsEmpty())
+		WriteParameterValues(node.Child(kOutputParametersNode), g_outputParameterNodeClsid, parameters);
 }
 } // namespace
 
@@ -938,34 +991,43 @@ wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter)
 	return wxEmptyString;
 }
 
-ibValue ibAppearanceDescription::ValueInForce(ibAppearanceParameter parameter) const
+// --- OTHER SETTINGS — see the header -----------------------------------------
+
+const std::vector<ibOutputParameter>& ibOutputParameters(ibOutputParameterScope scope)
 {
-	const ibAppearanceValueDescription* value = Find(parameter);
-	if (value == nullptr || !value->m_use)
-		return ibValue();
-	return ibStoredValue(value->m_value, nullptr);   // never a reference — see the header
+	static const std::vector<ibOutputParameter> s_report = {
+		ibOutputParameter::Theme,
+		ibOutputParameter::Title,
+		ibOutputParameter::ShowTitle,
+		ibOutputParameter::ShowFilter,
+		ibOutputParameter::ShowParameters,
+	};
+	static const std::vector<ibOutputParameter> s_node = {
+		ibOutputParameter::Theme,
+	};
+	return scope == ibOutputParameterScope::Node ? s_node : s_report;
 }
 
-void ibAppearanceDescription::Say(ibAppearanceParameter parameter, bool use, const ibValue& value)
+wxString ibOutputParameterCaption(ibOutputParameter parameter)
 {
-	for (size_t i = 0; i < m_values.size(); ++i) {
-		if (m_values[i].m_parameter != parameter)
-			continue;
-		if (!use && value.IsEmpty()) {
-			m_values.erase(m_values.begin() + i);
-			return;
-		}
-		m_values[i].m_use = use;
-		ibStoreValue(m_values[i].m_value, value);
-		return;
+	switch (parameter) {
+		case ibOutputParameter::Theme:          return _("Theme");
+		case ibOutputParameter::Title:          return _("Title");
+		case ibOutputParameter::ShowTitle:      return _("Show title");
+		case ibOutputParameter::ShowFilter:     return _("Show filter");
+		case ibOutputParameter::ShowParameters: return _("Show parameters");
 	}
-	if (!use && value.IsEmpty())
-		return;
-	ibAppearanceValueDescription said;
-	said.m_parameter = parameter;
-	said.m_use       = use;
-	ibStoreValue(said.m_value, value);
-	m_values.push_back(std::move(said));
+	return wxEmptyString;
+}
+
+wxString ibShowModeCaption(ibShowMode mode)
+{
+	switch (mode) {
+		case ibShowMode::Auto: return _("Auto");
+		case ibShowMode::Show: return _("Show");
+		case ibShowMode::Hide: return _("Do not show");
+	}
+	return wxEmptyString;
 }
 
 ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription>& selects, const wxString& path)

@@ -237,7 +237,8 @@ public:
 	//
 	// Const because a fetch is const — what changes is the parameter's cached value and the
 	// composer's parameter map, which are the state a run is entitled to settle.
-	void PrepareParametersForRun();
+	// Returns what it handed over — the values a report's heading prints are the ones the query was given.
+	std::map<wxString, ibValue> PrepareParametersForRun();
 
 	// COMPOSE INTO A DOCUMENT — the report's whole act, and the reason this type exists
 	// separately from the list. It runs the composition and writes the result into a

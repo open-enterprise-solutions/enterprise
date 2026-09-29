@@ -368,6 +368,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// …and how many outputs this run draws: the ones Run reads (a driver, and something declared).
 	info.m_outputCount = std::max<size_t>(1, static_cast<size_t>(std::count_if(m_outputs.begin(), m_outputs.end(),
 		[this](const Output& other) { return other.m_driver != nullptr && Declares(other); })));
+	// …and the palette it is painted in — its own theme, else the setting's (ThemeFor).
+	info.m_theme = &ThemeFor(output, nullptr);
 	// WHERE THE ROWS' DIMENSIONS END — the same count the clause writer wrote them by, asked the
 	// same way, so the two can never disagree about which heading belongs where.
 	//
@@ -540,6 +542,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// level-1 DRILLABLE group node WITHOUT the ByGroups fold (which folds a flat detail snapshot). The row
 		// reads exactly like the flat cursor. (⚠ a reference-spread group value needs m_objectPrefix in the
 		// schema — a follow-up; a scalar dim reads straight. docs: group-level paging)
+		const ibCompositionTheme& headTheme = ThemeFor(output, LevelAt(output, 1));   // the one grouping's palette
 		while (result.Next()) {
 			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
@@ -556,6 +559,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			ibCompositionLine head;
 			head.m_level = 1;
 			head.m_hasChildren = true;
+			head.m_theme = &headTheme;
 			driver.OnGroupBegin(head, row);
 		}
 	}
@@ -574,6 +578,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		//
 		// Being ENTERABLE is decided where the source is known — the model reads the hierarchy KIND
 		// off the queryable (IsItemHierarchy) and the folder flag off the row, and ORs this in.
+		const ibCompositionTheme& detailTheme = ThemeFor(output, DetailLevelOf(output));   // the records' palette
 		while (result.Next()) {
 			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
@@ -589,6 +594,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			// it got from the depth.
 			ibCompositionLine flat;
 			flat.m_kind = ibSelectorNodeKind::Detail;
+			flat.m_theme = &detailTheme;
 			driver.OnRow(flat, row);
 		}
 	}
@@ -668,6 +674,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			const GroupNode* shownFor   = nullptr;
 			bool             shownKnown = false;
 			std::vector<wxString> shownHere;
+			const ibCompositionTheme* themeHere = nullptr;   // …and its palette, asked with it
 			while (level.Next()) {
 				hearCancel();
 				for (size_t i = 0; i < schema.size(); ++i) {
@@ -697,9 +704,11 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				const GroupNode* here = LevelAt(output, level.Level(), level.Kind());
 				if (!shownKnown || here != shownFor) {
 					shownHere  = here != nullptr ? ibComposerSelectedUnder(shownAbove, *here) : shownAbove;
+					themeHere  = &ThemeFor(output, here);
 					shownFor   = here;
 					shownKnown = true;
 				}
+				line.m_theme = themeHere;
 
 				// …AND EVERYTHING IT DOES NOT SHOW IS BLANKED, not removed. The COLUMNS belong to the
 				// output — a table has the columns it has — so a node fills the cells that are its

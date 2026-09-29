@@ -306,6 +306,7 @@
     <ClInclude Include="composition\drivers\tableComposeDriver.h" />
     <ClInclude Include="composition\composeEvaluate.h" />
     <ClInclude Include="composition\composeRunSchema.h" />
+    <ClInclude Include="composition\compositionTheme.h" />
     <ClInclude Include="compositionDescription.h" />
     <ClInclude Include="system\value\composition\valueComposerField.h" />
     <ClInclude Include="system\value\composition\valueComposerSettings.h" />
@@ -846,6 +847,7 @@
     <ClCompile Include="composition\ramComposer.cpp" />
     <ClCompile Include="composition\composeEvaluate.cpp" />
     <ClCompile Include="composition\composeRunSchema.cpp" />
+    <ClCompile Include="composition\compositionTheme.cpp" />
     <ClCompile Include="compositionDescription.cpp" />
     <ClCompile Include="system\value\composition\valueComposerField.cpp" />
     <ClCompile Include="system\value\composition\valueComposerSettings.cpp" />

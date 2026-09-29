@@ -21,6 +21,8 @@
 #include <wx/string.h>
 #include <vector>
 
+struct ibCompositionTheme;   // compositionTheme.h — only a driver that paints has to know what a palette holds
+
 // ⚠ A CHART IS NOT A THIRD SHAPE. It reads exactly what a cross-table reads — series along one
 // axis, points along the other, a resource where they meet — and differs in being DRAWN as a
 // picture. Drawing is the driver's business, so a chart is an output with a chart driver, not a
@@ -56,6 +58,9 @@ struct ibCompositionOutputInfo
 	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
 	// and a run of one has nothing to tell apart (ibSpreadsheetComposeDriver::WriteOutputCaption).
 	size_t                                     m_outputCount = 1;
+	// ⭐ …AND THE PALETTE IT IS PAINTED IN — the output's own theme, else the setting's (ibOutputParameter::Theme).
+	// Its header, its grid and every line whose node names no theme of its own. Null = the platform's first.
+	const ibCompositionTheme*                  m_theme = nullptr;
 
 	// ⭐⭐ WHAT EACH COLUMN IS CALLED, one entry per schema column. The QUERY names its columns so
 	// they can be read back — uniquely, one word, sometimes qualified to stay apart (`CountNumber`
@@ -187,6 +192,9 @@ struct ibCompositionLine {
 	// records. A heading with nothing under it is still one of its level's headings: a period the fold filled in
 	// because nothing moved in it (PERIODS) reads as a month like its neighbours, not as a record (Max, 2026-09-29).
 	bool               m_levelReadsDeeper = false;
+	// …and the palette ITS NODE paints its lines in, where the node ticked a theme of its own — the way a node's
+	// own sort orders its headings. Null = the output's (ibCompositionOutputInfo::m_theme).
+	const ibCompositionTheme* m_theme = nullptr;
 
 	int Page() const { return m_level + m_indent; }
 };

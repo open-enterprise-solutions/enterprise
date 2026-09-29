@@ -3,6 +3,8 @@
 #include "backend/system/value/valueSpreadsheetDetails.h"  // …and what the clicked cell was composed from
 #include "backend/metadataReport.h"                        // the in-memory external report
 #include "backend/metaCollection/metaComposerObject.h"     // …and the composer metaobject it declares
+#include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the report a detail is named after
+#include "frontend/visualView/ctrl/form.h"                 // ibValueForm::GetMetaObject — …reached through the grid's form
 
 #include <algorithm>
 
@@ -169,7 +171,8 @@ std::vector<ibOutputDescription> ibStructureByField(const wxString& path)
 // and stands up the module manager — "so a freshly created (not-from-file) report already has it".
 // Opening from a file is the same path with `LoadCommonTree` in the middle; here the middle is a
 // composer carrying a copy of the schema.
-void ibOpenReportOver(const ibCompositionDescription& desc)
+// `source` — the report the cell was composed in; the detail is named after it.
+void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObject* source)
 {
 	// A report in memory: the ctor has already made its root and its module manager.
 	ibMetaDataReport* detailMeta = new ibMetaDataReport();
@@ -177,6 +180,13 @@ void ibOpenReportOver(const ibCompositionDescription& desc)
 	if (root == nullptr) {
 		wxDELETE(detailMeta);
 		return;
+	}
+
+	// ⭐ …AND NAMED AFTER THE REPORT IT DETAILS. A detail is that report's figure broken down, so its window says
+	// whose it is (Max, 2026-09-30); a fresh report answers with the default name, "External report1".
+	if (source != nullptr) {
+		root->SetName(source->GetName());
+		root->SetSynonym(source->GetSynonym());
 	}
 
 	// …AND THE COMPOSER IT DECLARES. A report's main node IS its default composer, which is what puts
@@ -305,5 +315,7 @@ void ibValueGridBox::ShowCellDetail(int row, int col, const wxString& byPath)
 		detailDesc.GetCompositionSettingsDesc() = narrowed;
 	}
 
-	ibOpenReportOver(detailDesc);
+	// …over the report this grid stands in — the form's own object (ibValueForm::GetMetaObject).
+	const ibValueForm* form = GetOwnerForm();
+	ibOpenReportOver(detailDesc, form != nullptr ? form->GetMetaObject() : nullptr);
 }

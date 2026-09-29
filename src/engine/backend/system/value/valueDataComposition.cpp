@@ -634,10 +634,12 @@ std::map<wxString, ibValue> ibValueDataComposition::ParameterValues() const
 // THE ONE POINT WHERE A RUN SETTLES ITS PARAMETERS: evaluate what is an expression, then hand every
 // value to the composer. Called by the one reader there is now — Compose — so "what the query was
 // given" is settled in exactly one place.
-void ibValueDataComposition::PrepareParametersForRun()
+std::map<wxString, ibValue> ibValueDataComposition::PrepareParametersForRun()
 {
-	for (const auto& parameter : EvaluatedParameterValues())
+	std::map<wxString, ibValue> settled = EvaluatedParameterValues();
+	for (const auto& parameter : settled)
 		GetModelComposer().Parameter(parameter.first, parameter.second);
+	return settled;
 }
 
 // (RunComposerPage is gone: it was the LIST's fetch — a page, an anchor, a direction. A composition
@@ -739,7 +741,7 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 
 	// THE PARAMETERS ARE SETTLED FIRST — the same door the fetch uses (PrepareParametersForRun):
 	// expressions evaluated once, values handed to the composer, and only then the read.
-	PrepareParametersForRun();
+	const std::map<wxString, ibValue> settled = PrepareParametersForRun();
 	ibDataComposer& composer = GetModelComposer();
 
 	// ⭐⭐ AND THE SETTINGS ARE DRIVEN IN HERE — at the moment the composer FIRES (Max, 2026-08-23:
@@ -806,12 +808,40 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 	// THE HEADING SAYS WHAT WAS ASKED. A report without its conditions cannot be defended a week
 	// later, and the conditions are not a second store — they are the filters the composition
 	// already carries, read back through the same door the settings window reads.
-	driver.SetTitle(GetSourceCaption());
+	//
+	// ⭐ …AND WHAT THE OTHER SETTINGS LET IT SAY (ibOutputParameter) — the report's own storey, the setting in
+	// force. `Auto` is what a heading does by itself: a title and the conditions print, the parameters do not.
+	const ibOutputParametersDescription& other = composer.GetCurrentOutputParametersDesc();
+	const auto shows = [&other](ibOutputParameter parameter, bool byItself) {
+		if (!other.Says(parameter))
+			return byItself;
+		const ibShowMode mode = static_cast<ibShowMode>(other.ValueInForce(parameter).GetInteger());
+		return mode == ibShowMode::Auto ? byItself : mode == ibShowMode::Show;
+	};
+	if (shows(ibOutputParameter::ShowTitle, true)) {
+		// A title a person wrote, read in the reader's language — else what the report is called.
+		const wxString title = other.ValueInForce(ibOutputParameter::Title).GetString();
+		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibBackendLocalization::GetTranslateGetRawLocText(title));
+	}
+	// …THE VALUES THE READER FILLED IN, as the query was given them — only the ones offered to the reader: a
+	// value the author settles is not a condition anybody chose.
+	if (shows(ibOutputParameter::ShowParameters, false)) {
+		for (const ibCompositionParameter& parameter : Parameters()) {
+			if (!parameter.m_userSettable)
+				continue;
+			const auto value = settled.find(parameter.m_name);
+			if (value != settled.end())
+				driver.AddHeaderLine(ibTitleFromName(parameter.m_name) + wxT(": ") + value->second.GetString());
+		}
+	}
 	// 🛑 IT PRINTED THE SCOPE AND NOT THE FILTER. This walked the flat list — the engine's own
 	// per-fetch conditions — while everything a PERSON asked for lives in the filter in force. So a
 	// report run with conditions printed a heading that said there were none, which is the one thing
 	// a heading exists to prevent (2026-08-24).
-	for (const ibFilterNodeDescription& node : composer.GetCurrentFilterDesc().m_nodes) {
+	const std::vector<ibFilterNodeDescription> noConditions;
+	const std::vector<ibFilterNodeDescription>& conditions = shows(ibOutputParameter::ShowFilter, true)
+		? composer.GetCurrentFilterDesc().m_nodes : noConditions;
+	for (const ibFilterNodeDescription& node : conditions) {
 		if (!node.m_use || node.m_kind != ibFilterNodeKind_Condition)
 			continue;   // a line switched off was not asked for; a group is not one condition
 		// ⭐ THE LINE'S OWN LABEL WINS, AND THIS IS WHAT IT IS FOR. `m_presentation` is the wording a

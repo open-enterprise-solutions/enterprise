@@ -301,6 +301,135 @@ struct ibGroupDescription {
 	bool operator!=(const ibGroupDescription& o) const { return !(*this == o); }
 };
 
+// ⭐ THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — the only places where one becomes the other.
+// Reading needs the configuration the value is read against (references and enum members are built
+// by the metadata, not by the value factory); writing needs nothing, a value packs itself.
+BACKEND_API ibValue ibStoredValue(const ibDataNode& stored, const class ibMetaData* metaData);
+BACKEND_API void    ibStoreValue(ibDataNode& stored, const ibValue& value);
+
+// --- PARAMETER VALUES ------------------------------------------------------
+// ⭐⭐ A FINITE LIST THE PLATFORM DEFINES, EACH TICKED AND GIVEN A VALUE — the shape a field's appearance has
+// (below), and the shape the other settings of a report have (Max, 2026-09-29: a page of lines, each a tick,
+// a parameter and its value). ONE shape over two lists: how a word about one parameter is said, how a tick
+// is kept without being applied and how a word is forgotten are answered here once, whichever list the
+// parameter belongs to.
+//
+// ONE PARAMETER A PERSON TOUCHED. Unticked keeps the value without applying it, the way a filter line is
+// switched off rather than deleted. The value is PACKED (ibStoreValue), for the reason a parameter's is: a
+// description is data. What goes here is never a reference, so it reads back without a configuration.
+template <class Parameter>
+struct ibParameterValueDescription {
+	Parameter  m_parameter{};
+	bool       m_use = false;
+	ibDataNode m_value;
+
+	bool operator==(const ibParameterValueDescription& o) const {
+		return m_parameter == o.m_parameter && m_use == o.m_use && m_value == o.m_value;
+	}
+	bool operator!=(const ibParameterValueDescription& o) const { return !(*this == o); }
+};
+
+template <class Parameter>
+struct ibParameterValuesDescription {
+	// Only the parameters somebody touched — an untouched one is its storey above speaking, or the platform.
+	std::vector<ibParameterValueDescription<Parameter>> m_values;
+
+	const ibParameterValueDescription<Parameter>* Find(Parameter parameter) const {
+		for (const ibParameterValueDescription<Parameter>& value : m_values)
+			if (value.m_parameter == parameter)
+				return &value;
+		return nullptr;
+	}
+
+	// ⭐ DOES THIS STOREY SAY ANYTHING ABOUT IT — the tick, and nothing else. It is what a sort's IsOk is to the
+	// sort: a storey that says nothing leaves the word to the one above it.
+	bool Says(Parameter parameter) const {
+		const ibParameterValueDescription<Parameter>* value = Find(parameter);
+		return value != nullptr && value->m_use;
+	}
+
+	// ⭐ WHAT IS IN FORCE — the value of a TICKED parameter, else empty.
+	ibValue ValueInForce(Parameter parameter) const {
+		const ibParameterValueDescription<Parameter>* value = Find(parameter);
+		if (value == nullptr || !value->m_use)
+			return ibValue();
+		return ibStoredValue(value->m_value, nullptr);   // never a reference — see above
+	}
+
+	// ⭐⭐ THE DOOR a person's word comes in through — the settings window and MCP alike. Unticked and empty
+	// forgets the parameter altogether.
+	void Say(Parameter parameter, bool use, const ibValue& value) {
+		const bool forget = !use && value.IsEmpty();
+		for (size_t i = 0; i < m_values.size(); ++i) {
+			if (m_values[i].m_parameter != parameter)
+				continue;
+			if (forget) {
+				m_values.erase(m_values.begin() + i);
+				return;
+			}
+			m_values[i].m_use = use;
+			ibStoreValue(m_values[i].m_value, value);
+			return;
+		}
+		if (forget)
+			return;
+		ibParameterValueDescription<Parameter> said;
+		said.m_parameter = parameter;
+		said.m_use       = use;
+		ibStoreValue(said.m_value, value);
+		m_values.push_back(std::move(said));
+	}
+
+	bool IsEmpty() const { return m_values.empty(); }
+	void Clear() { m_values.clear(); }
+
+	bool operator==(const ibParameterValuesDescription& o) const { return m_values == o.m_values; }
+	bool operator!=(const ibParameterValuesDescription& o) const { return !(*this == o); }
+};
+
+// --- OTHER SETTINGS --------------------------------------------------------
+// ⭐⭐ HOW A REPORT BEHAVES, as a whole — the page after Sort (Max, 2026-09-29: "the other settings define the
+// behaviour in general"), on the report and on every node of its structure, and inherited the way a sort is:
+// a node's own where it ticked one, else its output's, else the setting in force, else the platform's own
+// answer. The report's THEME lives here — which palette it is painted in (ibCompositionTheme) — and its heading.
+//
+// The numbers are what the store writes, so they stay; a new parameter is APPENDED.
+enum class ibOutputParameter {
+	Theme = 0,        // the palette — an ibCompositionTheme's id
+	Title,            // the heading's text, in every language it is written in
+	ShowTitle,        // ibShowMode — is the heading printed
+	ShowFilter,       // ibShowMode — are the conditions printed under it
+	ShowParameters,   // ibShowMode — are the values the reader filled in printed under it
+};
+
+// WHETHER A PART OF THE HEADING IS PRINTED. `Auto` is what the report does when nobody said anything, which
+// is an answer of its own and not "yes": a title and the conditions print by themselves, parameters do not.
+enum class ibShowMode {
+	Auto = 0,
+	Show,
+	Hide,
+};
+BACKEND_API wxString ibShowModeCaption(ibShowMode mode);
+
+// WHICH PARAMETERS TAKE ONE — asked of the list, so a window and a verb cannot disagree about it.
+inline bool ibOutputParameterShows(ibOutputParameter parameter) {
+	return parameter == ibOutputParameter::ShowTitle || parameter == ibOutputParameter::ShowFilter
+	    || parameter == ibOutputParameter::ShowParameters;
+}
+
+// ⭐ WHERE A PARAMETER MEANS SOMETHING. The heading is the REPORT's — a grouping has none to title or to hide,
+// while its rows have a palette — so a page lists only what does something where it stands (Max, of a page
+// offered where it could hold nothing: "what grouping could there be here").
+enum class ibOutputParameterScope {
+	Report,   // the report and its outputs — where the filter and sort pages edit the setting itself too
+	Node,     // a grouping, or the detail records
+};
+// THE PLATFORM'S LIST for a storey, in the order a window shows it, and what each is called there.
+BACKEND_API const std::vector<ibOutputParameter>& ibOutputParameters(ibOutputParameterScope scope);
+BACKEND_API wxString ibOutputParameterCaption(ibOutputParameter parameter);
+
+using ibOutputParametersDescription = ibParameterValuesDescription<ibOutputParameter>;
+
 // --- SETTINGS = the three of them together ---------------------------------
 // What a list calls "its settings" and what a variant stores are the same three
 // parts. Combined here rather than in either of them, so neither owns the shape.
@@ -358,6 +487,11 @@ struct ibSettingsDescription {
 	// may fill it in — is the author's declaration and stays there.
 	std::vector<struct ibParameterDescription> m_parameters;
 
+	// ⭐ …AND HOW THE REPORT BEHAVES — the other settings (above): its theme, its heading. A part like the
+	// filter and the sort, for their reason: a person sets it, at the report and on a node, and it travels
+	// with the rest of what they set.
+	ibOutputParametersDescription m_outputParameters;
+
 	// NOTHING SET AT ALL — which is a state of its own, not an accident, and the ONE question that
 	// answers "has anybody saved a setting": a composer whose reader has not runs on `m_variants[0]`.
 	bool IsOk() const;
@@ -400,12 +534,6 @@ struct ibParameterDescription {
 	}
 	bool operator!=(const ibParameterDescription& o) const { return !(*this == o); }
 };
-
-// ⭐ THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — the only places where one becomes the other.
-// Reading needs the configuration the value is read against (references and enum members are built
-// by the metadata, not by the value factory); writing needs nothing, a value packs itself.
-BACKEND_API ibValue ibStoredValue(const ibDataNode& stored, const class ibMetaData* metaData);
-BACKEND_API void    ibStoreValue(ibDataNode& stored, const ibValue& value);
 
 // ⭐⭐ THE TITLE A NAME IMPLIES — `DataVersion` → "Data Version", `Number` → "Number". A name is
 // written for the language (one word, no spaces); a title is written for a reader, and nobody
@@ -475,43 +603,10 @@ enum class ibAppearanceParameter {
 BACKEND_API const std::vector<ibAppearanceParameter>& ibAppearanceParameters();
 BACKEND_API wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
 
-// ONE PARAMETER A PERSON TOUCHED. Unticked keeps the value without applying it, the way a filter line is
-// switched off rather than deleted. The value is PACKED (ibStoreValue), for the reason a parameter's is: a
-// description is data. What goes here is never a reference, so it reads back without a configuration.
-struct ibAppearanceValueDescription {
-	ibAppearanceParameter m_parameter = ibAppearanceParameter::Format;
-	bool                  m_use       = false;
-	ibDataNode            m_value;
-
-	bool operator==(const ibAppearanceValueDescription& o) const {
-		return m_parameter == o.m_parameter && m_use == o.m_use && m_value == o.m_value;
-	}
-	bool operator!=(const ibAppearanceValueDescription& o) const { return !(*this == o); }
-};
-
-struct ibAppearanceDescription {
-	// Only the parameters somebody touched — an untouched one is the value showing itself its own way.
-	std::vector<ibAppearanceValueDescription> m_values;
-
-	const ibAppearanceValueDescription* Find(ibAppearanceParameter parameter) const {
-		for (const ibAppearanceValueDescription& value : m_values)
-			if (value.m_parameter == parameter)
-				return &value;
-		return nullptr;
-	}
-
-	// ⭐ WHAT IS IN FORCE — the value of a TICKED parameter, else empty.
-	BACKEND_API ibValue ValueInForce(ibAppearanceParameter parameter) const;
-
-	// ⭐⭐ THE DOOR a person's word comes in through — the appearance window and MCP's report_field alike.
-	// Unticked and empty forgets the parameter altogether.
-	BACKEND_API void Say(ibAppearanceParameter parameter, bool use, const ibValue& value);
-
-	bool IsEmpty() const { return m_values.empty(); }
-
-	bool operator==(const ibAppearanceDescription& o) const { return m_values == o.m_values; }
-	bool operator!=(const ibAppearanceDescription& o) const { return !(*this == o); }
-};
+// …said the way every list of the platform's parameters is (ibParameterValuesDescription): only what somebody
+// touched is kept — an untouched one is the value showing itself its own way.
+using ibAppearanceValueDescription = ibParameterValueDescription<ibAppearanceParameter>;
+using ibAppearanceDescription      = ibParameterValuesDescription<ibAppearanceParameter>;
 
 // ⭐⭐ A FIELD OF THE COMPOSITION, AND WHAT IT IS CALLED. This is the entity a resource, a grouping
 // level and a printed column all REFER TO — they name a path, and the path is this. So the title
@@ -903,16 +998,16 @@ struct ibOutputDescription {
 // every output has its own groupings, sorts, its own fields and its own filters"* (Max, 2026-08-24).
 inline bool ibSettingsDescription::IsOk() const {
 	return m_filter.IsOk() || m_sort.IsOk() || m_group.IsOk() || !m_structure.empty()
-	    || !m_selected.empty() || !m_parameters.empty();
+	    || !m_selected.empty() || !m_parameters.empty() || !m_outputParameters.IsEmpty();
 }
 inline void ibSettingsDescription::Clear() {
 	m_filter.Clear(); m_sort.Clear(); m_group.Clear(); m_structure.clear(); m_selected.clear();
-	m_parameters.clear();
+	m_parameters.clear(); m_outputParameters.Clear();
 }
 inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) const {
 	return m_filter == o.m_filter && m_sort == o.m_sort && m_group == o.m_group
 	    && m_structure == o.m_structure && m_selected == o.m_selected
-	    && m_parameters == o.m_parameters;
+	    && m_parameters == o.m_parameters && m_outputParameters == o.m_outputParameters;
 }
 
 // --- VARIANT ---------------------------------------------------------------

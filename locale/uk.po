@@ -6185,3 +6185,51 @@ msgstr "Клітинки рахуються від 0 - рядок і колон�
 #: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
 msgid "Open functional option composition"
 msgstr "Відкрити склад функціональної опції"
+
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3271
+msgid "Other settings"
+msgstr "Інші налаштування"
+
+#: src/engine/backend/compositionDescription.cpp:1014
+msgid "Theme"
+msgstr "Тема"
+
+#: src/engine/backend/compositionDescription.cpp:1016
+msgid "Show title"
+msgstr "Виводити заголовок"
+
+#: src/engine/backend/compositionDescription.cpp:1017
+msgid "Show filter"
+msgstr "Виводити фільтр"
+
+#: src/engine/backend/compositionDescription.cpp:1018
+msgid "Show parameters"
+msgstr "Виводити параметри"
+
+#: src/engine/backend/compositionDescription.cpp:1027
+msgid "Show"
+msgstr "Виводити"
+
+#: src/engine/backend/compositionDescription.cpp:1028
+msgid "Do not show"
+msgstr "Не виводити"
+
+#: src/engine/backend/composition/compositionTheme.cpp:15
+msgid "Main"
+msgstr "Основна"
+
+#: src/engine/backend/composition/compositionTheme.cpp:22
+msgid "Neutral"
+msgstr "Нейтральна"
+
+#: src/engine/backend/composition/compositionTheme.cpp:29
+msgid "Sea"
+msgstr "Море"
+
+#: src/engine/backend/composition/compositionTheme.cpp:36
+msgid "Sand"
+msgstr "Пісок"
+
+#: src/engine/backend/composition/compositionTheme.cpp:45
+msgid "Black and white"
+msgstr "Чорно-біла"

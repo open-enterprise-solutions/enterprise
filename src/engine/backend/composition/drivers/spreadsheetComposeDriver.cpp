@@ -3,6 +3,7 @@
 #include "backend/backend_localization.h"                   // ibTranslateString — an appearance's format, in the language in force
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a cell is stamped with — value + its links
 #include "backend/session/session.h"                        // ibSession::RunState — the lines hear a cancel
+#include "backend/composition/compositionTheme.h"           // ibCompositionTheme — what the tints and the grid are
 
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 #include <map>         // the per-level field counts the dimension layout is built from
@@ -26,17 +27,11 @@ constexpr int kCellPadding   = 12;
 constexpr int kMinColWidth   = 70;
 constexpr int kMaxColWidth   = 420;
 
-// ⚠ PROVISIONAL COLOURS, and deliberately quiet ones. A grouping row and the header are tinted
-// so the structure reads at a glance while the report is scrolled — a neutral green that BLENDS
-// rather than announces itself. The deeper the level, the paler the tint, so nesting is visible
-// without a second mechanism.
-//
-// They belong in the palette (docs/private/ui-palette.md) rather than in a driver, and they are here
-// only until the report gets its own palette roles — a report that prints must eventually take
-// these from the theme, not from a constant.
-const wxColour kHeaderFill(0xD4, 0xE4, 0xD4);
-const wxColour kGroupFillOuter(0xE2, 0xEE, 0xE2);
-const wxColour kGroupFillInner(0xF0, 0xF7, 0xF0);
+// ⭐ THE COLOURS ARE THE THEME'S (ibCompositionTheme). A grouping row and the header are tinted so the
+// structure reads at a glance while the report is scrolled; the deeper the level, the paler the tint, so
+// nesting is visible without a second mechanism. What the tints ARE is the palette a person picked on the
+// Other settings page — they stood here as constants until 2026-09-29, and the first theme is them, colour for
+// colour.
 
 // ⭐⭐ THE GRID — what makes a printed report a TABLE rather than tinted stripes. A column is read
 // DOWNWARD, and the eye needs to know where it ends sideways; a tint says "a level starts here" and
@@ -50,29 +45,22 @@ const wxColour kGroupFillInner(0xF0, 0xF7, 0xF0);
 // It also puts the bottom of the frame where it belongs. Drawn by the TOTAL row, as it was for an
 // hour, the frame simply had no bottom whenever a report declared no resources — an edge that
 // depends on whether some row happened to be there is not an edge.
-const wxColour kGridLine(0xA8, 0xB8, 0xA8);
-
-ibSpreadsheetBorderDescription GridPen()
+//
+// One pen for the whole table, made once per output from its theme — every edge of every cell is drawn with it.
+ibSpreadsheetBorderDescription GridPen(const ibCompositionTheme& theme)
 {
 	ibSpreadsheetBorderDescription pen;
 	pen.m_style  = wxPENSTYLE_SOLID;
-	pen.m_colour = kGridLine;
+	pen.m_colour = theme.m_gridLine;
 	pen.m_width  = 1;
-	return pen;
-}
-
-// One pen for the whole grid, made once — every edge of every cell is drawn with it.
-const ibSpreadsheetBorderDescription& TheGridPen()
-{
-	static const ibSpreadsheetBorderDescription pen = GridPen();
 	return pen;
 }
 
 // ONE CELL'S SHARE OF THE GRID — its verticals always, its horizontals when it is on an edge. Both
 // the header and the rows draw through here, so the table cannot come out with two kinds of line.
-void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool bottom)
+void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool bottom,
+	const ibSpreadsheetBorderDescription& pen)
 {
-	const ibSpreadsheetBorderDescription& pen = TheGridPen();
 	area.SetCellBorderLeft(row, col, pen);
 	area.SetCellBorderRight(row, col, pen);
 	if (top)
@@ -81,22 +69,9 @@ void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool 
 		area.SetCellBorderBottom(row, col, pen);
 }
 
-// A DETAIL ROW IS NOT BLANK PAPER. Left untinted it comes out pure white between the tinted group
-// rows, and pure white is the loudest thing on a page of soft greens — the eye lands on the last
-// row instead of on the structure (Max, 2026-08-19: "the last row stands out all white; give it
-// something very neutral so the white does not catch the eye").
-const wxColour kDetailFill(0xFA, 0xFA, 0xF8);
-
-// The tint for a grouping row at `level` — outermost is the strongest, and three levels down it
-// has faded into the page. Anything deeper keeps the palest shade rather than disappearing.
-wxColour ibGroupFillForLevel(int level)
-{
-	switch (level) {
-	case 0:  return kGroupFillOuter;
-	case 1:  return wxColour(0xE9, 0xF2, 0xE9);
-	default: return kGroupFillInner;
-	}
-}
+// (A DETAIL ROW IS NOT BLANK PAPER — its fill is the theme's too, m_detailFill: left untinted it comes out
+//  pure white between the tinted group rows, and pure white is the loudest thing on a page of soft colour.
+//  Max, 2026-08-19: "the last row stands out all white; give it something very neutral".)
 
 } // namespace
 
@@ -117,6 +92,9 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	m_crossRows.clear();
 	m_crossDetailRows = 0;
 	m_detailsAcross = info.m_detailsAxis == ibTotalsAxis::Columns;
+	// THE PALETTE, and the grid's pen made from it — a host that names none gets the platform's first.
+	m_theme   = info.m_theme != nullptr ? info.m_theme : ibCompositionThemes().front();
+	m_gridPen = GridPen(*m_theme);
 
 	std::vector<int> columnDepths;
 	for (size_t i = 0; i < info.m_schema.size(); ++i) {
@@ -210,7 +188,7 @@ void ibSpreadsheetComposeDriver::OnGroupBegin(const ibCompositionLine& line, con
 		PrintRow(line, values);   // the ordinary report, printed as it arrives
 		return;
 	}
-	OnCrossHeading(line.m_level, values);
+	OnCrossHeading(line.m_level, ThemeOf(line), values);
 }
 
 // A COLUMN — a heading that reads ACROSS the page. The walk says so now (it knows each level's
@@ -224,9 +202,9 @@ void ibSpreadsheetComposeDriver::OnColumn(const ibCompositionLine& line,
 	// WHERE IT IS DRAWN across the sheet — the rung plus the step into its tree, the same number the
 	// row axis lays out by. (It was `line.Page()` computed at the callsite; the line states it now.)
 	if (line.m_kind == ibSelectorNodeKind::Detail)
-		PrintCrossDetail(line.Page(), values);
+		PrintCrossDetail(line.Page(), ThemeOf(line), values);
 	else
-		OnCrossHeading(line.Page(), values);
+		OnCrossHeading(line.Page(), ThemeOf(line), values);
 }
 
 // ⭐⭐ A HEADING IS CLOSED — everything under it has been written, so its figures are final.
@@ -269,10 +247,11 @@ void ibSpreadsheetComposeDriver::OnRow(const ibCompositionLine& line, const std:
 		PrintRow(line, values);
 		return;
 	}
-	PrintCrossDetail(line.m_level, values);
+	PrintCrossDetail(line.m_level, ThemeOf(line), values);
 }
 
-void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const ibCompositionTheme& theme,
+	const std::vector<ibValue>& values)
 {
 
 	// ITS FIGURES, pulled out by role — the same as for a heading, because in a table a record IS
@@ -311,6 +290,7 @@ void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const std::vector<i
 
 	CrossRow row;
 	row.m_detail = true;
+	row.m_theme  = &theme;
 	// PAST THE LAST GROUPING, whatever the fold numbered it. The tint and the indent are what a
 	// reader sees, and both are about where the line sits UNDER the headings — not about which
 	// level of the config produced it.
@@ -535,7 +515,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 	for (int col = 0; col < m_columnCount; ++col) {
 		const int rows = merged[static_cast<size_t>(col)] ? 1 : headerRows;
 		for (int row = 0; row < rows; ++row)
-			header->SetCellBackgroundColour(row, col, kHeaderFill);
+			header->SetCellBackgroundColour(row, col, m_theme->m_headerFill);
 	}
 
 	// ⭐⭐ THE HEADER IS BOXED, and the rest of the table hangs off its lines. A report is read as a
@@ -558,11 +538,11 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 	// be asking for an edge in the middle of a single cell — the very line the merge exists to remove.
 	for (int col = 0; col < m_columnCount; ++col) {
 		if (merged[static_cast<size_t>(col)]) {
-			BoxCell(*header, 0, col, /*top*/ true, /*bottom*/ true);
+			BoxCell(*header, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 			continue;
 		}
 		for (int row = 0; row < headerRows; ++row)
-			BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true);
+			BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 	}
 
 	m_document->PutArea(header, 0);
@@ -619,9 +599,17 @@ void ibSpreadsheetComposeDriver::WriteHeading()
 	wxObjectDataPtr<ibBackendSpreadsheetObject> heading(new ibBackendSpreadsheetObject());
 	int row = 0;
 
+	// ⭐ THE TITLE IS WHAT THE PAGE IS, so it is read first: large, bold, in the theme's deepest colour (Max,
+	// 2026-09-29: "24 points, bold, so it catches the eye - in the theme's style"). The row takes its height from
+	// the text, as every row does; a height written here would be a second answer to that.
 	if (!m_title.IsEmpty()) {
 		heading->SetCellValue(row, 0, m_title);
 		heading->SetCellSize(row, 0, 1, span);
+		wxFont font = s_defaultSpreadsheetFont;
+		font.SetPointSize(24);
+		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
+		heading->SetCellFont(row, 0, font);
+		heading->SetCellTextColour(row, 0, m_theme->m_titleText);
 		++row;
 	}
 
@@ -822,12 +810,13 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 
 	// A GROUPING ROW IS TINTED ACROSS ITS WHOLE WIDTH AND BOLD — the tint says "a level starts here"
 	// while scrolling, the weight still says it in print. A detail row is tinted too, faintly: left
-	// white it would be the only pure white on a page of soft greens.
+	// white it would be the only pure white on a page of soft colour. Both in the palette of the line's node.
 	// ⭐ …AND A HEADING WITH NOTHING UNDER IT IS STILL ONE, where the output reads further down: a month the fold
 	// filled in because nothing moved in it printed as a record among its bold neighbours (Max, 2026-09-29). The
 	// deepest heading of a report that reads no records stays as it was — nothing is under any of them.
 	const bool groupRow = line.m_kind != ibSelectorNodeKind::Detail && (hasChildren || line.m_levelReadsDeeper);
-	const wxColour fill = groupRow ? ibGroupFillForLevel(level) : kDetailFill;
+	const ibCompositionTheme& theme = ThemeOf(line);
+	const wxColour fill = groupRow ? theme.GroupFill(level) : theme.m_detailFill;
 	wxFont font = s_defaultSpreadsheetFont;
 	if (groupRow)
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
@@ -844,7 +833,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		// merged lost the rule between the header and the first row while the unmerged one kept it (Max,
 		// 2026-08-28, with R6C4 selected: *"there is no line"*, Top: None). Every horizontal edge is now
 		// stated by the side that is never merged.
-		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);
+		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 	}
 
 	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is DRAWN — the rung plus the
@@ -906,14 +895,14 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	}
 
 	// TINTED AND BOLD LIKE THE HEADING IT BELONGS TO — a total is the group's other half, so it reads
-	// as part of it rather than as a stray row.
-	const wxColour fill = ibGroupFillForLevel(level);
+	// as part of it rather than as a stray row. The grand total is the output's own line, in its palette.
+	const wxColour fill = m_theme->GroupFill(level);
 	wxFont font = s_defaultSpreadsheetFont;
 	font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 	for (int col = 0; col < m_columnCount; ++col) {
 		row->SetCellBackgroundColour(0, col, fill);
 		row->SetCellFont(0, col, font);
-		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true);   // closed like every other row, both ends
+		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // closed like every other row, both ends
 	}
 
 	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, level)));
@@ -980,7 +969,8 @@ size_t ibSpreadsheetComposeDriver::ColumnKeyIndex(const CrossKey& key)
 	return m_colKeyHint = m_colKeys.size() - 1;
 }
 
-void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTheme& theme,
+	const std::vector<ibValue>& values)
 {
 	// THE FIGURES, PULLED OUT BY ROLE. A table stores measures, never the row as it arrived: its
 	// cells are laid out per measure, and a row holds the dimension slots too. (The streaming layout
@@ -1039,6 +1029,7 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const std::vector<ibV
 		// Built where it lives — one per row heading, forty thousand of them, none copied or moved.
 		CrossRow& row = m_crossRows.emplace_back();
 		row.m_level    = level;
+		row.m_theme    = &theme;
 		row.m_heading  = ibValuesOfLevel(m_schema, values, level - 1);
 		row.m_measures = std::move(measures);
 		return;
@@ -1469,8 +1460,8 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	for (int row = 0; row < std::max(1, headerRows); ++row)
 		for (int col = 0; col < totalCols; ++col)
 			if (!covered[static_cast<size_t>(row)][static_cast<size_t>(col)]) {
-				header->SetCellBackgroundColour(row, col, kHeaderFill);
-				BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true);
+				header->SetCellBackgroundColour(row, col, m_theme->m_headerFill);
+				BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 			}
 	m_document->PutArea(header, 0);
 	// THE FIRST SECTION ONLY — freezing again would pin everything printed so far and the sheet
@@ -1613,8 +1604,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			writeFigures(dimWidth + keys * perKey, source.m_measures, ibValue());
 
 		// A HEADING IS TINTED BY ITS LEVEL AND BOLD; A RECORD IS NEITHER — same rule the streaming
-		// layout follows (OnRow), so a table and a grouping dress their lines alike.
-		const wxColour fill = source.m_detail ? kDetailFill : ibGroupFillForLevel(source.m_level);
+		// layout follows (OnRow), so a table and a grouping dress their lines alike — in the palette of the
+		// line's node, else the output's.
+		const ibCompositionTheme& theme = source.m_theme != nullptr ? *source.m_theme : *m_theme;
+		const wxColour fill = source.m_detail ? theme.m_detailFill : theme.GroupFill(source.m_level);
 		// …and closed at both ends, like every row of a grouping: each line is an area of its own, so
 		// the horizontal edge is on its outside and belongs to it. One description of the line's cell,
 		// set in one call per cell — the same text, alignment, link, fill, font and edges the single
@@ -1626,7 +1619,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		if (!source.m_detail)
 			cell.m_font = boldFont;
 		for (ibSpreadsheetBorderDescription& edge : cell.m_borderAt)
-			edge = TheGridPen();
+			edge = m_gridPen;
 		for (int col = 0; col < totalCols; ++col) {
 			const size_t c = static_cast<size_t>(col);
 			if (cellSaid[c])
@@ -1700,9 +1693,9 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		wxFont font = s_defaultSpreadsheetFont;
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
 		for (int col = 0; col < totalCols; ++col) {
-			totals->SetCellBackgroundColour(0, col, kHeaderFill);
+			totals->SetCellBackgroundColour(0, col, m_theme->m_headerFill);
 			totals->SetCellFont(0, col, font);
-			BoxCell(*totals, 0, col, /*top*/ true, /*bottom*/ true);   // the line that closes the table
+			BoxCell(*totals, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // the line that closes the table
 		}
 		m_document->PutArea(totals, 0);
 		++m_rowsWritten;

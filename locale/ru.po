@@ -6335,3 +6335,51 @@ msgstr "Ячейки считаются от 0 - строка и колонка 
 #: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
 msgid "Open functional option composition"
 msgstr "Открыть состав функциональной опции"
+
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3271
+msgid "Other settings"
+msgstr "Другие настройки"
+
+#: src/engine/backend/compositionDescription.cpp:1014
+msgid "Theme"
+msgstr "Тема"
+
+#: src/engine/backend/compositionDescription.cpp:1016
+msgid "Show title"
+msgstr "Выводить заголовок"
+
+#: src/engine/backend/compositionDescription.cpp:1017
+msgid "Show filter"
+msgstr "Выводить фильтр"
+
+#: src/engine/backend/compositionDescription.cpp:1018
+msgid "Show parameters"
+msgstr "Выводить параметры"
+
+#: src/engine/backend/compositionDescription.cpp:1027
+msgid "Show"
+msgstr "Выводить"
+
+#: src/engine/backend/compositionDescription.cpp:1028
+msgid "Do not show"
+msgstr "Не выводить"
+
+#: src/engine/backend/composition/compositionTheme.cpp:15
+msgid "Main"
+msgstr "Основная"
+
+#: src/engine/backend/composition/compositionTheme.cpp:22
+msgid "Neutral"
+msgstr "Нейтральная"
+
+#: src/engine/backend/composition/compositionTheme.cpp:29
+msgid "Sea"
+msgstr "Море"
+
+#: src/engine/backend/composition/compositionTheme.cpp:36
+msgid "Sand"
+msgstr "Песок"
+
+#: src/engine/backend/composition/compositionTheme.cpp:45
+msgid "Black and white"
+msgstr "Чёрно-белая"

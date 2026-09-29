@@ -17,7 +17,9 @@ namespace {
 wxString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
 {
 	const ibAppearanceValueDescription* value = appearance.Find(parameter);
-	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString() : wxString();
+	// ⚠ BOTH ARMS wxString: an ibString beside a wxString is ambiguous on GCC and clang — each converts to the
+	// other — and MSVC's silence about it cost the Linux and macOS builds of fd601790d their frontend.
+	return value != nullptr ? ibStoredValue(value->m_value, nullptr).GetString().ToWxString() : wxString();
 }
 
 bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)

@@ -343,6 +343,7 @@
     <ClCompile Include="win\dlgs\settings\settingsFilterEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsSortEditor.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp" />
+    <ClCompile Include="win\dlgs\settings\settingsOutputParametersEditor.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp" />
@@ -750,6 +751,7 @@
     <ClInclude Include="win\dlgs\settings\settingsFilterEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsSortEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h" />
+    <ClInclude Include="win\dlgs\settings\settingsOutputParametersEditor.h" />
     <ClInclude Include="win\dlgs\settings\settingsStyle.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h" />

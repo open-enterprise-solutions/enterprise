@@ -67,6 +67,9 @@
     <ClCompile Include="win\dlgs\settings\settingsAppearanceEditor.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\settings\settingsOutputParametersEditor.cpp">
+      <Filter>win\dlgs\settings</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp">
       <Filter>win\dlgs\settings\list</Filter>
     </ClCompile>
@@ -1127,6 +1130,9 @@
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\settingsAppearanceEditor.h">
+      <Filter>win\dlgs\settings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\settings\settingsOutputParametersEditor.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\settingsStyle.h">

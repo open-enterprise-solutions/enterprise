@@ -183,6 +183,15 @@ private:
 	std::vector<int>            m_dimLevel;
 
 	ibBackendSpreadsheetObject* m_document = nullptr;
+	// ⭐ THE PALETTE — the output's (ibCompositionOutputInfo::m_theme): its header, its foot, and every line whose
+	// node names none of its own. And the GRID's pen, made from it once per output: the lines are the table's,
+	// so a node's own theme tints its rows and never redraws the grid.
+	const ibCompositionTheme*   m_theme = nullptr;
+	ibSpreadsheetBorderDescription m_gridPen;
+	// THE PALETTE A LINE IS PAINTED IN — its node's, else the output's.
+	const ibCompositionTheme& ThemeOf(const ibCompositionLine& line) const {
+		return *(line.m_theme != nullptr ? line.m_theme : m_theme);
+	}
 	wxString                    m_title;
 	// What THIS output is called — its caption over its own block. Empty for an output nobody named,
 	// and then nothing is printed: a blank caption line would read as a row that failed.
@@ -236,6 +245,7 @@ private:
 	struct CrossRow
 	{
 		int                  m_level = 0;      // depth of the heading — indent and tint read off it
+		const ibCompositionTheme* m_theme = nullptr;   // …and the palette its node paints it in (ThemeOf)
 		std::vector<ibValue> m_heading;        // its own dimension values (its level's fields)
 		std::vector<ibValue> m_measures;       // the heading's own figures = the row's total
 		// column key index -> the figures where that column meets this row. Sparse on purpose: a
@@ -272,13 +282,14 @@ private:
 		bool     m_subtotal = false;
 	};
 
-	void OnCrossHeading(int level, const std::vector<ibValue>& values);
+	// `theme` — the palette the line is painted in when the table is printed (ThemeOf).
+	void OnCrossHeading(int level, const ibCompositionTheme& theme, const std::vector<ibValue>& values);
 	// The STREAMING layout's row — an ordinary report's heading or record, printed as it arrives.
 	// Split off from the event when the kind started travelling on it: the dispatch is one question
 	// ("which layout is this output in"), the printing is another.
 	void PrintRow(const ibCompositionLine& line, const std::vector<ibValue>& values);
 	// …and a DETAIL record in the cross layout — its own line, with the cells across it.
-	void PrintCrossDetail(int level, const std::vector<ibValue>& values);
+	void PrintCrossDetail(int level, const ibCompositionTheme& theme, const std::vector<ibValue>& values);
 	// The output's columns, taken as the output begins. Not an event of its own any more: "which
 	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
 	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);

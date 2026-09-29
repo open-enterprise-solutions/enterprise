@@ -39,6 +39,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/composition/dataComposer.h"     // ibDataDBComposer — the two sections live on the base
+#include "backend/composition/compositionTheme.h" // ibCompositionThemes — the palettes a setting names
 #include "backend/compositionDescription.h"       // the description + its Memory (read/write) pair
 #include "backend/serialize/dataBuilder.h"        // ibDataNode — what a description is written into
 
@@ -922,6 +923,67 @@ TEST(CompositionFields, AnAppearanceKeepsWhatWasTickedThroughTheStore)
 		ibCompositionDescriptionMemory::ReadNode(node, read);
 		EXPECT_TRUE(read.m_selects.empty());
 	}
+}
+
+// ⭐⭐ THE OTHER SETTINGS TRAVEL WITH THE SETTING — the report's own and a node's alike, through the store, and
+// a setting that says nothing writes nothing (Max, 2026-09-29: the page after Sort, on every node).
+TEST(CompositionOtherSettings, AreKeptOnTheReportAndOnANodeThroughTheStore)
+{
+	ibCompositionDescription written;
+	ibSettingsDescription& settings = written.m_variants[0].m_settings;
+	settings.m_outputParameters.Say(ibOutputParameter::Theme, true, ibValue(wxString(wxT("Sea"))));
+	settings.m_outputParameters.Say(ibOutputParameter::ShowParameters, true,
+		ibValue(static_cast<int>(ibShowMode::Show)));
+
+	ibOutputDescription output;
+	ibLevelDescription level;
+	level.m_settings.m_group.Append(wxT("Partner"));
+	level.m_settings.m_outputParameters.Say(ibOutputParameter::Theme, true, ibValue(wxString(wxT("Sand"))));
+	output.m_rowGroups.push_back(level);
+	settings.m_structure.push_back(output);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	// EQUALITY IS HOW "MODIFIED" IS DECIDED — a part left out of it is a page that never saves.
+	EXPECT_EQ(written.m_variants[0].m_settings, read.m_variants[0].m_settings);
+	const ibOutputParametersDescription& back = read.m_variants[0].m_settings.m_outputParameters;
+	EXPECT_EQ(wxT("Sea"), back.ValueInForce(ibOutputParameter::Theme).GetString());
+	EXPECT_EQ(static_cast<int>(ibShowMode::Show), back.ValueInForce(ibOutputParameter::ShowParameters).GetInteger());
+	EXPECT_FALSE(back.Says(ibOutputParameter::Title));   // nobody said it
+
+	settings.m_outputParameters.Clear();
+	settings.m_structure.clear();
+	EXPECT_FALSE(settings.IsOk());   // …and a setting that says nothing is no setting at all
+}
+
+// ⭐⭐ INHERITED THE WAY A SORT IS: a node's own where it ticked one, else its output's, else the setting in force.
+// An unticked word is kept and says nothing — the storey above answers.
+TEST(CompositionOtherSettings, ANodeSaysItsOwnElseTheOutputElseTheSetting)
+{
+	ibDataDBComposer composer;
+	ibSettingsDescription zeroth;
+	zeroth.m_outputParameters.Say(ibOutputParameter::Theme, true, ibValue(wxString(wxT("Neutral"))));
+	DeclareZeroth(composer, zeroth);
+
+	ibDataComposer::Output& output = composer.Outputs().front();
+	ibLevelDescription node;
+
+	EXPECT_EQ(wxT("Neutral"), composer.OutputParameterFor(output, &node, ibOutputParameter::Theme).GetString());
+
+	output.m_settings.m_outputParameters.Say(ibOutputParameter::Theme, true, ibValue(wxString(wxT("Sea"))));
+	EXPECT_EQ(wxT("Sea"), composer.OutputParameterFor(output, &node, ibOutputParameter::Theme).GetString());
+
+	node.m_settings.m_outputParameters.Say(ibOutputParameter::Theme, false, ibValue(wxString(wxT("Sand"))));
+	EXPECT_EQ(wxT("Sea"), composer.OutputParameterFor(output, &node, ibOutputParameter::Theme).GetString());
+
+	node.m_settings.m_outputParameters.Say(ibOutputParameter::Theme, true, ibValue(wxString(wxT("Sand"))));
+	EXPECT_EQ(wxT("Sand"), wxString(composer.ThemeFor(output, &node).m_id));
+
+	// A THEME NOBODY KNOWS PAINTS IN THE FIRST — the way a field that has gone still prints under its name.
+	EXPECT_EQ(ibCompositionThemes().front(), &ibCompositionThemeById(wxT("NoSuchTheme")));
 }
 
 // ⭐⭐ A RENAME IS ONE WRITE, and everything that referred to the select BY ID still does. The name

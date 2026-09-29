@@ -32,6 +32,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/compositionDescription.h"
+#include "backend/composition/compositionTheme.h"   // ibCompositionThemes — the palettes report_other_settings offers
 #include "backend/metaCollection/metaComposerObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — a named item as a value
@@ -977,6 +978,230 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolReportOrder);
+
+//---------------------------------------------------------------------------
+// report_other_settings
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ HOW THE REPORT BEHAVES AS A WHOLE — the settings window's Other settings page (ibOutputParameter): its
+// theme, its heading. Part of a VARIANT like the filter, and set per storey the way the filter is (Max,
+// 2026-09-29: "the other settings are part of the variant, exactly as the filters, only set within a node"):
+// on the report, or on a node, where a grouping paints its own rows. Said through the page's own door
+// (ibParameterValuesDescription::Say), one argument per parameter of the platform's list, the way report_field
+// says a field's appearance — so a heading set here and one set on the page are set the same way.
+class ibMcpToolReportOtherSettings : public ibMcpTool {
+
+	// THE STOREY — a node of an output, or the report when no output is named.
+	static const ibArg& ArgNodeOutput() {
+		static const ibArg a(wxT("output"), ibArg::Kind::Text,
+			ibMcpText("Set it on a NODE of this output - the level `groupBy` names, or the output's DETAIL level "
+				"without it. Omit to set the REPORT's own, which every node inherits."));
+		return a;
+	}
+	static const ibArg& ArgTheme() {
+		static const std::vector<wxString> s_ids = [] {
+			std::vector<wxString> ids;
+			for (const ibCompositionTheme* theme : ibCompositionThemes())
+				ids.push_back(theme->m_id);
+			ids.push_back(wxEmptyString);   // …and empty, which gives it back — see ShowWordsOrEmpty
+			return ids;
+		}();
+		static const ibArg a(wxT("theme"), ibArg::Kind::Text,
+			ibMcpText("The palette the report is painted in - the header, the headings by their depth, the records, "
+				"the grid, the title. On a node it tints that node's rows only. Empty gives it back to the storey "
+				"above. Omit to leave it."),
+			false, s_ids);
+		return a;
+	}
+	static const ibArg& ArgTitle() {
+		static const ibArg a(wxT("title"), ibArg::Kind::Text,
+			ibMcpText("The report's heading, printed large over the table. Several languages in the synonym form - "
+				"`en = 'Stock by warehouse'; ru = '...'` - are read in the reader's. Empty gives back the report's "
+				"own name. Omit to leave it. The report's only."));
+		return a;
+	}
+	// THE THREE WORDS, in ibShowMode's order — a word's place IS the mode it says.
+	static const std::vector<wxString>& ShowWords() {
+		static const std::vector<wxString> s_words = { wxT("auto"), wxT("show"), wxT("hide") };
+		return s_words;
+	}
+	// ⚠ …AND EMPTY BESIDE THEM, as a word the gate lets through: a closed set is held to its words
+	// (ibMcpArgumentFault), and "empty gives it back" has to be one of them to be said at all.
+	static const std::vector<wxString>& ShowWordsOrEmpty() {
+		static const std::vector<wxString> s_words = { wxT("auto"), wxT("show"), wxT("hide"), wxEmptyString };
+		return s_words;
+	}
+	static const ibArg& ArgShowTitle() {
+		static const ibArg a(wxT("showTitle"), ibArg::Kind::Text,
+			ibMcpText("Print the heading: `show`, `hide`, or `auto` (it prints). The report's only. Omit to leave it."),
+			false, ShowWordsOrEmpty());
+		return a;
+	}
+	static const ibArg& ArgShowFilter() {
+		static const ibArg a(wxT("showFilter"), ibArg::Kind::Text,
+			ibMcpText("Print the filter's conditions under the heading: `show`, `hide`, or `auto` (they print). The "
+				"report's only. Omit to leave it."),
+			false, ShowWordsOrEmpty());
+		return a;
+	}
+	static const ibArg& ArgShowParameters() {
+		static const ibArg a(wxT("showParameters"), ibArg::Kind::Text,
+			ibMcpText("Print the values the reader filled in - `Period: ...` - under the heading: `show`, `hide`, or "
+				"`auto` (they do not print). The report's only. Omit to leave it."),
+			false, ShowWordsOrEmpty());
+		return a;
+	}
+
+	// WHICH ARGUMENT SAYS WHICH PARAMETER — the platform's list, in its order.
+	static const std::vector<std::pair<ibOutputParameter, const ibArg*>>& Words() {
+		static const std::vector<std::pair<ibOutputParameter, const ibArg*>> s_words = {
+			{ ibOutputParameter::Theme,          &ArgTheme() },
+			{ ibOutputParameter::Title,          &ArgTitle() },
+			{ ibOutputParameter::ShowTitle,      &ArgShowTitle() },
+			{ ibOutputParameter::ShowFilter,     &ArgShowFilter() },
+			{ ibOutputParameter::ShowParameters, &ArgShowParameters() },
+		};
+		return s_words;
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("report_other_settings"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("setting how '%s' is printed"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("The report's OTHER SETTINGS - the settings window's page after Sort: its THEME (the colour "
+			"palette), its TITLE and whether the title, the filter and the reader's parameter values are printed "
+			"over the table. Part of a variant, like the filter. On the report by default; name an `output` (and a "
+			"`groupBy`) to set a node, which holds only a theme - a grouping tinted apart from the rest. A node "
+			"that says nothing takes the report's. Each argument omitted leaves its parameter as it is; an empty "
+			"one gives it back to the storey above. With none, the storey's settings are read back.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgNodeOutput(), ArgGroupBy(), ArgTheme(),
+			ArgTitle(), ArgShowTitle(), ArgShowFilter(), ArgShowParameters(), ArgVariant() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		if (composer == nullptr)
+			return false;
+
+		ibCompositionDescription composition = composer->GetCompositionDesc();
+
+		ibVariantDescription* variant =
+			VariantOf(composition, ArgVariant().Text(params), refusal);
+		if (variant == nullptr)
+			return false;
+
+		// THE STOREY — the report's own settings, or a node's, found the way report_level finds the one it removes.
+		ibOutputParametersDescription* said = &variant->m_settings.m_outputParameters;
+		ibOutputParameterScope scope = ibOutputParameterScope::Report;
+		if (ArgNodeOutput().Given(params)) {
+			const wxString outputName = ArgNodeOutput().Text(params);
+			ibOutputDescription* output = nullptr;
+			wxString available;
+			for (ibOutputDescription& candidate : variant->m_settings.m_structure) {
+				available << (available.IsEmpty() ? wxT("") : wxT(", ")) << candidate.m_name;
+				if (candidate.m_name.IsSameAs(outputName, false))
+					output = &candidate;
+			}
+			if (output == nullptr) {
+				refusal = available.IsEmpty()
+					? ibMcpText("This variant has no output yet - add one with report_output.")
+					: wxString::Format(ibMcpText("There is no output called '%s'. It has: %s."), outputName, available);
+				return false;
+			}
+			const wxString groupBy = ArgGroupBy().Text(params);
+			ibLevelDescription* node = nullptr;
+			wxString has;
+			for (std::vector<ibLevelDescription>* axis : { &output->m_rowGroups, &output->m_columnGroups })
+				for (ibLevelDescription& level : *axis) {
+					for (const ibGroupLineDescription& field : level.m_settings.m_group.m_lines)
+						has << (has.IsEmpty() ? wxT("") : wxT(", ")) << field.m_path;
+					if (node != nullptr)
+						continue;
+					if (groupBy.IsEmpty() ? level.m_kind == ibCompositionLevelKind::Details
+					                      : std::any_of(level.m_settings.m_group.m_lines.begin(),
+					                                    level.m_settings.m_group.m_lines.end(),
+					                                    [&groupBy](const ibGroupLineDescription& field) {
+					                                        return field.m_path.IsSameAs(groupBy, false); }))
+						node = &level;
+				}
+			if (node == nullptr) {
+				refusal = groupBy.IsEmpty()
+					? ibMcpText("This output has no detail level - name the grouping with `groupBy`.")
+					: has.IsEmpty()
+						? ibMcpText("This output has no level grouped by that - it has no groupings yet.")
+						: wxString::Format(ibMcpText("This output has no level grouped by that. It groups by: %s."), has);
+				return false;
+			}
+			said  = &node->m_settings.m_outputParameters;
+			scope = ibOutputParameterScope::Node;
+		}
+
+		// EACH PARAMETER ITS OWN ARGUMENT — omitted leaves it, empty gives it back to the storey above. Everything
+		// is checked before anything is said, so a refused call changes nothing.
+		const std::vector<ibOutputParameter>& offered = ibOutputParameters(scope);
+		std::vector<std::pair<ibOutputParameter, ibValue>> words;
+		for (const auto& word : Words()) {
+			if (!word.second->Given(params))
+				continue;
+			if (std::find(offered.begin(), offered.end(), word.first) == offered.end()) {
+				refusal = wxString::Format(ibMcpText("A node holds only a theme - `%s` is the report's: say it "
+					"without `output`."), word.second->Name());
+				return false;
+			}
+			// (A word outside a closed set never gets here — the gate refuses it by name, ibMcpArgumentFault.)
+			const wxString text = word.second->Text(params);
+			ibValue value;   // empty — given back to the storey above
+			if (text.IsEmpty())
+				;
+			else if (word.first == ibOutputParameter::Theme)
+				value = ibValue(wxString(ibCompositionThemeById(text).m_id));   // its id as the platform spells it
+			else if (ibOutputParameterShows(word.first)) {
+				const std::vector<wxString>& modes = ShowWords();
+				const auto found = std::find_if(modes.begin(), modes.end(),
+					[&text](const wxString& mode) { return mode.IsSameAs(text, false); });
+				value = ibValue(static_cast<int>(found - modes.begin()));   // the words stand in ibShowMode's order
+			}
+			else
+				value = ibValue(text);
+			words.emplace_back(word.first, value);
+		}
+		for (const auto& word : words)
+			said->Say(word.first, !word.second.IsEmpty(), word.second);
+
+		if (!words.empty()) {
+			composer->SetCompositionDesc(composition);
+			activeMetaData->Modify(true);
+		}
+
+		// WHAT THE STOREY SAYS NOW — only what it says; the rest is the storey above's.
+		result.SetValue(wxT("storey"), wxString(scope == ibOutputParameterScope::Node ? wxT("node") : wxT("report")));
+		for (const auto& word : Words()) {
+			if (!said->Says(word.first))
+				continue;
+			const ibValue value = said->ValueInForce(word.first);
+			result.SetValue(word.second->Name(), ibOutputParameterShows(word.first)
+				? ShowWords()[std::min<size_t>(static_cast<size_t>(std::max(0, value.GetInteger())), 2)]
+				: wxString(value.GetString()));
+		}
+		ibMcpSayComposerComplaints(composition, result);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolReportOtherSettings);
 
 //---------------------------------------------------------------------------
 // report_parameter

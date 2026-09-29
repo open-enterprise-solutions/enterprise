@@ -38,6 +38,7 @@
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
+#include "compositionTheme.h"                 // ibCompositionTheme — the palette a run hands its driver
 #include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
 
 // A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
@@ -178,6 +179,9 @@ public:
 		// empty"). No fallback beside it: what the reader put there is theirs, and where they put
 		// nothing the author's declaration answers at the run, per name.
 		current.m_parameters = m_userSettings.m_parameters;
+		// …and the other settings, assembled like the rest — left out, the theme a person picked would be written
+		// into the setting on OK and gone from the window the next time it opened.
+		current.m_outputParameters = GetCurrentOutputParametersDesc();
 		return current;
 	}
 
@@ -268,6 +272,26 @@ public:
 	const std::vector<ibSelectedFieldDescription>& GetCurrentSelectedDesc() const {
 		return ReaderHasSetting() ? m_userSettings.m_selected
 		                          : m_variants.front().m_settings.m_selected;
+	}
+	// …AND HOW THE REPORT BEHAVES — the other settings, the same way again.
+	const ibOutputParametersDescription& GetCurrentOutputParametersDesc() const {
+		return ReaderHasSetting() ? m_userSettings.m_outputParameters
+		                          : m_variants.front().m_settings.m_outputParameters;
+	}
+
+	// ⭐⭐ WHAT AN OTHER SETTING IS IN FORCE — inherited the way a sort is (Max, 2026-09-29): the node's own where it
+	// ticked the parameter, else the output's, else the setting in force. Empty = nobody said anything, and the
+	// caller answers with the platform's own. `node` may be null — the output itself is asked.
+	ibValue OutputParameterFor(const Output& output, const GroupNode* node, ibOutputParameter parameter) const {
+		if (node != nullptr && node->m_settings.m_outputParameters.Says(parameter))
+			return node->m_settings.m_outputParameters.ValueInForce(parameter);
+		if (output.m_settings.m_outputParameters.Says(parameter))
+			return output.m_settings.m_outputParameters.ValueInForce(parameter);
+		return GetCurrentOutputParametersDesc().ValueInForce(parameter);
+	}
+	// …and the one a painter asks: the THEME in force there — the platform's first when nobody named one.
+	const ibCompositionTheme& ThemeFor(const Output& output, const GroupNode* node) const {
+		return ibCompositionThemeById(OutputParameterFor(output, node, ibOutputParameter::Theme).GetString());
 	}
 
 	// ⭐ THE READER'S GROUPING, less the lines on a field this base does not use (IsAvailable, below) — what

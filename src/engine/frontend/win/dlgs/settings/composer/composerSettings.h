@@ -525,6 +525,8 @@ private:
 	// nothing more than that").
 	class ibFilterEditor* m_filterEditor = nullptr;
 	class ibSortEditor*   m_sortEditor   = nullptr;
+	// …and the OTHER SETTINGS page after them, pointed at the same storey the same way (BindNodeEditors).
+	class ibOutputParametersEditor* m_outputParametersEditor = nullptr;
 
 	// (No live settings object. The window's transactional buffer IS m_edited below — the copy of
 	//  the composition's description — and each editor is handed the part of it it edits.)
