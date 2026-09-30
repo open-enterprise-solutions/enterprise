@@ -12,6 +12,7 @@
 struct ibRunContext;
 class ibSession;
 class ibMetaDataConfiguration;
+class ibDebuggerServerTestPeer;
 
 // Lifecycle: owned by ibMetaDataConfiguration as a unique_ptr field
 // (private ctor + friend). Ctor/dtor maintain the `ms_debugServer`
@@ -125,6 +126,7 @@ class BACKEND_API ibDebuggerServer {
 
 	ibDebuggerServer();
 	friend class ibMetaDataConfiguration;
+	friend class ibDebuggerServerTestPeer;
 
 public:
 
