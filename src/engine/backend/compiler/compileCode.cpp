@@ -2172,7 +2172,13 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 	}
 
-	while (true) {
+	// ⭐ A BODY WITHOUT BRACES IS ONE STATEMENT — OF ANY KIND. It used to stop after an assignment or a
+	// call only: a statement opened by a keyword leaves the switch below with a `break` that ends the
+	// switch, not the loop, so `else if (c) { … } n = n + 1;` put the increment inside the else
+	// (2026-09-30: a `while` over it never ended). The loop condition says it for every kind at once.
+	const bool oneStatement = gs_codeStyle == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK;
+
+	do {
 
 		const ibLexem& lex = PreviewGetLexem();
 
@@ -2577,12 +2583,14 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				SetError(ERROR_CODE);
 				return false;
 			}
-
-			if (gs_codeStyle == CODE_CES && !bCompileBlock && context->m_numReturn == RETURN_BLOCK)
-				break;
 		}
 
-	}//while
+	} while (!oneStatement);
+
+	// …and the `;` that closed it is stepped over, as the next statement's look-ahead did before, so
+	// `if (c) raise; else …` still finds its else.
+	if (oneStatement)
+		PreviewGetLexem();
 
 	if (gs_codeStyle == CODE_CES && bCompileBlock) {
 		GETDelimeter(wxT('}'));

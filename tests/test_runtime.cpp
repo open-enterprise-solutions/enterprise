@@ -351,6 +351,41 @@ TEST(RuntimeTest, IfElseTakesElseBranch) {
 	EXPECT_EQ(v.GetInteger(), 2);
 }
 
+// A BODY WITHOUT BRACES IS ONE STATEMENT, whatever word it opens with. A statement opened by a
+// keyword (`if`, `while`, `try`) used to run on into the next one: `else if (…) { … } b = 7;` put
+// `b = 7` inside the else, and a loop counting its passes that way never ended. The forms that
+// always stopped — an assignment, `a = 1; else …` — are here too, so the fix is held to both.
+TEST(RuntimeTest, ABraceLessBodyIsOneStatementOfAnyKind) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	struct Case { const wxChar* body; int a; int b; };
+	const Case cases[] = {
+		{ wxT("if (1 = 1) { a = 1; } else if (1 = 2) { a = 2; } b = 7;"), 1, 7 },
+		{ wxT("if (1 = 2) { a = 1; } else if (1 = 1) { a = 2; } b = 7;"), 2, 7 },
+		{ wxT("if (1 = 2) while (a < 3) { a = a + 1; } b = 7;"),          0, 7 },
+		{ wxT("if (1 = 2) try { a = 1; } except { a = 2; } b = 7;"),      0, 7 },
+		{ wxT("if (1 = 2) if (1 = 1) { a = 1; } b = 7;"),                 0, 7 },
+		{ wxT("if (1 = 1) a = 1; else a = 2; b = 7;"),                     1, 7 },
+		{ wxT("if (1 = 2) a = 1; else a = 2; b = 7;"),                     2, 7 },
+	};
+	for (const Case& c : cases) {
+		const std::string body = wxString(c.body).ToStdString();
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(cc, wxString(wxT("var a public; var b public; a = 0; b = 0; ")) + c.body)) << body;
+
+		ibProcUnit pu;
+		ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode)) << body;
+
+		ibValue v;
+		ASSERT_TRUE(pu.GetPropVal(wxT("a"), v)); EXPECT_EQ(v.GetInteger(), c.a) << body;
+		ASSERT_TRUE(pu.GetPropVal(wxT("b"), v)); EXPECT_EQ(v.GetInteger(), c.b) << body;
+	}
+}
+
 TEST(RuntimeTest, WhileLoopCountsToTen) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
