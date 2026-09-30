@@ -1098,7 +1098,7 @@ TEST(CompositionConditionalAppearance, AListIsReadHereAndANullIsNotAValue)
 // all stays unknown — «filled» asks the value, not whether the column exists.
 TEST(CompositionConditionalAppearance, NotFilledHoldsOnANullAndOnAnEmptyValue)
 {
-	const ibValue none(ibValueTypes::TYPE_NULL), blank(wxString()), named(wxString(wxT("Grain")));
+	const ibValue none(ibValueTypes::TYPE_NULL), blank{ wxString() }, named(wxString(wxT("Grain")));   // braces: `blank(wxString())` declares a function
 	const ibValue* supplier = &none;
 	const ibCompositionValueOf valueOf = [&supplier](const wxString& path) -> const ibValue* {
 		return path.IsSameAs(wxT("Supplier"), false) ? supplier : nullptr;
