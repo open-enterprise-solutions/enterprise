@@ -263,6 +263,19 @@ private:
 	ibTempTableQueryable m_scope;
 };
 
+class WindowSales : public ibQueryableSourceDescriptor
+{
+public:
+	WindowSales() : m_rows(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") })) {}
+
+	wxString GetNamespace() const override { return wxT("Document"); }
+	wxString GetName() const override { return wxT("Sales"); }
+	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+
+private:
+	ibTempTableQueryable m_rows;
+};
+
 // An OPEN configuration — only an open one has a source factory to register into.
 struct OpenConfiguration : ibMetaDataConfigurationFile
 {
@@ -455,6 +468,40 @@ TEST(QueryGrouping, AnUnresolvableQueryIsNotJudged)
 		wxT("SELECT Code, SUM(Qty) FROM Catalog.NoSuchThingExists AS t"));
 	ASSERT_NE(nullptr, select);
 	EXPECT_TRUE(ibQueryLowering::UngroupedProjections(*select, {}).empty());
+}
+
+TEST(QueryGrouping, AWindowAggregateDoesNotTurnTheSelectIntoAGroup)
+{
+	WindowSales sales;
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibQueryParser parser;
+	const ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT S.Region, S.Period, SUM(S.Amount) OVER (")
+		wxT("PARTITION BY S.Region ORDER BY S.Period ROWS) AS RunningAmount ")
+		wxT("FROM Document.Sales AS S"));
+
+	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
+}
+
+TEST(QueryGrouping, AWindowArgumentStillObeysAnOrdinaryGroupBesideIt)
+{
+	WindowSales sales;
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibQueryParser parser;
+	const ibQueryPackage package = parser.ParsePackage(
+		wxT("SELECT S.Region, SUM(S.Amount) AS Total, ")
+		wxT("SUM(S.Amount) OVER (PARTITION BY S.Region) AS RegionalAmount ")
+		wxT("FROM Document.Sales AS S GROUP BY S.Region"));
+
+	EXPECT_THROW(ibQueryLowering::CheckNames(package, {}), ibBackendException);
 }
 
 // ===========================================================================
