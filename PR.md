@@ -2,11 +2,12 @@
 
 ## Summary
 
-- Checked 20 query-language combinations against real configuration metadata: 18 validated, one drove a fix, and one remains unresolved. Recorded Release runtime/LINQ baselines.
+- Checked 20 query-language combinations against fresh current-build metadata: all 20 validate, and one drove a fix. Recorded Release runtime/LINQ and database-backed baselines.
 - Found two correctness defects: a reproducible macOS debugger shutdown crash and false grouping rejection for window aggregates.
 - Fixed both defects in the engine and added focused positive and negative regression coverage.
 - Release test, Designer, and Enterprise targets build; targeted and related suites pass.
 - Full suite result is 2,281 passed, 12 skipped, and one pre-existing timezone-sensitive failure.
+- Built a fresh integration configuration with 100 products, 10 warehouses, and 100,000 register movements; independent query, balance, and report totals agree.
 
 ## Measurements
 
@@ -18,8 +19,12 @@
 | block select | 164.1 ns/row at 1k | 175.5 ns/row at 16k | 1.07x per-row | unchanged | unchanged |
 | group by | 334.1 ns/row at 1k | 394.5 ns/row at 16k | 1.18x per-row | unchanged | unchanged |
 | order by, one key | 385.0 ns/row at 1k | 445.1 ns/row at 16k | 1.16x per-row | unchanged | unchanged |
+| DB aggregate | 14.49 ms at 10k | 64.25 ms at 100k | 4.43x | — | current build |
+| DB group by product | 139.10 ms at 10k | 905.95 ms at 100k | 6.51x | — | current build |
+| DB join + group | 33.25 ms at 10k | 261.02 ms at 100k | 7.85x | — | current build |
+| DB window + order | 267.39 ms at 10k | 3,740.60 ms at 100k | 13.99x | rejected by validator | executes correctly |
 
-The database-backed 10k/100k comparison is intentionally not claimed: the installed runtime crashed on the tested debug path, while the local uninstalled app did not complete initialization. The complete baseline, including strings, method dispatch, projections, and number arithmetic, is in `perf-night-report.md`.
+The database timings are direct Release MCP round trips after warm-up (minimum of five; medians and methodology are in `perf-night-report.md`). The current-source Designer and Enterprise also completed an attached-debugger launch and a real `SpreadsheetDocument` report composition without the former shutdown crash.
 
 ## Fixes
 
@@ -67,20 +72,19 @@ Commit: `349606e2 Keep window aggregates out of group validation`.
 | `CAST` + compound recorder field | correct |
 | window `SUM + PARTITION + ORDER + ROWS` | fixed |
 | `TOTALS + PERIODS(Month)` | correct |
-| `= UNDEFINED` | unresolved: parsed as an unknown source attribute; `IS UNDEFINED` also fails parsing |
+| `= UNDEFINED` | correct in the current build |
 | calendar scalars + grouping | correct |
 | `ALLOWED` | correct |
 | `FOR UPDATE` | correct |
 
-These results cover parsing, metadata resolution, and validation. They do not imply database result equivalence where execution could not be completed.
+These results cover parsing, metadata resolution, and validation. Database execution was separately verified on the synthetic 100,000-row register, including raw totals, `Balance()`, grouped report totals, and the window query.
 
 ## Found, not fixed
 
 - `DateTime.TheBridgeCarriesAReadingByItsParts` reproduces a one-hour mismatch on this host: expected 12, received 13 for `1969-12-31 12:00`. Suspected historical timezone/DST conversion.
 - With both database drivers disabled, `oes_tests` still compiles driver tests but excludes their implementations, producing link failures. Suspected CMake source gating.
-- The local uninstalled Release `.app` exits with status 1 before its MCP endpoint appears and produces no crash report; installed/package validation remains necessary.
+- Direct uninstalled GUI launch requires the Firebird client runtime beside the binaries. With it present, current-source Designer and Enterprise initialize and complete the integration run; packaging/runtime discovery can still be hardened.
 - Non-exact `ibNumber` division measures about 97.4 ns/op, roughly 135x its native control. No isolated regression or safe correction was established.
-- Undefined comparison has no validated spelling in the tested query dialect: `P.Recorder = UNDEFINED` fails name resolution and `IS UNDEFINED` fails parsing. `IS NULL` is not assumed equivalent.
 
 ## Verification
 
@@ -88,3 +92,4 @@ These results cover parsing, metadata resolution, and validation. They do not im
 - Targeted regressions: 3/3 pass.
 - Related parser/grouping/socket suite: 19/19 pass.
 - Full Release suite: 2,281 pass, 12 skip, one unrelated failure described above.
+- Fresh current-build integration: 100,000/100,000 register rows read back; independent totals and balances match; 20/20 query matrix cases validate; report composition into `SpreadsheetDocument` succeeds.

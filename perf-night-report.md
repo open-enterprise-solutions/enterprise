@@ -4,11 +4,12 @@
 
 - Branch `perf-night-2026-09-30` is based on fetched `origin/develop` commit `2df09c6e`.
 - Two correctness defects were reproduced, fixed, covered by tests, and committed separately.
-- Twenty query-language combinations were checked against real configuration metadata. Eighteen validated; the window-aggregate case exposed and drove one fix, while undefined-value comparison remains unresolved.
-- Release runtime microbenchmarks and LINQ scaling benchmarks were recorded. The checked in-memory pipelines remain approximately linear through 16,000 rows.
+- Twenty query-language combinations were checked against fresh current-build metadata and all twenty validated. The window-aggregate case exposed and drove one fix; `= UNDEFINED` also validates in the rebuilt Designer.
+- A fresh database was created with 100 products, 10 warehouses, and 100,000 accumulation-register movements. Independent read-back, balances, report totals, and a JavaScript oracle agree.
+- Release runtime microbenchmarks, LINQ scaling benchmarks, and database-backed 10k/100k timings were recorded.
 - Release `designer` and `enterprise` targets build. The full test executable has one pre-existing, unrelated date/time failure; 2,281 tests pass and 12 are skipped.
 
-Host: macOS 15.6, arm64, AppleClang 17, CMake Release. The configuration used for MCP discovery was the local file database `oes-ds-test-conf` with installed Designer build 3180. The MCP bearer token remains outside the worktree.
+Host: macOS 15.6, arm64, AppleClang 17, CMake Release. Final integration used the freshly built Designer and Enterprise against a newly created local `oes-ds-test-conf`; the incompatible previous database is preserved with a dated suffix. The MCP bearer token remains outside the worktree.
 
 ## Fix 1: debugger listener shutdown race on macOS
 
@@ -35,7 +36,7 @@ The worker now polls with the existing 50 ms bounded `WaitForAccept` path and pe
 - Regression: `SocketLockFix.ServerShutdown_WhileWaitingForClient_IsBounded` at `tests/test_socketLock.cpp:214`.
 - Commit: `2474492a Fix debugger listener shutdown race on macOS`.
 
-The locally built uninstalled `.app` exits with status 1 before opening its MCP endpoint and does not produce a crash report. Therefore the post-fix claim above is deliberately limited to the real-socket regression rather than claiming a packaged-app end-to-end run. Both GUI targets do link successfully.
+The freshly built Designer and Enterprise were then run end to end after making the Firebird client runtime available beside the binaries. `app_run {debug:true,restart:true}` started Enterprise successfully, the debugger attached, and repeated background code/report sessions completed without the former crash. This is the post-fix application-level confirmation in addition to the real-socket regression.
 
 ## Fix 2: window aggregate incorrectly turns SELECT into a group
 
@@ -87,12 +88,12 @@ The matrix was checked through `query_check` against the real configuration sche
 | `CAST(Recorder AS Document...).Number` | Correct | Compound reference selection |
 | window `SUM + PARTITION + ORDER + ROWS` | Defect fixed | Previously false grouping error |
 | `TOTALS ... BY Period PERIODS(Month)` | Correct |  |
-| `= UNDEFINED` | Error | `UNDEFINED` is parsed as a source attribute and fails name resolution; `IS UNDEFINED` is also rejected by the grammar |
+| `= UNDEFINED` | Correct | Validated in the freshly built Designer; the earlier failure came from the older installed build |
 | `YEAR + MONTH + GROUP BY` | Correct |  |
 | `SELECT ALLOWED` | Correct |  |
 | `FOR UPDATE` | Correct |  |
 
-The resolver also correctly rejected a nonexistent `Catalog.Товары` and an unset virtual-table parameter instead of silently returning an empty result.
+The resolver also correctly rejected a nonexistent catalog and an unset virtual-table parameter instead of silently returning an empty result. All matrix cases were rechecked with the current binary; the two `TOTALS` cases marked as module-only retain the composer's documented limitation.
 
 ## Release performance baseline
 
@@ -131,7 +132,22 @@ Additional scale probes:
 | order by, two keys | 490.6 ns/row at 1k | 597.3 ns/row at 16k | expected `n log n` growth |
 | projection width | 274.0 ns/row, one field | 447.9 ns/row, three fields | +63.5% for two fields |
 
-The requested 10k/100k database execution table, independent result oracle, SQL pushdown journal, and user-path report timings could not be produced reliably after the installed debug runtime repeatedly crashed and the uninstalled local app did not initialize. Parser success is not substituted for those measurements.
+## Database-backed integration and scaling
+
+The fresh configuration contains `PerfProduct` (100 items), `PerfWarehouse` (10 items), `PerfMovement`, and the `PerfStock` accumulation register. Ten committed batches contain exactly 100,000 movements. Independent query read-back returned `Quantity = 899,780` and `Amount = 11,247,250`; `Balance()` returned net `Quantity = 449,860` and net `Amount = 5,623,250`, all equal to a separately calculated JavaScript oracle.
+
+Release timings below are direct local MCP round trips after warm-up, five samples per case. The table shows minimum and median; the 10k side uses the direct `Period` predicate for one batch, while the 100k side scans all batches.
+
+| Scenario | 10k min / median | 100k min / median | Min growth |
+| --- | ---: | ---: | ---: |
+| aggregate | 14.49 / 21.03 ms | 64.25 / 75.24 ms | 4.43x |
+| group by product | 139.10 / 162.79 ms | 905.95 / 1,069.94 ms | 6.51x |
+| join + group | 33.25 / 42.43 ms | 261.02 / 311.20 ms | 7.85x |
+| window + order, top 10 | 267.39 / 335.67 ms | 3,740.60 / 3,869.46 ms | 13.99x |
+
+The window case follows the expected sort-heavy `n log n` shape rather than quadratic growth. A separate probe using `Recorder.Number = "B2"` was much slower than the direct period predicate for 10k because it traverses a compound reference; that result is a query-shape warning, not used in the fair scaling table.
+
+The stored `PerfStockReport` was applied to the database and executed through both the composition API and the application object path (`Reports.PerfStockReport.Create()` into `SpreadsheetDocument`). It produced 100 product groups and totals `899,780` / `11,247,250`; the background user-path job completed successfully within the journal's one-second timestamp interval. Release builds do not emit the debug technology trace, so a sub-second internal document-layout split is not claimed.
 
 ## Builds and tests
 
@@ -149,6 +165,5 @@ A configure with both database drivers disabled also exposes an existing CMake i
 
 1. Historical date/time bridge test differs by one hour on this host. Reproduction: `oes_tests --gtest_filter=DateTime.TheBridgeCarriesAReadingByItsParts`.
 2. `oes_tests` cannot link when both database drivers are configured off because driver tests remain in the target.
-3. The uninstalled Release `.app` bundles link but exit with status 1 before exposing MCP; no diagnostic report is generated. Installed/package testing is required for a true post-fix application launch check.
+3. A direct uninstalled launch needs the Firebird client runtime made available beside the binaries (`libfbclient.dylib` and its library directory). With that runtime present, both current-source GUI applications initialize and the integration run succeeds; packaging/runtime discovery remains worth hardening.
 4. Non-exact `ibNumber` division is the largest measured primitive hotspot at about 135x its native control. It was measured, not changed, because neither correctness nor a localized regression was established in this run.
-5. Undefined-value comparison has no validated query-language spelling in the tested build. `P.Recorder = UNDEFINED` fails names with `unknown attribute 'UNDEFINED' on source 'P'`; `IS UNDEFINED` fails parsing. `IS NULL` works for SQL null semantics but is not assumed to be equivalent.
