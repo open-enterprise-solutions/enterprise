@@ -367,10 +367,13 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 	return ReadStoredValue(stored, metaData);
 }
 
+// ⭐ NOTHING IS WRITTEN ONLY FOR "NOTHING CHOSEN" — Undefined. `IsEmpty` asked instead, and the empty value of
+// a type is a value: a 0, a False, an empty date or an empty reference was dropped here and read back as
+// Undefined — `Amount < 0` came back `Amount < Undefined` (2026-09-30, found by the round-trip test).
 void ibStoreValue(ibDataNode& stored, const ibValue& value)
 {
 	stored = ibDataNode();
-	if (!value.IsEmpty())
+	if (value.GetType() != ibValueTypes::TYPE_EMPTY)
 		value.Serialize(stored);
 }
 
@@ -441,8 +444,9 @@ void ibWriteOperand(ibDataNode& node, const wxString& prefix, const ibFilterOper
 	node.SetValue<wxString>(prefix + wxT("Text"), side.m_presentation);
 	node.SetValue<s32>(prefix + wxT("Leaf"), static_cast<s32>(side.m_leafId));
 	// The TYPE is deliberately NOT packed — it is derived from the source the field is bound to, and
-	// a saved setting outlives the schema it was saved against.
-	if (!side.m_value.IsEmpty())
+	// a saved setting outlives the schema it was saved against. The value is written unless it is Undefined —
+	// the empty value of its type is a value (see ibStoreValue).
+	if (side.m_value.GetType() != ibValueTypes::TYPE_EMPTY)
 		side.m_value.Serialize(node.Child(prefix + wxT("Value")));
 }
 

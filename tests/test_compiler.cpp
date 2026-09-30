@@ -880,7 +880,7 @@ TEST(AnyKinds, TypedParameterOfAKindCompiles) {
 #include "backend/metaData.h"
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
-#include "backend/system/value/valueColour.h"
+#include "backend/system/value/valuePoint.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"
 
@@ -981,12 +981,13 @@ TEST(ValueSerialize, EmptyArrayRoundTrips) {
 }
 
 TEST(ValueSerialize, AValueWithNoPackedFormIsRefused) {
-	// A colour is a perfectly ordinary registered value with no payload form.
+	// A point is a perfectly ordinary registered value with no payload form (a
+	// colour was, until it packed itself for a conditional appearance).
 	// Refusing is the contract: writing it as something else would produce a
 	// blob that restores into the wrong thing.
-	ibValuePtr<ibValueColour> colour(new ibValueColour());
-	ibDataNode node(colour->GetClassType(), 0);
-	EXPECT_FALSE(ibValue(colour).Serialize(node));
+	ibValuePtr<ibValuePoint> point(new ibValuePoint());
+	ibDataNode node(point->GetClassType(), 0);
+	EXPECT_FALSE(ibValue(point).Serialize(node));
 }
 
 TEST(ValueSerialize, ANodeWithoutATypeReadsAsUndefined) {
@@ -1196,10 +1197,10 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 	// The refusal reaches the caller as an exception rather than as a tree that
 	// would restore into nothing.
 	StandInMetaData metaData;
-	ibValuePtr<ibValueColour> colour(new ibValueColour());
+	ibValuePtr<ibValuePoint> point(new ibValuePoint());
 
-	ibDataNode node(colour->GetClassType(), 0);
-	EXPECT_THROW(metaData.Serialize(ibValue(colour), node), ibBackendException);
+	ibDataNode node(point->GetClassType(), 0);
+	EXPECT_THROW(metaData.Serialize(ibValue(point), node), ibBackendException);
 }
 
 // ===========================================================================
