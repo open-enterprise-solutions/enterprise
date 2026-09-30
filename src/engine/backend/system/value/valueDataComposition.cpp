@@ -849,16 +849,17 @@ bool ibValueDataComposition::Compose(ibBackendSpreadsheetObject* target)
 		// consulted by nothing at all (audit, 2026-08-24). A heading is exactly where somebody's own
 		// phrasing of a condition belongs.
 		if (!node.m_presentation.IsEmpty()) {
-			driver.AddHeaderLine(node.m_presentation);
+			driver.AddHeaderLine(ibBackendLocalization::GetTranslateGetRawLocText(node.m_presentation));
 			continue;
 		}
 		// …and generated otherwise. A SIDE READS AS ITS OWN TEXT — a field as its presentation, a
 		// value as its value: the same rule the settings window prints a line by
 		// (ibFilterTreeModel::GetValueByRow), so a heading and the window a person set it in cannot
-		// word one condition two ways.
+		// word one condition two ways. A presentation is kept in every language it was written in and
+		// read in the reader's, as the title above is — a heading line is text, not a cell PutArea reads.
 		auto side = [](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
-				? (operand.m_presentation.IsEmpty() ? operand.m_path : operand.m_presentation)
+				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibBackendLocalization::GetTranslateGetRawLocText(operand.m_presentation))
 				: operand.m_value.GetString().ToWxString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + wxT(" ")

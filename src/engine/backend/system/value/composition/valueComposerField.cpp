@@ -3,6 +3,7 @@
 #include "backend/compiler/typeCtor.h"
 #include "backend/metaData.h"                                        // the configuration a declaration is built against
 #include "backend/metaCollection/partial/reference/reference.h"      // …and what it is built INTO, at execution
+#include "backend/backend_localization.h"                            // a presentation read in the reader's language
 
 // ===========================================================================
 //  ibValueCompositionField — see valueComposerField.h
@@ -16,6 +17,12 @@ ibValueCompositionField::ibValueCompositionField(const wxString& path, const wxS
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, false),
 	  m_path(path), m_presentation(presentation) {
 	m_members.Bind(this, &ibValueCompositionField::FillMembers);
+}
+
+// …and the presentation in the READER's language. It is kept in every language it was written in — a field's
+// title is — and a filter line printed it that way, `en = 'Period'; ru = …; uk = …;`, in the settings window.
+ibString ibValueCompositionField::GetString() const {
+	return m_presentation.IsEmpty() ? m_path : ibBackendLocalization::GetTranslateGetRawLocText(m_presentation);
 }
 
 void ibValueCompositionField::FillMembers(ibMemberTable& helper) const {

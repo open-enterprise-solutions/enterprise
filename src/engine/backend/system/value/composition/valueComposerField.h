@@ -142,9 +142,7 @@ public:
 	// in a filter line is "Country", not "Supplier.Region.Country" — but a field
 	// built from script has no presentation, and showing an empty cell would be
 	// worse than showing the path.
-	virtual ibString GetString() const override {
-		return m_presentation.IsEmpty() ? m_path : m_presentation;
-	}
+	virtual ibString GetString() const override;
 
 	// TWO FIELDS ARE THE SAME FIELD when they point at the same place. The path
 	// is that answer: the leaf id is only meaningful against one source, and the

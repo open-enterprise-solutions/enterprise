@@ -1295,6 +1295,14 @@ TEST(CompositionField, ShowsThePresentationAndFallsBackToThePath) {
 	EXPECT_EQ(wxT("Supplier.Region"), bare->GetString());
 }
 
+// A presentation kept in every language it was written in — a field's title is — reads in the reader's
+// (English under the tests), never in its stored form: a filter line showed `en = 'Period'; ru = …`.
+TEST(CompositionField, ShowsThePresentationInTheReadersLanguage) {
+	ibValuePtr<ibValueCompositionField> named(
+		new ibValueCompositionField(wxT("Period"), wxT("en = 'Period'; ru = 'Period RU';")));
+	EXPECT_EQ(wxT("Period"), named->GetString());
+}
+
 TEST(CompositionField, EmptyMeansNoPath) {
 	ibValuePtr<ibValueCompositionField> nothing(new ibValueCompositionField());
 	EXPECT_TRUE(nothing->IsEmpty());
