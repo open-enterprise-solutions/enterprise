@@ -15,6 +15,8 @@
 //                   branches, strings, LINQ). The "runtime" number.
 //   NumberBench   — ibNumber arithmetic directly (immediate vs heap tier,
 //                   ToString / FromString), with an int64 / double baseline.
+//   DateBench     — ibDateTime directly (shift, order, span, parts, periods,
+//                   text), next to the wxDateTime it replaced.
 //   ParserBench   — ibCompileCode::Compile throughput (ns/compile, lines/s).
 //   JsonBench     — JSONReader / JSONWriter over a document, next to nlohmann's own
 //                   parse / dump of the same text.
@@ -42,6 +44,7 @@
 #include <thread>
 #include <vector>
 
+#include <wx/datetime.h>  // DateBench — the wxDateTime the value's date replaced
 #include <wx/init.h>   // SessionBench — wxBase before application data
 #include <wx/image.h>  // wxInitAllImageHandlers — the configuration loads icons
 #include <wx/log.h>    // wxLogStderr — a warning must not become a modal box
@@ -66,6 +69,7 @@
 #include "backend/compiler/codeDef.h"
 #include "backend/compiler/value.h"
 #include "backend/fnumber.h"
+#include "backend/fdatetime.h"                 // DateBench / DISABLED_DateLoop
 #include "backend/appData.h"                   // SessionBench — the application's road
 #include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
@@ -460,6 +464,33 @@ TEST(RuntimeBench, DISABLED_StringConcat) {
 
     const double baseTot = BestTotalNs(5, [&]{ std::string s; for (long i = 0; i < n; ++i) s += 'x'; g_sink += s.size(); });
     Row("string concat (ns/app)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- a date shifted in a loop: ns per loop-iteration -----------------------
+// `t = t + 60` over a date is the script's date arithmetic - the operand read, a span in seconds, a
+// new reading - on top of the loop itself (`loop alone` in CallCost prices that part). The date comes
+// in as the argument: this unit runs with no session, so it asks no system function for one.
+TEST(RuntimeBench, DISABLED_DateLoop) {
+    const long n = 1000000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc, wxString::Format(
+        wxT("Function Shift(d) Public\n")
+        wxT("  var t; var i; t = d; i = 0;\n")
+        wxT("  While i < %ld Do\n")
+        wxT("    t = t + 60; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return t;\n")
+        wxT("EndFunction\n"), n)));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    const ibDateTime start(2026, 1, 1);
+    ibValue argD(start), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Shift"), ret, argD); g_sink += (uint64_t)ret.GetDate().GetValue(); });
+    EXPECT_EQ(ret.GetDate(), start.AddMilliseconds(n * 60000ll));
+
+    volatile int64_t u = 0;
+    const double baseTot = BestTotalNs(5, [&]{ u = start.GetValue(); for (long i = 0; i < n; ++i) u += 60000; g_sink += (uint64_t)u; });
+    Row("date shift (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
     SUCCEED();
 }
 
@@ -1961,6 +1992,72 @@ TEST(NumberBench, DISABLED_Arithmetic) {
         const double oes = TimeNsPerOp(N / 5, [&](long){ ibNumber n; n.FromString(wxT("1234567.89")); g_sink += (uint64_t)n.IsHeap(); });
         const double base = TimeNsPerOp(N / 5, [&](long){ volatile double d = std::stod("1234567.89"); g_sink += (uint64_t)d; });
         Row("FromString (parse)", oes, base, "ns");
+    }
+
+    EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
+    SUCCEED();
+}
+
+// ===========================================================================
+// DateBench — ibDateTime directly, vs the wxDateTime it replaced in the value
+// ===========================================================================
+//
+// The same operations on both, so the ratio says what the engine's own date bought: a shift, an order
+// and a span are one integer operation on the count; the calendar (parts, periods) is integer day
+// arithmetic with no clock asked; text is written digit by digit. wxDateTime keeps an instant and asks
+// the machine's zone for every part. 10:30 on an ordinary day, so no clock change is on the path.
+
+TEST(DateBench, DISABLED_Calendar) {
+    std::cout << "\n[ DateBench | ibDateTime vs wxDateTime | x = ib/wx, <1 = ibDateTime faster ]\n";
+    const long N = 1000000;
+    const ibDateTime d(2026, 3, 15, 10, 30, 0), e(2026, 9, 30, 17, 0, 0);
+    const wxDateTime w(15, wxDateTime::Mar, 2026, 10, 30, 0), we(30, wxDateTime::Sep, 2026, 17, 0, 0);
+
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.AddMilliseconds(86400000).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c += wxTimeSpan::Day(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("shift +1 day", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(d < e); });
+        const double wx = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(w < we); });
+        Row("compare", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(e - d); });
+        const double wx = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)(we - w).GetMilliseconds().GetValue(); });
+        Row("span (ms)", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ ibDateTimeParts p; d.ToParts(p); g_sink += p.m_day + p.m_hour; });
+        const double wx = TimeNsPerOp(N, [&](long){ const wxDateTime::Tm tm = w.GetTm(); g_sink += tm.mday + tm.hour; });
+        Row("parts", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.BeginOfPeriod(ibTotalsPeriod::Month).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c.SetDay(1); c.ResetTime(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("begin of month", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N, [&](long){ g_sink += (uint64_t)d.AddPeriods(ibTotalsPeriod::Month, 1).GetValue(); });
+        const double wx = TimeNsPerOp(N, [&](long){ wxDateTime c = w; c += wxDateSpan::Month(); g_sink += (uint64_t)c.GetTicks(); });
+        Row("add a month", ib, wx, "ns");
+    }
+    {
+        const double ib = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)d.ToString().length(); });
+        const double wx = TimeNsPerOp(N / 5, [&](long){ g_sink += (uint64_t)w.Format(wxT("%d.%m.%Y %H:%M:%S")).length(); });
+        Row("ToString", ib, wx, "ns");
+    }
+    {
+        const ibString text(wxT("15.03.2026 10:30:00"));
+        const wxString wxText(wxT("15.03.2026 10:30:00"));
+        const double ib = TimeNsPerOp(N / 5, [&](long){ ibDateTime p; p.FromString(text); g_sink += (uint64_t)p.GetValue(); });
+        const double wx = TimeNsPerOp(N / 5, [&](long){
+            wxDateTime p; wxString::const_iterator end;
+            p.ParseFormat(wxText, wxT("%d.%m.%Y %H:%M:%S"), &end);
+            g_sink += (uint64_t)p.GetTicks();
+        });
+        Row("FromString (parse)", ib, wx, "ns");
     }
 
     EXPECT_NE(g_sink, 0xFFFFFFFFFFFFFFFFull);
