@@ -24,12 +24,12 @@ class ibDatabaseParameterODBC : public ibDatabaseStringConverter
 public:
 	// ctor
 	ibDatabaseParameterODBC();
-	ibDatabaseParameterODBC(const wxString& strValue);
+	ibDatabaseParameterODBC(const ibString& strValue);
 	ibDatabaseParameterODBC(const ibNumber& dblValue);
 	ibDatabaseParameterODBC(int nValue);
 	ibDatabaseParameterODBC(double dblValue);
 	ibDatabaseParameterODBC(bool bValue);
-	ibDatabaseParameterODBC(const wxDateTime& dateValue);
+	ibDatabaseParameterODBC(const ibDateTimeParts& date);   // a date by its parts (fdatetime.h)
 	ibDatabaseParameterODBC(const void* pData, long nDataLength);
 
 	// dtor
@@ -84,7 +84,7 @@ private:
 
 	// A union would probably be better here
 	TIMESTAMP_STRUCT m_DateValue;
-	wxString m_strValue;
+	ibString m_strValue;   // the value's own text, encoded from its characters when it is bound (GetDataPtr)
 	long m_nValue;
 	double m_dblValue;
 	ibNumber m_numValue;

@@ -39,8 +39,6 @@
 
 #include <vector>
 
-#include <wx/datetime.h>   // wxDateTime — when a setting was last written (MSVC drags it in, libstdc++ does not)
-
 class ibDataNode;
 
 // WHAT KIND OF SETTING THIS IS — the tenant, not a folder name. It is part of
@@ -118,7 +116,7 @@ struct BACKEND_API ibSettingsKey {
 // answer it would make opening a menu as expensive as restoring all of them.
 struct BACKEND_API ibSettingsEntry {
 	ibGuid     m_settingKey;   // the address INSIDE the object — an identity, not a caption
-	wxDateTime m_changed;
+	ibDateTime m_changed;
 };
 
 class BACKEND_API ibSettingsStorage {

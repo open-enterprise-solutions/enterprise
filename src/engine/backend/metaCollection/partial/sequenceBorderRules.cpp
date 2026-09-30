@@ -206,11 +206,8 @@ ibValue PeriodBefore(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 	// is gone sends the restoring run over the key's whole history (measured 2026-09-20: R1, R2, R3 posted
 	// in turn, R1.5 posted behind them - the border was expected at R1 and was gone).
 	// A MAX over no rows is NULL, which is the one case that really means "nothing before".
-	if (rs.Next() && !rs.IsResultNull(PeriodField(seq))) {
-		const wxDateTime earlier = rs.GetResultDate(PeriodField(seq));
-		if (earlier.IsValid())
-			found = ibValue(earlier);
-	}
+	if (rs.Next() && !rs.IsResultNull(PeriodField(seq)))
+		found = ibValue(rs.GetResultDate(PeriodField(seq)));
 	return found;
 }
 

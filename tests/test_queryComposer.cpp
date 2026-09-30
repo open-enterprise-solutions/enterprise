@@ -2089,3 +2089,24 @@ TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
 	EXPECT_EQ(ibNumber(40), totals[0]);
 	EXPECT_EQ(ibNumber(12), totals[1]);
 }
+
+// The page cache's signature compares the query's parameters as VALUES. It used to print them into one text:
+// a date became its raw count, and a string spelling `;b=` read the same as two parameters.
+TEST(PageSignature, TheParametersAreComparedAsValuesNotAsTheirText)
+{
+	const auto sign = [](std::vector<wxString> names, std::vector<ibValue> values) {
+		ibPageSignature s;
+		s.m_text = wxT("SELECT 1");
+		s.m_count = 50;
+		s.m_names = std::move(names);
+		s.m_values = std::move(values);
+		return s;
+	};
+	const ibValue day(ibDateTime(2026, 3, 29));
+	EXPECT_EQ(sign({ wxT("d") }, { day }), sign({ wxT("d") }, { ibValue(ibDateTime(2026, 3, 29)) }));
+	EXPECT_NE(sign({ wxT("d") }, { day }), sign({ wxT("d") }, { ibValue(ibDateTime(2026, 3, 29).AddMilliseconds(1)) }));
+	EXPECT_NE(sign({ wxT("a") }, { ibValue(wxT("x;b=S1")) }),
+	          sign({ wxT("a"), wxT("b") }, { ibValue(wxT("x")), ibValue(wxT("1")) })) << "a string cannot stand for a second parameter";
+	EXPECT_NE(sign({ wxT("n") }, { ibValue(1) }), sign({ wxT("n") }, { ibValue(wxT("1")) })) << "a number is not its text";
+	EXPECT_EQ(sign({ wxT("n") }, { ibValue(1) }), sign({ wxT("n") }, { ibValue(ibNumber(wxT("1.0"))) })) << "1 and 1.0 are one number";
+}

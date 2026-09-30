@@ -78,17 +78,16 @@ static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationR
 	// holds, so the moment is carried to the period's edges rather than the column truncated (its index still serves).
 	// A record at its period's start — every one written since — compares exactly as before.
 	const ibTotalsPeriod grain = meta->GetPeriodicityUnit();
-	const bool grained = grain != ibTotalsPeriod::Second
-		&& bound.m_date.GetType() == TYPE_DATE && bound.m_date.GetDateTime().IsValid();
+	const bool grained = grain != ibTotalsPeriod::Second && bound.m_date.GetType() == TYPE_DATE;
 	auto periodIs = [&](ibQueryBinOp op) -> ibQueryExprPtr {   // the record's period `op` the moment
 		auto compare = [&](ibQueryBinOp o, const ibValue& v) {
 			return ibRegCompositeIR(periodAttr->GetQueryColumn(), metaData, v, o);
 		};
 		if (!grained)
 			return compare(op, bound.m_date);
-		const wxDateTime moment = bound.m_date.GetDateTime();
-		const wxDateTime start = ibTruncateToPeriod(moment, grain);
-		const ibValue next(ibNextPeriodStart(start, grain));
+		const ibDateTime moment = bound.m_date.GetDate();
+		const ibDateTime start = moment.BeginOfPeriod(grain);
+		const ibValue next(start.BeginOfNextPeriod(grain));
 		const ibValue edge = start == moment ? bound.m_date : next;   // the first period start not before the moment
 		switch (op) {
 		case ibQueryBinOp::Lt: return compare(ibQueryBinOp::Lt, edge);

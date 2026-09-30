@@ -1,7 +1,7 @@
 #include "backend/query/columnLayout.h"
 #include "backend/query/columnSpread.h"   // ibColumnSpread::DriveSpread — shared role-spread binding (value + wire codecs)
 
-#include "backend/backend_core.h"    // emptyDate
+#include "backend/backend_core.h"    // ibDateTime
 #include "backend/metaData.h"        // ibMetaData::GetTypeCtor / GetAvailableCtor / CreateObject
 #include "backend/objCtor.h"         // ibCtorMetaValueType / ibCtorObjectMetaType / ibCtorAbstractType
 #include "backend/valueInfo.h"       // reference_size_t (= sizeof(ibReference)), ibReference

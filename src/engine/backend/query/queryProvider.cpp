@@ -1988,33 +1988,33 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row, con
 			// this walks the calendar rather than approximating (no "30-day month" arithmetic).
 			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			if (RamAnyNull({ &v })) return RamNullValue();
-			return ibValue(ibTruncateToPeriod(v.GetDateTime(), e->m_periodUnit));
+			return ibValue(v.GetDate().BeginOfPeriod(e->m_periodUnit));
 		}
 		// ⭐ AND THE REST OF THE CALENDAR, under the same obligation: each of these is the twin of a
 		// dialect template, and the two must answer identically or one query gives two numbers
-		// depending on the road it took. The arithmetic itself lives in ONE place (databaseLayer),
+		// depending on the road it took. The arithmetic itself lives in ONE place (ibDateTime, fdatetime.h),
 		// which is what makes that promise keepable rather than merely intended.
 		case ibQueryColumnExprKind::PeriodEnd: {
 			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			if (RamAnyNull({ &v })) return RamNullValue();
-			return ibValue(ibEndOfPeriod(v.GetDateTime(), e->m_periodUnit));
+			return ibValue(v.GetDate().EndOfPeriod(e->m_periodUnit));
 		}
 		case ibQueryColumnExprKind::DateAdd: {
 			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			const ibValue n = e->m_args.empty() ? ibValue(0) : EvalColumnExprRow(e->m_args.front().get(), row, win);
 			if (RamAnyNull({ &v, &n })) return RamNullValue();
-			return ibValue(ibDateAddUnits(v.GetDateTime(), e->m_periodUnit, static_cast<long>(n.GetNumber().ToInt())));
+			return ibValue(v.GetDate().AddPeriods(e->m_periodUnit, static_cast<long>(n.GetNumber().ToInt())));
 		}
 		case ibQueryColumnExprKind::DateDiff: {
 			const ibValue a = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			const ibValue b = EvalColumnExprRow(e->m_rhs.get(), row, win);
 			if (RamAnyNull({ &a, &b })) return RamNullValue();
-			return ibValue(ibNumber(ibDateDiffUnits(a.GetDateTime(), b.GetDateTime(), e->m_periodUnit)));
+			return ibValue(ibNumber(a.GetDate().PeriodsUntil(b.GetDate(), e->m_periodUnit)));
 		}
 		case ibQueryColumnExprKind::DatePart: {
 			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			if (RamAnyNull({ &v })) return RamNullValue();
-			return ibValue(ibNumber(ibReadDatePart(v.GetDateTime(), e->m_datePart)));
+			return ibValue(ibNumber(v.GetDate().GetPart(e->m_datePart)));
 		}
 		case ibQueryColumnExprKind::Substring: {
 			// 1-BASED, like the SQL it mirrors and like the language a person writes — the C++ one
@@ -4121,7 +4121,7 @@ ibDataQueryResult ibQueryComposer::ExecuteRead(const ibDataQuerySpec& spec, cons
 }
 
 ibDataQueryResult ibQueryComposer::ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& page,
-                                                     ibRenderedPageCache& cache, const wxString& signature)
+                                                     ibRenderedPageCache& cache, const ibPageSignature& signature)
 {
 	if (IsSingleSource(spec))
 		return spec.m_queryable->GetProvider().ExecuteReadCached(spec, page, cache, signature);
@@ -4233,7 +4233,7 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& given
 namespace {
 
 // ⭐ WHAT A LEVEL FIELD CONTRIBUTES TO THE KEY — its cell, or the START OF THE PERIOD containing it
-// when the field is read BY PERIODS. `ibTruncateToPeriod` is the RAM twin of the expression the SQL
+// when the field is read BY PERIODS. `ibDateTime::BeginOfPeriod` is the RAM twin of the expression the SQL
 // road groups by, walking the calendar rather than approximating it — so a row lands in the same
 // bucket whichever road read it, which is the only way two roads may exist at all.
 ibValue LevelKeyValue(const ibTotalField& field, const ibQueryRow& row)
@@ -4241,7 +4241,7 @@ ibValue LevelKeyValue(const ibTotalField& field, const ibQueryRow& row)
 	const ibValue v = row.Get(field.m_col);
 	if (!field.ByPeriods() || v.GetType() != TYPE_DATE)
 		return v;
-	return ibValue(ibTruncateToPeriod(v.GetDateTime(), field.m_periods->m_unit));
+	return ibValue(v.GetDate().BeginOfPeriod(field.m_periods->m_unit));
 }
 
 // ⭐⭐ THE STREAMING FOLD — rows in, tree out, ONE PASS, and nothing kept but the tree.
@@ -4526,7 +4526,7 @@ public:
 		const std::size_t none = static_cast<std::size_t>(-1);
 		for (const FoldNode& n : m_pool) {
 			// THE CHILDREN THAT ARE ONE PERIOD LEVEL, in time order
-			std::vector<std::pair<wxLongLong_t, std::size_t>> periods;
+			std::vector<std::pair<ibDateTime, std::size_t>> periods;
 			int level = -1;
 			for (const std::unique_ptr<ibSelectorTree::Node>& child : n.m_node->m_children) {
 				if (child == nullptr || child->m_kind == ibSelectorNodeKind::Detail)
@@ -4960,28 +4960,30 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	// about the period this level pads. Taken by their LEVEL, which is the one thing that says
 	// which of them this call is about; without it the first cell answered "not a period level
 	// after all" and the quiet months were silently never filled in.
-	std::map<wxDateTime, ibSelectorTree::Node*> have;   // ordered by the moment itself
+	std::map<ibDateTime, ibSelectorTree::Node*> have;   // ordered by the moment itself
 	std::vector<ibSelectorTree::Node*>          others; // …the ones this level does not speak for
 	for (const std::unique_ptr<ibSelectorTree::Node>& child : parent.m_children) {
 		if (child == nullptr) continue;
 		if (child->m_level != childLevel) { others.push_back(child.get()); continue; }
 		const auto it = child->m_values.find(id);
 		if (it == child->m_values.end() || it->second.GetType() != TYPE_DATE) return;   // not a period level after all
-		have[it->second.GetDateTime()] = child.get();
+		have[it->second.GetDate()] = child.get();
 	}
 
-	wxDateTime from = !periods.m_from.IsEmpty() ? ibTruncateToPeriod(periods.m_from.GetDateTime(), periods.m_unit)
-	                                            : (have.empty() ? wxDateTime() : have.begin()->first);
-	wxDateTime to   = !periods.m_to.IsEmpty()   ? ibTruncateToPeriod(periods.m_to.GetDateTime(),   periods.m_unit)
-	                                            : (have.empty() ? wxDateTime() : have.rbegin()->first);
-	if (!from.IsValid() || !to.IsValid() || from > to)
+	if (have.empty() && (periods.m_from.IsEmpty() || periods.m_to.IsEmpty()))
 		return;                                        // nothing to pad between — and saying so is not a failure
+	const ibDateTime from = !periods.m_from.IsEmpty() ? periods.m_from.GetDate().BeginOfPeriod(periods.m_unit)
+	                                                  : have.begin()->first;
+	const ibDateTime to   = !periods.m_to.IsEmpty()   ? periods.m_to.GetDate().BeginOfPeriod(periods.m_unit)
+	                                                  : have.rbegin()->first;
+	if (from > to)
+		return;
 
 	// ⚠ THE BOUNDS PAD, THEY DO NOT FILTER. A period OUTSIDE them that the data produced is still a
 	// period that happened; dropping it here would turn a display setting into a silent WHERE.
-	std::map<wxDateTime, ibSelectorTree::Node*> series = have;
+	std::map<ibDateTime, ibSelectorTree::Node*> series = have;
 	std::vector<std::unique_ptr<ibSelectorTree::Node>> made;
-	for (wxDateTime t = from; t <= to; t = ibNextPeriodStart(t, periods.m_unit)) {
+	for (ibDateTime t = from; t <= to; t = t.BeginOfNextPeriod(periods.m_unit)) {
 		if (series.find(t) != series.end())
 			continue;
 		auto node = std::make_unique<ibSelectorTree::Node>();
@@ -5007,7 +5009,7 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 			continue;
 		const ibMetaID slot = AggSlotId(aggregates, i);
 		const ibValue* carried = nullptr;
-		const auto visit = [&](const wxDateTime& at, ibSelectorTree::Node* node) {
+		const auto visit = [&](const ibDateTime& at, ibSelectorTree::Node* node) {
 			if (have.count(at) != 0) {
 				const auto it = node->m_values.find(slot);
 				carried = it != node->m_values.end() ? &it->second : nullptr;
@@ -5026,8 +5028,8 @@ void PadPeriodChildren(ibSelectorTree::Node& parent, const ibTotalField& field, 
 	const bool descending = parent.m_children.size() > 1 && have.size() > 1
 	                     && parent.m_children.front() != nullptr && parent.m_children.back() != nullptr
 	                     && parent.m_children.front()->m_values.count(id) && parent.m_children.back()->m_values.count(id)
-	                     && parent.m_children.front()->m_values.at(id).GetDateTime()
-	                        > parent.m_children.back()->m_values.at(id).GetDateTime();
+	                     && parent.m_children.front()->m_values.at(id).GetDate()
+	                        > parent.m_children.back()->m_values.at(id).GetDate();
 
 	std::map<ibSelectorTree::Node*, std::unique_ptr<ibSelectorTree::Node>> owned;
 	for (std::unique_ptr<ibSelectorTree::Node>& child : parent.m_children)

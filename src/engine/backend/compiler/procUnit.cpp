@@ -684,13 +684,27 @@ static inline void MakeNumberValue(ibValue& dest, const ibNumber& number)
 // its text let go — before the new kind is written. Stamping the tag and writing the field (as the
 // arithmetic below used to) leaked the text, and a number written over a boolean read its byte as a
 // heap pointer.
-static inline void MakeDateValue(ibValue& dest, wxLongLong_t date)
+static inline void MakeDateValue(ibValue& dest, const ibDateTime& date)
 {
 	if (dest.m_typeClass != ibValueTypes::TYPE_DATE) {
 		if (dest.m_typeClass != ibValueTypes::TYPE_EMPTY) dest.Reset();   // an empty value's word is zero already
 		dest.m_typeClass = ibValueTypes::TYPE_DATE;
 	}
 	dest.m_dData = date;
+}
+
+// A date operand, read off the field where the tag says the field holds one — the arithmetic's hot
+// path — and through GetDate where it does not (a reference to a date, whose field is a pointer).
+static inline ibDateTime DateOperand(const ibValue& operand)
+{
+	return operand.m_typeClass == ibValueTypes::TYPE_DATE ? operand.m_dData : operand.GetDate();
+}
+
+// What a right-hand operand moves a date by: its distance from the empty date - a number is that many
+// seconds (GetDate reads it so), a date its own count.
+static inline long long DateShift(const ibValue& operand)
+{
+	return DateOperand(operand) - ibDateTime();
 }
 
 static inline void MakeBooleanValue(ibValue& dest, bool flag)
@@ -746,17 +760,12 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date + date -> number
-			// static_cast: wxLongLong_t is `long long`, while ibNumber's 64-bit ctor takes
-			// int64_t — same width, different type on LP64 (there int64_t is `long`). MSVC
-			// spells both __int64 and picks it; GCC finds every ctor equally far away and
-			// calls the conversion ambiguous. Naming the target type settles it everywhere.
-			const ibNumber numResult = cValue2.GetDate() + cValue3.GetDate();
+			const ibNumber numResult = ibNumber(DateShift(cValue2) + DateShift(cValue3));
 			MakeNumberValue(cValue1, numResult);
 		}
 		else {
-			// On the calendar, not the clock — see ibValue::ShiftDate.
-			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, cValue3.GetDate());
-			MakeDateValue(cValue1, dateResult);
+			// On the wall, where every day is 86 400 seconds (fdatetime.h).
+			MakeDateValue(cValue1, DateOperand(cValue2).AddMilliseconds(DateShift(cValue3)));
 		}
 	}
 	else {
@@ -801,13 +810,12 @@ inline void SubValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 			// in seconds for `(d + 86400) - d` to be 86400. It came back in milliseconds, a thousand times
 			// the span: a day count written the ordinary way, `(to - from) / 86400 + 1`, gave 13001 for a
 			// two-week vacation (the payroll demo, 2026-09-10).
-			// …and counted on the calendar, where every day is 86400 seconds (ibValue::DateSpan).
-			const ibNumber numResult = ibNumber((long long)ibValue::DateSpan(cValue2.GetDate(), cValue3.GetDate())) / ibNumber(1000LL);
+			// …and counted on the wall, where every day is 86400 seconds (fdatetime.h).
+			const ibNumber numResult = ibNumber(DateOperand(cValue2) - DateOperand(cValue3)) / ibNumber(1000LL);
 			MakeNumberValue(cValue1, numResult);
 		}
 		else {
-			const wxLongLong_t dateResult = ibValue::ShiftDate(cValue2.m_dData, -cValue3.GetDate());
-			MakeDateValue(cValue1, dateResult);
+			MakeDateValue(cValue1, DateOperand(cValue2).AddMilliseconds(-DateShift(cValue3)));
 		}
 	}
 	else {
@@ -825,13 +833,13 @@ inline void MultValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& c
 		MakeNumberValue(cValue1, numResult);
 	}
 	else if (resultType == ibValueTypes::TYPE_DATE) {
+		// Over the counts, as it always was: a product of dates means nothing on the calendar.
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date * date -> number
-			const ibNumber numResult = cValue2.GetDate() * cValue3.GetDate();
+			const ibNumber numResult = ibNumber(DateShift(cValue2)) * ibNumber(DateShift(cValue3));
 			MakeNumberValue(cValue1, numResult);
 		}
 		else {
-			const wxLongLong_t dateResult = cValue2.m_dData * cValue3.GetDate();
-			MakeDateValue(cValue1, dateResult);
+			MakeDateValue(cValue1, ibDateTime(DateShift(cValue2) * DateShift(cValue3)));
 		}
 	}
 	else {
@@ -2374,7 +2382,7 @@ start_label:
 			case OPER_LS + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData < cvariable3.m_dData)); break;
 			case OPER_GE + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData >= cvariable3.m_dData)); break;
 			case OPER_LE + TYPE_DELTA3: SetTypeBoolean(variable1, (cvariable2.m_dData <= cvariable3.m_dData)); break;
-			case OPER_IF + TYPE_DELTA3: if (!cvariable1.m_dData) lCodeLine = index2 - 1; break;
+			case OPER_IF + TYPE_DELTA3: if (cvariable1.m_dData.IsEmpty()) lCodeLine = index2 - 1; break;
 				//BOOLEAN
 			case OPER_NOT + TYPE_DELTA4:
 				// Boolean-tier NOT — the typed path a `Not (comparison)` lambda hits. Kleene

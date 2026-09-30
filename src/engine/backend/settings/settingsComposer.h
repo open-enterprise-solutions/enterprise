@@ -52,7 +52,7 @@ class ibMetaData;
 struct BACKEND_API ibComposerSettingsEntry {
 	ibGuid     m_id;
 	wxString   m_name;
-	wxDateTime m_changed;
+	ibDateTime m_changed;
 };
 
 // THE ADDRESS. `userKey` empty = THE CURRENT SESSION'S user, which is what every

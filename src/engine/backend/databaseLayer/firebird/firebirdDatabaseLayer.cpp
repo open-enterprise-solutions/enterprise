@@ -159,8 +159,8 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 
 		// ⭐ THE END OF A PERIOD IS THE START OF THE NEXT ONE, LESS A SECOND — written that way rather
 		// than as ten more hand-built expressions, so the boundary rule lives in ONE place and the
-		// truncations above stay the single authority on where a period begins. (ibEndOfPeriod, the
-		// RAM twin, says the same sentence in C++.)
+		// truncations above stay the single authority on where a period begins. (ibDateTime::EndOfPeriod,
+		// the RAM twin, says the same sentence in C++.)
 		auto endOf = [&d](ibTotalsPeriod unit, const wxString& step) {
 			return wxT("DATEADD(-1 SECOND TO DATEADD(1 ") + step + wxT(" TO ") + d.m_periodTrunc[unit] + wxT("))");
 		};

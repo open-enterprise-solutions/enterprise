@@ -1536,7 +1536,7 @@ private:
 	// ⚠ NOT const, and that is the point: it REGISTERS the parameter values the query will bind
 	// (AddParam). A const method that writes is a const method that lied, and `mutable` was the cover.
 	void EnsureAst();
-	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
+	bool BuildPageSignature(const ibReadPageRequest& page, ibPageSignature& signature) const;
 
 	// ⭐⭐ THE AUTHOR'S TEXT, SPLIT INTO WHAT PREPARES AND WHAT IS READ — the seam that lets a
 	// composition stand over a PACKAGE (docs/private/query-language-arc.md § 24.4b).

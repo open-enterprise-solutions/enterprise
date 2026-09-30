@@ -221,11 +221,11 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		return true;
 	case ePointInTime: {
 		ibValueMetaObjectDocument* metaDocRef = nullptr;
-		wxDateTime when;
+		ibDateTime when;
 		if (m_metaObject->ConvertToValue(metaDocRef) && metaDocRef != nullptr) {
 			const ibValue& date = GetValueByMetaID(*metaDocRef->GetDocumentDate());
 			if (date.GetType() == ibValueTypes::TYPE_DATE)
-				when = date.GetDateTime();
+				when = date.GetDate();
 		}
 		pvarRetValue = new ibValuePointInTime(when, GetReference());
 		return true;

@@ -83,7 +83,7 @@ void AppendTwoDigits(int value, wxString& out)
 // mm / m, dd / d, HH / H, MM / M, SS / S two digits each): a letter is taken by the LONGEST spelling the
 // pattern uses anywhere, every run of it is read in pieces of that length, and what is left over stands as
 // the letter — `yyyyy` is the year and a `y`. Every other character stands as it is.
-void WriteDate(const wxString& pattern, const wxDateTime::Tm& tm, wxString& out)
+void WriteDate(const wxString& pattern, const ibDateTimeParts& tm, wxString& out)
 {
 	static const int s_longest[6] = { 4, 2, 2, 2, 2, 2 };
 	const size_t length = pattern.length();
@@ -111,20 +111,20 @@ void WriteDate(const wxString& pattern, const wxDateTime::Tm& tm, wxString& out)
 			for (; at + piece <= run; at += piece) {
 				switch (letter) {
 				case 0:
-					if (piece == 4 && tm.year >= 0 && tm.year <= 9999) {
-						AppendTwoDigits(tm.year / 100, out);
-						AppendTwoDigits(tm.year % 100, out);
+					if (piece == 4 && tm.m_year >= 0 && tm.m_year <= 9999) {
+						AppendTwoDigits(tm.m_year / 100, out);
+						AppendTwoDigits(tm.m_year % 100, out);
 					}
 					else if (piece == 4)
-						out << tm.year;
+						out << tm.m_year;
 					else
-						AppendTwoDigits((tm.year % 100 + 100) % 100, out);
+						AppendTwoDigits((tm.m_year % 100 + 100) % 100, out);
 					break;
-				case 1: AppendTwoDigits(tm.mon + 1, out); break;
-				case 2: AppendTwoDigits(tm.mday, out);    break;
-				case 3: AppendTwoDigits(tm.hour, out);    break;
-				case 4: AppendTwoDigits(tm.min, out);     break;
-				case 5: AppendTwoDigits(tm.sec, out);     break;
+				case 1: AppendTwoDigits(static_cast<int>(tm.m_month), out);  break;
+				case 2: AppendTwoDigits(static_cast<int>(tm.m_day), out);    break;
+				case 3: AppendTwoDigits(static_cast<int>(tm.m_hour), out);   break;
+				case 4: AppendTwoDigits(static_cast<int>(tm.m_minute), out); break;
+				case 5: AppendTwoDigits(static_cast<int>(tm.m_second), out); break;
 				}
 			}
 		}
@@ -398,8 +398,9 @@ bool ibFormatString::Apply(const ibValue& cData, wxString& result) const
 			break;
 		}
 		if (m_date.m_pattern) {
-			const wxDateTime dateTime = wxLongLong(cData.GetDate());
-			WriteDate(*m_date.m_pattern, dateTime.GetTm(), result);
+			ibDateTimeParts parts;
+			cData.GetDate().ToParts(parts);
+			WriteDate(*m_date.m_pattern, parts, result);
 			break;
 		}
 		result = cData.GetString();

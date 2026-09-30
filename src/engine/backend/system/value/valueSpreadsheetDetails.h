@@ -121,7 +121,7 @@ public:
 
 	virtual ibString GetString() const override { return m_value.GetString(); }
 	virtual ibNumber GetNumber() const override { return m_value.GetNumber(); }
-	virtual wxLongLong_t GetDate() const override { return m_value.GetDate(); }
+	virtual ibDateTime GetDate() const override { return m_value.GetDate(); }
 	virtual bool GetBoolean() const override { return m_value.GetBoolean(); }
 	virtual bool IsEmpty() const override { return m_value.IsEmpty(); }
 	virtual size_t GetValueHash() const override { return m_value.GetValueHash(); }

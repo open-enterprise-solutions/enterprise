@@ -17,7 +17,7 @@ bool ibPropertyDate::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyDate::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyDate::SetValue((wxLongLong_t)value.AsDate());
+	ibPropertyDate::SetValue(value.AsDate());
 	return true;
 }
 

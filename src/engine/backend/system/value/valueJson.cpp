@@ -625,11 +625,13 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 		return;
 	case ibValueTypes::TYPE_DATE: {
 		// An EMPTY date is `null`, not a moment in the year 1: the platform's empty date is a perfectly valid
-		// wxDateTime, and sent as one the other system receives `0001-01-01T00:00:00` for "not filled".
-		const wxDateTime moment = target->GetDateTime();
+		// reading, and sent as one the other system receives `0001-01-01T00:00:00` for "not filled".
 		BeginValue();
-		if (!target->IsEmpty() && moment.IsValid())
-			ibJsonText::AppendQuoted(m_text, moment.FormatISOCombined(wxT('T')));
+		if (!target->IsEmpty()) {
+			ibDateTimeParts p;
+			target->GetDate().ToParts(p);
+			ibJsonText::AppendQuoted(m_text, wxString::Format(wxT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+		}
 		else
 			m_text += wxT("null");
 		return;

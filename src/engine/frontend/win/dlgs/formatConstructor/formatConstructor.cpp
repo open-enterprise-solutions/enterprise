@@ -368,7 +368,7 @@ void ibDialogFormatConstructor::ShowResult()
 	}
 	case 1: {
 		const wxDateTime now = wxDateTime::Now();
-		line = sample(now.Format(wxT("%d.%m.%Y %H:%M:%S")), ibValue(now)) + wxT("     ")
+		line = sample(now.Format(wxT("%d.%m.%Y %H:%M:%S")), ibValue(ibDateTime::OfWxDateTime(now))) + wxT("     ")
 			+ sample(_("empty date"), ibValue(ibValueTypes::TYPE_DATE));
 		break;
 	}

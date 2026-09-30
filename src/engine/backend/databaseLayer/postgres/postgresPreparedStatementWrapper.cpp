@@ -33,7 +33,7 @@ void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const ibNumber&
 	m_Parameters.SetParam(nPosition, dblValue);
 }
 
-void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const wxString& strValue)
+void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const ibString& strValue)
 {
 	m_Parameters.SetParam(nPosition, strValue);
 }
@@ -48,9 +48,9 @@ void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const void* pDa
 	m_Parameters.SetParam(nPosition, pData, nDataLength);
 }
 
-void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, const ibDateTimeParts& date)
 {
-	m_Parameters.SetParam(nPosition, dateValue);
+	m_Parameters.SetParam(nPosition, date);
 }
 
 void ibPreparedStatementPostgresWrapper::SetParam(int nPosition, bool bValue)

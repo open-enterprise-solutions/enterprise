@@ -7,7 +7,9 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres() : m_nParameterType(ib
 {
 }
 
-ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const wxString& strValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_STRING), m_strValue(strValue), m_nBufferLength(strValue.Length())
+// A value's text goes to the wire as it came: encoded here, straight from its own characters, and the bytes
+// kept — no wxString made to hold it until GetDataPtr.
+ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibString& strValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_STRING), m_CharBufferValue(ConvertToUnicodeStream(strValue)), m_nBufferLength(strValue.Length())
 {
 }
 
@@ -31,9 +33,10 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(bool bValue) : m_nParam
 	m_strValue = wxString::Format(wxT("%d"), bValue);
 }
 
-ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
+ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibDateTimeParts& date) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_DATETIME)
 {
-	m_strDateValue = dateValue.Format(wxT("%Y-%m-%d %H:%M:%S"));
+	m_strDateValue = wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+		date.m_year, date.m_month, date.m_day, date.m_hour, date.m_minute, date.m_second);
 	m_nBufferLength = m_strDateValue.Length();
 }
 
@@ -61,8 +64,7 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 	switch (m_nParameterType)
 	{
 	case ibDatabaseParameterPostgres::PARAM_STRING:
-		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue;   // encoded when the value was given (the constructor)
 		break;
 	case ibDatabaseParameterPostgres::PARAM_INT:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);

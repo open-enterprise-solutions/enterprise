@@ -80,16 +80,16 @@ TEST(JobSchedule, EqualBoundsMatchNothing) {
 
 TEST(JobSchedule, DefaultAllowsAnyMoment) {
     const ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 3, 0)));
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(1, wxDateTime::Jan, 2026, 23, 59)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 3, 0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 1, 1, 23, 59)));
 }
 
 TEST(JobSchedule, WeekDayNarrows) {
     ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
     s.m_daysOfWeek = ibJobWeekDay_Tuesday;
 
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 12, 0)));   // Tuesday
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(18, wxDateTime::Mar, 2026, 12, 0)));  // Wednesday
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));   // Tuesday
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 18, 12, 0)));  // Wednesday
 }
 
 TEST(JobSchedule, WindowWeekDayAndMonthCombine) {
@@ -98,32 +98,32 @@ TEST(JobSchedule, WindowWeekDayAndMonthCombine) {
     s.m_startMinute = At(10);
     s.m_endMinute   = At(15);
     s.m_daysOfWeek  = ibJobWeekDay_Tuesday;
-    s.m_months      = 1u << wxDateTime::Mar;
+    s.m_months      = 1u << (3 - 1);   // March — bit 0 is January
 
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 12, 0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));
 
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 9, 0)));   // too early
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 15, 0)));  // end is exclusive
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(18, wxDateTime::Mar, 2026, 12, 0)));  // wrong weekday
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(21, wxDateTime::Apr, 2026, 12, 0)));  // right weekday, wrong month
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 9, 0)));   // too early
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 15, 0)));  // end is exclusive
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 18, 12, 0)));  // wrong weekday
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 4, 21, 12, 0)));  // right weekday, wrong month
 }
 
 TEST(JobSchedule, DayOfMonthNarrows) {
     ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
     s.m_daysOfMonth = 1u << 0;   // the 1st
 
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(1, wxDateTime::Mar, 2026, 12, 0)));
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(2, wxDateTime::Mar, 2026, 12, 0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 1, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 2, 12, 0)));
 }
 
 TEST(JobSchedule, ValidityRangeBounds) {
     ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
-    s.m_activeFrom = wxDateTime(1, wxDateTime::Mar, 2026);
-    s.m_activeTo   = wxDateTime(31, wxDateTime::Mar, 2026);
+    s.m_activeFrom = ibDateTime(2026, 3, 1);
+    s.m_activeTo   = ibDateTime(2026, 3, 31);
 
-    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Mar, 2026, 12, 0)));
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Feb, 2026, 12, 0)));
-    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, wxDateTime(17, wxDateTime::Apr, 2026, 12, 0)));
+    EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 3, 17, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 2, 17, 12, 0)));
+    EXPECT_FALSE(ibJobScheduleRules::IsAllowed(s, ibDateTime(2026, 4, 17, 12, 0)));
 
     // Inverted range names no moment at all — refused rather than silent.
     std::swap(s.m_activeFrom, s.m_activeTo);
@@ -134,11 +134,11 @@ TEST(JobSchedule, NextAllowedSkipsToTheWindow) {
     ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
 
     // Asked at noon, the next allowed moment is 02:00 the following day.
-    const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(s, wxDateTime(17, wxDateTime::Mar, 2026, 12, 0));
-    ASSERT_TRUE(next.IsValid());
-    EXPECT_EQ(18, next.GetDay());
-    EXPECT_EQ(2,  next.GetHour());
-    EXPECT_EQ(0,  next.GetMinute());
+    const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 3, 17, 12, 0));
+    ASSERT_FALSE(next.IsEmpty());
+    EXPECT_EQ(18, next.GetPart(ibDatePart::Day));
+    EXPECT_EQ(2,  next.GetPart(ibDatePart::Hour));
+    EXPECT_EQ(0,  next.GetPart(ibDatePart::Minute));
 }
 
 TEST(JobSchedule, NextAllowedSkipsToTheWeekday) {
@@ -146,18 +146,18 @@ TEST(JobSchedule, NextAllowedSkipsToTheWeekday) {
     s.m_daysOfWeek = ibJobWeekDay_Monday;
 
     // 17 Mar 2026 is a Tuesday; the next Monday is the 23rd.
-    const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(s, wxDateTime(17, wxDateTime::Mar, 2026, 12, 0));
-    ASSERT_TRUE(next.IsValid());
-    EXPECT_EQ(23, next.GetDay());
+    const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 3, 17, 12, 0));
+    ASSERT_FALSE(next.IsEmpty());
+    EXPECT_EQ(23, next.GetPart(ibDatePart::Day));
 }
 
 TEST(JobSchedule, ImpossibleCalendarHasNoNextRun) {
     // 30 February: every field is individually legal, the combination is not.
     ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(600);
     s.m_daysOfMonth = 1u << 29;             // the 30th
-    s.m_months      = 1u << wxDateTime::Feb;
+    s.m_months      = 1u << (2 - 1);        // February
 
-    EXPECT_FALSE(ibJobScheduleRules::NextAllowedAfter(s, wxDateTime(1, wxDateTime::Jan, 2026)).IsValid());
+    EXPECT_TRUE(ibJobScheduleRules::NextAllowedAfter(s, ibDateTime(2026, 1, 1)).IsEmpty());
 }
 
 TEST(JobSchedule, ToStringNamesOnlyWhatWasSet) {
@@ -469,8 +469,8 @@ TEST(JobManager, SnapshotReportsDeclaredJobs) {
     // Never ran yet: no outcome, no last run, and no promised next run — an empty
     // cell reads as "on the next tick" rather than as a missing value.
     EXPECT_EQ(ibJobOutcome::Never, snap[0].m_outcome);
-    EXPECT_FALSE(snap[0].m_lastRunAt.IsValid());
-    EXPECT_FALSE(snap[0].m_nextRunAt.IsValid());
+    EXPECT_TRUE(snap[0].m_lastRunAt.IsEmpty());
+    EXPECT_TRUE(snap[0].m_nextRunAt.IsEmpty());
     // The schedule reads back as a sentence, which is what a settings list shows.
     EXPECT_FALSE(snap[0].m_schedule.IsEmpty());
 }

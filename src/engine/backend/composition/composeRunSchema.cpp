@@ -50,7 +50,7 @@ ibDataValue ValueEntry(const ibValue& value)
 	switch (value.GetType()) {
 	case ibValueTypes::TYPE_NUMBER:  out->AddField(wxT("number"), ibDataValue::Number(value.GetNumber())); break;
 	case ibValueTypes::TYPE_BOOLEAN: out->AddField(wxT("bool"),   ibDataValue::Bool(value.GetBoolean())); break;
-	case ibValueTypes::TYPE_DATE:    out->SetValue(wxT("date"),   value.GetDateTime()); break;
+	case ibValueTypes::TYPE_DATE:    out->AddField(wxT("date"),   ibDataValue::Date(value.GetDate())); break;
 	case ibValueTypes::TYPE_NULL:    out->SetValue(wxT("null"),   true); break;
 	default: break;   // a reference, an enum, a composite - the presentation is what there is
 	}
@@ -79,7 +79,7 @@ ibValue ValueFrom(const ibDataValue& given)
 	case ibDataKind::String: return ibValue(given.AsString());
 	case ibDataKind::Number: return ibValue(given.AsNumber());
 	case ibDataKind::Bool:   return ibValue(given.AsBool());
-	case ibDataKind::Date:   return ibValue(wxDateTime(static_cast<wxLongLong>(given.AsDate())));
+	case ibDataKind::Date:   return ibValue(given.AsDate());
 	default: return ibValue();
 	}
 }

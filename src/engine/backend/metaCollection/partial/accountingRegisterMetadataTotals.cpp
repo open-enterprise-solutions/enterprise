@@ -60,7 +60,7 @@
 #include "backend/query/queryAST.h"                                // ibQueryDimUnfold — «in» / «in hierarchy» / «hierarchy only», the language's own three words
 #include "backend/query/queryHierarchy.h"                          // ibQueryHierarchyScope — the operator that resolves those three words into values
 #include "backend/query/queryException.h"                          // ibBackendQueryNameException — a breakdown field the register does not have
-#include "backend/databaseLayer/databaseLayer.h"                   // ibTruncateToPeriod / ibNextPeriodStart — the GRAIN, in RAM terms
+#include "backend/databaseLayer/databaseLayer.h"                   // ibDateTime::BeginOfPeriod / BeginOfNextPeriod (fdatetime.h) — the GRAIN, in RAM terms
 #include "backend/system/value/valueArray.h"                        // ibValueArray — a requested breakdown may be a LIST
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — a column's typed empty
 #include "backend/metaData.h"                                       // ibMetaData whole — AdjustValue(…, metaData) must see it is no ibValue
@@ -1027,7 +1027,7 @@ ibQueryPredicatePtr ArmCutAtMoment(const ibBackendQueryColumn* recorderCol, cons
 	if (bound.IsEmpty() || bound.m_date.GetType() != TYPE_DATE)
 		return ibRegStoredArm(recorderCol);
 
-	const ibValue floor = ibValue(ibTruncateToPeriod(bound.m_date.GetDateTime(), grain));
+	const ibValue floor = ibValue(bound.m_date.GetDate().BeginOfPeriod(grain));
 
 	const ibQueryPredicatePtr stored = AndWith(ibRegStoredArm(recorderCol),
 		Compare(periodCol, ibQueryFilterOp::Less, floor));
@@ -1050,20 +1050,20 @@ ibQueryPredicatePtr ArmCutOverRange(const ibBackendQueryColumn* recorderCol, con
 	// bound falls INTO holds movements before it as well, so it cannot be taken as a row.
 	ibValue storedFrom, headFrom;
 	if (!begin.IsEmpty() && begin.m_date.GetType() == TYPE_DATE) {
-		const wxDateTime moment = begin.m_date.GetDateTime();
-		const wxDateTime floor  = ibTruncateToPeriod(moment, grain);
+		const ibDateTime moment = begin.m_date.GetDate();
+		const ibDateTime floor  = moment.BeginOfPeriod(grain);
 		headFrom   = begin.m_date;
 		// A bound that names a DOCUMENT reaches inside its grain even on the grain's edge: the postings of
 		// that instant before the document are outside, so the grain cannot be a stored row (ibRegFillArmCut).
-		storedFrom = (floor == moment && !begin.HasRecorder()) ? begin.m_date : ibValue(ibNextPeriodStart(moment, grain));
+		storedFrom = (floor == moment && !begin.HasRecorder()) ? begin.m_date : ibValue(moment.BeginOfNextPeriod(grain));
 	}
 
 	// Where they must stop: the start of the grain the upper bound falls into — that grain's movements
 	// answer the rest.
 	ibValue storedTo, tailFrom;
 	if (!end.IsEmpty() && end.m_date.GetType() == TYPE_DATE) {
-		const wxDateTime moment = end.m_date.GetDateTime();
-		storedTo = ibValue(ibTruncateToPeriod(moment, grain));
+		const ibDateTime moment = end.m_date.GetDate();
+		storedTo = ibValue(moment.BeginOfPeriod(grain));
 		tailFrom = storedTo;
 	}
 
@@ -3387,7 +3387,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// empty one (measured 2026-09-16: fixed assets on 10 read by month from August).
 	const bool everyPeriod = withPeriod && fold.m_kind == ibRegGranularity::Calendar && !fold.FromMovements()
 		&& begin.m_date.GetType() == TYPE_DATE;
-	const wxDateTime firstPeriod = everyPeriod ? ibTruncateToPeriod(begin.m_date.GetDateTime(), fold.m_unit) : wxDateTime();
+	const ibDateTime firstPeriod = everyPeriod ? begin.m_date.GetDate().BeginOfPeriod(fold.m_unit) : ibDateTime();
 	// …and at movement grain (Recorder / Record) at the interval's beginning, as the accumulation register stands
 	// it: no document wrote the row, but a report by period still has to find it somewhere — with no date it
 	// made a month heading of its own with none (2026-09-29, the ROLE battery).
@@ -3521,8 +3521,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		}
 	}
 
-	if (everyPeriod && firstPeriod.IsValid() && end.m_date.GetType() == TYPE_DATE) {
-		const std::vector<wxDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), end.m_date, fold.m_unit, /*maxPeriods*/ 0);
+	if (everyPeriod && end.m_date.GetType() == TYPE_DATE) {
+		const std::vector<ibDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), end.m_date, fold.m_unit, /*maxPeriods*/ 0);
 		const size_t slot = keyColumns.size();
 		for (auto& group : byKey) {
 			if (group.second.empty())
@@ -3534,7 +3534,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 
 			const size_t templateRow = group.second.front();
 			const bool templateBalanceless = balanceless[templateRow];
-			for (const wxDateTime& period : calendar) {
+			for (const ibDateTime& period : calendar) {
 				const ibValue value(period);
 				if (present.find(value) == present.end()) {
 					ibAcctRow added = rows[templateRow].second;   // the key as it stands on a row that exists
@@ -3556,9 +3556,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// period's closing), and the order a GROUP BY answers in is the engine's business, not a promise.
 	const size_t periodSlot = withPeriod ? keyColumns.size() : rowColumns.size();
 	const auto periodOf = [&](const ibAcctRow& row) {
-		// static_cast, not a functional cast: wxLongLong_t is `long long` outside MSVC, and a
-		// two-word type name cannot be spelled `T(0)` (docs/portability.md).
-		return periodSlot < row.m_key.size() ? row.m_key[periodSlot].GetDate() : static_cast<wxLongLong_t>(0);
+		return periodSlot < row.m_key.size() ? row.m_key[periodSlot].GetDate() : ibDateTime();
 	};
 
 	ibAcctRowList ordered;
@@ -4714,7 +4712,7 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	const ibValueMetaObjectChartOfAccounts* chart   = reg->GetChartOfAccounts();
 	if (period == nullptr || account == nullptr || chart == nullptr || chart->GetQueryable() == nullptr)
 		return nullptr;
-	const std::vector<wxDateTime> periods = ibRegCalendarOf(begin.m_date, end.m_date, fold.m_unit);
+	const std::vector<ibDateTime> periods = ibRegCalendarOf(begin.m_date, end.m_date, fold.m_unit);
 	if (periods.empty())
 		return nullptr;
 
@@ -4962,7 +4960,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const wxString& alias) 
 		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
 		r.m_periodUnit = m_fold.m_unit;
 		r.m_fromGrain  = (r.m_from.GetType() == TYPE_DATE && m_fold.IsCalendar())
-			? ibValue(ibTruncateToPeriod(r.m_from.GetDateTime(), m_fold.m_unit))
+			? ibValue(r.m_from.GetDate().BeginOfPeriod(m_fold.m_unit))
 			: r.m_from;
 	}
 
@@ -5408,7 +5406,7 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const wxStrin
 		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
 		r.m_periodUnit = m_fold.m_unit;
 		r.m_fromGrain  = (r.m_from.GetType() == TYPE_DATE && m_fold.IsCalendar())
-			? ibValue(ibTruncateToPeriod(r.m_from.GetDateTime(), m_fold.m_unit))
+			? ibValue(r.m_from.GetDate().BeginOfPeriod(m_fold.m_unit))
 			: r.m_from;
 	}
 

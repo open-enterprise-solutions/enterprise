@@ -121,24 +121,30 @@ int ibDatabaseResultSetFirebird::GetResultInt(int nField)
 	return GetResultLong(nField);
 }
 
-wxString ibDatabaseResultSetFirebird::GetResultString(int nField)
+ibString ibDatabaseResultSetFirebird::GetResultString(int nField)
 {
 	ResetErrorCodes();
 
-	// Each road returns its own string — made once, where it is known — rather than an empty one made
-	// first and assigned over (a string built and replaced for every text field of every row).
+	// Each road returns its own string — made once, where it is known, decoded straight into the value's
+	// text — rather than a wxString made first and copied out of (for every text field of every row).
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
-		return wxString();   // the column is NULL
+		return ibString();   // the column is NULL
 
 	short nType = pVar->sqltype & ~1;
 	if (nType == SQL_TEXT)
-		return ConvertFromUnicodeStream(pVar->sqldata);
+	{
+		ibString strValue;
+		ConvertFromUnicodeStream(pVar->sqldata, strValue);
+		return strValue;
+	}
 	if (nType == SQL_VARYING)
 	{
 		PARAMVARY* pVary = (PARAMVARY*)pVar->sqldata;
 		pVary->vary_string[pVary->vary_length] = '\0';
-		return ConvertFromUnicodeStream((const char*)pVary->vary_string);
+		ibString strValue;
+		ConvertFromUnicodeStream((const char*)pVary->vary_string, strValue);
+		return strValue;
 	}
 
 	// Incompatible field type
@@ -147,7 +153,7 @@ wxString ibDatabaseResultSetFirebird::GetResultString(int nField)
 	SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
 
 	ThrowDatabaseException();
-	return wxString();
+	return ibString();
 }
 
 long long ibDatabaseResultSetFirebird::GetResultLong(int nField)
@@ -237,43 +243,54 @@ bool ibDatabaseResultSetFirebird::GetResultBool(int nField)
 	return (nValue != 0);
 }
 
-wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 {
 	ResetErrorCodes();
 
-	wxDateTime dateReturn = wxDefaultDateTime;
+	// The parts the column holds, as the reading they are (fdatetime.h): what isc_decode_* hands back is
+	// a calendar reading with no zone, and it becomes the value's date without a clock in between.
+	const auto readingOf = [](const struct tm& t) {
+		return ibDateTime(t.tm_year + 1900, static_cast<unsigned>(t.tm_mon + 1), static_cast<unsigned>(t.tm_mday),
+			static_cast<unsigned>(t.tm_hour), static_cast<unsigned>(t.tm_min), static_cast<unsigned>(t.tm_sec));
+	};
+
+	ibDateTime dateReturn;
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		dateReturn = wxDefaultDateTime;
+		dateReturn = ibDateTime();
 	}
 	else
 	{
 		short nType = pVar->sqltype & ~1;
 		if (nType == SQL_TIMESTAMP)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeTimestamp()((ISC_TIMESTAMP*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_DATE)
 		{
-			struct tm timeInTm;
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlDate()((ISC_DATE*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = readingOf(timeInTm);
 		}
 		else if (nType == SQL_TYPE_TIME)
 		{
-			struct tm timeInTm;
+			// A time of day alone: that time on the empty date's day (0001-01-01), the reading the
+			// reference system keeps for a time with no date - filled, and nothing but the time in it.
+			// (isc_decode_sql_time leaves the day fields as it found them: a day 0, which is no day.)
+			struct tm timeInTm = {};
 			m_pInterface->GetIscDecodeSqlTime()((ISC_TIME*)pVar->sqldata, &timeInTm);
-			SetDateTimeFromTm(dateReturn, timeInTm);
+			dateReturn = ibDateTime(1, 1, 1, static_cast<unsigned>(timeInTm.tm_hour),
+				static_cast<unsigned>(timeInTm.tm_min), static_cast<unsigned>(timeInTm.tm_sec));
 		}
 		else
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			dateReturn = wxDefaultDateTime;
+			dateReturn = ibDateTime();
 
 			SetErrorMessage(wxT("Invalid field type"));
 			SetErrorCode(DATABASE_LAYER_INCOMPATIBLE_FIELD_TYPE);
@@ -283,11 +300,6 @@ wxDateTime ibDatabaseResultSetFirebird::GetResultDate(int nField)
 	}
 
 	return dateReturn;
-}
-
-void ibDatabaseResultSetFirebird::SetDateTimeFromTm(wxDateTime& dateReturn, struct tm& timeInTm)
-{
-	dateReturn.Set(timeInTm.tm_mday, wxDateTime::Month(timeInTm.tm_mon), timeInTm.tm_year + 1900, timeInTm.tm_hour, timeInTm.tm_min, timeInTm.tm_sec);
 }
 
 double ibDatabaseResultSetFirebird::GetResultDouble(int nField)

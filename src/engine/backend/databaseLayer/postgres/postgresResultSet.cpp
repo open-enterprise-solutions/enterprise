@@ -68,9 +68,9 @@ int ibDatabaseResultSetPostgres::GetResultInt(int nField)
 	return GetResultLong(nField);
 }
 
-wxString ibDatabaseResultSetPostgres::GetResultString(int nField)
+ibString ibDatabaseResultSetPostgres::GetResultString(int nField)
 {
-	wxString strValue = wxEmptyString;
+	ibString strValue;
 	if (m_bBinaryResults)
 	{
 		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
@@ -93,7 +93,7 @@ wxString ibDatabaseResultSetPostgres::GetResultString(int nField)
 		{
 			if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 			{
-				strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
+				ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1), strValue);
 			}
 		}
 	}
@@ -169,54 +169,18 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 	return bValue;
 }
 
-wxDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 {
-	wxDateTime dateValue = wxDefaultDateTime;
-	// TIMESTAMP results should be the same in binary or text results
-	if (m_bBinaryResults)
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (!dateValue.ParseDateTime(strDateValue))
-			{
-				if (dateValue.ParseDate(strDateValue))
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-	else
-	{
-		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
-		{
-			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (!dateValue.ParseDateTime(strDateValue))
-			{
-				if (dateValue.ParseDate(strDateValue))
-				{
-					dateValue.SetHour(0);
-					dateValue.SetMinute(0);
-					dateValue.SetSecond(0);
-					dateValue.SetMillisecond(0);
-				}
-				else
-				{
-					dateValue = wxDefaultDateTime;
-				}
-			}
-		}
-	}
-
-	return dateValue;
+	// TIMESTAMP results are text in binary and text mode alike: the ISO spelling of the parts, which is
+	// the reading - read by the date's own door (fdatetime.h, ibDateTime::FromString; a fraction of a
+	// second beyond the millisecond is finer than the reading and dropped). NULL is the empty date.
+	ibDateTime date;
+	if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) == 1)
+		return date;
+	ibString text;
+	ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1), text);
+	date.FromString(text);
+	return date;
 }
 
 void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buffer)

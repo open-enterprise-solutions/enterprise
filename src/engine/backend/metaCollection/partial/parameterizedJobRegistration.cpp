@@ -16,16 +16,16 @@
 //*                    NextRun — the moved computation                  *
 //***********************************************************************
 
-wxDateTime ibValueMetaObjectParameterizedJob::ComputeNextRun(const ibJobScheduleDescription& schedule, const wxDateTime& lastRun)
+ibDateTime ibValueMetaObjectParameterizedJob::ComputeNextRun(const ibJobScheduleDescription& schedule, const ibDateTime& lastRun)
 {
 	// NOT simply lastRun + interval: a schedule is interval AND calendar joined by AND, so the
 	// interval says "no earlier than" and the calendar moves that to the next permitted window and
 	// day. Without the second half an hourly job with a 02:00–05:00 window would be scheduled for
 	// 14:00. This is deliberately the SAME formula the manager uses for a job as a whole, so a row
 	// inherits "a time of day means NOT BEFORE" rather than inventing a stricter reading.
-	const wxDateTime countFrom = lastRun.IsValid()
-		? lastRun + wxTimeSpan::Seconds(schedule.m_intervalSeconds > 0 ? schedule.m_intervalSeconds : 0)
-		: wxDateTime::Now();
+	const ibDateTime countFrom = !lastRun.IsEmpty()
+		? lastRun.AddMilliseconds((schedule.m_intervalSeconds > 0 ? schedule.m_intervalSeconds : 0) * 1000ll)
+		: ibDateTime::Now();
 
 	return ibJobScheduleRules::NextAllowedAfter(schedule, countFrom);
 }
@@ -130,7 +130,7 @@ void ibValueMetaObjectParameterizedJob::StampLastRun(const ibGuid& objGuid) cons
 	//     so an open card would be told its data "was changed by another user" — by itself.
 	//   * RUNNING IS NOT EDITING. Execute is its own right; a stamp through the object write would
 	//     silently require Write as well.
-	ibJobManager::WriteSharedLastRun(objGuid, GetRowJobName(objGuid), wxDateTime::Now());
+	ibJobManager::WriteSharedLastRun(objGuid, GetRowJobName(objGuid), ibDateTime::Now());
 }
 
 bool ibValueMetaObjectParameterizedJob::RunJobByReference(const ibGuid& objGuid) const

@@ -21,7 +21,7 @@ class ibMetaData;   // the metadata context the column-based value-assembly thre
 // it, and NewPageCache constructs it. (docs/private/query-language-arc.md §19/§20)
 struct ibRenderedPageCache
 {
-	wxString                     m_sig;             // signature of the SQL-determining inputs
+	ibPageSignature              m_sig;             // the SQL-determining inputs, compared as values (dataQueryBuilder.h)
 	std::vector<ibQuerySortItem> m_effectiveSort;   // resolved once (identity tail walk)
 	ibRenderedQuery              m_rendered;         // SQL + bind plan, rendered once
 	bool                         m_valid = false;
@@ -33,7 +33,7 @@ public:
 	// --- the L3<->L2 read/write engine (vended by a DB-family queryable) ---
 	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req) override;
 	ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
-	                                    ibRenderedPageCache& cache, const wxString& signature) override;
+	                                    ibRenderedPageCache& cache, const ibPageSignature& signature) override;
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
 	// The same GROUP BY / the same read, stopped one step before they run — see the base declarations.
 	ibQueryRelPtr     BuildAggregateRelation(const ibDataQuerySpec& spec) override;

@@ -55,8 +55,9 @@ public:
 	virtual void SetParamDouble(int nPosition, double dblValue) = 0;
 	/// Set the parameter at the 1-based position to a number value
 	virtual void SetParamNumber(int nPosition, const ibNumber& dblValue) = 0;
-	/// Set the parameter at the 1-based position to a wxString value
-	virtual void SetParamString(int nPosition, const wxString& strValue) = 0;
+	/// Set the parameter at the 1-based position to a string - the engine's own text (fstring.h), encoded
+	/// from its own characters; a wxString crosses into one on the way in
+	virtual void SetParamString(int nPosition, const ibString& strValue) = 0;
 	/// Set the parameter at the 1-based position to a nullptr  value
 	virtual void SetParamNull(int nPosition) = 0;
 	/// Set the parameter at the 1-based position to a Blob value.
@@ -75,10 +76,10 @@ public:
 	}
 	/// Set the parameter at the 1-based position to a Blob value
 	virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength) = 0;
-	/// Set the parameter at the 1-based position to a wxDateTime value
-	virtual void SetParamDate(int nPosition, const wxLongLong_t& dateValue) { SetParamDate(nPosition, wxDateTime(wxLongLong(dateValue))); }
-	/// Set the parameter at the 1-based position to a wxDateTime value
-	virtual void SetParamDate(int nPosition, const wxDateTime& dateValue) = 0;
+	/// Set the parameter at the 1-based position to a date - the wall-clock reading a date value holds
+	/// (fdatetime.h). The driver writes its PARTS into the engine's TIMESTAMP; no clock and no zone is
+	/// consulted on the way, so the reading the column shows is the reading the value held.
+	virtual void SetParamDate(int nPosition, const ibDateTime& dateValue) = 0;
 	/// Set the parameter at the 1-based position to a boolean value
 	virtual void SetParamBool(int nPosition, bool bValue) = 0;
 

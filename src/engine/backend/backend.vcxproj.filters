@@ -315,6 +315,7 @@
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="fileSystem\fs.h">
@@ -1996,6 +1997,7 @@
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
+    <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="compiler\value_res.cpp">

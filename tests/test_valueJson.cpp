@@ -416,7 +416,7 @@ TEST(JsonText, OneSpellingForTheWholeBackend) {
 
 TEST(JsonWriter, ADateIsIso8601) {
 	ibValueJsonWriter writer;
-	writer.WriteValue(ibValue(wxDateTime(20, wxDateTime::Sep, 2026, 21, 5, 39)));
+	writer.WriteValue(ibValue(ibDateTime(2026, 9, 20, 21, 5, 39)));
 	EXPECT_EQ(writer.Close(), wxString(wxT("\"2026-09-20T21:05:39\"")));
 }
 

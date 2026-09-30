@@ -14,8 +14,6 @@
 
 #include <algorithm>
 
-#include <wx/datetime.h>
-
 // ---------------------------------------------------------------------------
 // The SHARED clock — sys_job.
 //
@@ -31,7 +29,7 @@
 // SELECT failed — is worse than running it twice.
 // ---------------------------------------------------------------------------
 
-wxDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key)
+ibDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key)
 {
 	try {
 		ibDatabaseQueryBuilder q;
@@ -44,23 +42,19 @@ wxDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key)
 		// a zero date — a job row that exists but never ran reads as "no opinion".
 		if (rs.Next()) {
 			const ibValue last = rs.GetValue(1);
-			// Through wxLongLong, the way every other ms-to-wxDateTime site in the tree does
-			// it. GetDate() hands back a wxLongLong_t (`long long`), and wxDateTime's
-			// constructors take time_t / double / wxLongLong — on LP64 none of those is an
-			// exact match for `long long`, so the implicit conversion is ambiguous. MSVC
-			// happens to pick one; naming wxLongLong says which, on every platform.
+			// The reading the stored date names (fdatetime.h), the same on whichever machine reads it.
 			if (!last.IsNull() && !last.IsEmpty())
-				return wxDateTime(wxLongLong(last.GetDate()));
+				return last.GetDate();
 		}
 	}
 	catch (...) {
 		// An unreadable clock is no opinion, not a veto: skipping housekeeping
 		// because a SELECT failed is worse than running it twice.
 	}
-	return wxInvalidDateTime;
+	return ibDateTime();
 }
 
-void ibJobManager::WriteSharedLastRun(const ibGuid& key, const wxString& name, const wxDateTime& when)
+void ibJobManager::WriteSharedLastRun(const ibGuid& key, const wxString& name, const ibDateTime& when)
 {
 	try {
 		// UPDATE, deliberately — NOT an upsert.
@@ -127,7 +121,7 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 
 			const ibValue last = rs.GetValue(1);
 			if (!last.IsNull() && !last.IsEmpty())
-				settings.m_lastRun = wxDateTime(wxLongLong(last.GetDate()));
+				settings.m_lastRun = last.GetDate();
 
 			const ibValue computer = rs.GetValue(2);
 			if (!computer.IsNull())

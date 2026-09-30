@@ -1620,8 +1620,8 @@ void ibDataDBComposer::AppendSettingsClauses(wxString& text, const std::vector<c
 
 namespace {
 
-// Page-cache signature helpers — a value the signature can't render losslessly
-// (a reference / an object) disables caching for that run; correctness over speed.
+// Page-cache signature — a value the signature cannot compare exactly (a reference / an object orders by
+// its presentation, and two of them can present alike) disables caching for that run; correctness over speed.
 bool ValueSignable(const ibValue& v)
 {
 	switch (v.GetType()) {
@@ -1630,17 +1630,6 @@ bool ValueSignable(const ibValue& v)
 		return true;
 	default:
 		return false;
-	}
-}
-
-wxString ValueSig(const ibValue& v)
-{
-	switch (v.GetType()) {
-	case TYPE_BOOLEAN: return v.GetBoolean() ? wxT("B1") : wxT("B0");
-	case TYPE_NUMBER:  return wxT("N") + v.GetNumber().ToString();
-	case TYPE_DATE:    return wxT("D") + v.GetDateTime().GetValue().ToString();
-	case TYPE_STRING:  return wxT("S") + v.GetString();
-	default:           return wxT("_");
 	}
 }
 
@@ -1913,7 +1902,7 @@ void ibDataDBComposer::EnsureAst()
 	m_rendered.m_filter = GetCurrentFilterDesc();
 }
 
-bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const
+bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, ibPageSignature& signature) const
 {
 	// Cache the paged hot path only; the tree's parent filter is excluded (its
 	// reference blob is not signable). An ANCHORED page is NOT cached: the anchor
@@ -1926,12 +1915,15 @@ bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxStrin
 		if (!ValueSignable(p.second))
 			return false;
 
-	signature << wxT("c") << page.m_count
-	          << wxT("d") << static_cast<int>(page.m_direction)
-	          << wxT("a") << (page.m_hasAnchor ? 1 : 0)
-	          << wxT("r") << (page.m_reverseSort ? 1 : 0)
-	          << wxT("|T") << m_rendered.m_text << wxT("|P");
-	for (const auto& p : m_params)
-		signature << wxT(";") << p.first << wxT("=") << ValueSig(p.second);
+	signature.m_text = m_rendered.m_text;
+	signature.m_count = page.m_count;
+	signature.m_direction = static_cast<int>(page.m_direction);
+	signature.m_reverseSort = page.m_reverseSort;
+	signature.m_names.reserve(m_params.size());
+	signature.m_values.reserve(m_params.size());
+	for (const auto& p : m_params) {
+		signature.m_names.push_back(p.first);
+		signature.m_values.push_back(p.second);
+	}
 	return true;
 }

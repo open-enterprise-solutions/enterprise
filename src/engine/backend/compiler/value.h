@@ -123,14 +123,14 @@ public:
 	// copy of a value is a count and not a copy — and the number no longer takes 8 bytes of its own.
 	//
 	// 🛑 THE UNION'S EMPTY STATE IS ALL-ZERO BITS, and it is a valid value of EVERY member: a null
-	// pointer, a false, date 0, the empty string (no text) and the number 0 (fnumber.h: tag 0 =
-	// immediate). The constructors zero the whole word (m_dData(0) — 8 bytes on x86 as well, where
-	// a pointer is 4); Reset() ends the life of a string or a number — letting go of its text — and
+	// pointer, a false, the empty date (fdatetime.h: count 0), the empty string (no text) and the number
+	// 0 (fnumber.h: tag 0 = immediate). The constructors zero the whole word (m_dData() — 8 bytes on x86
+	// as well, where a pointer is 4); Reset() ends the life of a string or a number — letting go of its text — and
 	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
 	// a string or a number member over a non-zero word of another kind: its old text would be kept.
 	union {
 		bool          m_bData;  //TYPE_BOOLEAN
-		wxLongLong_t  m_dData;  //TYPE_DATE
+		ibDateTime    m_dData;  //TYPE_DATE — one word, the count of a wall-clock reading
 		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
 		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
 		// ibValueMetaObject* from the metadata tree). Aliases m_pRef in storage
@@ -922,8 +922,7 @@ public:
 	ibValue(unsigned int cParam); //number
 	ibValue(double cParam); //number
 	ibValue(const ibNumber& cParam); //number
-	ibValue(wxLongLong_t cParam); //date
-	ibValue(const wxDateTime& cParam); //date
+	ibValue(const ibDateTime& cParam); //date
 	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
 
 	// CONST char pointers, and that const is load-bearing. Declared as `char*` these
@@ -1010,8 +1009,7 @@ public:
 	void operator = (float cParam);
 	void operator = (double cParam);
 	void operator = (const ibNumber& cParam);
-	void operator = (const wxDateTime& cParam);
-	void operator = (wxLongLong_t cParam);
+	void operator = (const ibDateTime& cParam);
 	void operator = (const wxString& cParam);
 	// Character pointers — see the ctor note above. A string literal or wxEmptyString
 	// on the right-hand side has no wxString overload to bind to without these, and
@@ -1199,19 +1197,6 @@ public:
 	inline void Copy(const ibValue& cOld);
 	inline void Move(ibValue&& cOld);
 
-	void FromDate(int& nYear, int& nMonth, int& nDay) const;
-	void FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const;
-	void FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const;
-
-	// ⭐ DATE ARITHMETIC READS THE CALENDAR, NOT THE CLOCK. A date is held as a moment (m_dData), and
-	// a day on which the clocks move is 23 or 25 hours long as a moment — so `date + 86400` and
-	// `to - from` read off moments came out an hour wrong across a switch: a 90-day base period
-	// counted 89.958 days (the payroll demo, 2026-09-10). Both are worked out on the wall-clock reading
-	// instead, where every day is 86400 seconds, which is what a date written in a document means.
-	// Milliseconds in and out, as m_dData is held.
-	static wxLongLong_t ShiftDate(wxLongLong_t date, wxLongLong_t milliseconds);
-	static wxLongLong_t DateSpan(wxLongLong_t later, wxLongLong_t earlier);
-
 #pragma region serialization
 
 	// THE HEADER IS THE BASE'S JOB, the contents are the children's (DoSerialize,
@@ -1374,7 +1359,6 @@ public:
 	virtual int GetInteger() const { return GetNumber().ToInt(); }
 	virtual unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	virtual double GetDouble() const { return GetNumber().ToDouble(); }
-	virtual wxDateTime GetDateTime() const { return wxLongLong(GetDate()); }
 
 	virtual ibNumber GetNumber() const;
 	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one
@@ -1407,7 +1391,9 @@ public:
 	// counts as equal and leaves this behind puts equal values in different
 	// buckets, which no test of the comparator alone would catch.
 	virtual size_t GetValueHash() const;
-	virtual wxLongLong_t GetDate() const;
+	// THE VALUE AS A DATE, in the engine's own date (fdatetime.h). A window that holds a wxDateTime
+	// crosses at its own edge: GetDate().ToWxDateTime().
+	virtual ibDateTime GetDate() const;
 
 	/////////////////////////////////////////////////////////////////////////
 

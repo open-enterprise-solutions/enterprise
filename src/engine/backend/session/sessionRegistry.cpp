@@ -31,7 +31,6 @@
 #endif
 
 #include <wx/log.h>
-#include <wx/datetime.h>
 
 namespace {
 
@@ -539,7 +538,7 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	identity.m_computer          = req.m_computer;
 	identity.m_address           = req.m_address;
 	identity.m_appMode           = req.m_appMode;
-	identity.m_started           = wxDateTime::Now();
+	identity.m_started           = ibDateTime::Now();
 	identity.m_pid               = CurrentPid();
 	identity.m_expectsAnonPhase  = req.m_userName.IsEmpty();
 
@@ -1598,8 +1597,11 @@ void ibSessionRegistry::JobSweepStale()
 	// from Active Users within ~10 s of their last heartbeat.
 	constexpr int kStaleCutoffSec = kSilentSeconds;
 
-	wxDateTime cutoff = wxDateTime::Now();
-	(void)cutoff.Subtract(wxTimeSpan(0, 0, kStaleCutoffSec));
+	// Aged in REAL time (ElapsedSince, through the machine's zone): on the morning the clocks go forward a
+	// beat written at 01:59:59 is a second old at 03:00:00, and a live peer must not be swept - its row and
+	// then its locks - for the hour the wall skipped.
+	const ibDateTime now = ibDateTime::Now();
+	const long long staleAfter = kStaleCutoffSec * 1000ll;
 
 	std::vector<wxString> zombies;
 	std::vector<ibGuid>   live;   // everyone that survives this pass — the lock sweep's input
@@ -1619,8 +1621,8 @@ void ibSessionRegistry::JobSweepStale()
 				continue;  // our own — heartbeat keeps lastActive fresh
 			}
 
-			const wxDateTime lastActive = rs.GetResultDate(wxT("lastActive"));
-			if (lastActive.IsValid() && lastActive.IsEarlierThan(cutoff))
+			const ibDateTime lastActive = rs.GetResultDate(wxT("lastActive"));
+			if (!lastActive.IsEmpty() && now.ElapsedSince(lastActive) > staleAfter)
 				zombies.push_back(guid);
 			else
 				live.emplace_back(guid);
@@ -1674,7 +1676,7 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
-		const wxDateTime now = wxDateTime::Now();
+		const ibDateTime now = ibDateTime::Now();
 		for (const auto& kv : m_own) {
 			auto s = kv.second.Share();
 			if (!s || !s->Inserted()) continue;
@@ -1710,7 +1712,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 		return 0;
 
 	// Every row's lastActive — or false, and then nobody is proven dead.
-	const auto readBeats = [this](std::map<wxString, wxDateTime>& beats) {
+	const auto readBeats = [this](std::map<wxString, ibDateTime>& beats) {
 		beats.clear();
 		try {
 			ibDatabaseQueryBuilder q(&m_writeHolder);
@@ -1723,7 +1725,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 		catch (...) { return false; }
 	};
 
-	std::map<wxString, wxDateTime> first, now;
+	std::map<wxString, ibDateTime> first, now;
 	if (!readBeats(first))
 		return 0;
 	std::set<wxString> still;   // named rows that are there and have not moved yet
@@ -1733,14 +1735,14 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 
 	using clock = std::chrono::steady_clock;
 	const auto deadline = clock::now() + kSilentBeats * kHeartbeatInterval;
-	const wxTimeSpan silence(0, 0, kSilentSeconds);
+	const long long silence = kSilentSeconds * 1000ll;   // in milliseconds of real time (ElapsedSince, as the sweep ages)
 	std::set<wxString> silent;   // stood still until its last beat was older than the silence
 	for (;;) {
 		// Settled by age where the age already says it — the sweep's own rule, asked now.
-		const wxDateTime at = wxDateTime::Now();
+		const ibDateTime at = ibDateTime::Now();
 		for (auto it = still.begin(); it != still.end(); ) {
-			const wxDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
-			if (beat.IsValid() && at - beat >= silence) {
+			const ibDateTime& beat = first[*it];   // no beat recorded at all: only the watch can settle it
+			if (!beat.IsEmpty() && at.ElapsedSince(beat) >= silence) {
 				silent.insert(*it);
 				it = still.erase(it);
 			}
@@ -1938,7 +1940,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		if (m_sessionHasOptionalColumns.load(std::memory_order_relaxed) >= 0) {
 			struct WideRow {
 				ibRunMode  m_application;
-				wxDateTime m_started;
+				ibDateTime m_started;
 				wxString   m_userName, m_computer, m_session;
 				int        m_kind;
 				bool       m_exclusive;

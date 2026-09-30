@@ -53,9 +53,11 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, std::string& out, int depth
 	case ibDataKind::Bool:   out += v.AsBool() ? "true" : "false"; break;
 	case ibDataKind::Number: out += std::string(v.AsNumber().ToString().utf8_str()); break; // exact decimal
 	case ibDataKind::Date: {
-		const s64 ms = v.AsDate();
-		const wxDateTime dt((wxLongLong)ms);
-		out += JsonString(ms && dt.IsValid() ? dt.FormatISOCombined(' ') : wxString()); // readable ISO
+		const ibDateTime date = v.AsDate();   // the wall-clock reading (fdatetime.h); the empty date is ""
+		ibDateTimeParts p;
+		date.ToParts(p);
+		out += JsonString(!date.IsEmpty() ? wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second)
+		                                  : wxString()); // readable ISO
 		break;
 	}
 	case ibDataKind::String: out += JsonString(v.AsString()); break;

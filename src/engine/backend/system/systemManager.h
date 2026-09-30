@@ -18,13 +18,13 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 class BACKEND_API ibValueSystemFunction : public ibValueStaticMembers<&ibValueSystemFunction_BindNames> {
 	public:
-	static wxDateTime ms_workDate;
+	static ibDateTime ms_workDate;
 public:
 
 	//--- Basic:
 	static bool Boolean(const ibValue& cValue);
 	static ibNumber Number(const ibValue& cValue);
-	static wxLongLong_t Date(const ibValue& cValue);
+	static ibDateTime Date(const ibValue& cValue);
 
 	// ⭐ THE CALENDAR FORM, which is how a person writes a date they know: Date(2026, 9, 2). The
 	// help has published this signature all along and the compiler took one argument only, so
@@ -32,7 +32,7 @@ public:
 	// 2026-09-02). The one-argument form stays what it was — a CONVERSION, of a string or of a
 	// number of seconds — because those are different questions and only one of them is a
 	// calendar.
-	static wxLongLong_t Date(int year, int month, int day,
+	static ibDateTime Date(int year, int month, int day,
 		int hour = 0, int minute = 0, int second = 0);
 
 	static wxString String(const ibValue& cValue);

@@ -29,13 +29,13 @@ class BACKEND_API ibValuePointInTime : public ibValueStaticMembers<&ibValuePoint
 {
 public:
 
-	wxDateTime m_date;        // always present -- a moment with no date is not a moment
+	ibDateTime m_date;        // the date's reading (fdatetime.h); the empty date is "unset" -- a moment with no date is not a moment
 	ibValue    m_reference;   // optional -- empty means "the instant itself", before any record in it
 
 public:
 
 	ibValuePointInTime();
-	ibValuePointInTime(const wxDateTime& date, const ibValue& reference = ibValue());
+	ibValuePointInTime(const ibDateTime& date, const ibValue& reference = ibValue());
 	virtual ~ibValuePointInTime() {}
 
 	// PointInTime(date [, reference]) -- the reference is the SECOND argument and may be left out
@@ -43,7 +43,7 @@ public:
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
 	virtual ibString GetString() const;
-	virtual bool IsEmpty() const { return !m_date.IsValid(); }
+	virtual bool IsEmpty() const { return m_date.IsEmpty(); }
 
 	// The date, then the reference. See the .cpp for what an absent reference means.
 	virtual int CompareValueLS(const ibValue& cParam) const;

@@ -9,7 +9,7 @@
 // Internal to the codec TUs — not part of any public surface.
 
 #include "backend/query/columnLayout.h"   // ibColumnRole / ibPersistedTypeTag / ibColumnCodec::HasReference / ibQueryStatement
-#include "backend/backend_core.h"          // emptyDate
+#include "backend/backend_core.h"          // ibDateTime, emptyEnum
 #include "backend/compiler/value.h"        // ibValueTypes
 #include "backend/system/value/valueJob.h"    // g_valueScheduleCLSID — a value object stored whole
 #include "backend/system/value/valueType.h"   // g_valueTypeDescriptionCLSID — the other one
@@ -66,14 +66,14 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 }
 
 // Bind a primitive slot's PLACEHOLDER — the value it carries when it is NOT the active type
-// (false / 0 / emptyDate / "" / wxNOT_FOUND). Keyed by role, one place for the constants the old
+// (false / 0 / the empty date / "" / wxNOT_FOUND). Keyed by role, one place for the constants the old
 // hand-rolled spreads repeated per branch.
 inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& pos)
 {
 	switch (role) {
 	case ibColumnRole::Boolean: st->SetParamBool(pos++, false);             break;
 	case ibColumnRole::Number:  st->SetParamNumber(pos++, 0);               break;
-	case ibColumnRole::Date:    st->SetParamDate(pos++, emptyDate);         break;
+	case ibColumnRole::Date:    st->SetParamDate(pos++, ibDateTime());      break;
 	case ibColumnRole::String:  st->SetParamString(pos++, wxEmptyString);   break;
 	case ibColumnRole::Enum:    st->SetParamInt(pos++, emptyEnum);          break;
 	default:                                                                break;

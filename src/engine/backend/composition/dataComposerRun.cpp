@@ -98,7 +98,7 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 			wholeResult && WantsDetails(Root()), LayoutFor(Root()));
 	}
 
-	wxString signature;
+	ibPageSignature signature;
 	if (BuildPageSignature(page, signature)) {
 		if (!m_pageCache)
 			m_pageCache = ibDataQueryBuilder::NewPageCache();

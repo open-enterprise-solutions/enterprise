@@ -13,7 +13,6 @@
 
 #include <algorithm>
 
-#include <wx/datetime.h>
 #include <wx/log.h>
 
 namespace {
@@ -128,27 +127,28 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 		return false;
 
 	const ibJobScheduleDescription& sched = e.m_desc.m_schedule;
-	wxDateTime countFrom;
-	if (e.m_retryAt.IsValid()) {
+	const long long intervalMs = sched.m_intervalSeconds * 1000ll;
+	ibDateTime countFrom;
+	if (!e.m_retryAt.IsEmpty()) {
 		// A RETRY counts from its own moment, not from the interval — the previous pass did not
 		// happen, so there is no gap between runs to space out. The calendar below still applies:
 		// a second chance must not sneak the job into an hour its window forbids.
 		countFrom = e.m_retryAt;
 	}
 	else if (e.m_everRun) {
-		countFrom = e.m_lastRunAt.IsValid() ? e.m_lastRunAt : e.m_registeredAtWall;
-		countFrom += wxTimeSpan::Seconds(sched.m_intervalSeconds);
+		countFrom = !e.m_lastRunAt.IsEmpty() ? e.m_lastRunAt : e.m_registeredAtWall;
+		countFrom = countFrom.AddMilliseconds(intervalMs);
 	}
 	else {
 		countFrom = e.m_registeredAtWall;
 		if (sched.m_startMinute < 0 && sched.m_endMinute < 0)
-			countFrom += wxTimeSpan::Seconds(sched.m_intervalSeconds);
+			countFrom = countFrom.AddMilliseconds(intervalMs);
 	}
 
-	const wxDateTime dueAt = ibJobScheduleRules::NextAllowedAfter(sched, countFrom);
-	if (!dueAt.IsValid())
+	const ibDateTime dueAt = ibJobScheduleRules::NextAllowedAfter(sched, countFrom);
+	if (dueAt.IsEmpty())
 		return false;   // the calendar names no moment at all — a schedule that can never run
-	if (dueAt.IsLaterThan(wxDateTime::Now()))
+	if (dueAt > ibDateTime::Now())
 		return false;   // still ahead
 
 	// The due moment has arrived. One guard left: a WALL clock decided that, and a wall clock can be
@@ -188,15 +188,15 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 		// whoever reads the list.
 		if (e.m_outcome == ibJobOutcome::Succeeded) {
 			e.m_retriesLeft = e.m_desc.m_retryCount;
-			e.m_retryAt     = wxDateTime();
+			e.m_retryAt     = ibDateTime();
 		}
 		else if (e.m_outcome == ibJobOutcome::Failed && e.m_retriesLeft > 0) {
 			--e.m_retriesLeft;
 			const int wait = e.m_desc.m_retryIntervalSeconds > 0 ? e.m_desc.m_retryIntervalSeconds : 1;
-			e.m_retryAt = wxDateTime::Now() + wxTimeSpan::Seconds(wait);
+			e.m_retryAt = ibDateTime::Now().AddMilliseconds(wait * 1000ll);
 		}
 		else {
-			e.m_retryAt = wxDateTime();
+			e.m_retryAt = ibDateTime();
 		}
 
 		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
@@ -296,10 +296,10 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	// Exclusive jobs only: a parameterised one has an entry per instance, so there
 	// is no shared "when did THIS last run" that means anything.
 	if (!e.m_workRemains && e.m_desc.m_exclusive) {
-		const wxDateTime sharedLast = ReadSharedLastRun(KeyOf(e.m_desc));
-		if (sharedLast.IsValid()) {
-			const wxTimeSpan since    = wxDateTime::Now() - sharedLast;
-			const wxTimeSpan interval = wxTimeSpan::Seconds(e.m_desc.m_schedule.m_intervalSeconds);
+		const ibDateTime sharedLast = ReadSharedLastRun(KeyOf(e.m_desc));
+		if (!sharedLast.IsEmpty()) {
+			const long long since    = ibDateTime::Now().ElapsedSince(sharedLast);          // ms of real time, a clock change counted
+			const long long interval = e.m_desc.m_schedule.m_intervalSeconds * 1000ll;    // ms
 			if (since < interval) {
 				// Somebody already did it. Adopt their time as ours so the local
 				// clock stops asking the database on every tick.
@@ -366,18 +366,18 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		//
 		//    Exclusive jobs only: a parameterised job has one record per instance,
 		//    so there is no shared "when did THIS last run" to consult.
-		const wxDateTime sharedLast = desc.m_exclusive ? ReadSharedLastRun(KeyOf(desc))
-		                                              : wxInvalidDateTime;
-		if (sharedLast.IsValid()) {
-			// Compare SPANS, never a span converted to long. A row that exists but
-			// has never actually run comes back as a zero date, and the distance
-			// from year zero to now is some 63 billion seconds — wxLongLong::ToLong
-			// asserts on that, which under Debug is an int 3 and takes the process
-			// down. It also took the run with it, which is why these sessions
-			// looked like they were hanging: the task died here and never reached
-			// the line that releases the session.
-			const wxTimeSpan since    = wxDateTime::Now() - sharedLast;
-			const wxTimeSpan interval = wxTimeSpan::Seconds(desc.m_schedule.m_intervalSeconds);
+		const ibDateTime sharedLast = desc.m_exclusive ? ReadSharedLastRun(KeyOf(desc))
+		                                              : ibDateTime();
+		if (!sharedLast.IsEmpty()) {
+			// Compare SPANS in whole milliseconds, never a span narrowed to long. A row
+			// that exists but has never actually run once came back as a zero date, and
+			// the distance from year zero to now is some 63 billion seconds — narrowed
+			// through wxLongLong::ToLong it asserted, which under Debug is an int 3 and
+			// takes the process down. It also took the run with it, which is why these
+			// sessions looked like they were hanging: the task died here and never
+			// reached the line that releases the session.
+			const long long since    = ibDateTime::Now().ElapsedSince(sharedLast);       // ms of real time, a clock change counted
+			const long long interval = desc.m_schedule.m_intervalSeconds * 1000ll;      // ms
 			if (since < interval) {
 				result->m_skipped.store(true, std::memory_order_release);
 				result->m_done.store(true, std::memory_order_release);
@@ -390,7 +390,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		// flight must see the job as taken. The claim covers that window too, but
 		// the stamp is what survives this process letting go — including by dying.
 		if (desc.m_exclusive)
-			WriteSharedLastRun(KeyOf(desc), desc.m_name, wxDateTime::Now());
+			WriteSharedLastRun(KeyOf(desc), desc.m_name, ibDateTime::Now());
 
 		// 4. THE BODY, wrapped. Visible in Active Users while it lasts.
 		session->SetActivity(wxString::Format(wxT("job: %s"), desc.m_name));
@@ -445,13 +445,13 @@ bool ibJobManager::Launch(ibJobEntry& e)
 
 	// The pending attempt has been taken — a new failure will schedule the next one. Cleared HERE
 	// rather than on the verdict, so a retry that is still waiting survives an intervening tick.
-	e.m_retryAt = wxDateTime();
+	e.m_retryAt = ibDateTime();
 
 	e.m_runSession = runSession;   // released by HarvestFinished, off the worker
 	e.m_result    = std::move(result);
 	e.m_everRun   = true;
 	e.m_lastRun   = std::chrono::steady_clock::now();
-	e.m_lastRunAt = wxDateTime::Now();
+	e.m_lastRunAt = ibDateTime::Now();
 	e.m_outcome   = ibJobOutcome::Running;
 	e.m_error.clear();
 	// Cleared here rather than after: the pass is under way, so "work remained
@@ -942,9 +942,9 @@ std::vector<ibJobState> ibJobManager::Snapshot() const
 		// runs on Tuesdays. Left empty when the job is due right now (never ran,
 		// or work remained), so an empty cell reads as "on the next tick" rather
 		// than as a missing value.
-		if (e.m_everRun && !e.m_workRemains && e.m_lastRunAt.IsValid()) {
-			const wxDateTime earliest =
-				e.m_lastRunAt + wxTimeSpan::Seconds(e.m_desc.m_schedule.m_intervalSeconds);
+		if (e.m_everRun && !e.m_workRemains && !e.m_lastRunAt.IsEmpty()) {
+			const ibDateTime earliest =
+				e.m_lastRunAt.AddMilliseconds(e.m_desc.m_schedule.m_intervalSeconds * 1000ll);
 			state.m_nextRunAt = ibJobScheduleRules::NextAllowedAfter(e.m_desc.m_schedule, earliest);
 		}
 

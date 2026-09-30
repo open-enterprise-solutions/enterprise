@@ -18,6 +18,8 @@
 // cell — sub-chunk 0 (when the table has a uuid key) is the row's uuid string, and sub-chunk = a
 // column's id carries that column's codec output. The caller frames the per-table blob by table id.
 
+#include <cstdint>
+
 #include "backend/backend.h"
 
 struct ibSchemaTable;     // L3-2 structure — the mover's single input (query/schemaSnapshot.h)
@@ -27,8 +29,17 @@ class ibReaderMemory;
 class ibWriterMemory;
 class ibQueryStatement;   // L2 statement — the wire codec binds through it (restore)
 class ibQueryResult;      // L2 cursor — the wire codec reads through it (dump)
+class ibDateTime;         // backend/fdatetime.h — what a date off the wire becomes
 
 namespace ibDataMover {
+
+// ⭐ THE FORM A DATE TOOK ON THE WIRE, numbered as a dump's chunk 3 says it (DumpDataToBuffer). A
+// dump with no such chunk is the first form.
+enum class DateForm : std::uint32_t {
+	Instant      = 1,   // before 2026-09: an instant of the dumping machine's clock
+	WallFrom1970 = 2,   // the wall-clock reading counted from 1970-01-01 - the first form of it (PR #217)
+	DateTime     = 3,   // an ibDateTime's count (fdatetime.h) - what a dump writes now
+};
 
 // --- the binary-wire CODEC (the per-cell dump / restore PRIMITIVE) ------------------------------
 // Spread ONE column's value between the binary wire (ibReaderMemory / ibWriterMemory) and an L2
@@ -38,11 +49,19 @@ namespace ibDataMover {
 // ibColumnCodec::HasReference with the value codec, so a dumped cell restores byte-identically.
 
 // WRITE — read the wire TYPE tag + the active value, bind the column's full physical spread into
-// `statement` from `position` (1-based), advancing it.
+// `statement` from `position` (1-based), advancing it. `dates` - the form the wire's dates are in
+// (DateOfWire).
 BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
-                                   const ibReaderMemory& reader, ibQueryStatement* statement, int& position);
+                                   const ibReaderMemory& reader, ibQueryStatement* statement, int& position,
+                                   DateForm dates = DateForm::DateTime);
 BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
                                    const ibReaderMemory& reader, ibQueryStatement* statement);   // from position 1
+
+// A date off the wire as the date it is (fdatetime.h): the count itself; the first wall form moved
+// to the count's own start; or - from a dump that carried instants - the parts this machine's clock
+// shows for the instant, which are the parts the dumper saw wherever this machine stands in the
+// dumper's zone, with the old empty literal the empty date.
+BACKEND_API ibDateTime DateOfWire(long long raw, DateForm form);
 
 // READ — write the column's compact wire form (tag + only the active type's value + reference pair)
 // off the row in `result`.
@@ -57,7 +76,8 @@ BACKEND_API bool Dump(const ibSchemaTable& table, ibWriterMemory& out);
 // Restore the per-row chunk blob in `rows` (already unwrapped from the caller's framing chunk) into
 // `table` — UPSERT when the structure has a unique key, else INSERT — binding each cell through the
 // codec. Returns false on a write error (the caller rolls the transaction back).
-BACKEND_API bool Restore(const ibSchemaTable& table, const ibReaderMemory& rows);
+// `dates` - the form the dump's dates are in (DateForm).
+BACKEND_API bool Restore(const ibSchemaTable& table, const ibReaderMemory& rows, DateForm dates = DateForm::DateTime);
 
 } // namespace ibDataMover
 

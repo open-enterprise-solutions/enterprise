@@ -233,7 +233,7 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
 			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
 			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
-			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
 		}, { wxT("guid") }));

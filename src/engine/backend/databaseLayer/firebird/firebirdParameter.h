@@ -36,12 +36,12 @@ public:
 	// writing a payroll's 72 234 movements of its own (stack samples 2026-09-14, Debug). Each Set leaves the
 	// slot as the constructor of that value used to.
 	void SetNull();
-	void Set(const wxString& strValue);
+	void Set(const ibString& strValue);
 	void Set(const ibNumber& dblValue);
 	void Set(int nValue);
 	void Set(double dblValue);
 	void Set(bool bValue);
-	void Set(const wxDateTime& dateValue);
+	void Set(const ibDateTimeParts& date);   // a date by its parts (fdatetime.h) - no clock on the way to the TIMESTAMP
 	void Set(const void* pData, long nDataLength);
 
 	enum {
@@ -79,7 +79,7 @@ private:
 	int m_nParameterType;
 
 	// A union would probably be better here
-	wxString m_strValue;
+	ibString m_strValue;
 	short m_sValue;
 	int m_nValue;
 	float m_fValue;

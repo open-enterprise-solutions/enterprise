@@ -495,7 +495,7 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 
 	// FOR WHICH DAYS OF ACTION (ibCalcViewArg): the subject's own action period meets them — it ends on
 	// BeginOfActionPeriod or later and begins on EndOfActionPeriod or earlier.
-	const auto dated = [](const ibValue& v) { return v.GetType() == TYPE_DATE && v.GetDateTime().IsValid(); };
+	const auto dated = [](const ibValue& v) { return v.GetType() == TYPE_DATE; };
 	if (dated(actionFrom))
 		terms.push_back({ recordEnd, actionFrom, ibQueryBinOp::Ge, false });
 	if (dated(actionTo))
@@ -546,7 +546,7 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 	// its displacers alike, the registration period under the register's field name.
 	ibQueryExprPtr before;
 	if (dated(moment))
-		before = ibConst(ibValue(ibNextPeriodStart(moment.GetDateTime(), reg->GetPeriodicityUnit())));
+		before = ibConst(ibValue(moment.GetDate().BeginOfNextPeriod(reg->GetPeriodicityUnit())));
 
 	if (terms.empty() && !before)
 		return nullptr;
@@ -717,22 +717,6 @@ void ibCalcFactSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSou
 
 namespace {
 
-// A calendar day as a number: whole days between two dates, whatever the clock did in between — a difference of
-// local times across a daylight-saving change is an hour short of a day. Days from the civil calendar (y, m, d),
-// so a date read back from the database counts the day it names.
-long long ibCalcCalendarDay(const wxDateTime& t)
-{
-	int y = t.GetYear();
-	const unsigned m = static_cast<unsigned>(t.GetMonth()) + 1;
-	const unsigned d = t.GetDay();
-	y -= m <= 2 ? 1 : 0;
-	const long long era = (y >= 0 ? y : y - 399) / 400;
-	const unsigned yoe = static_cast<unsigned>(y - era * 400);
-	const unsigned doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
-	const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-	return era * 146097 + static_cast<long long>(doe) - 719468;
-}
-
 // Each item of a comma-separated list, trimmed; empty items dropped.
 std::vector<wxString> ibCalcBaseItemsOf(const wxString& list)
 {
@@ -892,21 +876,22 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 	const bool ownBasePeriod = reg->IsUseBasePeriod();
 	const ibTotalsPeriod unit = reg->GetPeriodicityUnit();
 	std::vector<std::pair<long long, long long>> spans(records.size(), { 0, -1 });
-	wxDateTime windowFrom, windowTo;
+	ibDateTime windowFrom, windowTo;   // the empty date is "no window yet"
 	for (size_t i = 0; i < records.size(); ++i) {
-		wxDateTime from = records[i].m_from, to = records[i].m_to;
-		if (!ownBasePeriod && records[i].m_registration.IsValid()) {
-			from = ibTruncateToPeriod(records[i].m_registration, unit);
-			to = ibNextPeriodStart(from, unit) - wxDateSpan::Day();
+		ibDateTime from = records[i].m_from, to = records[i].m_to;
+		if (!ownBasePeriod && !records[i].m_registration.IsEmpty()) {
+			from = records[i].m_registration.BeginOfPeriod(unit);
+			to = from.BeginOfNextPeriod(unit).AddDays(-1);
 		}
-		if (!from.IsValid() || !to.IsValid() || from.GetYear() <= 1 || to < from)
+		if (from < ibDateTime(2, 1, 1) || to < from)   // a date in year 1 is not set
 			continue;
-		spans[i] = { ibCalcCalendarDay(from), ibCalcCalendarDay(to) };
-		if (!windowFrom.IsValid() || from < windowFrom) windowFrom = from;
-		if (!windowTo.IsValid() || to > windowTo) windowTo = to;
+		// A calendar day as a number: the date's day count, whatever any clock did in between.
+		spans[i] = { from.GetDays(), to.GetDays() };
+		if (windowFrom.IsEmpty() || from < windowFrom) windowFrom = from;
+		if (windowTo.IsEmpty() || to > windowTo) windowTo = to;
 	}
 
-	if (feeds != nullptr && feeds->IsAllowed() && feeds->GetCalculationType() != nullptr && windowFrom.IsValid()) {
+	if (feeds != nullptr && feeds->IsAllowed() && feeds->GetCalculationType() != nullptr && !windowFrom.IsEmpty()) {
 		// ---- which types a type takes its base from: the Base rows it owns ----------------------------------------
 		std::unordered_map<std::vector<ibValue>, std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> namedBy;
 		{
@@ -1069,8 +1054,8 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 				for (size_t c = 0; c < figureResources.size(); ++c)
 					for (const ibValueMetaObjectResource* resource : figureResources[c])
 						item.m_figures[c] += rs.GetResultNumber(ibRegValueField(resource));
-				item.m_first = ibCalcCalendarDay(rs.GetResultDate(firstField));
-				item.m_last = ibCalcCalendarDay(rs.GetResultDate(lastField));
+				item.m_first = rs.GetResultDate(firstField).GetDays();
+				item.m_last = rs.GetResultDate(lastField).GetDays();
 				if (byAction) {
 					ibValue recorder, line;
 					ibDbTableProvider::GetValueAttribute(base->GetRegisterRecorder(), recorder, rs);
@@ -1475,14 +1460,14 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	// employee for every record, three times over: 162 s for a July of 40 000 employees in Release, against 57.6 s
 	// for bringing the rows home (2026-09-17). The tag is said the way a comparison to a value says it
 	// (ibRegCompositeIR), with the earliest day any record reads as that value.
-	wxDateTime earliest;
+	ibDateTime earliest;
 	const auto widen = [&](const ibValueMetaObjectAttributeBase* field) {
 		const size_t at = placeOf(field);
 		if (at >= record.size())
 			return;
 		for (const std::vector<ibValue>& one : records)
-			if (!one[at].IsEmpty() && (!earliest.IsValid() || one[at].GetDateTime().IsEarlierThan(earliest)))
-				earliest = one[at].GetDateTime();
+			if (!one[at].IsEmpty() && (earliest.IsEmpty() || one[at].GetDate() < earliest))
+				earliest = one[at].GetDate();
 	};
 	if (readsAction)
 		widen(m_reg->GetActionPeriodStart());
@@ -1490,8 +1475,8 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		widen(m_reg->GetRegistrationPeriod());
 	if (readsBase && m_reg->IsUseBasePeriod())
 		widen(m_reg->GetBasePeriodStart());
-	const ibQueryExprPtr tagged = earliest.IsValid()
-		? ibRegCompositeIR(scheduleDate->GetQueryColumn(), metaData, ibValue(earliest.GetDateOnly()), ibQueryBinOp::Ge, s) : nullptr;
+	const ibQueryExprPtr tagged = !earliest.IsEmpty()
+		? ibRegCompositeIR(scheduleDate->GetQueryColumn(), metaData, ibValue(earliest.BeginOfPeriod(ibTotalsPeriod::Day)), ibQueryBinOp::Ge, s) : nullptr;
 
 	long sumRows = 0;
 	// One period a query sums over: the days [from, next) a row of the source names.

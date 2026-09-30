@@ -981,8 +981,8 @@ ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias
 	ibValue v;
 	// ⭐⭐ NOTHING THERE IS *NULL*, and it has to be asked before it is read. A field projected under
 	// an alias carries no `_TYPE` beside it, so absence has no spelling in the value itself: read as a
-	// date, a NULL is an INVALID wxDateTime and assigning one stops the program; read as a number it
-	// is a silent zero. The fold in memory answers this case with a real NULL (ibAggAcc::Result) — the
+	// date, a NULL is the empty date (and before the date was the engine's own, an invalid wxDateTime
+	// that stopped the program); read as a number it is a silent zero. The fold in memory answers this case with a real NULL (ibAggAcc::Result) — the
 	// server road owes the same answer, or one query means two things by where it ran.
 	if (cursor.IsResultNull(alias)) {
 		v.SetType(ibValueTypes::TYPE_NULL);
@@ -2427,7 +2427,7 @@ ibQueryRelPtr ibDbTableProvider::BuildReadRelation(const ibDataQuerySpec& spec)
 	}
 
 ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
-	                                    ibRenderedPageCache& cache, const wxString& signature)
+	                                    ibRenderedPageCache& cache, const ibPageSignature& signature)
 	{
 		if (!cache.m_valid || cache.m_sig != signature) {
 			cache.m_effectiveSort = ibDataQueryBuilder::EffectiveSort(spec.m_queryable, *spec.m_sorts);
@@ -4247,7 +4247,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 				const wxString       galias = wxString::Format(wxT("g%d_%d"), li, fi);
 				// ⭐ BY PERIODS — the key is the START OF THE PERIOD containing the value, so the
 				// element grouped by and the field projected are both the truncation. The dialect
-				// spells PeriodTrunc its own way, and `ibTruncateToPeriod` is the RAM twin of the
+				// spells PeriodTrunc its own way, and `ibDateTime::BeginOfPeriod` is the RAM twin of the
 				// very same definition — which is what lets a row land in the same bucket whichever
 				// road read it.
 				auto keyExpr = [&](void) {

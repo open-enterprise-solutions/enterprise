@@ -138,7 +138,7 @@ void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibNumber&
 	m_pParameterCollection->SetParam(nPosition, dblValue);
 }
 
-void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const wxString& strValue)
+void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibString& strValue)
 {
 	m_pParameterCollection->SetParam(nPosition, strValue);
 }
@@ -153,9 +153,9 @@ void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const void* pDa
 	m_pParameterCollection->SetParam(nPosition, pData, nDataLength);
 }
 
-void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, const ibDateTimeParts& date)
 {
-	m_pParameterCollection->SetParam(nPosition, dateValue);
+	m_pParameterCollection->SetParam(nPosition, date);
 }
 
 void ibPreparedStatementFirebirdWrapper::SetParam(int nPosition, bool bValue)

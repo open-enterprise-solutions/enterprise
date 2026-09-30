@@ -391,7 +391,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		for (auto clsid : removedRef)
 			batch.Insert([tableName, typeCol, refCol, clsid]() {
 				ibDatabaseQueryBuilder q;
-				// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
+				// clsid is a 64-bit ibClassID — bind through ibNumber: ibValue has no 64-bit integer ctor.
 				q.Execute(ibUpdate(tableName,
 					{ { typeCol, ibConst(ibValue(0)) } },
 					ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));

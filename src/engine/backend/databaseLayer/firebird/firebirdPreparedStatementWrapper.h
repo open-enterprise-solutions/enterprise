@@ -38,10 +38,10 @@ public:
 	void SetParam(int nPosition, int nValue);
 	void SetParam(int nPosition, double dblValue);
 	void SetParam(int nPosition, const ibNumber& numValue);
-	void SetParam(int nPosition, const wxString& strValue);
+	void SetParam(int nPosition, const ibString& strValue);
 	void SetParam(int nPosition);
 	void SetParam(int nPosition, const void* pData, long nDataLength);
-	void SetParam(int nPosition, const wxDateTime& dateValue);
+	void SetParam(int nPosition, const ibDateTimeParts& date);
 	void SetParam(int nPosition, bool bValue);
 	int GetParameterCount();
 

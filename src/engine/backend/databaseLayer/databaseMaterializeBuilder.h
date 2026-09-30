@@ -337,7 +337,7 @@ struct ibMaterializeReadSpec
 	ibValue  m_to;
 
 	// ⭐ THE FIRST PERIOD TO REPORT — only read when the grain is periodised, and resolved BY THE
-	// CALLER through the same truncation the stored key is built with (`ibTruncateToPeriod`).
+	// CALLER through the same truncation the stored key is built with (`ibDateTime::BeginOfPeriod`).
 	//
 	// Two things make it a field of its own rather than m_from reused. A running column accumulates
 	// from the beginning of the data, so the lower bound cannot be applied before the window — it is

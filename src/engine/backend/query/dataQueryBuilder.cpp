@@ -887,7 +887,7 @@ ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
                                              ibRenderedPageCache& cache,
-                                             const wxString& signature) const
+                                             const ibPageSignature& signature) const
 {
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);

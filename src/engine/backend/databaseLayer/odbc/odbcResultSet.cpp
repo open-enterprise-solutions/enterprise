@@ -256,9 +256,11 @@ void ibDatabaseResultSetODBC::RetrieveFieldData(int nField)
 				/*
 				wxPrintf(_T("day = %d, month = %d, year = %d, hour = %d, minute = %d, second = %d, fraction = %d\n"),
 				  ret.day, ret.month, ret.year, ret.hour, ret.minute, ret.second, ret.fraction);*/
-				wxDateTime dt(ret.day, wxDateTime::Month(ret.month - 1), ret.year, ret.hour,
-					ret.minute, ret.second, ret.fraction);
-				m_fieldValues[nField - 1] = dt;
+				// The struct's parts are the reading (fdatetime.h); fraction is in nanoseconds (ODBC), the
+				// milliseconds are its first three digits. Kept as the date's count - no wxDateTime,
+				// so no clock on the way.
+				m_fieldValues[nField - 1] = wxLongLong(ibDateTime(ret.year, ret.month, ret.day, ret.hour,
+					ret.minute, ret.second, static_cast<unsigned>(ret.fraction / 1000000u)).GetValue());
 			}
 		}
 		else
@@ -335,15 +337,23 @@ int ibDatabaseResultSetODBC::GetResultInt(int nField)
 	return m_fieldValues[nField - 1].GetLong();
 }
 
-wxString ibDatabaseResultSetODBC::GetResultString(int nField)
+ibString ibDatabaseResultSetODBC::GetResultString(int nField)
 {
 	if (m_fieldValues[nField - 1].IsNull())
 	{
 		if (GetFieldLength(nField) < 0)
-			return wxEmptyString;
+			return ibString();
 	}
 
-	return m_fieldValues[nField - 1].GetString();
+	// A date is kept as its reading (the one field kind held as a long long here); read as text it is
+	// the reading's parts spelled the ISO way, as the text-keeping drivers hold a TIMESTAMP.
+	if (m_fieldValues[nField - 1].GetType() == wxT("longlong")) {
+		ibDateTimeParts p;
+		ibDateTime(m_fieldValues[nField - 1].GetLongLong().GetValue()).ToParts(p);
+		return wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
+	}
+	// The row is kept as wxVariants, so the text is a wxString already - it crosses once, here.
+	return ibString(m_fieldValues[nField - 1].GetString());
 }
 
 long long ibDatabaseResultSetODBC::GetResultLong(int nField)
@@ -368,15 +378,15 @@ bool ibDatabaseResultSetODBC::GetResultBool(int nField)
 	return m_fieldValues[nField - 1].GetBool();
 }
 
-wxDateTime ibDatabaseResultSetODBC::GetResultDate(int nField)
+ibDateTime ibDatabaseResultSetODBC::GetResultDate(int nField)
 {
 	if (m_fieldValues[nField - 1].IsNull())
 	{
 		if (GetFieldLength(nField) <= 0)
-			return wxDefaultDateTime;
+			return ibDateTime();
 	}
 
-	return m_fieldValues[nField - 1].GetDateTime();
+	return ibDateTime(m_fieldValues[nField - 1].GetLongLong().GetValue());
 }
 
 double ibDatabaseResultSetODBC::GetResultDouble(int nField)

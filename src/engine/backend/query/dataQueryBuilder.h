@@ -478,6 +478,26 @@ private:
 // the .cpp and it is OPAQUE here — the list model holds it through a shared_ptr
 // and creates it via ibDataQueryBuilder::NewPageCache(), never naming its layout.
 
+// ⭐ WHAT DECIDES A CACHED PAGE'S SQL, compared as what it is: the rendered text, the page's shape, and the
+// query's parameters by name and VALUE. A value is compared as a value (ibValueSeqEqual, the relation a
+// grouping key uses), never as its printed text: the key used to be one wxString the values were rendered
+// into, which made a date its raw count and let a string that spelled `;name=` stand for another parameter.
+struct ibPageSignature
+{
+	wxString              m_text;          // the rendered query text
+	long                  m_count = 0;
+	int                   m_direction = 0;
+	bool                  m_reverseSort = false;
+	std::vector<wxString> m_names;         // the parameters, in their names' order…
+	std::vector<ibValue>  m_values;        // …and their values
+
+	bool operator==(const ibPageSignature& other) const {
+		return m_count == other.m_count && m_direction == other.m_direction && m_reverseSort == other.m_reverseSort
+			&& m_text == other.m_text && m_names == other.m_names && ibValueSeqEqual()(m_values, other.m_values);
+	}
+	bool operator!=(const ibPageSignature& other) const { return !(*this == other); }
+};
+
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).
 enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RAM stitch only (co-located does Inner/Left)
 
@@ -1117,7 +1137,7 @@ public:
 	// capture every SQL-determining input (the caller owns that contract).
 	[[nodiscard]] ibDataQueryResult Execute(const ibReadPageRequest& request,
 	                                       ibRenderedPageCache& cache,
-	                                       const wxString& signature) const;
+	                                       const ibPageSignature& signature) const;
 
 	// Aggregated terminal — a FLAT GROUP BY built from GroupBy() + Sum()/Count()/… +
 	// Where()/Having(). NOT paged: returns the full grouped set (one row per group). In

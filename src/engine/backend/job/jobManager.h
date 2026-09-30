@@ -49,8 +49,6 @@
 #include "backend/lock/lockHolder.h"       // ibLockHolder — base for the job's claim identity
 #include "backend/system/systemEnum.h"     // ibStatusMessage — the level of what a run's code said
 
-#include <wx/datetime.h>
-
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -255,12 +253,12 @@ struct BACKEND_API ibJobState {
 	// Wall clock, for display. The scheduling itself runs off a steady clock so a
 	// system-clock adjustment cannot make a job fire twice or stall for hours;
 	// these two are the human-readable projection of that, not its source.
-	wxDateTime   m_lastRunAt;
+	ibDateTime   m_lastRunAt;
 	// COMPUTED, never stored: last run + interval. Empty when the job has not run
 	// yet (it is due immediately) or when work remained from the previous pass
 	// (due on the next tick). A stored "next run" would be one more thing that can
 	// disagree with reality after a restart.
-	wxDateTime   m_nextRunAt;
+	ibDateTime   m_nextRunAt;
 	wxString     m_error;   // set when m_outcome == Failed
 	// The schedule as a sentence — "Every 10 minutes, 10:00-15:00, Tue". Built
 	// from the same fields an editor shows, so a settings list and this list say
@@ -518,7 +516,7 @@ private:
 		// "was there a 02:00 between when we started watching and now?" cannot be asked on a steady
 		// clock. Used only for the first-run decision; every later one measures on the steady clock,
 		// where moving the system time cannot make a job fire twice.
-		wxDateTime                            m_registeredAtWall = wxDateTime::Now();
+		ibDateTime                            m_registeredAtWall = ibDateTime::Now();
 		bool                                  m_everRun     = false;
 		// Set from the body's return value: the previous pass left work behind, so
 		// the interval is skipped and the job is due on the next tick.
@@ -526,10 +524,10 @@ private:
 
 		// RETRY STATE (ibJobDescription::m_retryCount). m_retriesLeft is the allowance remaining for
 		// the CURRENT streak of failures — refilled by a successful pass, so a job that fails once a
-		// week never runs out. m_retryAt is when the next attempt is due; invalid means the job is on
-		// its ordinary schedule and nothing is being retried.
+		// week never runs out. m_retryAt is when the next attempt is due; the empty date means the job
+		// is on its ordinary schedule and nothing is being retried.
 		int                                   m_retriesLeft = 0;
-		wxDateTime                            m_retryAt;
+		ibDateTime                            m_retryAt;
 
 		// A TICK IS WORKING ON THIS ENTRY OUTSIDE THE LOCK — launching it, which creates a session
 		// and can wait on the registry. Set under m_mtx before the lock is dropped and cleared under
@@ -567,7 +565,7 @@ private:
 		// system clock cannot make a job fire twice or stall until the date comes
 		// back around.
 		ibJobOutcome                          m_outcome = ibJobOutcome::Never;
-		wxDateTime                            m_lastRunAt;
+		ibDateTime                            m_lastRunAt;
 		wxString                              m_error;
 	};
 
@@ -605,7 +603,7 @@ public:
 		wxString                 m_name;        // display name, so the table reads for a person
 		bool                     m_active = true;
 		ibJobScheduleDescription m_schedule;
-		wxDateTime               m_lastRun;      // read-only for a caller — the shared clock
+		ibDateTime               m_lastRun;      // read-only for a caller — the shared clock
 		wxString                 m_computer;     // who ran it last, for diagnostics
 		bool                     m_found = false;   // was there a row at all? (seed-on-first-sight)
 
@@ -670,8 +668,8 @@ public:
 	//
 	// Best-effort by design: a database that cannot answer must not stop a job, since silently
 	// skipping work is worse than repeating it.
-	static wxDateTime ReadSharedLastRun(const ibGuid& key);
-	static void       WriteSharedLastRun(const ibGuid& key, const wxString& name, const wxDateTime& when);
+	static ibDateTime ReadSharedLastRun(const ibGuid& key);
+	static void       WriteSharedLastRun(const ibGuid& key, const wxString& name, const ibDateTime& when);
 
 	// Apply settings to a REGISTERED job, at once — no re-registration, because the entry holds a
 	// session and dropping it would end a run in flight. Returns false when the key is unknown.

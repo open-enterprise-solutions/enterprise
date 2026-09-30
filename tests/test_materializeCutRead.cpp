@@ -80,7 +80,7 @@ wxString SqlOf(const ibQueryRelPtr& rel)
 
 // A balance as of `moment`, cut at the start of its day — off the rows as they stand, or (rows = false) off
 // the dressed view the way every reading went before.
-ibMaterializeReadSpec BalanceRead(bool rows, const wxDateTime& moment, bool excluding)
+ibMaterializeReadSpec BalanceRead(bool rows, const ibDateTime& moment, bool excluding)
 {
 	ibMaterializeReadSpec r;
 	if (rows) {
@@ -96,7 +96,7 @@ ibMaterializeReadSpec BalanceRead(bool rows, const wxDateTime& moment, bool excl
 	r.m_to           = ibValue(moment);
 	r.m_toExcluding  = excluding;
 	r.m_markColumn   = wxT("rec_");
-	r.m_floor        = ibValue(ibTruncateToPeriod(moment, ibTotalsPeriod::Day));
+	r.m_floor        = ibValue(moment.BeginOfPeriod(ibTotalsPeriod::Day));
 	r.m_dropZeroRows = true;
 	r.m_columns = {
 		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), wxString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
@@ -166,7 +166,7 @@ TEST(MaterializeRows, WithoutTheReadFormsThereAreNoMovementRows) {
 // A cut inside the grain is read as two selections, each of its own table. The bound of each stands in ITS OWN
 // WHERE, which is the whole point: under an OR neither could ride an index.
 TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	const wxString sql = ReadSql(BalanceRead(/*rows*/ true, moment, /*excluding*/ true));
 
 	EXPECT_TRUE(sql.Contains(wxT("UNION ALL"))) << sql;
@@ -181,7 +181,7 @@ TEST(MaterializeCutRead, ACutIsAUnionOfTwoNarrowedSelections) {
 // select from the same dressed union: four arms expanded where there were two, and neither half any nearer an
 // index than the OR it replaced.
 TEST(MaterializeCutRead, OffANamedViewTheReadingStaysOneSelection) {
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	const wxString sql = ReadSql(BalanceRead(/*rows*/ false, moment, true));
 	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
 	EXPECT_FALSE(sql.Contains(wxT("_cut"))) << sql;
@@ -192,7 +192,7 @@ TEST(MaterializeCutRead, OffANamedViewTheReadingStaysOneSelection) {
 
 // A reading that stops AT the grain needs no movements: no floor, no union — the stored rows alone.
 TEST(MaterializeCutRead, AtTheGrainOnlyTheStoredRowsAreRead) {
-	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, wxDateTime(5, wxDateTime::Mar, 2026), false);
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, ibDateTime(2026, 3, 5), false);
 	r.m_floor = ibValue();   // what ibRegFillArmCut leaves when the bound does not reach inside a grain
 	const wxString sql = ReadSql(r);
 	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
@@ -203,7 +203,7 @@ TEST(MaterializeCutRead, AtTheGrainOnlyTheStoredRowsAreRead) {
 // 🛑 Stored rows cannot be cut without the movements: the partial grain would be read from nowhere, a balance
 // short of today's postings. Refused, not answered.
 TEST(MaterializeCutRead, StoredRowsWithoutTheMovementsAreNotCut) {
-	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, wxDateTime(5, wxDateTime::Mar, 2026, 14, 0, 0), true);
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, ibDateTime(2026, 3, 5, 14, 0, 0), true);
 	r.m_movedRows = nullptr;
 	EXPECT_ANY_THROW(RenderMaterializedRead(r, wxT("b")));
 }
@@ -212,7 +212,7 @@ TEST(MaterializeCutRead, StoredRowsWithoutTheMovementsAreNotCut) {
 // NOT said a third time around them: the relation the halves publish carries only the columns the reading
 // names, and a filter is free to name another.
 TEST(MaterializeCutRead, FiltersNarrowEachHalf) {
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
 	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
 	const wxString sql = ReadSql(r);
@@ -226,8 +226,8 @@ TEST(MaterializeCutRead, FiltersNarrowEachHalf) {
 // A turnover looks at nothing below its interval, and the stored half is told so: bounded on both sides, the
 // period can ride the index instead of walking the warehouse's whole history to add zeros.
 TEST(MaterializeCutRead, ATurnoverBoundsItsStoredHalfBelow) {
-	const wxDateTime from(3, wxDateTime::Mar, 2026);
-	const wxDateTime to(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime from(2026, 3, 3);
+	const ibDateTime to(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, to, false);
 	r.m_from = ibValue(from);
 	r.m_columns = {
@@ -340,7 +340,7 @@ struct CutReadFix : ::testing::Test {
 // movement standing exactly AT the moment is the row the two differ by.
 TEST_F(CutReadFix, TheRowsAnswerWhatTheSingleViewAnswered) {
 	Fill();
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 
 	for (const bool excluding : { true, false }) {
 		const double hand   = ByHand(wxT("kitchen"), wxT("2026-03-05 14:00:00"), excluding);
@@ -359,21 +359,21 @@ TEST_F(CutReadFix, TheRowsAnswerWhatTheSingleViewAnswered) {
 TEST_F(CutReadFix, TheRowsNeedNoViewInTheBase) {
 	Fill();
 	db->RunQuery(wxT("DROP VIEW Reg9_Turnovers"));
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, true), wxT("kitchen")), 100.0);
 }
 
 // The other warehouse is untouched by the day being cut — its answer comes off the stored half alone.
 TEST_F(CutReadFix, AKeyWithNoMovementsInTheGrainReadsItsStoredRows) {
 	Fill();
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, true), wxT("bar")), 40.0);
 }
 
 // A filter narrows both halves and must not lose the key it names.
 TEST_F(CutReadFix, AFilterOnTheKeyKeepsThatKeyWhole) {
 	Fill();
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
 	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(wxString(wxT("kitchen"))))) };
 
@@ -395,9 +395,9 @@ TEST_F(CutReadFix, AFilterThatWalksFindsItsRowInEitherHalf) {
 	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("wh")), ibCol(wxT("b_rows"), wxT("wh"))));
 	kinds.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("k"), wxT("kind")), ibConst(ibValue(wxString(wxT("hot"))))));
 
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	for (const bool inside : { true, false }) {   // a cut (two halves) and a reading at the grain (one)
-		ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, inside ? moment : wxDateTime(5, wxDateTime::Mar, 2026), true);
+		ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, inside ? moment : ibDateTime(2026, 3, 5), true);
 		if (!inside)
 			r.m_floor = ibValue();
 		r.m_filters = { ibExists(kinds.Build().m_root) };
@@ -411,7 +411,7 @@ TEST_F(CutReadFix, AFilterThatWalksFindsItsRowInEitherHalf) {
 TEST_F(CutReadFix, AZeroBalanceIsNoRowOnEitherRoad) {
 	Move(wxT("r1"), 1, wxT("2026-03-04 09:00:00"), wxT("kitchen"), true, 10);
 	Move(wxT("w1"), 1, wxT("2026-03-05 10:00:00"), wxT("kitchen"), false, 10);
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 
 	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ false, moment, false), wxT("kitchen")), -1e9);
 	EXPECT_DOUBLE_EQ(Balance(BalanceRead(/*rows*/ true, moment, false), wxT("kitchen")), -1e9);
@@ -421,7 +421,7 @@ TEST_F(CutReadFix, AZeroBalanceIsNoRowOnEitherRoad) {
 // named a column their relation does not publish, and the read failed where the single view had answered.
 TEST_F(CutReadFix, AFilterOnAColumnTheReadingDoesNotCarryStillReads) {
 	Fill();
-	const wxDateTime moment(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime moment(2026, 3, 5, 14, 0, 0);
 	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, moment, true);
 	r.m_filters = { ibBinOp(ibQueryBinOp::Ge, ibCol(wxT("b_rows"), wxT("Qty_Receipt")), ibConst(ibValue(ibNumber(0)))) };   // every row passes
 
@@ -432,8 +432,8 @@ TEST_F(CutReadFix, AFilterOnAColumnTheReadingDoesNotCarryStillReads) {
 // 05.03 14:00 inclusive: +30 -25 +7 -9; the day before and the evening after belong to nobody.
 TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 	Fill();
-	const wxDateTime from(4, wxDateTime::Mar, 2026);
-	const wxDateTime to(5, wxDateTime::Mar, 2026, 14, 0, 0);
+	const ibDateTime from(2026, 3, 4);
+	const ibDateTime to(2026, 3, 5, 14, 0, 0);
 
 	const auto read = [&](bool rows) {
 		ibMaterializeReadSpec r = BalanceRead(rows, to, /*excluding*/ false);

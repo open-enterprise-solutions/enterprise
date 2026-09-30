@@ -36,10 +36,10 @@ public:
 	void SetParamInt(int, int) override {}
 	void SetParamDouble(int, double) override {}
 	void SetParamNumber(int, const ibNumber&) override {}
-	void SetParamString(int, const wxString&) override {}
+	void SetParamString(int, const ibString&) override {}
 	void SetParamNull(int) override {}
 	void SetParamBlob(int, const void*, long) override {}
-	void SetParamDate(int, const wxDateTime&) override {}
+	void SetParamDate(int, const ibDateTime&) override {}
 	void SetParamBool(int, bool) override {}
 	int  GetParameterCount() override { return 0; }
 	int  RunQuery() override { return 0; }
@@ -55,10 +55,10 @@ public:
 
 	int        LookupField(const wxString&) override { return -1; }
 	int        GetResultInt(int) override { return 0; }
-	wxString   GetResultString(int) override { return wxString(); }
+	ibString   GetResultString(int) override { return ibString(); }
 	long long  GetResultLong(int) override { return 0; }
 	bool       GetResultBool(int) override { return false; }
-	wxDateTime GetResultDate(int) override { return wxDateTime(); }
+	ibDateTime GetResultDate(int) override { return ibDateTime(); }
 	void*      GetResultBlob(int, wxMemoryBuffer&) override { return nullptr; }
 	double     GetResultDouble(int) override { return 0.0; }
 	ibNumber   GetResultNumber(int) override { return ibNumber(); }

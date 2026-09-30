@@ -321,22 +321,22 @@ int ibDatabaseLayer::GetSingleResultInt(const wxString& strSQL, const wxVariant*
 	return value;
 }
 
-wxString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultString(strSQL, &variant, bRequireUniqueResult);
 }
 
-wxString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant(strField);
 	return GetSingleResultString(strSQL, &variant, bRequireUniqueResult);
 }
 
-wxString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+ibString ibDatabaseLayer::GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
-	wxString value = wxEmptyString;
+	ibString value;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -555,22 +555,22 @@ bool ibDatabaseLayer::GetSingleResultBool(const wxString& strSQL, const wxVarian
 	return value;
 }
 
-wxDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultDate(strSQL, &variant, bRequireUniqueResult);
 }
 
-wxDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant(strField);
 	return GetSingleResultDate(strSQL, &variant, bRequireUniqueResult);
 }
 
-wxDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
+ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
-	wxDateTime value = wxDefaultDateTime;
+	ibDateTime value;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -583,7 +583,7 @@ wxDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 				// Close the result set, reset the value and throw an exception
 				CloseResultSet(pResult);
 				pResult = nullptr;
-				value = wxDefaultDateTime;
+				value = ibDateTime();
 				SetErrorCode(DATABASE_LAYER_NON_UNIQUE_RESULTSET);
 				SetErrorMessage(wxT("A non-unique result was returned."));
 				ThrowDatabaseException();
@@ -613,7 +613,7 @@ wxDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 		// Make sure that a value was retrieved from the database
 		if (!valueRetrievedFlag)
 		{
-			value = wxDefaultDateTime;
+			value = ibDateTime();
 			SetErrorCode(DATABASE_LAYER_NO_ROWS_FOUND);
 			SetErrorMessage(wxT("No result was returned."));
 			ThrowDatabaseException();

@@ -1235,11 +1235,11 @@ public:
 	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
 	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set — which
 	// is no longer reachable at all (see below). Delegate to the borrowed driver cursor.
-	wxString    GetResultString(const wxString& name);
+	ibString    GetResultString(const wxString& name);   // the engine's own text (fstring.h); NULL is empty
 	int         GetResultInt(const wxString& name);
 	long long   GetResultLong(const wxString& name);
 	bool        GetResultBool(const wxString& name);
-	wxDateTime  GetResultDate(const wxString& name);
+	ibDateTime  GetResultDate(const wxString& name);   // the reading (fdatetime.h); NULL is the empty date
 	double      GetResultDouble(const wxString& name);
 	ibNumber    GetResultNumber(const wxString& name);
 	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
@@ -1252,9 +1252,10 @@ public:
 	// and an aggregate are one field and nothing else, so an empty fold (`MIN(x)` over a group that
 	// matched nothing) comes back as SQL NULL with no way to say so.
 	//
-	// 🛑 Asked as a date, that NULL is an INVALID wxDateTime, and assigning one into an ibValue trips
-	// its assertion and stops the program — which is how a self-join's `MIN(Period)`, the moment it
-	// began folding on the server, came back as a debug alert instead of a blank cell (2026-09-06).
+	// 🛑 Asked as a date, that NULL is the empty date - indistinguishable from a date nobody filled in -
+	// and before the date was the engine's own it was an INVALID wxDateTime that tripped an assertion and
+	// stopped the program: a self-join's `MIN(Period)`, the moment it began folding on the server, came
+	// back as a debug alert instead of a blank cell (2026-09-06).
 	// The RAM fold answers the same case with a real NULL (ibAggAcc::Result); this is what lets the
 	// server road say it too, instead of guessing from a value that has no way to be absent.
 	bool        IsResultNull(const wxString& name);
@@ -1265,11 +1266,11 @@ public:
 	int         FieldIndex(FieldSlots& slots, const wxString& base, unsigned slot, const wxString& suffix);
 
 	// …and the typed reads of a field found that way, answering exactly what the named reads answer.
-	wxString    GetResultString(int field);
+	ibString    GetResultString(int field);
 	int         GetResultInt(int field);
 	long long   GetResultLong(int field);
 	bool        GetResultBool(int field);
-	wxDateTime  GetResultDate(int field);
+	ibDateTime  GetResultDate(int field);
 	ibNumber    GetResultNumber(int field);
 	void*       GetResultBlob(int field, wxMemoryBuffer& buffer);
 	bool        IsResultNull(int field);
@@ -1460,8 +1461,7 @@ public:
 	                 ibDatabaseConnectionHolder* holder = nullptr);
 	~ibQueryStatement() override = default;
 
-	// Keep the base's non-pure overloads visible alongside our overrides.
-	using ibPreparedStatement::SetParamDate;
+	// Keep the base's non-pure overload visible alongside our overrides.
 	using ibPreparedStatement::SetParamBlob;
 
 	// --- ibPreparedStatement: bind -> capture as an L2-1 value node ----------
@@ -1469,10 +1469,10 @@ public:
 	void SetParamInt(int nPosition, int nValue) override;
 	void SetParamDouble(int nPosition, double dblValue) override;
 	void SetParamNumber(int nPosition, const ibNumber& numValue) override;
-	void SetParamString(int nPosition, const wxString& strValue) override;
+	void SetParamString(int nPosition, const ibString& strValue) override;
 	void SetParamNull(int nPosition) override;
 	void SetParamBlob(int nPosition, const void* pData, long nDataLength) override;
-	void SetParamDate(int nPosition, const wxDateTime& dateValue) override;
+	void SetParamDate(int nPosition, const ibDateTime& dateValue) override;
 	void SetParamBool(int nPosition, bool bValue) override;
 	int  GetParameterCount() override { return static_cast<int>(m_columns.size()); }
 
@@ -1546,18 +1546,17 @@ public:
 	ibBatchInsert(const wxString& table, std::vector<wxString> columns, ibDatabaseConnectionHolder* holder = nullptr);
 	~ibBatchInsert() override;
 
-	// Keep the base's non-pure overloads visible alongside our overrides.
-	using ibQueryStatement::SetParamDate;
+	// Keep the base's non-pure overload visible alongside our overrides.
 	using ibQueryStatement::SetParamBlob;
 
 	// --- the row being bound: into the prepared INSERT, or captured as the template's values ---------
 	void SetParamInt(int nPosition, int nValue) override;
 	void SetParamDouble(int nPosition, double dblValue) override;
 	void SetParamNumber(int nPosition, const ibNumber& numValue) override;
-	void SetParamString(int nPosition, const wxString& strValue) override;
+	void SetParamString(int nPosition, const ibString& strValue) override;
 	void SetParamNull(int nPosition) override;
 	void SetParamBlob(int nPosition, const void* pData, long nDataLength) override;
-	void SetParamDate(int nPosition, const wxDateTime& dateValue) override;
+	void SetParamDate(int nPosition, const ibDateTime& dateValue) override;
 	void SetParamBool(int nPosition, bool bValue) override;
 
 	// The row is bound: it runs, or is held for the next statement. Answers the rows this call wrote — 0 while

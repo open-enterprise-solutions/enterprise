@@ -40,7 +40,7 @@ bool ibPropertyDynamicSource::SetDataValue(const ibValue& varPropVal)
 bool ibPropertyDynamicSource::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibBackendQueryable* q = GetQueryable();
-	pvarPropVal = ibValue((wxLongLong_t)(q != nullptr ? q->GetQueryTableId() : 0));
+	pvarPropVal = ibValue(q != nullptr ? q->GetQueryTableId() : 0);
 	return true;
 }
 

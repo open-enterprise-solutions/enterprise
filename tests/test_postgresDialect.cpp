@@ -143,7 +143,7 @@ TEST_F(PostgresDialect, TimestampComesBackAsTheSameInstant)
 		s_db->PrepareStatement(wxT("INSERT INTO oes_dialect_stamp (v) VALUES (?)")));
 	ASSERT_TRUE(static_cast<bool>(stmt));
 
-	const wxDateTime written(4, wxDateTime::Aug, 2026, 16, 33, 48);
+	const ibDateTime written(2026, 8, 4, 16, 33, 48);
 	stmt->SetParamDate(1, written);
 	stmt->RunQuery();
 
@@ -152,9 +152,8 @@ TEST_F(PostgresDialect, TimestampComesBackAsTheSameInstant)
 	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
-	const wxDateTime read = rs->GetResultDate(1);
-	ASSERT_TRUE(read.IsValid());
-	EXPECT_EQ(written.GetTicks(), read.GetTicks())
+	const ibDateTime read = rs->GetResultDate(1);
+	EXPECT_EQ(written, read)
 		<< "a timestamp must not drift through the driver";
 
 	s_db->RunQuery(wxT("DROP TABLE oes_dialect_stamp"));

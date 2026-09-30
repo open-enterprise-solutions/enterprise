@@ -300,7 +300,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 	// A table with no period dimension has no such frontier: its whole content is fair game, since
 	// a key without a period is written to at any time or not at all.
 	const ibValue periodBefore = hasPeriod
-		? ibValue(ibTruncateToPeriod(wxDateTime::Now(), spec.m_periodUnit)) : ibValue();
+		? ibValue(ibDateTime::Now().BeginOfPeriod(spec.m_periodUnit)) : ibValue();
 	const bool bounded = hasPeriod;
 
 	// The period is the table's own column, asked of the SOURCE only for how it is laid out.
@@ -401,9 +401,9 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 				break;
 			}
 			case ibCanonicalKind::Date: {
-				const wxDateTime v = rows.GetResultDate(f.m_name);
+				const ibDateTime v = rows.GetResultDate(f.m_name);
 				value = ibConst(ibValue(v));
-				id += v.FormatISOCombined();
+				id += wxString::Format(wxT("%lld"), v.GetValue());
 				break;
 			}
 			case ibCanonicalKind::String: {
@@ -555,8 +555,8 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 	// The window is the whole of the PREVIOUS stored period. Stepping back is done by truncating a
 	// moment just before the current period begins — no per-unit calendar arithmetic, and it stays
 	// right for the irregular units too (a week, a ten-day span whose last one runs 8-11 days).
-	const wxDateTime curStart  = ibTruncateToPeriod(wxDateTime::Now(), spec.m_periodUnit);
-	const wxDateTime prevStart = ibTruncateToPeriod(curStart - wxTimeSpan::Seconds(1), spec.m_periodUnit);
+	const ibDateTime curStart  = ibDateTime::Now().BeginOfPeriod(spec.m_periodUnit);
+	const ibDateTime prevStart = curStart.AddMilliseconds(-1000).BeginOfPeriod(spec.m_periodUnit);
 
 	// Both sides are drained the same way — one entry per key, the accumulations in declaration
 	// order — so the comparison below comes down to two maps of the same shape.

@@ -183,7 +183,7 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	{ ibValue v(wxString(wxT("")));          src.m_listConst.push_back(v); }
 	{
 		ibValue v(ibValueTypes::TYPE_DATE);
-		v.m_dData = (wxLongLong_t)1714639200; // arbitrary epoch seconds
+		v.m_dData = ibDateTime(1714639200ll); // an arbitrary raw count - the cache stores the number
 		src.m_listConst.push_back(v);
 	}
 
@@ -206,7 +206,7 @@ TEST(ByteCodeAOT, ListConstAllPrimitives) {
 	EXPECT_EQ(dst.m_listConst[7].m_typeClass, ibValueTypes::TYPE_STRING);
 	EXPECT_TRUE(dst.m_listConst[7].GetString().IsEmpty());
 	EXPECT_EQ(dst.m_listConst[8].m_typeClass, ibValueTypes::TYPE_DATE);
-	EXPECT_EQ(dst.m_listConst[8].m_dData,     (wxLongLong_t)1714639200);
+	EXPECT_EQ(dst.m_listConst[8].m_dData.GetValue(), 1714639200ll);
 }
 
 // Number with > 14 digits forces ibNumber's heap tier — round-trip must
@@ -292,7 +292,7 @@ TEST(ByteCodeAOT, ConstTypeTagRoundTripsThroughAOT) {
 	src.m_listConst.push_back(ibValue(7));
 	{
 		ibValue v(ibValueTypes::TYPE_DATE);
-		v.m_dData = (wxLongLong_t)1700000000;
+		v.m_dData = ibDateTime(1700000000ll);
 		src.m_listConst.push_back(v);
 	}
 	src.m_listConst.push_back(ibValue(wxString(wxT("ünïcödé"))));   // multibyte string payload

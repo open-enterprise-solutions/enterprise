@@ -242,7 +242,7 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 		const ibValue from = ibReadRegisterBound(m_begin).m_date;
 		const ibValue to   = ibReadRegisterBound(m_end).m_date;
 		if (from.GetType() == TYPE_DATE && to.GetType() == TYPE_DATE
-		    && ibRegCalendarOf(from, to, m_fold.m_unit).empty() && !from.GetDateTime().IsLaterThan(to.GetDateTime()))
+		    && ibRegCalendarOf(from, to, m_fold.m_unit).empty() && from.GetDate() <= to.GetDate())
 			return true;
 	}
 
@@ -733,13 +733,13 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	const ibValue beginDate = ibReadRegisterBound(cBegin).m_date;
 	const ibValue endDate   = ibReadRegisterBound(cEnd).m_date;
 	const bool calendarFold = withSign && periodCol != nullptr && cFold.IsCalendar();
-	const wxDateTime firstPeriod = calendarFold && beginDate.GetType() == TYPE_DATE
-		? ibTruncateToPeriod(beginDate.GetDateTime(), cFold.m_unit) : wxDateTime();
+	const bool firstPeriodKnown = calendarFold && beginDate.GetType() == TYPE_DATE;
+	const ibDateTime firstPeriod = firstPeriodKnown ? beginDate.GetDate().BeginOfPeriod(cFold.m_unit) : ibDateTime();
 	for (const auto& entry : opening) {
 		if (groupIndex.find(entry.first) != groupIndex.end())
 			continue;
 		ibPeriodRow carried;
-		if (firstPeriod.IsValid())
+		if (firstPeriodKnown)
 			carried.m_period = ibValue(firstPeriod);
 		// …and at movement grain it stands at the interval's beginning: no document wrote it, but a report by
 		// period still has to find it somewhere — with no date it made a month heading of its own with none.
@@ -749,14 +749,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		carried.m_expense.assign(resources.size(), ibValue());
 		groupFor(entry.first).push_back(std::move(carried));
 	}
-	if (firstPeriod.IsValid() && endDate.GetType() == TYPE_DATE) {
+	if (firstPeriodKnown && endDate.GetType() == TYPE_DATE) {
 		// The same calendar the server grid stands on, uncapped: the live path is where a long one goes.
-		const std::vector<wxDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), endDate, cFold.m_unit, /*maxPeriods*/ 0);
+		const std::vector<ibDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), endDate, cFold.m_unit, /*maxPeriods*/ 0);
 		for (auto& group : groups) {
 			std::unordered_set<ibValue, ibValueHash, ibValueEqual> present;
 			for (const ibPeriodRow& row : group.second)
 				present.insert(row.m_period);
-			for (const wxDateTime& period : calendar) {
+			for (const ibDateTime& period : calendar) {
 				if (present.find(ibValue(period)) == present.end()) {
 					ibPeriodRow still;
 					still.m_period = ibValue(period);
@@ -773,8 +773,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// previous closing), and the order a GROUP BY answers in is the engine's business, not a promise.
 	for (auto& group : groups) {
 		std::stable_sort(group.second.begin(), group.second.end(), [](const ibPeriodRow& a, const ibPeriodRow& b) {
-			// static_cast, not a functional cast: wxLongLong_t is `long long` outside MSVC (docs/portability.md).
-			const auto dateOf = [](const ibValue& v) { return v.GetType() == TYPE_DATE ? v.GetDate() : static_cast<wxLongLong_t>(0); };
+			const auto dateOf = [](const ibValue& v) { return v.GetType() == TYPE_DATE ? v.GetDate() : ibDateTime(); };
 			if (dateOf(a.m_period) != dateOf(b.m_period))
 				return dateOf(a.m_period) < dateOf(b.m_period);
 			// …and at movement grain within one second by the recorder, then the line — the order a TOTALS fold
@@ -968,7 +967,7 @@ std::vector<wxString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 //   at a DOCUMENT              the same, plus the tail that separates documents sharing one instant.
 //
 // The floor is what keeps a movement from being counted twice -- once by the trigger that rolled it
-// into today's total, once by itself. It is computed through `ibTruncateToPeriod`, the RAM twin of
+// into today's total, once by itself. It is computed through `ibDateTime::BeginOfPeriod`, the RAM twin of
 // the truncation the trigger renders, because a floor that disagreed with the stored key by one
 // second would drop or duplicate a whole grain.
 
@@ -1124,7 +1123,7 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
 		r.m_periodUnit = m_fold.m_unit;
 		r.m_fromGrain  = (r.m_from.GetType() == TYPE_DATE && m_fold.IsCalendar())
-			? ibValue(ibTruncateToPeriod(r.m_from.GetDateTime(), m_fold.m_unit))
+			? ibValue(r.m_from.GetDate().BeginOfPeriod(m_fold.m_unit))
 			: r.m_from;
 	}
 	// Same rule as the turnover reading above — and here the opening and closing balances count as
@@ -1158,8 +1157,8 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	// accounting register's periodised reading stands on (ibRegRunningGrid, registerQueryLowering.h). A
 	// register without balances has nothing to carry into an empty period and keeps the window.
 	const bool withSign = (m_reg->GetRegisterType() == ibRegisterType::eBalances);
-	const std::vector<wxDateTime> calendar = (periodised && withSign && m_fold.IsCalendar())
-		? ibRegCalendarOf(r.m_from, r.m_to, m_fold.m_unit) : std::vector<wxDateTime>();
+	const std::vector<ibDateTime> calendar = (periodised && withSign && m_fold.IsCalendar())
+		? ibRegCalendarOf(r.m_from, r.m_to, m_fold.m_unit) : std::vector<ibDateTime>();
 	if (!calendar.empty()) {
 		// The movement per key per period, inside the interval.
 		ibMaterializeReadSpec t = r;

@@ -194,6 +194,22 @@ void ThrowQueryException(unsigned int line, unsigned int col, const wxString& fm
 
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
 
+// `DATETIME(y, m, d[, h, mi, s])` as the date it denotes - the wall-clock reading of the parts
+// (fdatetime.h), settled once for the two roads that fold it (a parameter's value and a projected
+// constant). A day the calendar does not have is refused with the query's own line and column;
+// a month or day written as 0 is read as 1, as it always was.
+static ibValue DateTimeOfParts(const int parts[6], const ibQueryAstExpr& e)
+{
+	const int year = parts[0], month = parts[1] > 0 ? parts[1] : 1, day = parts[2] > 0 ? parts[2] : 1;
+	const int hour = parts[3], minute = parts[4], second = parts[5];
+	if (hour < 0 || minute < 0 || second < 0
+		|| !ibDateTime::IsADate(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
+		                        static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second)))
+		ThrowQueryException(e.m_line, e.m_col, _("DATETIME was given a date that does not exist"));
+	return ibValue(ibDateTime(year, static_cast<unsigned>(month), static_cast<unsigned>(day),
+		static_cast<unsigned>(hour), static_cast<unsigned>(minute), static_cast<unsigned>(second)));
+}
+
 // One resolved source in a query: its alias + queryable. Defined HERE, above the source resolver,
 // because a condition the source CONSUMES is lowered while the source is still being built — see
 // ResolveSource. (Its full role is described where the resolver's column lookup uses it, below.)
@@ -1438,15 +1454,7 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 			const ibValue v = e.m_args[i] ? EvalValue(*e.m_args[i], params) : ibValue();
 			parts[i] = static_cast<int>(v.GetNumber().ToInt());
 		}
-		wxDateTime moment(static_cast<wxDateTime::wxDateTime_t>(parts[2] > 0 ? parts[2] : 1),
-		                  static_cast<wxDateTime::Month>((parts[1] > 0 ? parts[1] : 1) - 1),
-		                  parts[0],
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[3]),
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[4]),
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[5]));
-		if (!moment.IsValid())
-			ThrowQueryException(e.m_line, e.m_col, _("DATETIME was given a date that does not exist"));
-		return ibValue(moment);
+		return DateTimeOfParts(parts, e);
 	}
 	// ⭐⭐ `TYPE(Number)` IS A CONSTANT TOO — a TYPE is an ordinary value here (ibValueType, registered
 	// as `Type`), so the word denotes one exactly as `DATETIME(…)` denotes a date, and it is settled
@@ -2430,15 +2438,7 @@ ibQueryColumnExprPtr BuildScalarCallFromAst(const std::vector<ibSourceBinding>& 
 					_("DATETIME builds a date out of CONSTANTS: give it numbers or parameters, not fields"));
 			parts[i] = static_cast<int>(v.GetNumber().ToInt());
 		}
-		wxDateTime moment(static_cast<wxDateTime::wxDateTime_t>(parts[2] > 0 ? parts[2] : 1),
-		                  static_cast<wxDateTime::Month>((parts[1] > 0 ? parts[1] : 1) - 1),
-		                  parts[0],
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[3]),
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[4]),
-		                  static_cast<wxDateTime::wxDateTime_t>(parts[5]));
-		if (!moment.IsValid())
-			ThrowQueryException(e.m_line, e.m_col, _("DATETIME was given a date that does not exist"));
-		return ibQueryColumnExpr::Const(ibValue(moment));
+		return ibQueryColumnExpr::Const(DateTimeOfParts(parts, e));
 	}
 
 	default:
@@ -6713,7 +6713,7 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
                                            const std::map<wxString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema)
 {
-	return ExecuteImpl(astIn, params, outSchema, ibReadPageRequest{}, nullptr, wxEmptyString);
+	return ExecuteImpl(astIn, params, outSchema, ibReadPageRequest{}, nullptr, nullptr);
 }
 
 ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
@@ -6721,16 +6721,16 @@ ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
                                            std::vector<OutputColumn>& outSchema,
                                            const ibReadPageRequest& page)
 {
-	return ExecuteImpl(astIn, params, outSchema, page, nullptr, wxEmptyString);
+	return ExecuteImpl(astIn, params, outSchema, page, nullptr, nullptr);
 }
 
 ibDataQueryResult ibQueryLowering::Execute(const ibQuerySelect& astIn,
                                            const std::map<wxString, ibValue>& params,
                                            std::vector<OutputColumn>& outSchema,
                                            const ibReadPageRequest& page,
-                                           ibRenderedPageCache& cache, const wxString& signature)
+                                           ibRenderedPageCache& cache, const ibPageSignature& signature)
 {
-	return ExecuteImpl(astIn, params, outSchema, page, &cache, signature);
+	return ExecuteImpl(astIn, params, outSchema, page, &cache, &signature);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -7591,7 +7591,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
                                                const std::map<wxString, ibValue>& params,
                                                std::vector<OutputColumn>& outSchema,
                                                const ibReadPageRequest& pageIn,
-                                               ibRenderedPageCache* cache, const wxString& signature)
+                                               ibRenderedPageCache* cache, const ibPageSignature* signature)
 {
 	// Optimizer pass — negation normalization + FROM-subquery flattening. Works on a
 	// deep clone; the Query value object's cached parse is never mutated. (queryRewrite.h)
@@ -7677,7 +7677,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	// (FOR UPDATE / WITH LOCK) from there. Nothing new below L2: the driver half was built.
 	if (ast.m_forUpdate)
 		page.m_lockForUpdate = true;
-	ibDataQueryResult rows = cache != nullptr && !dedupeOverRow && !sortOverRow ? b.Execute(page, *cache, signature) : b.Execute(page);
+	ibDataQueryResult rows = cache != nullptr && !dedupeOverRow && !sortOverRow ? b.Execute(page, *cache, *signature) : b.Execute(page);
 	if (!computedOverRow.empty())
 		rows.SetComputedOverRow(std::move(computedOverRow));
 	if (dedupeOverRow)

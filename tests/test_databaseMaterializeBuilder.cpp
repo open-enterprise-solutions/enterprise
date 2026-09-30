@@ -546,48 +546,44 @@ TEST(MaterializeRenderer, TheZeroRowTestGoesWhereTheGroupingPutIt) {
 }
 
 // =============================================================================
-// ibNextPeriodStart — where a stored row stops covering.
+// ibDateTime::BeginOfNextPeriod — where a stored row stops covering.
 //
-// The twin of ibTruncateToPeriod, and the reason a reading whose lower boundary falls INSIDE a
+// The twin of BeginOfPeriod, and the reason a reading whose lower boundary falls INSIDE a
 // grain cannot take that grain's stored row. Both walk the calendar rather than adding fixed
 // lengths, because months differ in length and the ten-day bucket that ends a month is not ten
 // days long. An off-by-one here loses or duplicates a whole grain of movements.
 // =============================================================================
 
 TEST(TotalsPeriod, NextDayStartIsTheFollowingMidnight) {
-    const wxDateTime noon(15, wxDateTime::Mar, 2026, 12, 30, 5);
-    EXPECT_EQ(wxDateTime(16, wxDateTime::Mar, 2026),
-              ibNextPeriodStart(noon, ibTotalsPeriod::Day));
+    const ibDateTime noon(2026, 3, 15, 12, 30, 5);
+    EXPECT_EQ(ibDateTime(2026, 3, 16),
+              noon.BeginOfNextPeriod(ibTotalsPeriod::Day));
 }
 
 TEST(TotalsPeriod, NextMonthStartCrossesAMonthOfAnyLength) {
-    EXPECT_EQ(wxDateTime(1, wxDateTime::Mar, 2026),
-              ibNextPeriodStart(wxDateTime(28, wxDateTime::Feb, 2026, 23, 59, 59), ibTotalsPeriod::Month));
-    EXPECT_EQ(wxDateTime(1, wxDateTime::Feb, 2026),
-              ibNextPeriodStart(wxDateTime(31, wxDateTime::Jan, 2026), ibTotalsPeriod::Month));
+    EXPECT_EQ(ibDateTime(2026, 3, 1),
+              ibDateTime(2026, 2, 28, 23, 59, 59).BeginOfNextPeriod(ibTotalsPeriod::Month));
+    EXPECT_EQ(ibDateTime(2026, 2, 1),
+              ibDateTime(2026, 1, 31).BeginOfNextPeriod(ibTotalsPeriod::Month));
 }
 
 // The third ten-day bucket runs to the END of the month, so what follows it is the 1st of the next
 // month — not "ten days later", which would open a fourth bucket the truncation never produces.
 TEST(TotalsPeriod, TheLastTenDayBucketIsFollowedByTheNextMonth) {
-    EXPECT_EQ(wxDateTime(1, wxDateTime::Feb, 2026),
-              ibNextPeriodStart(wxDateTime(31, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
-    EXPECT_EQ(wxDateTime(11, wxDateTime::Jan, 2026),
-              ibNextPeriodStart(wxDateTime(5, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
-    EXPECT_EQ(wxDateTime(21, wxDateTime::Jan, 2026),
-              ibNextPeriodStart(wxDateTime(20, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
+    EXPECT_EQ(ibDateTime(2026, 2, 1),
+              ibDateTime(2026, 1, 31).BeginOfNextPeriod(ibTotalsPeriod::TenDays));
+    EXPECT_EQ(ibDateTime(2026, 1, 11),
+              ibDateTime(2026, 1, 5).BeginOfNextPeriod(ibTotalsPeriod::TenDays));
+    EXPECT_EQ(ibDateTime(2026, 1, 21),
+              ibDateTime(2026, 1, 20).BeginOfNextPeriod(ibTotalsPeriod::TenDays));
 }
 
 // A moment already ON a grain edge still moves to the NEXT one: the reading that asks for it wants
 // the grain it starts, not the one it ends.
 TEST(TotalsPeriod, AMomentOnTheEdgeStillMovesForward) {
-    const wxDateTime midnight(3, wxDateTime::Apr, 2026);
-    EXPECT_EQ(midnight, ibTruncateToPeriod(midnight, ibTotalsPeriod::Day));
-    EXPECT_EQ(wxDateTime(4, wxDateTime::Apr, 2026), ibNextPeriodStart(midnight, ibTotalsPeriod::Day));
-}
-
-TEST(TotalsPeriod, AnInvalidMomentStaysInvalid) {
-    EXPECT_FALSE(ibNextPeriodStart(wxDateTime(), ibTotalsPeriod::Day).IsValid());
+    const ibDateTime midnight(2026, 4, 3);
+    EXPECT_EQ(midnight, midnight.BeginOfPeriod(ibTotalsPeriod::Day));
+    EXPECT_EQ(ibDateTime(2026, 4, 4), midnight.BeginOfNextPeriod(ibTotalsPeriod::Day));
 }
 
 // ---------------------------------------------------------------------------

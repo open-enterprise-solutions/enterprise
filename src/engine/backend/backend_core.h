@@ -19,6 +19,7 @@ extern BACKEND_API const char* GetBuildStamp();
 #include "guid.h"
 #include "clsid.h"
 #include "fnumber.h"
+#include "fdatetime.h"
 #include "fstring.h"
 #include "typeconv.h"
 #include "stringUtils.h"
@@ -40,9 +41,7 @@ constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 //*                                 Special structures                                      *
 //*******************************************************************************************
 
-#define emptyDate -62135604000000ll
-
-// ⭐⭐ THE MEMBER NUMBER THAT MEANS "NO MEMBER" — the enumeration's emptyDate.
+// ⭐⭐ THE MEMBER NUMBER THAT MEANS "NO MEMBER" — the enumeration's empty date.
 //
 // A member's number is whatever its declaration says: 0, 1, 2 — or 50, 51, 52, or any set at all.
 // What holds for EVERY enumeration is the SIGN: members are NON-NEGATIVE, and the negative range is

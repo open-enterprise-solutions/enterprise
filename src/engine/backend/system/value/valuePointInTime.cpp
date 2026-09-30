@@ -11,7 +11,7 @@ ibValuePointInTime::ibValuePointInTime() : ibValueStaticMembers(ibValueTypes::TY
 {
 }
 
-ibValuePointInTime::ibValuePointInTime(const wxDateTime& date, const ibValue& reference)
+ibValuePointInTime::ibValuePointInTime(const ibDateTime& date, const ibValue& reference)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_date(date), m_reference(reference)
 {
 }
@@ -28,7 +28,7 @@ bool ibValuePointInTime::Init(ibValue** paParams, const long lSizeArray)
 	if (paParams[0]->GetType() != ibValueTypes::TYPE_DATE)
 		return false;   // a moment with no date is not a moment
 
-	m_date = paParams[0]->GetDateTime();
+	m_date = paParams[0]->GetDate();
 	if (lSizeArray == 2 && !paParams[1]->IsEmpty())
 		m_reference = *paParams[1];
 
@@ -37,11 +37,11 @@ bool ibValuePointInTime::Init(ibValue** paParams, const long lSizeArray)
 
 ibString ibValuePointInTime::GetString() const
 {
-	if (!m_date.IsValid())
-		return wxEmptyString;
+	if (IsEmpty())
+		return ibString();
 
-	const wxString date = m_date.Format(wxT("%d.%m.%Y %H:%M:%S"));
-	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString().ToWxString();
+	const ibString date = m_date.ToString();   // the date's own text (fdatetime.h)
+	return m_reference.IsEmpty() ? date : date + wxT(", ") + m_reference.GetString();
 }
 
 // ⭐ THE DATE FIRST, THE REFERENCE INSIDE IT.
@@ -55,19 +55,18 @@ ibString ibValuePointInTime::GetString() const
 // is not set. One order, not two.
 int ibValuePointInTime::CompareValueLS(const ibValue& cParam) const
 {
-	wxDateTime otherDate;
+	ibDateTime otherDate;
 	ibValuePointInTime* other = nullptr;
 
 	if (cParam.ConvertToValue(other) && other != nullptr)
 		otherDate = other->m_date;
 	else if (cParam.GetType() == ibValueTypes::TYPE_DATE)
-		otherDate = cParam.GetDateTime();
+		otherDate = cParam.GetDate();
 	else
 		return ibValue::CompareValueLS(cParam);   // not a moment at all -- the base decides
 
-	if (m_date.IsValid() != otherDate.IsValid())
-		return m_date.IsValid() ? 1 : -1;         // an unset moment is the smallest, as NULL is
-	if (m_date.IsValid() && m_date != otherDate)
+	// An unset moment IS the empty date, the smallest reading there is, so NULL's rule holds by itself.
+	if (m_date != otherDate)
 		return m_date < otherDate ? -1 : 1;
 
 	const ibValue otherRef = other != nullptr ? other->m_reference : ibValue();
@@ -103,7 +102,7 @@ bool ibValuePointInTime::CompareValueNE(const ibValue& cParam) const
 // available while a bare date has to land in that bucket as well.
 size_t ibValuePointInTime::GetValueHash() const
 {
-	if (!m_date.IsValid())
+	if (IsEmpty())
 		return 0;   // an unset moment is the smallest, exactly as NULL is
 	return ibValue(m_date).GetValueHash();
 }
@@ -132,7 +131,7 @@ bool ibValuePointInTime::SetPropVal(const long lPropNum, const ibValue& varPropV
 	switch (lPropNum)
 	{
 	case eDate:
-		m_date = varPropVal.GetDateTime();
+		m_date = varPropVal.GetDate();
 		return true;
 	case eRef:
 		m_reference = varPropVal;

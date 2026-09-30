@@ -135,7 +135,7 @@ void ibPreparedStatementSQLite::SetParamNumber(int nPosition, const ibNumber &db
 	}
 }
 
-void ibPreparedStatementSQLite::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementSQLite::SetParamString(int nPosition, const ibString& strValue)
 {
 	ResetErrorCodes();
 
@@ -190,39 +190,26 @@ void ibPreparedStatementSQLite::SetParamBlob(int nPosition, const void* pData, l
 	}
 }
 
-void ibPreparedStatementSQLite::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementSQLite::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	ResetErrorCodes();
 
-	if (dateValue.IsValid())
+	// SQLite keeps a date as text, and the text is the reading's parts spelled the ISO way (fdatetime.h) -
+	// what ibDateTime::FromString reads back, and what the reference `strftime` forms in the dialect expect.
+	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
+	if (nIndex > -1)
 	{
-		int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-		if (nIndex > -1)
+		sqlite3_reset(m_Statements[nIndex]);
+		ibDateTimeParts p;
+		dateValue.ToParts(p);
+		wxCharBuffer valueBuffer = ConvertToUnicodeStream(wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"),
+			p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
+		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
+		if (nReturn != SQLITE_OK)
 		{
-			sqlite3_reset(m_Statements[nIndex]);
-			wxCharBuffer valueBuffer = ConvertToUnicodeStream(dateValue.Format(wxT("%Y-%m-%d %H:%M:%S")));
-			int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
-			if (nReturn != SQLITE_OK)
-			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
-				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
-				ThrowDatabaseException();
-			}
-		}
-	}
-	else
-	{
-		int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-		if (nIndex > -1)
-		{
-			sqlite3_reset(m_Statements[nIndex]);
-			int nReturn = sqlite3_bind_null(m_Statements[nIndex], nPosition);
-			if (nReturn != SQLITE_OK)
-			{
-				SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
-				SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
-				ThrowDatabaseException();
-			}
+			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn));
+			SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg(m_pDatabase)));
+			ThrowDatabaseException();
 		}
 	}
 }

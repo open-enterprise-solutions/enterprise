@@ -105,7 +105,7 @@ void ibDialogActiveUser::RefreshLocksTable()
 			r.lockMode == ibLockMode::Shared ? _("Shared") : _("Exclusive"));
 		m_locksTable->SetItem(index, 3, r.userName);
 		m_locksTable->SetItem(index, 4,
-			r.acquiredAt.IsValid() ? r.acquiredAt.FormatISOCombined() : wxString());
+			!r.acquiredAt.IsEmpty() ? r.acquiredAt.ToWxDateTime().FormatISOCombined() : wxString());
 		m_locksTable->SetItem(index, 5, r.lockGuid.str());
 
 		if (!selectedGuid.IsEmpty() && r.lockGuid.str() == selectedGuid)

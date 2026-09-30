@@ -519,7 +519,7 @@ void BindingsChanged() noexcept
 ibSession::ibSession(wxString id, ibSessionKind kind)
 	: m_id(std::move(id))
 	, m_kind(kind)
-	, m_workDate(wxDateTime::Now())
+	, m_workDate(ibDateTime::Now())
 {
 }
 

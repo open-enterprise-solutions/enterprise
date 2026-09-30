@@ -611,6 +611,19 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 {
 	ibReaderMemory reader(buffer);
 
+	// The form of the dates in the rows (chunk 3, DumpDataToBuffer): a dump made before 2026-09 has
+	// no such chunk and carried instants of the dumping machine's clock; the mover reads each form
+	// as the date it is (ibDataMover::DateOfWire). A form this build does not know is a newer one.
+	ibDataMover::DateForm dates = ibDataMover::DateForm::Instant;
+	wxMemoryBuffer bufferForm;
+	if (reader.r_chunk(3, bufferForm)) {
+		ibReaderMemory readerForm(bufferForm);
+		const u32 form = readerForm.r_u32();
+		if (form > static_cast<u32>(ibDataMover::DateForm::DateTime))
+			ibBackendCoreException::Error(_("The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."), form);
+		dates = static_cast<ibDataMover::DateForm>(form);
+	}
+
 	//common data
 	wxMemoryBuffer bufferData;
 
@@ -627,7 +640,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 			wxMemoryBuffer tableBuffer;
 			if (readerData.r_chunk(table.m_id, tableBuffer)) {
 				ibReaderMemory rows(tableBuffer);
-				if (!ibDataMover::Restore(table, rows))
+				if (!ibDataMover::Restore(table, rows, dates))
 					return false;
 			}
 		}
@@ -683,6 +696,12 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	ibWriterMemory writerSequence;
 	if (SaveSequenceToBuffer(writerSequence))
 		writer.w_chunk(2, writerSequence.buffer());
+
+	// The form of the dates in chunk 1 (ibDataMover::DateForm): an ibDateTime's count. A dump without
+	// this chunk carried instants, and RestoreDataFromBuffer reads it as one.
+	ibWriterMemory writerForm;
+	writerForm.w_u32(static_cast<u32>(ibDataMover::DateForm::DateTime));
+	writer.w_chunk(3, writerForm.buffer());
 
 	buffer = writer.buffer();
 	return true;

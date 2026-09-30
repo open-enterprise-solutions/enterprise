@@ -85,7 +85,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 
 		m_configNew = false;
 
-		m_metaGuid = result.GetResultString(wxT("file_guid"));
+		m_metaGuid = ibGuid(result.GetResultString(wxT("file_guid")));
 		m_md5Hash = ibMD5::ComputeMd5(wxBase64Encode(binaryData.GetData(), binaryData.GetDataLen()));
 	}
 

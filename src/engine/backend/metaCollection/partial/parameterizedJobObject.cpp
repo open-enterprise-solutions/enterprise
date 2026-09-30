@@ -147,10 +147,10 @@ bool ibValueRecordDataObjectParameterizedJob::GetValueByMetaID(const ibMetaID& i
 			return true;
 		}
 
-		const wxDateTime lastRun = ibJobManager::ReadSharedLastRun(m_objGuid);
+		const ibDateTime lastRun = ibJobManager::ReadSharedLastRun(m_objGuid);
 
 		if (id == metaJob->GetDataLastRun()->GetMetaID()) {
-			pvarMetaVal = lastRun.IsValid() ? ibValue(lastRun) : ibValue(ibValueTypes::TYPE_DATE);
+			pvarMetaVal = !lastRun.IsEmpty() ? ibValue(lastRun) : ibValue(ibValueTypes::TYPE_DATE);
 			return true;
 		}
 
@@ -163,12 +163,12 @@ bool ibValueRecordDataObjectParameterizedJob::GetValueByMetaID(const ibMetaID& i
 			return true;
 		}
 
-		const wxDateTime nextRun = ibValueMetaObjectParameterizedJob::ComputeNextRun(schedule->GetSchedule(), lastRun);
+		const ibDateTime nextRun = ibValueMetaObjectParameterizedJob::ComputeNextRun(schedule->GetSchedule(), lastRun);
 
-		// An INVALID answer means the calendar names no moment within a year — a schedule naming,
+		// An EMPTY answer means the calendar names no moment within a year — a schedule naming,
 		// say, February 31st. It reads as the empty date, which is a thing to SEE on the card
 		// rather than a job that quietly never runs.
-		pvarMetaVal = nextRun.IsValid() ? ibValue(nextRun) : ibValue(ibValueTypes::TYPE_DATE);
+		pvarMetaVal = !nextRun.IsEmpty() ? ibValue(nextRun) : ibValue(ibValueTypes::TYPE_DATE);
 		return true;
 	}
 

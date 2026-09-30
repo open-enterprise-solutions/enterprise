@@ -36,7 +36,7 @@ public:
 	// per signature, rebind the anchor per tick. Non-DB providers fall back to a plain
 	// read (the default).
 	virtual ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& page,
-	                                            ibRenderedPageCache& /*cache*/, const wxString& /*signature*/)
+	                                            ibRenderedPageCache& /*cache*/, const ibPageSignature& /*signature*/)
 	{
 		return ExecuteRead(spec, page);
 	}
@@ -160,7 +160,7 @@ class BACKEND_API ibQueryComposer
 public:
 	static ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 	static ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& page,
-	                                           ibRenderedPageCache& cache, const wxString& signature);
+	                                           ibRenderedPageCache& cache, const ibPageSignature& signature);
 	static ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec);
 	// Paged single-level group read (door SelectAggregatePage): server-side GROUP BY + keyset + LIMIT when the
 	// shape is pageable (ibDbTableProvider::CanPageGroupLevel), else the unpaged ExecuteAggregate (all groups).

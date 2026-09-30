@@ -846,8 +846,8 @@ WFRONTEND_API std::string wfrontendLocksJSON()
 				{ "namespace",   r.namespaceName.ToStdString(wxConvUTF8) },
 				{ "key",         r.keyData.ToStdString(wxConvUTF8) },
 				{ "mode",        r.lockMode == ibLockMode::Shared ? "Shared" : "Exclusive" },
-				{ "acquiredAt",  r.acquiredAt.IsValid()
-				                    ? r.acquiredAt.FormatISOCombined().ToStdString(wxConvUTF8)
+				{ "acquiredAt",  !r.acquiredAt.IsEmpty()
+				                    ? r.acquiredAt.ToWxDateTime().FormatISOCombined().ToStdString(wxConvUTF8)
 				                    : std::string() },
 				{ "user",        r.userName.ToStdString(wxConvUTF8) },
 				{ "computer",    r.computer.ToStdString(wxConvUTF8) },

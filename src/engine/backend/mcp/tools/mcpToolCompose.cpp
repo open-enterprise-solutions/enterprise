@@ -769,7 +769,7 @@ public:
 			// it, and two people may well use the same word for different things.
 			node->SetValue(wxT("id"), wxString(entry.m_id));
 			node->SetValue(wxT("name"), entry.m_name);
-			if (entry.m_changed.IsValid())
+			if (!entry.m_changed.IsEmpty())
 				node->SetValue(wxT("changed"), entry.m_changed);
 			if (preferred.isValid() && entry.m_id == preferred)
 				node->SetValue(wxT("default"), true);   // …and this is the one running right now

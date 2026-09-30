@@ -18,10 +18,10 @@
 
 namespace {
 
-// A local moment, spelled the way a schedule reads it.
-wxDateTime At(int year, wxDateTime::Month month, int day, int hour = 0, int minute = 0)
+// A wall-clock reading, spelled the way a schedule reads it (wx's month names, January = 0).
+ibDateTime At(int year, wxDateTime::Month month, unsigned day, unsigned hour = 0, unsigned minute = 0)
 {
-	return wxDateTime(day, month, year, hour, minute, 0);
+	return ibDateTime(year, static_cast<unsigned>(month) + 1, day, hour, minute);
 }
 
 } // namespace
@@ -188,7 +188,7 @@ TEST(JobSchedule, NextAllowedAfter_ReturnsTheMomentItselfWhenAlreadyAllowed)
 	// "Not before", never "only at": a moment that already qualifies IS the next
 	// allowed one. This is what lets a missed night run late instead of vanishing.
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
-	const wxDateTime inside = At(2026, wxDateTime::Aug, 3, 3, 0);
+	const ibDateTime inside = At(2026, wxDateTime::Aug, 3, 3, 0);
 	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, inside), inside);
 }
 
@@ -198,8 +198,7 @@ TEST(JobSchedule, NextAllowedAfter_KeepsSecondsWhenTheCalendarAllows)
 	// "at or after" means exactly that. Rounding up to the next whole minute (which the search does
 	// once the calendar refuses) turned "every 4 seconds" into one run a minute, on the :00.
 	ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(4);
-	wxDateTime moment = At(2026, wxDateTime::Aug, 3, 10, 0);
-	moment.SetSecond(37);
+	const ibDateTime moment = At(2026, wxDateTime::Aug, 3, 10, 0).AddMilliseconds(37 * 1000);
 	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, moment), moment);
 }
 
@@ -208,16 +207,15 @@ TEST(JobSchedule, NextAllowedAfter_StillRoundsToTheMinuteWhenItHasToSearch)
 	// The other half of the same rule: a REFUSED moment starts the walk at the next whole minute,
 	// because minutes are all the calendar's own fields can name.
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
-	wxDateTime outside = At(2026, wxDateTime::Aug, 3, 9, 0);
-	outside.SetSecond(37);
+	const ibDateTime outside = At(2026, wxDateTime::Aug, 3, 9, 0).AddMilliseconds(37 * 1000);
 	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, outside), At(2026, wxDateTime::Aug, 4, 2, 0));
 }
 
 TEST(JobSchedule, NextAllowedAfter_MovesForwardToTheWindow)
 {
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
-	const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(s, At(2026, wxDateTime::Aug, 3, 9, 0));
-	ASSERT_TRUE(next.IsValid());
+	const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, At(2026, wxDateTime::Aug, 3, 9, 0));
+	ASSERT_FALSE(next.IsEmpty());
 	EXPECT_EQ(next, At(2026, wxDateTime::Aug, 4, 2, 0));   // the following night
 }
 
@@ -227,8 +225,8 @@ TEST(JobSchedule, NextAllowedAfter_HonoursTheWeekdayMask)
 	s.m_daysOfWeek = ibJobWeekDay_Monday;
 
 	// From Tuesday morning the next allowed moment is the following Monday 02:00.
-	const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(s, At(2026, wxDateTime::Aug, 4, 9, 0));
-	ASSERT_TRUE(next.IsValid());
+	const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(s, At(2026, wxDateTime::Aug, 4, 9, 0));
+	ASSERT_FALSE(next.IsEmpty());
 	EXPECT_EQ(next, At(2026, wxDateTime::Aug, 10, 2, 0));
 }
 
@@ -336,12 +334,64 @@ TEST(JobSchedule, Buffer_RoundTripsEveryField)
 	EXPECT_EQ(dst.m_activeTo,     src.m_activeTo);
 }
 
+// A blob written under version 1 (before 2026-09) holds instants - ms of real time - and one written
+// under version 2 the wall reading counted from 1970, where version 3 holds an ibDateTime's count. Each
+// reads its dates by its byte, and an empty one stays empty. The older blobs here are the version-3 one
+// with its byte lowered: the numbers stay, their meaning changes with the byte, which is what the byte
+// is for.
+TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
+{
+	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
+	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
+	src.m_activeFrom   = At(2026, wxDateTime::Jan, 1);
+	ASSERT_TRUE(src.m_activeTo.IsEmpty());
+
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
+	ASSERT_GT(blob.GetDataLen(), 0u);
+	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
+	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
+	bytes[0] = 1;
+
+	ibJobScheduleDescription dst;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
+	// The stored number is the count of the anchor's reading; under version 1 it is an instant, read
+	// back as the reading of its local parts.
+	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
+	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
+	EXPECT_TRUE(dst.m_activeTo.IsEmpty());
+	EXPECT_EQ(src.m_intervalSeconds, dst.m_intervalSeconds);
+
+	bytes[0] = 4;
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst)) << "a version this build does not know";
+}
+
+TEST(JobSchedule, Buffer_ReadsAVersionTwoBlobsDatesFrom1970)
+{
+	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
+	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
+	ASSERT_TRUE(src.m_activeTo.IsEmpty());
+
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
+	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
+	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
+	bytes[0] = 2;
+
+	ibJobScheduleDescription dst;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
+	// The same number, counted from 1970-01-01 instead of from the empty date.
+	const long long stored = src.m_periodAnchor.GetValue();
+	EXPECT_EQ(ibDateTime(1970, 1, 1).AddMilliseconds(stored), dst.m_periodAnchor);
+	EXPECT_TRUE(dst.m_activeTo.IsEmpty()) << "0 is unbounded in every version";
+}
+
 TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
 {
 	// An empty date is a legitimate value — "no validity range" — and it must not come back as
 	// some epoch moment, which would gate the job to a range nobody declared.
 	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
-	ASSERT_FALSE(src.m_activeFrom.IsValid());
+	ASSERT_TRUE(src.m_activeFrom.IsEmpty());
 
 	wxMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
@@ -350,9 +400,9 @@ TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
 	dst.m_activeFrom = At(2020, wxDateTime::Jan, 1);   // dirty, to prove the read overwrites it
 	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
 
-	EXPECT_FALSE(dst.m_activeFrom.IsValid());
-	EXPECT_FALSE(dst.m_activeTo.IsValid());
-	EXPECT_FALSE(dst.m_periodAnchor.IsValid());
+	EXPECT_TRUE(dst.m_activeFrom.IsEmpty());
+	EXPECT_TRUE(dst.m_activeTo.IsEmpty());
+	EXPECT_TRUE(dst.m_periodAnchor.IsEmpty());
 }
 
 TEST(JobSchedule, Buffer_RefusesWhatItCannotRead)

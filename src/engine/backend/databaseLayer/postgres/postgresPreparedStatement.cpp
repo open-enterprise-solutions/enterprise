@@ -107,7 +107,7 @@ void ibPreparedStatementPostgres::SetParamNumber(int nPosition, const ibNumber& 
 	}
 }
 
-void ibPreparedStatementPostgres::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementPostgres::SetParamString(int nPosition, const ibString& strValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
 	if (nIndex > -1)
@@ -134,12 +134,14 @@ void ibPreparedStatementPostgres::SetParamBlob(int nPosition, const void* pData,
 	}
 }
 
-void ibPreparedStatementPostgres::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementPostgres::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
 	if (nIndex > -1)
 	{
-		m_Statements[nIndex].SetParam(nPosition, dateValue);
+		ibDateTimeParts parts;
+		dateValue.ToParts(parts);
+		m_Statements[nIndex].SetParam(nPosition, parts);
 	}
 }
 

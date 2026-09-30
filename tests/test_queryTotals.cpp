@@ -592,11 +592,10 @@ namespace {
 
 ibValue Moment(int year, int month, int day)
 {
-	return ibValue(wxDateTime(static_cast<wxDateTime::wxDateTime_t>(day),
-	                          static_cast<wxDateTime::Month>(month - 1), year, 12, 0, 0));
+	return ibValue(ibDateTime(year, static_cast<unsigned>(month), static_cast<unsigned>(day), 12, 0, 0));
 }
 
-int MonthOf(const ibValue& v) { return static_cast<int>(v.GetDateTime().GetMonth()) + 1; }
+int MonthOf(const ibValue& v) { return static_cast<int>(v.GetDate().GetPart(ibDatePart::Month)); }
 
 } // namespace
 

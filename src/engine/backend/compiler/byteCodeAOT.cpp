@@ -238,7 +238,9 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    `AnyRef` / `CatalogRef` are spelled in those bits (any metaID) instead of a name hash. A blob keeps the
 //    class ids its code was compiled against — a declared type, a `New` — and a v33 one names classes that
 //    are registered under other ids now.
-constexpr uint16_t kAOTFormatVersion = 34;
+// 🛑 34 -> 35 (2026-09-30): A DATE CONSTANT IS AN ibDateTime (fdatetime.h) - a wall-clock reading counted from the
+//    empty date - where a v34 blob holds an instant of the compiling machine's clock.
+constexpr uint16_t kAOTFormatVersion = 35;
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -325,7 +327,7 @@ bool WriteConstValue(ibWriterMemory& w, const ibValue& v) {
 		return true;
 	}
 	case ibValueTypes::TYPE_DATE:
-		w.w_s64((int64_t)v.m_dData);
+		w.w_s64(v.m_dData.GetValue());
 		return true;
 	case ibValueTypes::TYPE_STRING:
 		w.w_stringZ(v.GetString());
@@ -367,7 +369,7 @@ bool ReadConstValue(const ibReaderMemory& r, ibValue& v) {
 		break;
 	}
 	case ibValueTypes::TYPE_DATE:
-		v.m_dData = (wxLongLong_t)r.r_s64();
+		v.m_dData = ibDateTime(r.r_s64());
 		break;
 	case ibValueTypes::TYPE_STRING:
 		v.SetString(r.r_stringZ());

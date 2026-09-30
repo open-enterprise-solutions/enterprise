@@ -23,8 +23,10 @@ wxString ibSessionSnapshot::GetSession(unsigned int idx) const {
 wxString ibSessionSnapshot::GetStartedDate(unsigned int idx) const {
 	if (idx > m_listSession.size())
 		return wxEmptyString;
-	const wxDateTime& startedDate = m_listSession[idx].m_startedDate;
-	return startedDate.Format(wxT("%d.%m.%Y %H:%M:%S"));
+	const ibDateTime& startedDate = m_listSession[idx].m_startedDate;
+	if (startedDate.IsEmpty())
+		return wxEmptyString;
+	return startedDate.ToString().ToWxString();
 }
 
 wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {

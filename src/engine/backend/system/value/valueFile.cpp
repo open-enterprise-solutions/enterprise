@@ -47,7 +47,7 @@ bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 			((!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists()));
 		return true;
 		//case enGetHidden: break;
-	case enGetModificationTime: pvarRetValue = strFileName.GetModificationTime();
+	case enGetModificationTime: pvarRetValue = ibDateTime::OfWxDateTime(strFileName.GetModificationTime());   // the file system's instant, by its local parts
 		return true;
 	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 &&
 		((!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable()));

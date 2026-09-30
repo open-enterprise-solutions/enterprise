@@ -6,9 +6,6 @@
 #include "value.h"
 #include "backend/backend_exception.h"
 
-#include <wx/datetime.h>
-#include <wx/longlong.h>
-
 
 //**********************************************************************
 //*                       Value implementation                         *
@@ -75,21 +72,21 @@ BACKEND_API const ibValue wxEmptyValue;
 //**********************************************************************
 
 ibValue::ibValue()
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	DEBUG_VALUE_CREATE();
 }
 
 //copy constructor:
 ibValue::ibValue(const ibValue& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	Copy(varValue);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValue&& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	Move(std::move(varValue));
 	DEBUG_VALUE_CREATE();
@@ -115,30 +112,15 @@ ibValue::ibValue(ibBackendValue* pParam)
 	DEBUG_VALUE_CREATE();
 }
 
-ibValue::ibValue(const wxDateTime& cParam)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData(0)
-{
-	const wxLongLong& llData = cParam.GetValue();
-	m_dData = llData.GetValue();
-	DEBUG_VALUE_CREATE();
-}
-
 ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
-	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData()
 {
-	wxDateTime dataVal(nDay, (wxDateTime::Month)(nMonth - 1), nYear, nHour, nMinute, nSecond);
-	if (dataVal.IsValid()) {
-		const wxLongLong& llData = dataVal.GetValue();
-		m_dData = llData.GetValue();
-	}
-	else {
-		m_dData = emptyDate;   // no such day is the empty date, not whatever the storage held
-	}
+	m_dData.FromParts(nYear, nMonth, nDay, nHour, nMinute, nSecond);   // no such day leaves the empty date
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibValueTypes type, bool readOnly)
-	: m_typeClass(type), m_bReadOnly(readOnly), m_refCount(0), m_dData(0)
+	: m_typeClass(type), m_bReadOnly(readOnly), m_refCount(0), m_dData()
 {
 	switch (type)
 	{
@@ -149,8 +131,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 		m_fData.SetZero();
 		break;
 	case TYPE_DATE:
-		m_dData = emptyDate;
-		break;
+		break;      // the zeroed word IS the empty date
 	case TYPE_STRING:
 		break;      // the zeroed word IS the empty string
 	default:
@@ -164,7 +145,7 @@ ibValue::ibValue(ibValueTypes type, bool readOnly)
 //Constructors by types:
 #define CVALUE_BYTYPE(v_parclass, v_type, v_value) \
 ibValue::ibValue (v_parclass cParam) \
-    : m_typeClass(v_type), m_bReadOnly(false), m_refCount(0), m_dData(0) \
+    : m_typeClass(v_type), m_bReadOnly(false), m_refCount(0), m_dData() \
 {\
 	v_value = cParam;\
 	DEBUG_VALUE_CREATE();\
@@ -177,35 +158,35 @@ CVALUE_BYTYPE(unsigned int, ibValueTypes::TYPE_NUMBER, m_fData);
 CVALUE_BYTYPE(double, ibValueTypes::TYPE_NUMBER, m_fData);
 CVALUE_BYTYPE(const ibNumber&, ibValueTypes::TYPE_NUMBER, m_fData);
 
-CVALUE_BYTYPE(wxLongLong_t, ibValueTypes::TYPE_DATE, m_dData);
+CVALUE_BYTYPE(const ibDateTime&, ibValueTypes::TYPE_DATE, m_dData);
 
 // String ctors — the text goes into the union's word as it is (a copy of an
 // ibString is one more owner, not the characters); the empty string is the
 // zeroed word itself. char* keeps the historical wxString(char*) conversion
 // (NOT ibString's UTF-8 path).
 ibValue::ibValue(const char* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	if (cParam && *cParam) m_sData = ibString(wxString(cParam));
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wchar_t* cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(const wxString& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam);
 	DEBUG_VALUE_CREATE();
 }
 
 ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime string functions)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData(0)
+	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = std::move(cParam);
 	DEBUG_VALUE_CREATE();
@@ -250,7 +231,7 @@ void ibValue::Reset()
 	// m_bReadOnly, so the write-denied guard above doesn't fire for it either.
 
 	m_typeClass = ibValueTypes::TYPE_EMPTY;
-	m_dData = 0;   // the WHOLE word: the empty state of every member (value.h, the union)
+	m_dData = ibDateTime();   // the WHOLE word: the empty state of every member (value.h, the union)
 }
 
 //methods:
@@ -431,16 +412,7 @@ void ibValue::operator = (const ibNumber& cParam)
 	m_fData = cParam;
 }
 
-void ibValue::operator = (const wxDateTime& cParam)
-{
-	Reset();
-
-	m_typeClass = ibValueTypes::TYPE_DATE;
-	const wxLongLong& llData = cParam.GetValue();
-	m_dData = llData.GetValue();
-}
-
-void ibValue::operator = (wxLongLong_t cParam)
+void ibValue::operator = (const ibDateTime& cParam)
 {
 	Reset();
 
@@ -507,7 +479,7 @@ void ibValue::operator = (ibValueTypes type)
 		m_sData.~ibString();
 	else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
 		m_fData.~ibNumber();
-	m_dData = 0;
+	m_dData = ibDateTime();
 
 	switch (type)
 	{
@@ -517,8 +489,7 @@ void ibValue::operator = (ibValueTypes type)
 	case TYPE_NUMBER:
 		break;      // the zeroed word is the number 0
 	case TYPE_DATE:
-		m_dData = emptyDate;
-		break;
+		break;      // the zeroed word is the empty date
 	case TYPE_STRING:
 		break;      // the zeroed word is the empty string
 	default:
@@ -625,28 +596,9 @@ bool ibValue::SetDate(const wxString& strDate)
 
 	Reset();
 
-	wxDateTime strTime; wxLongLong_t dData = emptyDate;
-	if (!strDate.IsEmpty()) {
-		if (strTime.ParseFormat(strDate, "%d.%m.%Y %H:%M:%S")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseFormat(strDate, "%Y%m%d%H%M%S")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseFormat(strDate, "%Y%m%d")) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else if (strTime.ParseDateTime(strDate)) {
-			const wxLongLong& llData = strTime.GetValue();
-			dData = llData.GetValue();
-		}
-		else {
-			return false;
-		}
-	}
+	ibDateTime dData;
+	if (!strDate.IsEmpty() && !dData.FromString(strDate))
+		return false;
 
 	m_typeClass = ibValueTypes::TYPE_DATE;
 	m_dData = dData;
@@ -803,7 +755,8 @@ ibNumber ibValue::GetNumber() const
 		return number;
 	}
 	case ibValueTypes::TYPE_DATE:
-		return m_dData / 1000;
+		// Seconds from the empty date - and GetDate reads a number back the same way.
+		return ibNumber(m_dData.GetValue() / 1000);
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetNumber();
@@ -827,10 +780,8 @@ ibString ibValue::GetString() const
 		return m_fData.ToString();
 	case ibValueTypes::TYPE_STRING:
 		return m_sData;   // the text SHARED — one more owner, no copy
-	case ibValueTypes::TYPE_DATE: {
-		const wxDateTime& dateTime = wxLongLong(m_dData);
-		return dateTime.Format("%d.%m.%Y %H:%M:%S");
-	}
+	case ibValueTypes::TYPE_DATE:
+		return m_dData.ToString();
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		// A REFERENCE TO A STRING IS STILL A STRING: the target shares its text the same way.
@@ -842,34 +793,24 @@ ibString ibValue::GetString() const
 	return GetClassName();
 }
 
-wxLongLong_t ibValue::GetDate() const
+ibDateTime ibValue::GetDate() const
 {
 	switch (m_typeClass)
 	{
-	case ibValueTypes::TYPE_BOOLEAN:
-		return emptyDate;
 	case ibValueTypes::TYPE_NUMBER: {
-		wxLongLong_t dTemp = 0;
-		if (!m_fData.ToInt(dTemp))
-			return dTemp * 1000;
-		return emptyDate;
+		// Seconds from the empty date, the way GetNumber reads a date.
+		long long seconds = 0;
+		if (!m_fData.ToInt(seconds))
+			return ibDateTime().AddMilliseconds(seconds * 1000);
+		return ibDateTime();
 	}
 	case ibValueTypes::TYPE_STRING: {
-		const wxString sData = m_sData.ToWxString();
-		wxDateTime dateTime;
-		if (dateTime.ParseFormat(sData, "%d.%m.%Y %H:%M:%S")) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		else if (dateTime.ParseFormat(sData, "%Y%m%d%H%M%S")) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		else if (dateTime.ParseDateTime(sData)) {
-			const wxLongLong& llData = dateTime.GetValue();
-			return llData.GetValue();
-		}
-		return emptyDate;
+		// The same reading SetDate gives the text - one door for "this text as a date". (This one used
+		// to skip the eight-digit form the setter took, so `"20260315"` was a date when assigned and
+		// the empty date when read.)
+		ibDateTime dData;
+		dData.FromString(m_sData);   // a text that is no date leaves the empty date
+		return dData;
 	}
 	case ibValueTypes::TYPE_DATE:
 		return m_dData;
@@ -877,10 +818,10 @@ wxLongLong_t ibValue::GetDate() const
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetDate();
 	default:
-		break;      // every other type carries no date — emptyDate below
+		break;      // every other type carries no date — the empty one below
 	}
 
-	return emptyDate;
+	return ibDateTime();
 }
 
 ibValue* ibValue::GetRef() const
@@ -900,133 +841,6 @@ void ibValue::ShowValue()
 		return m_pRef->ShowValue();
 }
 
-// THE WALL-CLOCK READING of a held date: the calendar day it shows, counted from 1970-01-01, and the
-// time on that day — as milliseconds of a calendar in which every day is 86400 seconds long. The two
-// day-number conversions are the civil-calendar algorithms (proleptic Gregorian), exact for any year.
-namespace {
-
-long long ibDaysFromCivil(long long year, unsigned month, unsigned day)
-{
-	year -= month <= 2 ? 1 : 0;
-	const long long era = (year >= 0 ? year : year - 399) / 400;
-	const unsigned yoe = static_cast<unsigned>(year - era * 400);
-	const unsigned doy = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
-	const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-	return era * 146097 + static_cast<long long>(doe) - 719468;
-}
-
-void ibCivilFromDays(long long days, int& year, unsigned& month, unsigned& day)
-{
-	days += 719468;
-	const long long era = (days >= 0 ? days : days - 146096) / 146097;
-	const unsigned doe = static_cast<unsigned>(days - era * 146097);
-	const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-	const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-	const unsigned mp = (5 * doy + 2) / 153;
-	day   = doy - (153 * mp + 2) / 5 + 1;
-	month = mp < 10 ? mp + 3 : mp - 9;
-	year  = static_cast<int>(static_cast<long long>(yoe) + era * 400 + (month <= 2 ? 1 : 0));
-}
-
-constexpr long long kMsPerDay = 86400000LL;
-
-long long ibWallOf(wxLongLong_t date)
-{
-	const wxDateTime::Tm tm = wxDateTime(wxLongLong(date)).GetTm();
-	const long long days = ibDaysFromCivil(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday);
-	return days * kMsPerDay
-		+ ((tm.hour * 60LL + tm.min) * 60LL + tm.sec) * 1000LL + tm.msec;
-}
-
-wxLongLong_t ibDateOfWall(long long wall)
-{
-	long long days = wall / kMsPerDay, rest = wall % kMsPerDay;
-	if (rest < 0) { rest += kMsPerDay; --days; }
-	int year = 0; unsigned month = 1, day = 1;
-	ibCivilFromDays(days, year, month, day);
-	const long long seconds = rest / 1000;
-	const wxDateTime moment(static_cast<wxDateTime::wxDateTime_t>(day), static_cast<wxDateTime::Month>(month - 1), year,
-		static_cast<wxDateTime::wxDateTime_t>(seconds / 3600), static_cast<wxDateTime::wxDateTime_t>(seconds / 60 % 60),
-		static_cast<wxDateTime::wxDateTime_t>(seconds % 60), static_cast<wxDateTime::wxDateTime_t>(rest % 1000));
-	return moment.GetValue().GetValue();
-}
-
-} // namespace
-
-wxLongLong_t ibValue::ShiftDate(wxLongLong_t date, wxLongLong_t milliseconds)
-{
-	// A shift that leaves the years a date can be (a date minus another date read as a number of
-	// seconds, say) names no calendar day — the arithmetic it always had answers for it, rather than
-	// a wxDateTime built out of range.
-	static const long long kFirst = ibDaysFromCivil(1, 1, 1) * kMsPerDay;
-	static const long long kLast  = ibDaysFromCivil(10000, 1, 1) * kMsPerDay;
-	const long long wall = ibWallOf(date) + milliseconds;
-	if (wall < kFirst || wall >= kLast)
-		return date + milliseconds;
-	return ibDateOfWall(wall);
-}
-
-wxLongLong_t ibValue::DateSpan(wxLongLong_t later, wxLongLong_t earlier)
-{
-	return ibWallOf(later) - ibWallOf(earlier);
-}
-
-void ibValue::FromDate(int& nYear, int& nMonth, int& nDay) const
-{
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
-}
-
-void ibValue::FromDate(int& nYear, int& nMonth, int& nDay, unsigned short& nHour, unsigned short& nMinute, unsigned short& nSecond) const
-{
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
-	nHour = dateTime.GetHour();
-	nMinute = dateTime.GetMinute();
-	nSecond = dateTime.GetSecond();
-}
-
-void ibValue::FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const
-{
-	const wxLongLong& llData = wxLongLong(GetDate());
-	wxDateTime dateTime(llData);
-
-	// ⚠ THIS SAID `- 1`, WHERE ITS TWO SIBLINGS ABOVE SAY `+ 1`. wxDateTime
-	// numbers months from zero, so January came back as -1 — and the month was
-	// then cast straight back into a wxDateTime to derive everything else, which
-	// made that rebuilt date DECEMBER OF THE PREVIOUS YEAR. Measured on
-	// 2024-01-01: day of year 335, week 49. Every caller of this overload —
-	// GetDayOfWeek / GetDayOfYear / GetWeekOfYear, and BegOfWeek / EndOfWeek,
-	// which build their result out of nMonth — was wrong, and quietly: the
-	// figures look like dates, so nothing raises.
-	nYear = dateTime.GetYear();
-	nMonth = dateTime.GetMonth() + 1;
-	nDay = dateTime.GetDay();
-
-	// And ASK THE DATE, rather than rebuilding one from the parts just taken off
-	// it. The rebuild was what turned one wrong month into three wrong answers.
-	DayOfYear = dateTime.GetDayOfYear();
-
-	// ISO numbering: Monday = 1 … Sunday = 7. wx numbers Sunday 0 … Saturday 6,
-	// and the old `GetWeekDay() - 1` with a `< 1 → 7` floor gave Monday and
-	// Sunday the SAME number while shifting every other day down by one.
-	const int wxWeekDay = static_cast<int>(dateTime.GetWeekDay());
-	DayOfWeek = (wxWeekDay == static_cast<int>(wxDateTime::Sun)) ? 7 : wxWeekDay;
-
-	// wx knows the calendar rule; the hand-rolled `1 + (DayOfYear - 1) / 7` did
-	// not — it counted seven-day blocks from January 1st, which is not what a
-	// week number is in any calendar anybody reconciles against.
-	WeekOfYear = static_cast<int>(dateTime.GetWeekOfYear(wxDateTime::Monday_First));
-}
-
 bool ibValue::IsEmpty() const
 {
 	switch (m_typeClass)
@@ -1036,7 +850,7 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData.IsZero();
 	case ibValueTypes::TYPE_DATE:
-		return m_dData == emptyDate;
+		return m_dData.IsEmpty();
 	case ibValueTypes::TYPE_STRING:
 		return m_sData.IsEmpty();
 	case ibValueTypes::TYPE_ENUM:
@@ -1074,7 +888,7 @@ void ibValue::SetType(ibValueTypes type)
 			m_sData.~ibString();
 		else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
 			m_fData.~ibNumber();
-		m_dData = 0;
+		m_dData = ibDateTime();
 		m_typeClass = type;
 	}
 }
@@ -1441,12 +1255,12 @@ size_t ibValue::GetValueHash() const
 	// EACH SCALAR KIND HASHES ITS OWN PAYLOAD, exactly, because each is its own
 	// rank in the order now (see KindRank) — a boolean is never order-equal to a
 	// number, so nothing forces their hashes together and neither has to be
-	// blurred to meet the other. A date keeps its full instant for the same
+	// blurred to meet the other. A date keeps its full count for the same
 	// reason: the /1000 it used to carry existed only to meet GetNumber().
 	case ibValueTypes::TYPE_BOOLEAN:
 		return (size_t)HashStep(kIbHashBasis, m_bData ? 1u : 0u);
 	case ibValueTypes::TYPE_DATE:
-		return (size_t)HashStep(kIbHashBasis, (uint64_t)m_dData);
+		return (size_t)HashStep(kIbHashBasis, (uint64_t)m_dData.GetValue());
 	// A number still blurs to its integer part, and that one is NOT optional:
 	// 1 and 1.0 are the same number and must share a bucket. 1.5 joining them
 	// costs one comparison.
@@ -1483,10 +1297,9 @@ const ibValue& ibValue::operator+(const ibValue& cParam)
 		m_fData = m_fData + cParam.GetNumber();
 		break;
 	case ibValueTypes::TYPE_DATE:
-		// A number of seconds moves the date on the calendar (ShiftDate); a date is not a distance
-		// and keeps the arithmetic it always had.
-		m_dData = cParam.GetType() == ibValueTypes::TYPE_DATE ? m_dData + cParam.GetDate()
-		                                                     : ShiftDate(m_dData, cParam.GetDate());
+		// The operand moves the date by its distance from the empty date: a number is that many seconds
+		// (GetDate), a date its own count - the arithmetic a date on the right always had.
+		m_dData = m_dData.AddMilliseconds(cParam.GetDate() - ibDateTime());
 		break;
 	default:
 		break;      // '+' is defined for number and date only; others unchanged
@@ -1503,8 +1316,7 @@ const ibValue& ibValue::operator-(const ibValue& cParam)
 		m_fData = m_fData - cParam.GetNumber();
 		break;
 	case ibValueTypes::TYPE_DATE:
-		m_dData = cParam.GetType() == ibValueTypes::TYPE_DATE ? m_dData - cParam.GetDate()
-		                                                     : ShiftDate(m_dData, -cParam.GetDate());
+		m_dData = m_dData.AddMilliseconds(-(cParam.GetDate() - ibDateTime()));   // as '+', the other way
 		break;
 	default:
 		break;      // '-' is defined for number and date only; others unchanged

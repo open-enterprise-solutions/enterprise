@@ -28,14 +28,14 @@ int ibDatabaseResultSet::GetResultInt(const wxString& strField)
 	return -1;
 }
 
-wxString ibDatabaseResultSet::GetResultString(const wxString& strField)
+ibString ibDatabaseResultSet::GetResultString(const wxString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
 	{
 		return GetResultString(nIndex);
 	}
-	return wxEmptyString;
+	return ibString();
 }
 
 long long ibDatabaseResultSet::GetResultLong(const wxString& strField)
@@ -58,15 +58,15 @@ bool ibDatabaseResultSet::GetResultBool(const wxString& strField)
 	return false;
 }
 
-wxDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
+ibDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)
 	{
 		return GetResultDate(nIndex);
 	}
-	
-	return wxDefaultDateTime;
+
+	return ibDateTime();
 }
 
 void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer)

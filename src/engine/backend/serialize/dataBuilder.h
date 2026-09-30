@@ -20,7 +20,6 @@
 #include <vector>
 #include <utility>
 #include <memory>
-#include <wx/datetime.h>                    // wxDateTime — codec specialization (wxBase, not GUI)
 
 #include "backend/backend_core.h"          // ibMetaID
 #include "backend/clsid.h"                  // ibClassID
@@ -49,7 +48,7 @@ enum class ibDataKind : u8 {
 	Empty = 0,
 	Bool,
 	Number,    // exact decimal later; integer scalars for now
-	Date,      // a date/time scalar (ms ticks since epoch) — distinct from Number so it stays
+	Date,      // a date/time scalar (an ibDateTime, fdatetime.h) — distinct from Number so it stays
 	           // self-describing: a JSON view renders it as a readable ISO string, not a raw int
 	String,
 	Binary,    // opaque block (compiled form / module)
@@ -69,7 +68,7 @@ public:
 	static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
 	static ibDataValue Int(s64 value);    // small-int convenience over Number
 	static ibDataValue UInt(u64 value);   // unsigned-int convenience over Number
-	static ibDataValue Date(s64 ticks);   // date/time scalar (ms ticks since epoch)
+	static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
 	static ibDataValue Binary(const wxMemoryBuffer& data);
 	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
@@ -82,7 +81,7 @@ public:
 	const ibNumber&                  AsNumber() const { Expect(ibDataKind::Number); return m_number; }
 	s64                              AsInt()    const { Expect(ibDataKind::Number); s64 out = 0; m_number.ToInt(out); return out; }
 	u64                              AsUInt()   const { Expect(ibDataKind::Number); u64 out = 0; m_number.ToInt(out); return out; }
-	s64                              AsDate()   const { Expect(ibDataKind::Date);   return m_date; }
+	ibDateTime                       AsDate()   const { Expect(ibDataKind::Date);   return m_date; }
 	const wxMemoryBuffer&            AsBinary() const { Expect(ibDataKind::Binary); return m_binary; }
 	const std::shared_ptr<ibDataNode>& AsChild() const { Expect(ibDataKind::Child); return m_child; }
 	const std::vector<ibDataValue>&  AsArray()  const { Expect(ibDataKind::Array);  return m_array; }
@@ -101,7 +100,7 @@ private:
 	wxString       m_text;     // String payload
 	bool           m_bool = false; // Bool payload
 	ibNumber       m_number;   // Number payload (exact decimal, huge-capable)
-	s64            m_date = 0; // Date payload (ms ticks since epoch) — never mixed with Number
+	ibDateTime     m_date;     // Date payload (the wall-clock reading, fdatetime.h) — never mixed with Number
 	wxMemoryBuffer m_binary;   // Binary payload
 	std::shared_ptr<ibDataNode> m_child; // Child payload (composite sub-node)
 	std::vector<ibDataValue>    m_array; // Array payload (ordered list of values)
@@ -143,9 +142,9 @@ template<> struct ibDataCodec<ibNumber> {         // exact decimal — the Numbe
 	static ibDataValue To(const ibNumber& v) { return ibDataValue::Number(v); }
 	static ibNumber    From(const ibDataValue& v) { return v.AsNumber(); }
 };
-template<> struct ibDataCodec<wxDateTime> {       // a date/time — the Date scalar (ms ticks)
-	static ibDataValue To(const wxDateTime& v) { return ibDataValue::Date(v.IsValid() ? v.GetValue().GetValue() : 0); }
-	static wxDateTime  From(const ibDataValue& v) { const s64 ms = v.AsDate(); return ms != 0 ? wxDateTime(wxLongLong(ms)) : wxDateTime(); }
+template<> struct ibDataCodec<ibDateTime> {       // the engine's own date — the Date scalar
+	static ibDataValue To(const ibDateTime& v) { return ibDataValue::Date(v); }
+	static ibDateTime  From(const ibDataValue& v) { return v.AsDate(); }
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -340,14 +339,14 @@ private:
 	void WriteNode(const ibDataNode& node, ibWriter& writer) const;  // identity-framed node; CHILD path
 	void ReadNode(ibReader& reader, ibDataNode& node) const; // reads the inner; node.clsid/metaId pre-set by caller
 	void WriteFields(const ibDataNode& node, ibWriter& writer) const;
-	void ReadFields(ibReader& reader, ibDataNode& node) const;
+	void ReadFields(ibReader& reader, ibDataNode& node, u32 version) const;   // version = the node's format stamp (kFormatVersion when written)
 	void WriteProps(const ibDataNode& node, ibWriter& writer) const;   // the property bag, separate area
-	void ReadProps(ibReader& reader, ibDataNode& node) const;
+	void ReadProps(ibReader& reader, ibDataNode& node, u32 version) const;
 	void WriteChildren(const ibDataNode& node, ibWriter& writer) const; // a Child value's subtree (form control tree)
-	void ReadChildren(ibReader& reader, ibDataNode& node) const;
+	void ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
 	void WriteEntry(ibWriter& writer, const wxString& name, const ibDataValue& value) const; // name + value payload
 	void WriteValue(ibWriter& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
-	ibDataValue ReadEntry(ibReader& reader) const;                                            // kind + value (name read by the caller)
+	ibDataValue ReadEntry(ibReader& reader, u32 version) const;                               // kind + value (name read by the caller)
 };
 
 ////////////////////////////////////////////////////////////////////////////

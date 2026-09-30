@@ -124,7 +124,7 @@ struct TotalsFoldFix : ::testing::Test {
 	void Put(bool typed, long long shard, long figure) {
 		static const unsigned char zeroKey[16] = {};
 		std::vector<ibDmlAssign> row;
-		row.push_back({ totals.m_materialize.m_periodColumn, ibConst(ibValue(wxDateTime(1, wxDateTime::Jan, 2020))) });
+		row.push_back({ totals.m_materialize.m_periodColumn, ibConst(ibValue(ibDateTime(2020, 1, 1))) });
 		row.push_back({ Field(ibColumnRole::Discriminator),
 			ibConst(ibValue(static_cast<int>(typed ? ibFieldTypes_Reference : ibFieldTypes_Empty))) });
 		row.push_back({ Field(ibColumnRole::ReferenceType),

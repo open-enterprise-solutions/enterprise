@@ -470,7 +470,7 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 			cValue1.m_sData.~ibString();
 		else if (destWas == ibValueTypes::TYPE_NUMBER)
 			cValue1.m_fData.~ibNumber();
-		cValue1.m_dData = 0;
+		cValue1.m_dData = ibDateTime();
 	}
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
@@ -530,7 +530,7 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_sData.~ibString();
 	else if (destWas == ibValueTypes::TYPE_NUMBER)
 		cValue1.m_fData.~ibNumber();
-	cValue1.m_dData = 0;
+	cValue1.m_dData = ibDateTime();
 
 	cValue1.m_typeClass = cValue2.m_typeClass;
 

@@ -355,7 +355,7 @@ struct CalcRecalculationFix : ::testing::Test {
 		ibQueryResult rs = q.Execute();
 		const bool month = spec.m_mark.size() > 3;
 		while (rs.Next()) {
-			const wxString stored = month ? rs.GetResultString(wxT("ap_")) : wxString();
+			const wxString stored = month ? rs.GetResultString(wxT("ap_")).ToWxString() : wxString();
 			int day = 0;
 			if (month) {
 				wxDateTime d;

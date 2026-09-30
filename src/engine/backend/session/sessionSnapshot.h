@@ -19,7 +19,6 @@
 #include <vector>
 #include <string>
 
-#include <wx/datetime.h>
 #include <wx/string.h>
 
 // Forward-declared so the header stays independent of session.h —
@@ -32,7 +31,7 @@ class BACKEND_API ibSessionSnapshot {
 
 	struct Entry {
 
-		Entry(ibRunMode runMode, int kind, const wxDateTime& startedDateTime,
+		Entry(ibRunMode runMode, int kind, const ibDateTime& startedDateTime,
 			const wxString& strUserName, const wxString& strComputerName, const wxString& strSession)
 			: m_runMode(runMode), m_kind(kind), m_startedDate(startedDateTime),
 			  m_strUserName(strUserName), m_strComputerName(strComputerName), m_strSession(strSession)
@@ -44,7 +43,7 @@ class BACKEND_API ibSessionSnapshot {
 		// header stays independent of session.h (snapshot is read by
 		// frontend code that doesn't otherwise need the registry types).
 		int        m_kind;
-		wxDateTime m_startedDate;
+		ibDateTime m_startedDate;
 		wxString   m_strUserName;
 		wxString   m_strComputerName;
 		wxString   m_strSession;
@@ -57,7 +56,7 @@ public:
 
 	ibSessionSnapshot() : m_sessionArrayHash(wxNewUniqueGuid) {}
 
-	void AppendSession(ibRunMode runMode, int kind, const wxDateTime& startedTime,
+	void AppendSession(ibRunMode runMode, int kind, const ibDateTime& startedTime,
 		const wxString& strUserName, const wxString& strComputerName, const wxString& strSession) {
 		m_listSession.emplace_back(runMode, kind, startedTime, strUserName, strComputerName, strSession);
 	}

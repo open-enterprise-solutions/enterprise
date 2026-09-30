@@ -524,7 +524,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 
 //**********************************************************************
 
-wxDateTime ibValueSystemFunction::ms_workDate = wxDateTime::Now();
+ibDateTime ibValueSystemFunction::ms_workDate = ibDateTime::Now();
 
 class wxOESRandModule : public wxModule
 {

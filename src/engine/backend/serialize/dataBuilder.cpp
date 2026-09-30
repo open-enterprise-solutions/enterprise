@@ -8,6 +8,7 @@
 #include "backend/backend_exception.h"   // ibBackendCoreException — kind-mismatch throw
 
 #include <cstring>                       // std::memcmp — two packed values compared as bytes
+#include <wx/datetime.h>                  // a format-1 node's instant, read by its local parts (ReadEntry)
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataValue — typed factories
@@ -75,8 +76,8 @@ ibDataValue ibDataValue::Int(s64 value) {
 ibDataValue ibDataValue::UInt(u64 value) {
 	ibDataValue v; v.m_kind = ibDataKind::Number; v.m_number = ibNumber((uint64_t)value); return v;
 }
-ibDataValue ibDataValue::Date(s64 ticks) {
-	ibDataValue v; v.m_kind = ibDataKind::Date; v.m_date = ticks; return v;
+ibDataValue ibDataValue::Date(const ibDateTime& date) {
+	ibDataValue v; v.m_kind = ibDataKind::Date; v.m_date = date; return v;
 }
 ibDataValue ibDataValue::Binary(const wxMemoryBuffer& data) {
 	ibDataValue v; v.m_kind = ibDataKind::Binary; v.m_binary = data; return v;
@@ -160,7 +161,11 @@ ibDataNode* ibDataNode::FindChild(const wxString& name) {
 namespace {
 	const u64 kMetaBlock   = 0x2350; // node's own data: version + fields + props + raw remainder
 	const u64 kChildBlock  = 0x2370; // node's children (full forms)
-	const u32 kFormatVersion = 1;    // per-node stamp; bump on any field-encoding change
+	// Per-node stamp; bump on any field-encoding change. A Date entry, by the stamp (ReadEntry):
+	//   3 (2026-09-30) - an ibDateTime's count: milliseconds of the wall from 0001-01-01 (fdatetime.h);
+	//   2              - the same reading counted from 1970-01-01, the first form of it (PR #217);
+	//   1              - an instant of the writing machine's clock.
+	const u32 kFormatVersion = 3;
 }
 
 // A named entry = name + value payload (used by the fields / properties areas).
@@ -177,7 +182,7 @@ void ibBinaryProvider::WriteValue(ibWriter& writer, const ibDataValue& v) const 
 	switch (v.Kind()) {
 	case ibDataKind::String: writer.w_stringZ(v.AsString()); break;
 	case ibDataKind::Bool:   writer.w_u8(v.AsBool() ? 1 : 0); break;
-	case ibDataKind::Date:   writer.w_s64(v.AsDate()); break;
+	case ibDataKind::Date:   writer.w_s64(v.AsDate().GetValue()); break;
 	case ibDataKind::Number: {
 		const wxMemoryBuffer b = v.AsNumber().GetBuffer();
 		writer.w_u32((u32)b.GetDataLen());
@@ -210,12 +215,28 @@ void ibBinaryProvider::WriteValue(ibWriter& writer, const ibDataValue& v) const 
 	}
 }
 
-ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader) const {
+ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 	const ibDataKind kind = (ibDataKind)reader.r_u8();
 	switch (kind) {
 	case ibDataKind::String: return ibDataValue::String(reader.r_stringZ());
 	case ibDataKind::Bool:   return ibDataValue::Bool(reader.r_u8() != 0);
-	case ibDataKind::Date:   return ibDataValue::Date(reader.r_s64());
+	case ibDataKind::Date: {
+		// ⭐ THE ONE DOOR A STORED DATE COMES BACK THROUGH, and where an older node is read (the stamp,
+		// above). Format 3 holds the ibDateTime's own count. Format 2 held the same wall reading counted
+		// from 1970-01-01, where 0 stood for "no date" (an invalid wxDateTime) - the empty date now. Format
+		// 1 held an INSTANT of the writing machine's clock, with the empty date the literal
+		// -62135604000000 and 0 for "no date": both are the empty date, and any other instant crosses the
+		// bridge - the parts THIS machine's clock shows for it, which are the parts the writer saw wherever
+		// this machine stands in the writer's zone (a configuration and its files rarely change zones).
+		const s64 stored = reader.r_s64();
+		if (version >= 3)
+			return ibDataValue::Date(ibDateTime(stored));
+		if (stored == 0 || (version == 1 && stored == -62135604000000ll))
+			return ibDataValue::Date(ibDateTime());
+		if (version == 2)
+			return ibDataValue::Date(ibDateTime(1970, 1, 1).AddMilliseconds(stored));
+		return ibDataValue::Date(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(stored))));
+	}
 	case ibDataKind::Number: {
 		const u32 len = reader.r_u32();
 		wxMemoryBuffer b;
@@ -237,9 +258,9 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader) const {
 	}
 	case ibDataKind::Child: {
 		auto c = std::make_shared<ibDataNode>();
-		ReadFields(reader, *c);
-		ReadProps(reader, *c);
-		ReadChildren(reader, *c);
+		ReadFields(reader, *c, version);
+		ReadProps(reader, *c, version);
+		ReadChildren(reader, *c, version);
 		return ibDataValue::Child(c);
 	}
 	case ibDataKind::Array: {
@@ -247,7 +268,7 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader) const {
 		std::vector<ibDataValue> a;
 		a.reserve(count);
 		for (u32 i = 0; i < count; i++)
-			a.push_back(ReadEntry(reader));
+			a.push_back(ReadEntry(reader, version));
 		return ibDataValue::Array(a);
 	}
 	default: return ibDataValue();
@@ -261,11 +282,11 @@ void ibBinaryProvider::WriteFields(const ibDataNode& node, ibWriter& writer) con
 		WriteEntry(writer, f.first, f.second);
 }
 
-void ibBinaryProvider::ReadFields(ibReader& reader, ibDataNode& node) const {
+void ibBinaryProvider::ReadFields(ibReader& reader, ibDataNode& node, u32 version) const {
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
 		wxString name = reader.r_stringZ();
-		node.AddField(name, ReadEntry(reader));
+		node.AddField(name, ReadEntry(reader, version));
 	}
 }
 
@@ -276,11 +297,11 @@ void ibBinaryProvider::WriteProps(const ibDataNode& node, ibWriter& writer) cons
 		WriteEntry(writer, p.first, p.second);
 }
 
-void ibBinaryProvider::ReadProps(ibReader& reader, ibDataNode& node) const {
+void ibBinaryProvider::ReadProps(ibReader& reader, ibDataNode& node, u32 version) const {
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
 		wxString name = reader.r_stringZ();
-		node.SetProperty(name, ReadEntry(reader));
+		node.SetProperty(name, ReadEntry(reader, version));
 	}
 }
 
@@ -300,15 +321,15 @@ void ibBinaryProvider::WriteChildren(const ibDataNode& node, ibWriter& writer) c
 	}
 }
 
-void ibBinaryProvider::ReadChildren(ibReader& reader, ibDataNode& node) const {
+void ibBinaryProvider::ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const {
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
 		const ibClassID clsid  = (ibClassID)reader.r_u64();
 		const ibMetaID  metaId = (ibMetaID)reader.r_s32();
 		ibDataNode& child = node.AddChild(clsid, metaId);
-		ReadFields(reader, child);
-		ReadProps(reader, child);
-		ReadChildren(reader, child);
+		ReadFields(reader, child, version);
+		ReadProps(reader, child, version);
+		ReadChildren(reader, child, version);
 	}
 }
 
@@ -376,9 +397,9 @@ void ibBinaryProvider::ReadNode(ibReader& reader, ibDataNode& node) const {
 	}
 
 	if (ibReader* metaBlock = reader.open_chunk(kMetaBlock)) {
-		(void)metaBlock->r_u32(); // format version (reserved for migration)
-		ReadFields(*metaBlock, node);
-		ReadProps(*metaBlock, node);
+		const u32 version = metaBlock->r_u32();   // the node's format stamp - a Date entry reads by it
+		ReadFields(*metaBlock, node, version);
+		ReadProps(*metaBlock, node, version);
 		const u32 rawLen = metaBlock->r_u32();
 		if (rawLen) {
 			wxMemoryBuffer raw;

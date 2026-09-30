@@ -29,7 +29,7 @@ void ibDatabaseParameterFirebird::SetNull()
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-void ibDatabaseParameterFirebird::Set(const wxString& strValue)
+void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 {
 	m_nParameterType = ibDatabaseParameterFirebird::PARAM_STRING;
 	m_strValue = strValue;
@@ -278,18 +278,19 @@ void ibDatabaseParameterFirebird::Set(bool bValue)
 	m_nParameterType = ibDatabaseParameterFirebird::PARAM_BOOL;
 }
 
-void ibDatabaseParameterFirebird::Set(const wxDateTime& dateValue)
+void ibDatabaseParameterFirebird::Set(const ibDateTimeParts& date)
 {
 	m_nParameterType = ibDatabaseParameterFirebird::PARAM_DATETIME;
 
-	struct tm dateAsTm;
-	wxDateTime::Tm tm = dateValue.GetTm();
-	dateAsTm.tm_sec = tm.sec;
-	dateAsTm.tm_min = tm.min;
-	dateAsTm.tm_hour = tm.hour;
-	dateAsTm.tm_mday = tm.mday;
-	dateAsTm.tm_mon = tm.mon;
-	dateAsTm.tm_year = tm.year - 1900;
+	// The parts as they are - what isc_encode_timestamp takes is a calendar reading, and a calendar
+	// reading is what a date value holds (fdatetime.h). Nothing here asks the machine's clock.
+	struct tm dateAsTm = {};
+	dateAsTm.tm_sec = static_cast<int>(date.m_second);
+	dateAsTm.tm_min = static_cast<int>(date.m_minute);
+	dateAsTm.tm_hour = static_cast<int>(date.m_hour);
+	dateAsTm.tm_mday = static_cast<int>(date.m_day);
+	dateAsTm.tm_mon = static_cast<int>(date.m_month) - 1;
+	dateAsTm.tm_year = date.m_year - 1900;
 	m_pInterface->GetIscEncodeTimestamp()(&dateAsTm, &m_Date);
 
 	m_nBufferLength = sizeof(ISC_TIMESTAMP);

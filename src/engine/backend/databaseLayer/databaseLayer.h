@@ -134,89 +134,9 @@ struct ibSqlFeatures
 	bool m_batchByReexecution = false;
 };
 
-// A period truncation unit — "start of the minute / week / month / … containing this moment".
-//
-// It lives in the QUERY dictionary, not the materialization one, because truncating a period is
-// an ordinary DECLARATIVE expression: it belongs in any SELECT that groups by month, whoever
-// wrote it — a report, the composer, a user query — and only incidentally in a totals trigger.
-// Locking it inside the dictionary that only the trigger generator can reach would have shut a
-// generally useful fact into a private room.
-//
-// ORDERED COARSENING, and that ordering is a CONTRACT: every member is coarser than the one
-// before it. Consumers rely on it to decide derivability — a value truncated to unit A can be
-// re-truncated to any B >= A, and to nothing finer, because the finer information is gone.
-// Insert new members in order.
-//
-// (Not to be confused with ibPeriodicity — that is the granularity of a record KEY, a different
-// question that happens to share a word.)
-enum class ibTotalsPeriod
-{
-	Second,
-	Minute,
-	Hour,
-	Day,
-	Week,       // starts Monday (ISO) on every engine — the truncations encode that per dialect
-	TenDays,    // the 1st / 11th / 21st of the month; the last one runs 8-11 days
-	Month,
-	Quarter,
-	HalfYear,
-	Year
-};
-
-// ⭐ ONE PIECE OF A DATE, AS A NUMBER — what `YEAR(x)` / `WEEKDAY(x)` answer with. A different
-// question from ibTotalsPeriod, which names a STRETCH of time and answers with a date: truncating to
-// the month gives the 1st of it, taking the month gives 9. They share most of their words and none
-// of their meaning, so they are separate enums rather than one with two readings.
-//
-// WeekDay is Monday = 1 … Sunday = 7 (ISO), pinned here rather than left to each engine's own
-// numbering — a rule that differs per dialect is a report that reads differently per deployment.
-enum class ibDatePart
-{
-	Year,
-	Quarter,
-	Month,
-	DayOfYear,
-	Day,
-	Week,
-	WeekDay,
-	Hour,
-	Minute,
-	Second
-};
-
-// The RAM twin of the dialect's truncation expression: same answer, computed in C++ for the paths
-// that cannot push down (a multi-source read materialises its leaves and folds them here).
-//
-// The two MUST agree exactly, or a query answers differently depending on whether it happened to
-// co-locate — a difference that shows up as totals that reconcile in one deployment and not in
-// another. So this walks the calendar (month lengths, leap years) rather than approximating with
-// fixed-length arithmetic, exactly as the SQL expressions do.
-BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
-
-// The start of the NEXT period after the one holding `moment` — the first instant a stored row of
-// that grain no longer covers. A read whose lower boundary falls inside a grain cannot use that
-// grain's stored row (it holds the part before the boundary too), so it starts at this instant and
-// takes the head from the movements instead. Calendar-walking for the same reason as the truncation:
-// months differ in length, and the ten-day bucket ending a month is not ten days long.
-BACKEND_API wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit);
-
-// The LAST instant the period holding `moment` still covers — `ENDOFPERIOD(x, Month)`. Written as
-// the start of the next period less one second, and said here ONCE so the RAM road and the SQL one
-// cannot disagree about whether the boundary belongs to the period (it does).
-BACKEND_API wxDateTime ibEndOfPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
-
-// Move a date by whole units, calendar-aware — `DATEADD(x, Month, 3)`. Adding a month to the 31st of
-// a 31-day month lands on the last day of a shorter one, which is what a person means by "a month
-// later" and what fixed-length arithmetic gets wrong.
-BACKEND_API wxDateTime ibDateAddUnits(const wxDateTime& moment, ibTotalsPeriod unit, long count);
-
-// How many WHOLE units lie between two moments — `DATEDIFF(a, b, Day)`. Negative when `to` is
-// earlier, zero when they fall in the same unit.
-BACKEND_API long ibDateDiffUnits(const wxDateTime& from, const wxDateTime& to, ibTotalsPeriod unit);
-
-// One piece of a date as a number — `YEAR(x)`, `WEEKDAY(x)`. The RAM twin of the dialect's
-// m_datePart expression, and it must agree with it to the digit.
-BACKEND_API long ibReadDatePart(const wxDateTime& moment, ibDatePart part);
+// The calendar's periods (ibTotalsPeriod) and a date's parts (ibDatePart) are the date's own, and so
+// is the arithmetic over them (fdatetime.h): the dialect's truncation, DATEADD, DATEDIFF and date-part
+// expressions below have their RAM twins there, as methods of ibDateTime, and the two roads must agree.
 
 struct ibDialectDictionary
 {
@@ -1017,8 +937,8 @@ public:
 	/// Retrieve a single string value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual wxString GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual wxString GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
+	virtual ibString GetSingleResultString(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
+	virtual ibString GetSingleResultString(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
 
 	/// Retrieve a single long value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
@@ -1035,8 +955,8 @@ public:
 	/// Retrieve a single date/time value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual wxDateTime GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual wxDateTime GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
+	virtual ibDateTime GetSingleResultDate(const wxString& strSQL, int nField, bool bRequireUniqueResult = true);
+	virtual ibDateTime GetSingleResultDate(const wxString& strSQL, const wxString& strField, bool bRequireUniqueResult = true);
 
 	/// Retrieve a single Blob value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
@@ -1251,10 +1171,10 @@ protected:
 private:
 
 	int GetSingleResultInt(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	wxString GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
+	ibString GetSingleResultString(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	long GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	bool GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	wxDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
+	ibDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 	double GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	ibNumber GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);

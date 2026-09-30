@@ -40,7 +40,7 @@ struct BACKEND_API ibLockSnapshotRow {
 	wxString     namespaceName;
 	wxString     keyData;          // human-readable canonical key
 	ibLockMode   lockMode;
-	wxDateTime   acquiredAt;
+	ibDateTime   acquiredAt;
 	wxString     userName;
 	wxString     computer;
 };

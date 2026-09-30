@@ -20,7 +20,7 @@ static void ibBindParam(ibPreparedStatement* stmt, int pos, const ibValue& v)
 	switch (v.GetType()) {
 	case TYPE_BOOLEAN: stmt->SetParamBool(pos, v.GetBoolean());   break;
 	case TYPE_NUMBER:  stmt->SetParamNumber(pos, v.GetNumber());  break;
-	case TYPE_DATE:    stmt->SetParamDate(pos, v.GetDateTime());  break;
+	case TYPE_DATE:    stmt->SetParamDate(pos, v.GetDate());      break;
 	case TYPE_STRING:  stmt->SetParamString(pos, v.GetString());  break;
 	case TYPE_NULL:
 	case TYPE_EMPTY:
@@ -774,22 +774,22 @@ int ibQueryResult::FieldIndex(FieldSlots& slots, const wxString& base, unsigned 
 // Each read answers what its NAMED twin answers — with no cursor (0) the ibQueryResult defaults, for an
 // absent field (-1) the driver-base defaults (databaseResultSet.cpp) — so the two roads cannot be told
 // apart by what comes back.
-wxString   ibQueryResult::GetResultString(int field)                   { return m_rs == nullptr || field == 0 ? wxString()  : field < 0 ? wxString()        : m_rs->GetResultString(field); }
+ibString   ibQueryResult::GetResultString(int field)                   { return m_rs == nullptr || field == 0 ? ibString()  : field < 0 ? ibString()        : m_rs->GetResultString(field); }
 int        ibQueryResult::GetResultInt(int field)                      { return m_rs == nullptr || field == 0 ? 0           : field < 0 ? -1                : m_rs->GetResultInt(field); }
 long long  ibQueryResult::GetResultLong(int field)                     { return m_rs == nullptr || field == 0 ? 0           : field < 0 ? -1                : m_rs->GetResultLong(field); }
 bool       ibQueryResult::GetResultBool(int field)                     { return m_rs == nullptr || field == 0 ? false       : field < 0 ? false             : m_rs->GetResultBool(field); }
-wxDateTime ibQueryResult::GetResultDate(int field)                     { return m_rs == nullptr || field == 0 ? wxDateTime(): field < 0 ? wxDefaultDateTime : m_rs->GetResultDate(field); }
+ibDateTime ibQueryResult::GetResultDate(int field)                     { return m_rs == nullptr || field <= 0 ? ibDateTime() : m_rs->GetResultDate(field); }
 ibNumber   ibQueryResult::GetResultNumber(int field)                   { return m_rs == nullptr || field == 0 ? ibNumber()  : field < 0 ? ibNumber(-1)      : m_rs->GetResultNumber(field); }
 void*      ibQueryResult::GetResultBlob(int field, wxMemoryBuffer& b)  { return m_rs == nullptr || field <= 0 ? nullptr : m_rs->GetResultBlob(field, b); }
 bool       ibQueryResult::IsResultNull(int field)                      { return m_rs == nullptr || field <= 0 || m_rs->IsFieldNull(field); }
 
 // Typed field reads by name — delegate to the borrowed driver cursor (the dialect-normalised
 // physical field). The provider's value-assembly reads through these, never the raw L1 cursor.
-wxString   ibQueryResult::GetResultString(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultString(name)        : wxString(); }
+ibString   ibQueryResult::GetResultString(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultString(name)        : ibString(); }
 int        ibQueryResult::GetResultInt(const wxString& name)                     { return m_rs != nullptr ? m_rs->GetResultInt(name)           : 0; }
 long long  ibQueryResult::GetResultLong(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultLong(name)          : 0; }
 bool       ibQueryResult::GetResultBool(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultBool(name)          : false; }
-wxDateTime ibQueryResult::GetResultDate(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : wxDateTime(); }
+ibDateTime ibQueryResult::GetResultDate(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : ibDateTime(); }
 double     ibQueryResult::GetResultDouble(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
 ibNumber   ibQueryResult::GetResultNumber(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
 void*      ibQueryResult::GetResultBlob(const wxString& name, wxMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
@@ -1844,10 +1844,10 @@ void ibQueryStatement::Put(int position, ibQueryExprPtr expr)
 void ibQueryStatement::SetParamInt(int p, int v)                  { Put(p, ibConst(ibValue(ibNumber(v)))); }
 void ibQueryStatement::SetParamDouble(int p, double v)            { Put(p, ibConst(ibValue(v))); }
 void ibQueryStatement::SetParamNumber(int p, const ibNumber& v)   { Put(p, ibConst(ibValue(v))); }
-void ibQueryStatement::SetParamString(int p, const wxString& v)   { Put(p, ibConst(ibValue(v))); }
+void ibQueryStatement::SetParamString(int p, const ibString& v)   { Put(p, ibConst(ibValue(ibString(v)))); }   // one more owner of the text
 void ibQueryStatement::SetParamNull(int p)                        { Put(p, ibConst(ibValue())); }
 void ibQueryStatement::SetParamBlob(int p, const void* d, long n) { Put(p, ibConstBlob(d, static_cast<size_t>(n))); }
-void ibQueryStatement::SetParamDate(int p, const wxDateTime& v)   { Put(p, ibConst(ibValue(v))); }
+void ibQueryStatement::SetParamDate(int p, const ibDateTime& v)   { Put(p, ibConst(ibValue(v))); }
 void ibQueryStatement::SetParamBool(int p, bool v)                { Put(p, ibConst(ibValue(v))); }
 
 // The one bind that is not a constant: `col = col + <delta>`, evaluated by the DB. The column name
@@ -1992,7 +1992,7 @@ void ibBatchInsert::SetParamNumber(int p, const ibNumber& v)
 	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, v); }
 	else            ibQueryStatement::SetParamNumber(p, v);
 }
-void ibBatchInsert::SetParamString(int p, const wxString& v)
+void ibBatchInsert::SetParamString(int p, const ibString& v)
 {
 	if (m_prepared) { Bound(p); (*m_prepared)->SetParamString(p, v); }
 	else            ibQueryStatement::SetParamString(p, v);
@@ -2002,7 +2002,7 @@ void ibBatchInsert::SetParamNull(int p)
 	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNull(p); }
 	else            ibQueryStatement::SetParamNull(p);
 }
-void ibBatchInsert::SetParamDate(int p, const wxDateTime& v)
+void ibBatchInsert::SetParamDate(int p, const ibDateTime& v)
 {
 	if (m_prepared) { Bound(p); (*m_prepared)->SetParamDate(p, v); }
 	else            ibQueryStatement::SetParamDate(p, v);

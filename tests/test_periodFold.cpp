@@ -4,7 +4,7 @@
 // Two pure functions that every totals reading rests on, and both fail
 // quietly when they are wrong:
 //
-//   ibTruncateToPeriod  — the RAM twin of the dialect's SQL truncation. If the
+//   BeginOfPeriod       — the RAM twin of the dialect's SQL truncation. If the
 //                         two disagree, the same query returns different rows
 //                         depending on whether the read pushed down or folded
 //                         in memory. That looks like a rounding bug and is not
@@ -26,12 +26,26 @@
 
 namespace {
 
-wxDateTime Day(int y, int m, int d, int hh = 0, int mm = 0, int ss = 0)
+// A date as the engine keeps it (fdatetime.h) - the reading of these parts.
+ibDateTime Day(int y, int m, int d, int hh = 0, int mm = 0, int ss = 0)
 {
-    return wxDateTime(d, static_cast<wxDateTime::Month>(m - 1), y, hh, mm, ss);
+    return ibDateTime(y, static_cast<unsigned>(m), static_cast<unsigned>(d),
+        static_cast<unsigned>(hh), static_cast<unsigned>(mm), static_cast<unsigned>(ss));
 }
 
-wxString Ymd(const wxDateTime& d) { return d.Format(wxT("%Y-%m-%d")); }
+wxString Ymd(const ibDateTime& d)
+{
+    ibDateTimeParts p;
+    d.ToParts(p);
+    return wxString::Format(wxT("%04d-%02u-%02u"), p.m_year, p.m_month, p.m_day);
+}
+
+wxString Hms(const ibDateTime& d)
+{
+    ibDateTimeParts p;
+    d.ToParts(p);
+    return wxString::Format(wxT("%02u:%02u:%02u"), p.m_hour, p.m_minute, p.m_second);
+}
 
 } // namespace
 
@@ -40,24 +54,24 @@ wxString Ymd(const wxDateTime& d) { return d.Format(wxT("%Y-%m-%d")); }
 // ---------------------------------------------------------------------------
 
 TEST(PeriodTruncate, MonthAndYearLandOnTheFirst) {
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 28), ibTotalsPeriod::Month)), wxT("2026-07-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 28), ibTotalsPeriod::Year)),  wxT("2026-01-01"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 28).BeginOfPeriod(ibTotalsPeriod::Month)), wxT("2026-07-01"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 28).BeginOfPeriod(ibTotalsPeriod::Year)),  wxT("2026-01-01"));
 }
 
 TEST(PeriodTruncate, QuarterAndHalfYearLandOnTheirOpeningMonth) {
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 2, 14), ibTotalsPeriod::Quarter)),  wxT("2026-01-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 8, 14), ibTotalsPeriod::Quarter)),  wxT("2026-07-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 6, 30), ibTotalsPeriod::HalfYear)), wxT("2026-01-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7,  1), ibTotalsPeriod::HalfYear)), wxT("2026-07-01"));
+    EXPECT_EQ(Ymd(Day(2026, 2, 14).BeginOfPeriod(ibTotalsPeriod::Quarter)),  wxT("2026-01-01"));
+    EXPECT_EQ(Ymd(Day(2026, 8, 14).BeginOfPeriod(ibTotalsPeriod::Quarter)),  wxT("2026-07-01"));
+    EXPECT_EQ(Ymd(Day(2026, 6, 30).BeginOfPeriod(ibTotalsPeriod::HalfYear)), wxT("2026-01-01"));
+    EXPECT_EQ(Ymd(Day(2026, 7,  1).BeginOfPeriod(ibTotalsPeriod::HalfYear)), wxT("2026-07-01"));
 }
 
 // The week must start MONDAY on every engine and in RAM alike. Sunday is the
 // case that catches an off-by-one: it belongs to the week that began six days
 // earlier, not to the one starting the next day.
 TEST(PeriodTruncate, WeekStartsMondayIncludingSunday) {
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 27), ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Monday itself
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 29), ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Wednesday
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 8,  2), ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Sunday
+    EXPECT_EQ(Ymd(Day(2026, 7, 27).BeginOfPeriod(ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Monday itself
+    EXPECT_EQ(Ymd(Day(2026, 7, 29).BeginOfPeriod(ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Wednesday
+    EXPECT_EQ(Ymd(Day(2026, 8,  2).BeginOfPeriod(ibTotalsPeriod::Week)), wxT("2026-07-27"));  // Sunday
 }
 
 // Ten-day periods start on the 1st / 11th / 21st. Day 31 is THE case: an
@@ -65,20 +79,20 @@ TEST(PeriodTruncate, WeekStartsMondayIncludingSunday) {
 // one-day period nobody expects. The last ten-day period running 8-11 days is
 // the definition, not a defect.
 TEST(PeriodTruncate, TenDaysCapsTheLastPeriod) {
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7,  1), ibTotalsPeriod::TenDays)), wxT("2026-07-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 10), ibTotalsPeriod::TenDays)), wxT("2026-07-01"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 11), ibTotalsPeriod::TenDays)), wxT("2026-07-11"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 21), ibTotalsPeriod::TenDays)), wxT("2026-07-21"));
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 7, 31), ibTotalsPeriod::TenDays)), wxT("2026-07-21"));  // capped
-    EXPECT_EQ(Ymd(ibTruncateToPeriod(Day(2026, 2, 28), ibTotalsPeriod::TenDays)), wxT("2026-02-21"));  // short month
+    EXPECT_EQ(Ymd(Day(2026, 7,  1).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-07-01"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 10).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-07-01"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 11).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-07-11"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 21).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-07-21"));
+    EXPECT_EQ(Ymd(Day(2026, 7, 31).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-07-21"));  // capped
+    EXPECT_EQ(Ymd(Day(2026, 2, 28).BeginOfPeriod(ibTotalsPeriod::TenDays)), wxT("2026-02-21"));  // short month
 }
 
 TEST(PeriodTruncate, SubDayUnitsShearTheirTail) {
-    const wxDateTime t = Day(2026, 7, 28, 14, 37, 52);
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Day).Format(wxT("%H:%M:%S")),    wxT("00:00:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Hour).Format(wxT("%H:%M:%S")),   wxT("14:00:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Minute).Format(wxT("%H:%M:%S")), wxT("14:37:00"));
-    EXPECT_EQ(ibTruncateToPeriod(t, ibTotalsPeriod::Second).Format(wxT("%H:%M:%S")), wxT("14:37:52"));
+    const ibDateTime t = Day(2026, 7, 28, 14, 37, 52);
+    EXPECT_EQ(Hms(t.BeginOfPeriod(ibTotalsPeriod::Day)),    wxT("00:00:00"));
+    EXPECT_EQ(Hms(t.BeginOfPeriod(ibTotalsPeriod::Hour)),   wxT("14:00:00"));
+    EXPECT_EQ(Hms(t.BeginOfPeriod(ibTotalsPeriod::Minute)), wxT("14:37:00"));
+    EXPECT_EQ(Hms(t.BeginOfPeriod(ibTotalsPeriod::Second)), wxT("14:37:52"));
 }
 
 // Truncation must be IDEMPOTENT — re-truncating an already-truncated value to
@@ -87,8 +101,8 @@ TEST(PeriodTruncate, SubDayUnitsShearTheirTail) {
 TEST(PeriodTruncate, IsIdempotent) {
     for (const ibTotalsPeriod u : { ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::TenDays,
                                     ibTotalsPeriod::Month, ibTotalsPeriod::Quarter, ibTotalsPeriod::Year }) {
-        const wxDateTime once  = ibTruncateToPeriod(Day(2026, 7, 28, 9, 15, 1), u);
-        const wxDateTime twice = ibTruncateToPeriod(once, u);
+        const ibDateTime once  = Day(2026, 7, 28, 9, 15, 1).BeginOfPeriod(u);
+        const ibDateTime twice = once.BeginOfPeriod(u);
         EXPECT_EQ(Ymd(once), Ymd(twice));
     }
 }

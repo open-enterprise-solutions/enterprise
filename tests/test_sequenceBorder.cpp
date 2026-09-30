@@ -136,12 +136,12 @@ struct SequenceBorderFix : ::testing::Test {
 	ibValue NewDocument() const {
 		return ibValue(ibValueReferenceDataObject::Create(cfg.get(), document->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	}
-	static ibValue Moment(const wxDateTime& when, const ibValue& recorder) {
+	static ibValue Moment(const ibDateTime& when, const ibValue& recorder) {
 		return ibValue(new ibValuePointInTime(when, recorder));
 	}
 
 	// What a posting does: the document's registration is written, then the border is told.
-	void Post(const ibValue& recorder, const wxDateTime& when, const wxString& warehouse) {
+	void Post(const ibValue& recorder, const ibDateTime& when, const wxString& warehouse) {
 		std::vector<ibDmlAssign> row;
 		Assign(row, seq->GetRegisterActive()->GetQueryColumn(), ibValue(true));
 		Assign(row, seq->GetRegisterPeriod()->GetQueryColumn(), ibValue(when));
@@ -174,10 +174,10 @@ struct SequenceBorderFix : ::testing::Test {
 	}
 };
 
-const wxDateTime kDay1(1, wxDateTime::Jul, 2025, 10, 0, 0);
-const wxDateTime kDay1Later(1, wxDateTime::Jul, 2025, 15, 0, 0);
-const wxDateTime kDay2(2, wxDateTime::Jul, 2025, 10, 0, 0);
-const wxDateTime kDay3(3, wxDateTime::Jul, 2025, 10, 0, 0);
+const ibDateTime kDay1(2025, 7, 1, 10, 0, 0);
+const ibDateTime kDay1Later(2025, 7, 1, 15, 0, 0);
+const ibDateTime kDay2(2025, 7, 2, 10, 0, 0);
+const ibDateTime kDay3(2025, 7, 3, 10, 0, 0);
 
 } // namespace
 

@@ -35,17 +35,16 @@
 // so moving the system clock cannot make a job fire twice or stall for hours —
 // see ibJobEntry::m_lastRun.
 
-#include "backend/backend.h"
+#include "backend/backend_core.h"   // BACKEND_API, ibDateTime — the schedule's dates
 
 #include <cstdint>
 
 #include <wx/buffer.h>
-#include <wx/datetime.h>
 
 class ibDataValue;   // storage door — see ibJobScheduleDescriptionMemory at the bottom
 
-// Bit per weekday, Monday = bit 0 (matching how a week is written, not how
-// wxDateTime numbers it — the conversion lives in the .cpp).
+// Bit per weekday, Monday = bit 0 (matching how a week is written, and the
+// date's own Monday = 1 shifted by one — the shift lives in the .cpp).
 enum ibJobWeekDay : std::uint8_t {
 	ibJobWeekDay_Monday    = 1 << 0,
 	ibJobWeekDay_Tuesday   = 1 << 1,
@@ -101,11 +100,11 @@ struct BACKEND_API ibJobScheduleDescription {
 	// Months, bit 0 = January … bit 11 = December. 0 = every month.
 	std::uint16_t m_months = 0;
 
-	// Validity range — the job does not run before / after these. Invalid
-	// (default-constructed) means unbounded. Used for a job that should start
+	// Validity range — the job does not run before / after these. The empty
+	// date (default-constructed) means unbounded. Used for a job that should start
 	// next quarter, or stop after a migration window closes.
-	wxDateTime m_activeFrom;
-	wxDateTime m_activeTo;
+	ibDateTime m_activeFrom;
+	ibDateTime m_activeTo;
 
 	// ---- counted from the END of the month -------------------------------
 	// The same day-of-month idea read backwards: bit 0 = the LAST day, bit 1 = the day before it.
@@ -130,7 +129,7 @@ struct BACKEND_API ibJobScheduleDescription {
 	// must not shift every later run with it, which is exactly what "count from last time" does.
 	std::uint16_t m_everyNWeeks  = 0;
 	std::uint16_t m_everyNMonths = 0;
-	wxDateTime    m_periodAnchor;
+	ibDateTime    m_periodAnchor;
 
 	// ---- stop after ------------------------------------------------------
 	// Minutes from midnight after which a pass must not START, even though the window still allows
@@ -177,18 +176,18 @@ struct BACKEND_API ibJobScheduleDescription {
 ////////////////////////////////////////////////////////////////////////////
 class BACKEND_API ibJobScheduleRules {
 public:
-	// Does the calendar allow `moment` (local time)? Windows, weekdays, month days from either end,
-	// the Nth weekday, the every-N phase and the validity range — all of it, one answer.
-	static bool IsAllowed(const ibJobScheduleDescription& schedule, const wxDateTime& moment);
+	// Does the calendar allow `moment` (a wall-clock reading)? Windows, weekdays, month days from either
+	// end, the Nth weekday, the every-N phase and the validity range — all of it, one answer.
+	static bool IsAllowed(const ibJobScheduleDescription& schedule, const ibDateTime& moment);
 
 	// The first moment the calendar allows AT OR AFTER `notBefore`. At or after, not strictly after:
 	// a moment that already qualifies IS the answer, which is what makes a time of day read as "not
-	// before" and lets a missed night run late instead of vanishing. Invalid when nothing matches
-	// within a year (a schedule naming, say, February 30th).
+	// before" and lets a missed night run late instead of vanishing. The empty date when nothing
+	// matches within a year (a schedule naming, say, February 30th).
 	//
 	// Derived on demand and never stored: a "next run" kept in a field is one more thing that can
 	// disagree with reality after a restart or a clock change.
-	static wxDateTime NextAllowedAfter(const ibJobScheduleDescription& schedule, const wxDateTime& notBefore);
+	static ibDateTime NextAllowedAfter(const ibJobScheduleDescription& schedule, const ibDateTime& notBefore);
 
 	// A human sentence — "Every 10 minutes, 10:00-15:00, Tue, in March". Localised, built from the
 	// same fields an editor shows, so a settings list and a log line say the same thing without
@@ -207,7 +206,7 @@ public:
 //   IntervalSeconds, StartMinute, EndMinute, StopAfterMinute : s32 (minutes from midnight; -1 = unset)
 //   DaysOfWeek, DaysOfMonth, DaysOfMonthFromEnd, Months      : s32 bit masks (0 = any)
 //   WeekdayOrdinal, EveryNWeeks, EveryNMonths                : s32 (0 = unused)
-//   PeriodAnchor, ActiveFrom, ActiveTo                       : Date (0 = invalid / unbounded)
+//   PeriodAnchor, ActiveFrom, ActiveTo                       : Date (the empty date = unbounded)
 //
 // Names rather than positions, so adding or dropping a field keeps old data readable: an absent
 // name leaves the member at its default — and every default here means "not restricted", never
@@ -223,8 +222,11 @@ public:
 	// which binds a blob, not a node tree. Same door, second spelling: the node form stays the
 	// metadata format, this is the data one, and both are here so neither can be written twice.
 	//
-	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64 ms since
-	// the wxDateTime epoch; 0 = invalid / unbounded). VERSIONED because a row outlives a release:
+	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64: the
+	// ibDateTime's count - the wall-clock reading (fdatetime.h) - since version 3; that reading
+	// counted from 1970 in version 2 and ms since the wxDateTime epoch - an instant - in version 1,
+	// both still read; 0 = the empty date / unbounded). VERSIONED
+	// because a row outlives a release:
 	// a reader older than the blob stops at the fields it knows, and every field it did not read
 	// keeps its default — which here always means "not restricted".
 	static void WriteBuffer(wxMemoryBuffer& out, const ibJobScheduleDescription& schedule);

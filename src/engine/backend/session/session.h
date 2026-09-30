@@ -162,7 +162,7 @@ struct BACKEND_API ibSessionIdentity {
 	wxString     m_computer;          // hostname
 	wxString     m_address;            // "host:port" for web; "" for desktop
 	ibRunMode    m_appMode;            // eENTERPRISE / eDESIGNER / eWEB_ENTERPRISE / ...
-	wxDateTime   m_started;
+	ibDateTime   m_started;
 	int          m_pid = 0;            // OS pid — for kick / attach debugger
 	bool         m_expectsAnonPhase = true;  // true: INSERT on Add; false: INSERT deferred to Attach success
 };
@@ -627,13 +627,13 @@ public:
 	// sessions in the same process don't step on each other's value.
 	//
 	// Returned by value (not const ref) so a concurrent SetWorkDate can
-	// never race with a long-lived caller-side reference. wxDateTime is
-	// a small POD-like value, copy is cheap. Both Get and Set are
+	// never race with a long-lived caller-side reference. A date is one
+	// word (fdatetime.h), copy is cheap. Both Get and Set are
 	// expected to be called from the per-session script thread (single
 	// in-flight per session), so the copy itself is also race-free in
 	// practice — value semantics document the invariant.
-	wxDateTime GetWorkDate()         const { return m_workDate; }
-	void       SetWorkDate(const wxDateTime& d) { m_workDate = d; }
+	ibDateTime GetWorkDate()         const { return m_workDate; }
+	void       SetWorkDate(const ibDateTime& d) { m_workDate = d; }
 
 	// Per-session interpreter state slot — currentRunModule, runContext
 	// stack, errorPlace, recCount. Single source of truth for the script
@@ -1057,7 +1057,7 @@ private:
 
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.
 	// Initialized to the session-creation wall-clock in the ctor.
-	wxDateTime                m_workDate;
+	ibDateTime                m_workDate;
 
 	// Per-session active configuration-language code.
 	// m_languageCode = explicit override from SetLanguageCode (empty =

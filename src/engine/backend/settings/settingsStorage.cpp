@@ -67,7 +67,7 @@ bool ibSettingsStorage::Save(const ibSettingsKey& key, const ibDataNode& node)
 			{ wxT("objectKey"),  ibConst(Text(key.m_objectKey))  },
 			{ wxT("settingKey"), ibConst(Text(key.m_settingKey)) },
 			{ wxT("userKey"),    ibConst(Text(key.m_userKey))    },
-			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
+			{ wxT("changed"),    ibConst(ibValue(ibDateTime::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			// Opaque bytes bound as a blob constant — L2 never interprets them,
 			// which is right for a payload whose format belongs to the value.
@@ -152,7 +152,7 @@ std::vector<ibSettingsEntry> ibSettingsStorage::List(ibSettingsCategory category
 
 			const ibValue changed = rs.GetValue(2);
 			if (!changed.IsNull() && !changed.IsEmpty())
-				entry.m_changed = wxDateTime(wxLongLong(changed.GetDate()));
+				entry.m_changed = changed.GetDate();
 
 			entries.push_back(entry);
 		}
@@ -169,8 +169,8 @@ std::vector<ibSettingsEntry> ibSettingsStorage::List(ibSettingsCategory category
 	// before this column meant anything must not decide where a menu opens.
 	std::stable_sort(entries.begin(), entries.end(),
 		[](const ibSettingsEntry& a, const ibSettingsEntry& b) {
-			if (!a.m_changed.IsValid()) return false;
-			if (!b.m_changed.IsValid()) return true;
+			if (a.m_changed.IsEmpty()) return false;
+			if (b.m_changed.IsEmpty()) return true;
 			return a.m_changed > b.m_changed;
 		});
 	return entries;

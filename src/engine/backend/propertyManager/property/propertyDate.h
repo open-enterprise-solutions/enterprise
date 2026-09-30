@@ -7,38 +7,41 @@
 class BACKEND_API ibPropertyDate : public ibProperty {
 public:
 
-	wxLongLong_t GetValueAsDateTime() const { return stringUtils::StrToInt(m_propValue); }
-	void SetValue(const wxLongLong_t& val = emptyDate) { m_propValue = stringUtils::IntToStr(val); }
+	// The text keeps the date's count (fdatetime.h) - all 64 bits of it: through IntToStr / StrToInt,
+	// which are int, a date was cut to its low 32.
+	ibDateTime GetValueAsDateTime() const { wxLongLong_t value = 0; m_propValue.GetString().ToLongLong(&value); return ibDateTime(value); }
+	void SetValue(const ibDateTime& val = ibDateTime()) { m_propValue = TextOf(val); }
 
 	ibPropertyDate(ibPropertyCategory* cat, const wxString& name,
-		const wxLongLong_t& value = emptyDate) : ibProperty(cat, name, stringUtils::IntToStr(value))
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, TextOf(value))
 	{
 	}
 
 	ibPropertyDate(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxLongLong_t& value = emptyDate) : ibProperty(cat, name, label, stringUtils::IntToStr(value))
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, TextOf(value))
 	{
 	}
 
 	ibPropertyDate(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxLongLong_t& value = emptyDate) : ibProperty(cat, name, label, helpString, stringUtils::IntToStr(value))
+		const ibDateTime& value = ibDateTime()) : ibProperty(cat, name, label, helpString, TextOf(value))
 	{
 	}
 
-	virtual bool IsEmptyProperty() const { return GetValueAsDateTime() == emptyDate; }
+	virtual bool IsEmptyProperty() const { return GetValueAsDateTime().IsEmpty(); }
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
+	//load & save object in control
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-public:
+private:
 
+	static wxString TextOf(const ibDateTime& date) { return wxString::Format(wxT("%lld"), date.GetValue()); }
 };
 
 #endif

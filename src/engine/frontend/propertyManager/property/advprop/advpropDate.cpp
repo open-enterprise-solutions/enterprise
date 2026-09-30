@@ -12,8 +12,8 @@ public:
 	ibPropertyDateLoader()
 	{
 		ibPropertyRegistry::Register([](ibPropertyDate* prop) -> wxPGProperty* {
-			return new wxDateProperty(prop->GetLabel(), prop->GetName(),
-				wxDateTime(static_cast<time_t>(prop->GetValueAsDateTime())));
+			// The empty date crosses as an invalid wxDateTime: a picker with no date.
+			return new wxDateProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsDateTime().ToWxDateTime());
 		});
 	}
 }s_dateLoaderDate;

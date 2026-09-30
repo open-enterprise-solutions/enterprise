@@ -187,7 +187,7 @@ void ibPreparedStatementFirebird::SetParamNumber(int nPosition, const ibNumber& 
 		SetInvalidParameterPositionError(nPosition);
 }
 
-void ibPreparedStatementFirebird::SetParamString(int nPosition, const wxString& strValue)
+void ibPreparedStatementFirebird::SetParamString(int nPosition, const ibString& strValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
 	if (nIndex > -1)
@@ -214,11 +214,14 @@ void ibPreparedStatementFirebird::SetParamBlob(int nPosition, const void* pData,
 		SetInvalidParameterPositionError(nPosition);
 }
 
-void ibPreparedStatementFirebird::SetParamDate(int nPosition, const wxDateTime& dateValue)
+void ibPreparedStatementFirebird::SetParamDate(int nPosition, const ibDateTime& dateValue)
 {
 	int nIndex = FindStatementAndAdjustPositionIndex(&nPosition);
-	if (nIndex > -1)
-		m_Statements[nIndex]->SetParam(nPosition, dateValue);
+	if (nIndex > -1) {
+		ibDateTimeParts parts;
+		dateValue.ToParts(parts);
+		m_Statements[nIndex]->SetParam(nPosition, parts);
+	}
 	else
 		SetInvalidParameterPositionError(nPosition);
 }

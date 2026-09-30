@@ -46,10 +46,10 @@ public:
 
 	// get field
 	virtual int GetResultInt(int nField);
-	virtual wxString GetResultString(int nField);
+	virtual ibString GetResultString(int nField);
 	virtual long long GetResultLong(int nField);
 	virtual bool GetResultBool(int nField);
-	virtual wxDateTime GetResultDate(int nField);
+	virtual ibDateTime GetResultDate(int nField);
 	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer);
 	virtual double GetResultDouble(int nField);
 	virtual ibNumber GetResultNumber(int nField);
@@ -60,7 +60,6 @@ public:
 
 private:
 	bool IsNull(XSQLVAR* pVar);
-	void SetDateTimeFromTm(wxDateTime& dateReturn, struct tm& timeInTm);
 
 	void AllocateFieldSpace();
 	void FreeFieldSpace();

@@ -104,14 +104,17 @@ public:
 	// get field
 	/// Retrieve an integer from the result set by the 1-based field index
 	virtual int GetResultInt(int nField) = 0;
-	/// Retrieve a wxString from the result set by the 1-based field index
-	virtual wxString GetResultString(int nField) = 0;
+	/// Retrieve a string from the result set by the 1-based field index - the engine's own text
+	/// (fstring.h), decoded straight into it; NULL reads as the empty string
+	virtual ibString GetResultString(int nField) = 0;
 	/// Retrieve a long from the result set by the 1-based field index
 	virtual long long GetResultLong(int nField) = 0;
 	/// Retrieve a boolean from the result set by the 1-based field index
 	virtual bool GetResultBool(int nField) = 0;
-	/// Retrieve a wxDateTime from the result set by the 1-based field index
-	virtual wxDateTime GetResultDate(int nField) = 0;
+	/// Retrieve a date from the result set by the 1-based field index - the wall-clock reading of the
+	/// TIMESTAMP's parts (fdatetime.h), no clock consulted. NULL, and a field that is not a date, read as
+	/// the empty date; IsFieldNull says which of the two it was.
+	virtual ibDateTime GetResultDate(int nField) = 0;
 	/// Retrieve a BLOB from the result set by the 1-based field index
 	virtual void* GetResultBlob(int nField, wxMemoryBuffer& buffer) = 0;
 	/// Retrieve a double from the result set by the 1-based field index
@@ -123,14 +126,14 @@ public:
 
 	/// Retrieve an integer from the result set by the result set column name
 	virtual int GetResultInt(const wxString& strField);
-	/// Retrieve a wxString from the result set by the result set column name
-	virtual wxString GetResultString(const wxString& strField);
+	/// Retrieve a string from the result set by the result set column name (see the index form)
+	virtual ibString GetResultString(const wxString& strField);
 	/// Retrieve a long from the result set by the result set column name
 	virtual long long GetResultLong(const wxString& strField);
 	/// Retrieve a boolean from the result set by the result set column name
 	virtual bool GetResultBool(const wxString& strField);
-	/// Retrieve a wxDateTime from the result set by the result set column name
-	virtual wxDateTime GetResultDate(const wxString& strField);
+	/// Retrieve a date from the result set by the result set column name (see the index form)
+	virtual ibDateTime GetResultDate(const wxString& strField);
 	/// Retrieve a BLOB from the result set by the result set column name
 	virtual void* GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer);
 	/// Retrieve a double from the result set by the result set column name

@@ -69,16 +69,16 @@ bool ibValueSchedule::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 		// The CALENDAR half only — "has enough time passed" belongs to whoever holds the last run,
 		// which is the manager for a predefined job and the row for a parameterized one.
 		pvarRetValue = ibJobScheduleRules::IsAllowed(m_schedule,
-			lSizeArray > 0 ? paParams[0]->GetDateTime() : wxDateTime::Now());
+			lSizeArray > 0 ? paParams[0]->GetDate() : ibDateTime::Now());
 		return true;
 	case enNextRun:
 	{
-		const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule,
-			lSizeArray > 0 ? paParams[0]->GetDateTime() : wxDateTime::Now());
-		// An invalid answer means the calendar names no moment within a year (February 31st). It
+		const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule,
+			lSizeArray > 0 ? paParams[0]->GetDate() : ibDateTime::Now());
+		// The empty answer means the calendar names no moment within a year (February 31st). It
 		// travels as an empty date rather than as an exception: the card shows it, and a job whose
 		// next run cannot be computed is a thing to SEE, not a thing to crash on.
-		pvarRetValue = next.IsValid() ? ibValue(next) : ibValue(ibValueTypes::TYPE_DATE);
+		pvarRetValue = ibValue(next);
 		return true;
 	}
 	case enPresentation:
@@ -107,9 +107,11 @@ bool ibValueSchedule::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	case enWeekdayOrdinal:     m_schedule.m_weekdayOrdinal = static_cast<std::uint8_t>(varPropVal.GetInteger()); return true;
 	case enEveryNWeeks:        m_schedule.m_everyNWeeks = static_cast<std::uint16_t>(varPropVal.GetInteger()); return true;
 	case enEveryNMonths:       m_schedule.m_everyNMonths = static_cast<std::uint16_t>(varPropVal.GetInteger()); return true;
-	case enPeriodAnchor:       m_schedule.m_periodAnchor = varPropVal.GetDateTime(); return true;
-	case enActiveFrom:         m_schedule.m_activeFrom = varPropVal.GetDateTime(); return true;
-	case enActiveTo:           m_schedule.m_activeTo = varPropVal.GetDateTime(); return true;
+	// The empty date IS the schedule's own "unbounded" (fdatetime.h), the way GetPropVal hands one
+	// back — so clearing ActiveTo unbounds the job rather than making it active until the year 1.
+	case enPeriodAnchor:       m_schedule.m_periodAnchor = varPropVal.GetDate(); return true;
+	case enActiveFrom:         m_schedule.m_activeFrom = varPropVal.GetDate(); return true;
+	case enActiveTo:           m_schedule.m_activeTo = varPropVal.GetDate(); return true;
 	}
 
 	return false;
@@ -132,9 +134,9 @@ bool ibValueSchedule::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	case enEveryNMonths:       pvarPropVal = static_cast<int>(m_schedule.m_everyNMonths); return true;
 	// An unset date travels as the empty date, the same value an unfilled date requisite holds —
 	// so "no anchor" and "no date typed" are one thing in script, not two.
-	case enPeriodAnchor:       pvarPropVal = m_schedule.m_periodAnchor.IsValid() ? ibValue(m_schedule.m_periodAnchor) : ibValue(ibValueTypes::TYPE_DATE); return true;
-	case enActiveFrom:         pvarPropVal = m_schedule.m_activeFrom.IsValid() ? ibValue(m_schedule.m_activeFrom) : ibValue(ibValueTypes::TYPE_DATE); return true;
-	case enActiveTo:           pvarPropVal = m_schedule.m_activeTo.IsValid() ? ibValue(m_schedule.m_activeTo) : ibValue(ibValueTypes::TYPE_DATE); return true;
+	case enPeriodAnchor:       pvarPropVal = ibValue(m_schedule.m_periodAnchor); return true;
+	case enActiveFrom:         pvarPropVal = ibValue(m_schedule.m_activeFrom); return true;
+	case enActiveTo:           pvarPropVal = ibValue(m_schedule.m_activeTo); return true;
 	}
 
 	return false;
@@ -334,7 +336,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 		pvarPropVal = new ibValueSchedule(m_schedule);
 		return true;
 	case enLastRun:
-		pvarPropVal = m_lastRun.IsValid() ? ibValue(m_lastRun) : ibValue(ibValueTypes::TYPE_DATE);
+		pvarPropVal = ibValue(m_lastRun);   // never run: the empty date
 		return true;
 	case enComputer:
 		pvarPropVal = m_computer;
@@ -344,12 +346,12 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 		// DERIVED, exactly as on a parameterized job's row: a pure function of the schedule and
 		// the last run, computed when asked. Nothing stores it, so nothing can hold a stale copy
 		// after a restart or a clock change.
-		const wxDateTime countFrom = m_lastRun.IsValid()
-			? m_lastRun + wxTimeSpan::Seconds(m_schedule.m_intervalSeconds > 0 ? m_schedule.m_intervalSeconds : 0)
-			: wxDateTime::Now();
+		const ibDateTime countFrom = !m_lastRun.IsEmpty()
+			? m_lastRun.AddMilliseconds((m_schedule.m_intervalSeconds > 0 ? m_schedule.m_intervalSeconds : 0) * 1000ll)
+			: ibDateTime::Now();
 
-		const wxDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule, countFrom);
-		pvarPropVal = next.IsValid() ? ibValue(next) : ibValue(ibValueTypes::TYPE_DATE);
+		const ibDateTime next = ibJobScheduleRules::NextAllowedAfter(m_schedule, countFrom);
+		pvarPropVal = ibValue(next);
 		return true;
 	}
 	}

@@ -220,13 +220,13 @@ TEST(RegisterColumns, ARegisterWithoutARecorderIsAskedWithoutOne)
 
 TEST(RegisterBound, ABareDateIsTheInstantAndNothingElse)
 {
-    const wxDateTime noon(15, wxDateTime::Mar, 2026, 12, 0, 0);
+    const ibDateTime noon(2026, 3, 15, 12, 0, 0);
     const ibRegBound bound = ibReadRegisterBound(ibValue(noon));
 
     EXPECT_FALSE(bound.IsEmpty());
     EXPECT_FALSE(bound.HasRecorder());
     EXPECT_FALSE(bound.m_excluding);
-    EXPECT_EQ(noon, bound.m_date.GetDateTime());
+    EXPECT_EQ(noon, bound.m_date.GetDate());
 }
 
 TEST(RegisterBound, AnEmptyArgumentIsNoBoundaryAtAll)
@@ -238,14 +238,14 @@ TEST(RegisterBound, AnEmptyArgumentIsNoBoundaryAtAll)
 // cannot be told apart by the date.
 TEST(RegisterBound, AMomentYieldsTheDateAndTheDocument)
 {
-    const wxDateTime when(15, wxDateTime::Mar, 2026, 12, 0, 0);
+    const ibDateTime when(2026, 3, 15, 12, 0, 0);
     ibValue recorder;
     recorder.SetString(wxT("a document"));   // any non-empty value: the bound only carries it
 
     const ibValuePtr<ibValuePointInTime> moment(new ibValuePointInTime(when, recorder));
     const ibRegBound bound = ibReadRegisterBound(*moment);
 
-    EXPECT_EQ(when, bound.m_date.GetDateTime());
+    EXPECT_EQ(when, bound.m_date.GetDate());
     EXPECT_TRUE (bound.HasRecorder());
     EXPECT_FALSE(bound.m_excluding);
 }
@@ -254,16 +254,16 @@ TEST(RegisterBound, AMomentYieldsTheDateAndTheDocument)
 // either travel ONE road and differ only in which side of the position is meant.
 TEST(RegisterBound, ABoundaryOnlyDecidesWhichSideOfThePositionIsMeant)
 {
-    const wxDateTime when(15, wxDateTime::Mar, 2026, 12, 0, 0);
+    const ibDateTime when(2026, 3, 15, 12, 0, 0);
 
     const ibValuePtr<ibValueBoundary> including(new ibValueBoundary(ibValue(when), ibBoundaryKind_Including));
     const ibRegBound in = ibReadRegisterBound(*including);
-    EXPECT_EQ(when, in.m_date.GetDateTime());
+    EXPECT_EQ(when, in.m_date.GetDate());
     EXPECT_FALSE(in.m_excluding);
 
     const ibValuePtr<ibValueBoundary> excluding(new ibValueBoundary(ibValue(when), ibBoundaryKind_Excluding));
     const ibRegBound out = ibReadRegisterBound(*excluding);
-    EXPECT_EQ(when, out.m_date.GetDateTime());
+    EXPECT_EQ(when, out.m_date.GetDate());
     EXPECT_TRUE(out.m_excluding);
 }
 
@@ -271,7 +271,7 @@ TEST(RegisterBound, ABoundaryOnlyDecidesWhichSideOfThePositionIsMeant)
 // to and not including THIS document" would silently become "up to this date".
 TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
 {
-    const wxDateTime when(15, wxDateTime::Mar, 2026, 12, 0, 0);
+    const ibDateTime when(2026, 3, 15, 12, 0, 0);
     ibValue recorder;
     recorder.SetString(wxT("a document"));
 
@@ -279,7 +279,7 @@ TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
     const ibValuePtr<ibValueBoundary> excluding(new ibValueBoundary(*moment, ibBoundaryKind_Excluding));
 
     const ibRegBound bound = ibReadRegisterBound(*excluding);
-    EXPECT_EQ(when, bound.m_date.GetDateTime());
+    EXPECT_EQ(when, bound.m_date.GetDate());
     EXPECT_TRUE(bound.HasRecorder());
     EXPECT_TRUE(bound.m_excluding);
 }
@@ -313,7 +313,7 @@ struct ArmCutFix {
         reg->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
     }
 
-    ibMaterializeReadSpec CutAt(const wxDateTime& upTo, bool excluding) const {
+    ibMaterializeReadSpec CutAt(const ibDateTime& upTo, bool excluding) const {
         ibRegBound upper;
         upper.m_date = ibValue(upTo);
         upper.m_excluding = excluding;
@@ -323,8 +323,8 @@ struct ArmCutFix {
     }
 };
 
-const wxDateTime kMidnight(5, wxDateTime::Mar, 2026);
-const wxDateTime kAfternoon(5, wxDateTime::Mar, 2026, 14, 0, 0);
+const ibDateTime kMidnight(2026, 3, 5);
+const ibDateTime kAfternoon(2026, 3, 5, 14, 0, 0);
 
 } // namespace
 
@@ -362,7 +362,7 @@ TEST(RegisterArmCut, AnIncludedDateOnAGrainEdgeIsCutAtThatEdge)
     const ibMaterializeReadSpec read = f.CutAt(kMidnight, /*excluding*/ false);
 
     ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
-    EXPECT_EQ(read.m_floor.GetDateTime(), kMidnight);
+    EXPECT_EQ(read.m_floor.GetDate(), kMidnight);
     EXPECT_FALSE(read.m_toExcluding);
 }
 
@@ -374,7 +374,7 @@ TEST(RegisterArmCut, ADateInsideAGrainIsCutAtItsStartAndKeepsItsSide)
     const ibMaterializeReadSpec read = f.CutAt(kAfternoon, /*excluding*/ true);
 
     ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
-    EXPECT_EQ(read.m_floor.GetDateTime(), kMidnight);
+    EXPECT_EQ(read.m_floor.GetDate(), kMidnight);
     EXPECT_TRUE(read.m_toExcluding);
 }
 
@@ -433,7 +433,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('w1', 1, '2026-03-04 23:00:00', 1, 'kitchen', 0, 12)"));
     db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('r2', 1, '2026-03-05 09:00:00', 1, 'kitchen', 1, 30)"));
 
-    const auto balance = [&](const wxDateTime& upTo, bool excluding) {
+    const auto balance = [&](const ibDateTime& upTo, bool excluding) {
         ibMaterializeReadSpec read = f.CutAt(upTo, excluding);   // the cut, as the register fills it
         read.m_view         = wxT("Reg9_Turnovers");
         read.m_periodColumn = wxT("period_");

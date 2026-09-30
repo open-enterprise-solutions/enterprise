@@ -199,7 +199,7 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 		wxString                 m_jobName;   // the display name
 		bool                     m_active = true;
 		ibJobScheduleDescription m_schedule;
-		wxDateTime               m_lastRun;
+		ibDateTime               m_lastRun;
 		wxString                 m_computer;
 	};
 

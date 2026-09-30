@@ -331,6 +331,7 @@
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
+    <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="objCtor.h" />
@@ -903,6 +904,7 @@
     <ClCompile Include="metadataReport.cpp" />
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
+    <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />

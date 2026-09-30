@@ -192,7 +192,7 @@ TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 // wire it is indistinguishable from a string that looks like a date.
 TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 	ibDataNode n;
-	n.AddField(wxT("when"), ibDataValue::Date(1700000000000LL));
+	n.AddField(wxT("when"), ibDataValue::Date(ibDateTime(2023, 11, 14, 22, 13, 20)));
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
 	const ibDataValue* v = back.FindField(wxT("when"));

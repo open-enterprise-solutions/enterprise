@@ -133,7 +133,7 @@ public:
 	// WHEN THIS ROW IS NEXT DUE — computed from (schedule, last run) every time it is asked, never
 	// stored. NOT a second scheduler: it composes the SAME pure rules the manager asks
 	// (ibJobScheduleRules), so a row and the tick can never disagree about what its calendar means.
-	static wxDateTime ComputeNextRun(const ibJobScheduleDescription& schedule, const wxDateTime& lastRun);
+	static ibDateTime ComputeNextRun(const ibJobScheduleDescription& schedule, const ibDateTime& lastRun);
 
 	//support icons
 	virtual wxIcon GetIcon() const;

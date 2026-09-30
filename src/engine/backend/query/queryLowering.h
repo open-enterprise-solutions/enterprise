@@ -383,14 +383,15 @@ public:
 	                                 const std::map<wxString, ibValue>& params,
 	                                 std::vector<OutputColumn>& outSchema,
 	                                 const ibReadPageRequest& page,
-	                                 ibRenderedPageCache& cache, const wxString& signature);
+	                                 ibRenderedPageCache& cache, const ibPageSignature& signature);
 
 private:
+	// `cache` and `signature` go together: both null for a read that is not cached.
 	static ibDataQueryResult ExecuteImpl(const ibQuerySelect& ast,
 	                                     const std::map<wxString, ibValue>& params,
 	                                     std::vector<OutputColumn>& outSchema,
 	                                     const ibReadPageRequest& page,
-	                                     ibRenderedPageCache* cache, const wxString& signature);
+	                                     ibRenderedPageCache* cache, const ibPageSignature* signature);
 
 	// A SELECT WITH NO TABLE — `SELECT 1`, `SELECT &Param`. One row carrying the projected values,
 	// built without opening the door at all: there is no source to open it on. A COLUMN in such a
