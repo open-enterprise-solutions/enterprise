@@ -6233,3 +6233,19 @@ msgstr "Пісок"
 #: src/engine/backend/composition/compositionTheme.cpp:45
 msgid "Black and white"
 msgstr "Чорно-біла"
+
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp
+msgid "Conditional appearance"
+msgstr "Умовне оформлення"
+
+#: src/engine/backend/compositionDescription.cpp
+msgid "Horizontal alignment"
+msgstr "Горизонтальне положення"
+
+#: src/engine/backend/system/value/composition/valueComposerSettings.h
+msgid "Filled"
+msgstr "Заповнено"
+
+#: src/engine/backend/system/value/composition/valueComposerSettings.h
+msgid "Not filled"
+msgstr "Не заповнено"

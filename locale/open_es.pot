@@ -5245,3 +5245,19 @@ msgstr ""
 #: src/engine/backend/composition/compositionTheme.cpp:45
 msgid "Black and white"
 msgstr ""
+
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp
+msgid "Conditional appearance"
+msgstr ""
+
+#: src/engine/backend/compositionDescription.cpp
+msgid "Horizontal alignment"
+msgstr ""
+
+#: src/engine/backend/system/value/composition/valueComposerSettings.h
+msgid "Filled"
+msgstr ""
+
+#: src/engine/backend/system/value/composition/valueComposerSettings.h
+msgid "Not filled"
+msgstr ""

@@ -177,8 +177,11 @@ bool ibFilterTreeModel::HasValue(const ibDataViewItem& item, unsigned col) const
 		return true;
 	if (!node->IsRoot()) {
 		const ibFilterNodeDescription* line = node->Resolve();
-		if (line == nullptr || line->m_kind != ibFilterNodeKind_Group)
-			return true;   // a condition fills every column
+		if (line == nullptr)
+			return true;
+		// A CONDITION fills every column — but «filled» / «not filled» asks the field alone, and has no right side.
+		if (line->m_kind != ibFilterNodeKind_Group)
+			return col != kFilterColRight || ibComparisonTakesValue(line->m_comparison);
 		// A GROUP is a Use box and an operator, and nothing else: no comparison, no
 		// right-hand side, no display mode.
 		return col == kFilterColUse || col == kFilterColLeft;
@@ -210,6 +213,11 @@ wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescriptio
 	if (field.IsField() && ibBackendTypeConfigFactory::GetFormatFromTypeDesc(field.m_type, format))
 		return format.Apply(value);
 	return value.GetString();
+}
+
+wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other)
+{
+	return side.IsField() ? ibFieldText(side) : ibFilterValueText(side.m_value, other);
 }
 
 void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
@@ -252,10 +260,10 @@ void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item,
 	// `Price > Cost`, `Amount > 100.00` and the comparison between them all read as
 	// what they are.
 	case kFilterColLeft:
-		variant = line->m_left.IsField() ? ibFieldText(line->m_left) : ibFilterValueText(line->m_left.m_value, line->m_right);
+		variant = ibFilterSideText(line->m_left, line->m_right);
 		break;
 	case kFilterColRight:
-		variant = line->m_right.IsField() ? ibFieldText(line->m_right) : ibFilterValueText(line->m_right.m_value, line->m_left);
+		variant = ibFilterSideText(line->m_right, line->m_left);
 		break;
 	case kFilterColComparison:
 		variant = ibValue::CreateEnumObject<ibValueEnumComparisonKind>(line->m_comparison).GetString();

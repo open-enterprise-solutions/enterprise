@@ -60,6 +60,11 @@ using ibFilterPath = std::vector<size_t>;
 // that asks whether its text is still the cell's own (ibFilterValueRenderer::GetValueFromEditorCtrl).
 wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescription& field);
 
+// …AND A SIDE AS ITS CELL SHOWS IT — a field as its whole path, a value as the field across the comparison writes
+// it. One reading for the filter's own cells and for a condition read out in one line elsewhere (the conditional
+// appearance's summary), so the two never show one condition two ways.
+wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilterOperandDescription& other);
+
 // One row of the tree — a condition or a group, named by WHERE it sits. The
 // model owns these and hands the same one back for the same path, so selection
 // and expansion survive a refresh.

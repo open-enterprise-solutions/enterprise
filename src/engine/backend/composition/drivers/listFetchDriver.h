@@ -27,6 +27,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>   // a row's conditional appearance, null where there is none — see Row::m_attr
 
 class BACKEND_API ibListFetchDriver : public ibCompositionDriver
 {
@@ -55,6 +56,12 @@ public:
 		// the page window never found its anchor, so the same headings arrived twice (2026-09-29).
 		ibValue m_key;
 		bool    m_keyed = false;   // …and whether the output had one to give: a record has none
+		// ⭐ …AND WHAT ITS CONDITIONAL APPEARANCE DRAWS IT WITH, kept with it — the row's, and each column's under
+		// the same id its value is filed under, beside m_values (only where a rule said something). Made by the walk
+		// (ibCompositionLineAttr) and MOVED here; the model moves it on to its node as it is.
+		// ⚠ NULL WHERE NO RULE HELD — a list with no conditional appearance carries nothing for it per row, not even
+		// an empty map (Max, 2026-09-30: "no conditional appearance, nothing to count").
+		std::unique_ptr<ibCompositionRowAttr> m_attr;
 
 		ibValue GetValue(const ibMetaID& id) const {
 			const auto it = m_values.find(id);
@@ -78,6 +85,12 @@ public:
 	ibListFetchDriver(const ibReadPageRequest& page, ColumnIdOf idOf)
 		: m_paged(true), m_page(page), m_idOf(std::move(idOf)) {}
 
+	// ⚠ ONE FETCH'S SINK, NEVER COPIED — its rows are taken from it (a row's attributes move on to the node, see
+	// Row::m_attr). Said out loud because the class is exported: MSVC generates every member of an exported class,
+	// and a generated copy would have to copy rows that only move.
+	ibListFetchDriver(const ibListFetchDriver&) = delete;
+	ibListFetchDriver& operator=(const ibListFetchDriver&) = delete;
+
 	bool GetPageRequest(ibReadPageRequest& request) const override {
 		if (!m_paged)
 			return false;
@@ -96,12 +109,12 @@ public:
 	// the flag is draw an EXPANDER, and an expander may promise only what the output will actually
 	// show; a heading standing over rows this output does not print must not offer to open.
 	virtual void OnGroupBegin(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
-		Append(line.m_level, line.m_indent, line.m_showsWhatIsUnder, /*heading*/ true, values);
+		Append(line.m_level, line.m_indent, line.m_showsWhatIsUnder, /*heading*/ true, values, line.m_attr);
 	}
 
 	// A RECORD OPENS NOTHING, so it offers no expander — the truthful answer, not a default.
 	virtual void OnRow(const ibCompositionLine& line, const std::vector<ibValue>& values) override {
-		Append(line.m_level, line.m_indent, false, /*heading*/ false, values);
+		Append(line.m_level, line.m_indent, false, /*heading*/ false, values, line.m_attr);
 	}
 
 	// (⛔ NO OnGroupEnd HERE, and that is a fact about a list rather than an omission: a list draws a
@@ -109,11 +122,16 @@ public:
 	//  list has no place for. The default does nothing, which is exactly right.)
 
 private:
-	void Append(int level, int indent, bool expandable, bool heading, const std::vector<ibValue>& values) {
+	void Append(int level, int indent, bool expandable, bool heading, const std::vector<ibValue>& values,
+		ibCompositionLineAttr* attr) {
 		Row row;
 		row.m_level = level;
 		row.m_indent = indent;
 		row.m_expandable = expandable;
+		if (attr != nullptr) {
+			row.m_attr = std::make_unique<ibCompositionRowAttr>();
+			row.m_attr->m_line = std::move(attr->m_line);
+		}
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
 			// A heading's key — the first dimension column of its level (a column counts levels from 0, a line from 1).
 			if (heading && !row.m_keyed && m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension
@@ -137,6 +155,12 @@ private:
 					continue;
 			}
 			row.m_values.emplace(id, values[i]);
+			if (attr != nullptr)
+				for (std::pair<size_t, ibCompositionAttr>& cell : attr->m_cells)   // a column's own, where it has one
+					if (cell.first == i) {
+						row.m_attr->m_columns.emplace(id, std::move(cell.second));
+						break;
+					}
 		}
 		m_rows.push_back(std::move(row));
 	}

@@ -46,6 +46,10 @@ public:
 	// metadata-free while resolution has a single home. (docs/private/query-language-arc.md §22 dot-walk)
 	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	// …the same answer for a TYPE a holder of fields already has in hand, with no column behind it — a setting's
+	// field, walked by its type (ibQueryConstructorModel::WalkFrom). ResolveReferenceTargets is this over the column.
+	static BACKEND_API std::vector<const ibBackendQueryable*> ReferenceTargetsOf(const ibMetaData* metaData,
+		const ibTypeDescription& type);
 
 	// ⭐⭐ A WALK NARROWED BY CAST. `CAST(Analytics AS Catalog.Goods).Description` walks into the goods and
 	// nowhere else: a counterparty in the same slot answers NULL, not its own description. The narrowing

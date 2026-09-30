@@ -34,6 +34,11 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 	// DoGetPMethods (protected) + Shared<&ibValueColour_BindNames> come from the base.
 
+	// ⭐ A PACKED FORM — the text a property keeps a colour in (typeConv), so a colour kept in a description
+	// (an appearance's parameter) is stored as data and read back without anything to resolve.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 	operator wxColour() const { return m_colour; }
 };
 

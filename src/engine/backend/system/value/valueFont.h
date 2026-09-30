@@ -31,6 +31,10 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 	// DoGetPMethods (protected) + Shared<&ibValueFont_BindNames> come from the base.
 
+	// ⭐ A PACKED FORM — the text a property keeps a font in (typeConv), as the colour has one.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 	operator wxFont() {
 		return m_font;
 	}

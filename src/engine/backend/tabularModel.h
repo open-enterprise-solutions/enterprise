@@ -1044,7 +1044,9 @@ public:
 			m_valueTable(tableRow.m_valueTable), m_nodeValues(tableRow.m_nodeValues),
 			m_groupPath(tableRow.m_groupPath), m_subPath(tableRow.m_subPath),
 			m_heading(tableRow.m_heading), m_rowKey(tableRow.m_rowKey),
-			m_container(tableRow.m_container), m_selfContained(tableRow.m_selfContained) {
+			m_container(tableRow.m_container), m_selfContained(tableRow.m_selfContained),
+			m_compositionAttr(tableRow.m_compositionAttr != nullptr ? std::make_unique<ibCompositionRowAttr>(*tableRow.m_compositionAttr) : nullptr),
+			m_compositionAttrKnown(tableRow.m_compositionAttrKnown) {
 		}
 
 		// --- composer-fetch ctors (out-of-line: they need ibBackendQueryable's full type / are non-trivial) ---
@@ -1065,6 +1067,13 @@ public:
 		// `subPath` = the folder chain inside a hierarchy rung; empty for an ordinary grouping heading.
 		ibComposerNode(const std::map<ibMetaID, ibValue>& values, const std::vector<ibValue>& groupPath, bool container,
 			std::vector<ibValue> subPath = {});
+		// …AND WHAT ITS CONDITIONAL APPEARANCE DRAWS IT WITH, taken from the fetch's row as it is — the pointer moves,
+		// nothing is converted or copied (see m_compositionAttr). Null where no rule held — and that is the answer
+		// (m_compositionAttrKnown).
+		void TakeCompositionAttr(std::unique_ptr<ibCompositionRowAttr> attr) {
+			m_compositionAttr = std::move(attr);
+			m_compositionAttrKnown = true;
+		}
 
 		// ⭐⭐ WHERE THIS NODE STANDS — the dimension values of the rungs above it, root->this. A GROUP node's
 		// own value is the last of them; a ROW's path is the scope it was fetched under and stops above it.
@@ -1332,6 +1341,30 @@ public:
 		std::vector<ibValue> m_rowKey;                            // DB-list / stub identity: source primary-key value(s)
 		bool m_container = false;                                 // drillable group level / folder — OR'd with !m_children.empty()
 		bool m_selfContained = false;                             // composer copy (value copies, m_valueTable null) — IsAttached -> true
+		// ⭐ …AND WHAT ITS CONDITIONAL APPEARANCE DRAWS IT WITH — the composition's own structure, the row's and each
+		// column's under the id its value is filed under (beside m_nodeValues), moved in from the fetch as it is; the
+		// grid is handed its widget's attribute made from it when it asks (ibValueModel::GetAttrByRow). A row the
+		// walk never read (a table in memory, a crumb above a folder) is asked of by its model.
+		// ⚠ NULL WHERE NO RULE HELD — a node of a list with no conditional appearance carries nothing for it, not
+		// even an empty map (Max, 2026-09-30: "no conditional appearance, nothing to count").
+		std::unique_ptr<ibCompositionRowAttr> m_compositionAttr;
+		// ⭐ …AND WHETHER THAT IS THE ANSWER — the walk read this row against the rules (TakeCompositionAttr), so a
+		// null m_compositionAttr says "none held" rather than "nobody asked". Its model then asks nothing: before this,
+		// every row the walk had found
+		// no rule for was asked again, per visible cell, twice, with the rules made ready each time (2026-09-30: "a list
+		// with a conditional appearance is noticeably slower").
+		bool m_compositionAttrKnown = false;
+
+		// THE ATTRIBUTE OF ONE COLUMN — its own, else the row's; null where the row carries none. (Composition in the
+		// name, as the model's GetCompositionAttrByRow: a model's plain Attr is the grid's widget attribute.)
+		const ibCompositionAttr* GetCompositionAttr(const ibMetaID& id) const {
+			if (m_compositionAttr == nullptr)
+				return nullptr;
+			const auto own = m_compositionAttr->m_columns.find(id);
+			return own != m_compositionAttr->m_columns.end() ? &own->second : &m_compositionAttr->m_line;
+		}
+		bool HasCompositionAttr() const { return m_compositionAttr != nullptr; }
+		bool IsCompositionAttrKnown() const { return m_compositionAttrKnown; }
 	};
 
 	// The universal node IS the tree node — a list is just a childless one. The historical ibValueTreeNode
@@ -1404,10 +1437,19 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) = 0;
 
-	virtual bool GetAttrByRow(const ibDataViewItem& WXUNUSED(row), unsigned int WXUNUSED(col),
-		ibDataViewItemAttr& WXUNUSED(attr)) const {
-		return false;
-	}
+	// ⭐ A ROW'S CONDITIONAL APPEARANCE, handed to the grid as the attribute it draws with — converted, value for value,
+	// from the composition's structure GetCompositionAttrByRow answers with: the one the walk made and the fetch moved
+	// onto the node (ibComposerNode::GetAttr), or, for a row that carries none (a table in memory, a heading folded in
+	// memory), the rules of this model's setting asked of the row now, by the walk's own reading of them
+	// (ibCompositionSayRules): the line's, then the column's own over it. Every model whose rows are composer nodes
+	// answers it here; one that draws otherwise overrides it.
+	virtual bool GetAttrByRow(const ibDataViewItem& row, unsigned int col, ibDataViewItemAttr& attr) const;
+	// …and whether the row has one to ask at all — its node carries one, or the setting declares a rule. Asked first,
+	// so a list with no conditional appearance builds nothing per cell for it.
+	bool HasAttrByRow(const ibDataViewItem& row) const;
+	// …and what it draws a cell with in the composition's own structure (ibCompositionAttr) — what the grid's attribute
+	// is converted from, and what the cell's text is read off (GetValue).
+	bool GetCompositionAttrByRow(const ibDataViewItem& row, unsigned int col, ibCompositionAttr& attr) const;
 
 	virtual bool IsEnabledByRow(const ibDataViewItem& WXUNUSED(row),
 		unsigned int WXUNUSED(col)) const {
@@ -1419,10 +1461,10 @@ public:
 	// THE data accessors (the provider forwards here). They forward to the GetValueByRow/SetValueByRow
 	// extension points. Declared FRESH on the single model (the former pure ibValueModel::GetValue/… are gone
 	// — these concrete versions took their place), so no `override`.
+	// …and what the cell SAYS under its conditional appearance — its text (GetCompositionAttrByRow), laid over
+	// what GetValueByRow read. Only what it shows: the row is untouched.
 	virtual void GetValue(wxVariant& variant,
-		const ibDataViewItem& item, unsigned int col) const {
-		GetValueByRow(variant, item, col);
-	}
+		const ibDataViewItem& item, unsigned int col) const;
 
 	virtual bool SetValue(const wxVariant& variant,
 		const ibDataViewItem& item, unsigned int col) {

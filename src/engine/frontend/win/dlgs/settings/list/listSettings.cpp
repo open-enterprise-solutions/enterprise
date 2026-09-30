@@ -2,6 +2,7 @@
 #include "frontend/win/dlgs/settings/settingsFieldTree.h"     // which fields this list has — one answer
 #include "frontend/win/dlgs/settings/settingsFilterEditor.h"   // SHARED with the composer's world
 #include "frontend/win/dlgs/settings/settingsSortEditor.h"     // …and so is this one
+#include "frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.h"   // …and so is the conditional appearance
 #include "frontend/win/dlgs/settings/settingsStyle.h"          // art / grid styling, spelled once
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button
 #include "frontend/win/dlgs/callbackDropTarget.h"                  // the same-process drag: the source knows what moved
@@ -152,6 +153,15 @@ void ibListSettingsPanel::BuildPages()
 	if ((m_pages & Page_Group) != 0)
 		notebook->AddPage(BuildGroupPage(notebook), _("Group"), notebook->GetPageCount() == 0,
 			ibSettingsTabArt(ibSettingsTab::Grouping));
+	// ⭐ …AND WHAT STANDS OUT, WHEN — the rules a list's grid paints its rows by, the very editor a report's
+	// settings carry (Max, 2026-09-30: "conditional appearance lives in lists and in reports, one mechanism").
+	if ((m_pages & Page_ConditionalAppearance) != 0) {
+		m_conditionalAppearanceEditor = new ibConditionalAppearanceEditor(notebook,
+			&EditedSettings().m_conditionalAppearance, m_fieldSource.get(), [this] { return m_metaData; });
+		m_conditionalAppearanceEditor->SetOnChanged([this] { MarkModified(); });
+		notebook->AddPage(m_conditionalAppearanceEditor, _("Conditional appearance"), notebook->GetPageCount() == 0,
+			ibSettingsTabArt(ibSettingsTab::ConditionalAppearance));
+	}
 
 	mainSizer->Add(notebook, 1, wxEXPAND);
 	SetSizer(mainSizer);
@@ -480,6 +490,7 @@ void ibListSettingsPanel::LoadFromSettings()
 	if (m_filterEditor != nullptr) m_filterEditor->Reload();
 	if (m_sortEditor   != nullptr) m_sortEditor->Reload();
 	if (m_groupModel   != nullptr) m_groupModel->ResetFromList();
+	if (m_conditionalAppearanceEditor != nullptr) m_conditionalAppearanceEditor->Reload();
 }
 
 // RE-READ THE SETTINGS THEMSELVES — what the panel edits changed under it.

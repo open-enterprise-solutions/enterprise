@@ -33,6 +33,11 @@
 
 #include "backend/compositionDescription.h"
 #include "backend/composition/compositionTheme.h"   // ibCompositionThemes — the palettes report_other_settings offers
+#include "backend/system/value/valueColour.h"        // report_conditional_appearance — a colour, kept as the value it is
+#include "backend/system/value/valueFont.h"          // …a font
+#include "backend/spreadsheetDescription.h"                   // …said against the report's own (s_defaultSpreadsheetFont)
+#include "backend/composition/drivers/compositionDriver.h"    // …as the parts it changes (ibCompositionFont)
+#include "backend/system/value/valueSpreadsheet.h"   // …and an alignment, the sheet's own enumeration
 #include "backend/metaCollection/metaComposerObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — a named item as a value
@@ -87,14 +92,50 @@ const ibArg& ArgRemove()
 	return s_a;
 }
 
+// THE COMPARISON AS A WORD. Spelled out in the schema and matched here, so the two cannot drift -
+// and so a caller reading the description knows the whole vocabulary without guessing at numbers.
+// ONE TABLE: the schema's choices, the descriptions and the refusals are all read off it.
+struct ibComparisonWord { const wxChar* m_word; ibComparisonKind m_kind; };
+const std::vector<ibComparisonWord>& ComparisonWords()
+{
+	static const std::vector<ibComparisonWord> s_words = {
+		{ wxT("equal"),        ibComparisonKind_Equal },
+		{ wxT("notEqual"),     ibComparisonKind_NotEqual },
+		{ wxT("greater"),      ibComparisonKind_Greater },
+		{ wxT("less"),         ibComparisonKind_Less },
+		{ wxT("greaterEqual"), ibComparisonKind_GreaterEqual },
+		{ wxT("lessEqual"),    ibComparisonKind_LessEqual },
+		{ wxT("contains"),     ibComparisonKind_Contains },
+		{ wxT("in"),           ibComparisonKind_In },
+		{ wxT("inHierarchy"),  ibComparisonKind_InHierarchy },
+		{ wxT("filled"),       ibComparisonKind_Filled },
+		{ wxT("notFilled"),    ibComparisonKind_NotFilled },
+	};
+	return s_words;
+}
+
+// …as a list a sentence can carry: "equal, notEqual, …, notFilled".
+wxString ComparisonWordList()
+{
+	wxString text;
+	for (const ibComparisonWord& entry : ComparisonWords())
+		text += (text.IsEmpty() ? wxString() : wxString(wxT(", "))) + entry.m_word;
+	return text;
+}
+
 const ibArg& ArgComparison()
 {
 	static const ibArg s_a(wxT("comparison"), ibArg::Kind::Text,
-		ibMcpText("How to compare - equal (the default), notEqual, greater, less, greaterEqual, lessEqual, "
-			  "contains, in, inHierarchy."),
+		wxString::Format(ibMcpText("How to compare - %s; equal is the default. filled and notFilled ask whether "
+			"the field has a value at all (none = NULL or the empty value of its type) and take no value."),
+			ComparisonWordList()),
 		/*required*/ false,
-		{ wxT("equal"), wxT("notEqual"), wxT("greater"), wxT("less"), wxT("greaterEqual"),
-		  wxT("lessEqual"), wxT("contains"), wxT("in"), wxT("inHierarchy") });
+		[] {
+			std::vector<wxString> words;
+			for (const ibComparisonWord& entry : ComparisonWords())
+				words.push_back(entry.m_word);
+			return words;
+		}());
 	return s_a;
 }
 
@@ -575,30 +616,33 @@ ibVariantDescription* VariantOf(ibCompositionDescription& composition,
 // nearly every report; `m_selected` is the author's answer to "which columns do I want to see",
 // and THAT is what was missing. Checked the wrong one first, and the wrong one is empty on healthy
 // reports — a warning that fired on everything would have been worse than none.
-// THE COMPARISON AS A WORD. Spelled out in the schema and matched here, so the two cannot drift -
-// and so a caller reading the description knows the whole vocabulary without guessing at numbers.
-bool ComparisonFromWord(const wxString& word, ibComparisonKind& kind)
-{
-	struct { const wxChar* m_word; ibComparisonKind m_kind; } static const s_words[] = {
-		{ wxT("equal"),        ibComparisonKind_Equal },
-		{ wxT("notEqual"),     ibComparisonKind_NotEqual },
-		{ wxT("greater"),      ibComparisonKind_Greater },
-		{ wxT("less"),         ibComparisonKind_Less },
-		{ wxT("greaterEqual"), ibComparisonKind_GreaterEqual },
-		{ wxT("lessEqual"),    ibComparisonKind_LessEqual },
-		{ wxT("contains"),     ibComparisonKind_Contains },
-		{ wxT("in"),           ibComparisonKind_In },
-		{ wxT("inHierarchy"),  ibComparisonKind_InHierarchy },
-	};
+// (ComparisonWords — the vocabulary — stands with the arguments at the top of the file: the schema is built from it.)
 
-	for (const auto& entry : s_words) {
+// THE WORD A CALLER SAID — none is `equal`; one that names no comparison is refused here, in the one sentence every
+// verb that takes a comparison answers with.
+bool ComparisonFromWord(const wxString& word, ibComparisonKind& kind, wxString& refusal)
+{
+	kind = ibComparisonKind_Equal;
+	if (word.IsEmpty())
+		return true;
+	for (const ibComparisonWord& entry : ComparisonWords()) {
 		if (word.IsSameAs(entry.m_word, false)) {
 			kind = entry.m_kind;
 			return true;
 		}
 	}
 
+	refusal = wxString::Format(ibMcpText("'%s' is not a comparison. Use one of: %s."), word, ComparisonWordList());
 	return false;
+}
+
+// …and back, for an answer that reads a condition out in the words it was said in.
+wxString WordOfComparison(ibComparisonKind kind)
+{
+	for (const ibComparisonWord& entry : ComparisonWords())
+		if (entry.m_kind == kind)
+			return entry.m_word;
+	return wxEmptyString;
 }
 
 // ⭐⭐ THE VALUE A FILTER COMPARES AGAINST, and this is where most of the work is. A filter on a
@@ -672,6 +716,206 @@ bool ValueForPath(const ibCompositionDescription& composition, const wxString& p
 	}
 
 	return true;
+}
+
+// WHOSE SETTINGS — a node of an output, or the report's when no output is named (SettingsOf).
+const ibArg& ArgNodeOutput()
+{
+	static const ibArg s_a(wxT("output"), ibArg::Kind::Text,
+		ibMcpText("Set it on a NODE of this output - the level `groupBy` names, or the output's DETAIL level "
+			"without it. Omit to set the REPORT's own, which every node inherits."));
+	return s_a;
+}
+
+// ⭐ WHOSE SETTINGS A CALL SPEAKS OF — the settings window's own "Settings of:": the report's, or a NODE's (the level
+// `groupBy` names in the output `output` names, else that output's DETAIL level). One finder for every verb said per
+// node (report_other_settings, report_conditional_appearance), so "which node" is answered once. Null, with the
+// refusal, where there is none.
+ibSettingsDescription* SettingsOf(ibVariantDescription& variant, const ibDataNode& params, wxString& refusal)
+{
+	if (!ArgNodeOutput().Given(params))
+		return &variant.m_settings;
+
+	const wxString outputName = ArgNodeOutput().Text(params);
+	ibOutputDescription* output = nullptr;
+	wxString available;
+	for (ibOutputDescription& candidate : variant.m_settings.m_structure) {
+		available << (available.IsEmpty() ? wxT("") : wxT(", ")) << candidate.m_name;
+		if (candidate.m_name.IsSameAs(outputName, false))
+			output = &candidate;
+	}
+	if (output == nullptr) {
+		refusal = available.IsEmpty()
+			? ibMcpText("This variant has no output yet - add one with report_output.")
+			: wxString::Format(ibMcpText("There is no output called '%s'. It has: %s."), outputName, available);
+		return nullptr;
+	}
+	const wxString groupBy = ArgGroupBy().Text(params);
+	ibLevelDescription* node = nullptr;
+	wxString has;
+	for (std::vector<ibLevelDescription>* axis : { &output->m_rowGroups, &output->m_columnGroups })
+		for (ibLevelDescription& level : *axis) {
+			for (const ibGroupLineDescription& field : level.m_settings.m_group.m_lines)
+				has << (has.IsEmpty() ? wxT("") : wxT(", ")) << field.m_path;
+			if (node != nullptr)
+				continue;
+			if (groupBy.IsEmpty() ? level.m_kind == ibCompositionLevelKind::Details
+			                      : std::any_of(level.m_settings.m_group.m_lines.begin(),
+			                                    level.m_settings.m_group.m_lines.end(),
+			                                    [&groupBy](const ibGroupLineDescription& field) {
+			                                        return field.m_path.IsSameAs(groupBy, false); }))
+				node = &level;
+		}
+	if (node == nullptr) {
+		refusal = groupBy.IsEmpty()
+			? ibMcpText("This output has no detail level - name the grouping with `groupBy`.")
+			: has.IsEmpty()
+				? ibMcpText("This output has no level grouped by that - it has no groupings yet.")
+				: wxString::Format(ibMcpText("This output has no level grouped by that. It groups by: %s."), has);
+		return nullptr;
+	}
+	return &node->m_settings;
+}
+
+// ⭐⭐ A CONDITION AS A TREE — the filter's own shape, said and read back the same way by report_filter and
+// report_conditional_appearance (Max, 2026-09-30: "≠ X OR not filled" could not be said at all, and a rule built in
+// the window with a group read back as an EMPTY condition — its groups were skipped). An array of entries joined by
+// AND; an entry is a LINE or a GROUP. What is read back is what can be sent.
+const ibArg& ArgCondition()
+{
+	static const ibArg s_a(wxT("condition"), ibArg::Kind::Any,
+		wxString::Format(ibMcpText("The whole condition as a tree - an array of entries, joined by AND. A LINE is "
+			"{\"path\": a field, \"comparison\": %s, \"value\": what to compare with - or \"valuePath\": another field of "
+			"the same row - and \"use\": false to keep it switched off}; filled / notFilled take neither. A GROUP is "
+			"{\"group\": \"and\" | \"or\" | \"not\", \"lines\": [entries]}. `Supplier` is not X or has none: "
+			"[{\"group\": \"or\", \"lines\": [{\"path\": \"Supplier\", \"comparison\": \"notEqual\", \"value\": \"...\"}, "
+			"{\"path\": \"Supplier\", \"comparison\": \"notFilled\"}]}]. An empty array holds on every row. It replaces the "
+			"whole condition; the answer reads it back in this same shape."), ComparisonWordList()));
+	return s_a;
+}
+
+// …AND A CONDITION OF ONE LINE, the everyday case — its field; the rest of the line is `comparison` and `value`.
+const ibArg& ArgLinePath()
+{
+	static const ibArg s_a(wxT("path"), ibArg::Kind::Text,
+		ibMcpText("The field of a ONE-LINE condition, with `comparison` and `value`. For several lines, a group or a "
+			"field compared with a field, give `condition` instead."));
+	return s_a;
+}
+
+// THE GROUP'S WORD — and, with none, not a group.
+const std::vector<std::pair<const wxChar*, ibFilterGroupKind>>& GroupWords()
+{
+	static const std::vector<std::pair<const wxChar*, ibFilterGroupKind>> s_words = {
+		{ wxT("and"), ibFilterGroupKind_And }, { wxT("or"), ibFilterGroupKind_Or }, { wxT("not"), ibFilterGroupKind_Not } };
+	return s_words;
+}
+
+// THE TREE AS IT WAS SAID — every entry checked before anything is kept: a field the query does not offer, a word
+// that is no comparison, a value that is no value of the field refuse the whole call.
+bool ConditionFromTree(const ibCompositionDescription& composition, const ibDataValue& said,
+	std::vector<ibFilterNodeDescription>& into, wxString& refusal)
+{
+	if (said.Kind() != ibDataKind::Array) {
+		refusal = ibMcpText("`condition` is an ARRAY of entries - [] holds on every row.");
+		return false;
+	}
+	for (const ibDataValue& entry : said.AsArray()) {
+		if (entry.Kind() != ibDataKind::Child || entry.AsChild() == nullptr) {
+			refusal = ibMcpText("Each entry of `condition` is an object - a line {path, comparison, value} or a "
+				"group {group, lines}.");
+			return false;
+		}
+		const ibDataNode& line = *entry.AsChild();
+		const ibDataValue* use = line.FindField(wxT("use"));
+		const bool on = use == nullptr || use->Kind() != ibDataKind::Bool || use->AsBool();
+
+		if (const ibDataValue* group = line.FindField(wxT("group"))) {
+			const wxString word = group->Kind() == ibDataKind::String ? group->AsString() : wxString();
+			const auto kind = std::find_if(GroupWords().begin(), GroupWords().end(),
+				[&word](const std::pair<const wxChar*, ibFilterGroupKind>& known) { return word.IsSameAs(known.first, false); });
+			if (kind == GroupWords().end()) {
+				refusal = wxString::Format(ibMcpText("'%s' is not a group - and, or or not."), word);
+				return false;
+			}
+			std::vector<ibFilterNodeDescription> children;   // read apart — `into` does not move under `added`
+			const ibDataValue* lines = line.FindField(wxT("lines"));
+			if (lines != nullptr && !ConditionFromTree(composition, *lines, children, refusal))
+				return false;
+			ibFilterNodeDescription& added = ibFilterDescription::AppendGroup(into, kind->second);
+			added.m_use = on;
+			added.m_children = std::move(children);
+			continue;
+		}
+
+		const ibDataValue* pathSaid = line.FindField(wxT("path"));
+		const wxString path = pathSaid != nullptr && pathSaid->Kind() == ibDataKind::String ? pathSaid->AsString() : wxString();
+		if (path.IsEmpty()) {
+			refusal = ibMcpText("A line of `condition` names its field - \"path\".");
+			return false;
+		}
+		if (!PathIsOffered(composition, path, refusal))
+			return false;
+		const ibDataValue* comparisonSaid = line.FindField(wxT("comparison"));
+		const wxString word = comparisonSaid != nullptr && comparisonSaid->Kind() == ibDataKind::String
+			? comparisonSaid->AsString() : wxString();
+		ibComparisonKind comparison = ibComparisonKind_Equal;
+		if (!ComparisonFromWord(word, comparison, refusal))
+			return false;
+		ibFilterNodeDescription& added = ibFilterDescription::Append(into, path, comparison, ibValue(), on);
+		if (!ibComparisonTakesValue(comparison))
+			continue;   // «filled» asks the field alone
+		const ibDataValue* valuePath = line.FindField(wxT("valuePath"));
+		if (valuePath != nullptr && valuePath->Kind() == ibDataKind::String && !valuePath->AsString().IsEmpty()) {
+			if (!PathIsOffered(composition, valuePath->AsString(), refusal))
+				return false;
+			added.m_right.m_path = valuePath->AsString();   // a field of the same row
+		}
+		else if (!ValueForPath(composition, path, line, added.m_right.m_value, refusal))
+			return false;
+	}
+	return true;
+}
+
+// …AND READ BACK IN THE SAME SHAPE — a group as a group, a switched-off entry as one, a root that is not an AND as
+// the one group it stands for.
+std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescription>& nodes)
+{
+	std::vector<ibDataValue> entries;
+	for (const ibFilterNodeDescription& node : nodes) {
+		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+		if (node.m_kind == ibFilterNodeKind_Group) {
+			for (const auto& known : GroupWords())
+				if (known.second == node.m_groupKind)
+					entry->SetValue(wxT("group"), wxString(known.first));
+			entry->AddField(wxT("lines"), ibDataValue::Array(TreeOfCondition(node.m_children)));
+		}
+		else {
+			entry->SetValue(wxT("path"), node.m_left.m_path);
+			entry->SetValue(wxT("comparison"), WordOfComparison(node.m_comparison));
+			if (!ibComparisonTakesValue(node.m_comparison))
+				;   // «filled» has none to read out
+			else if (node.m_right.IsField())
+				entry->SetValue(wxT("valuePath"), node.m_right.m_path);
+			else
+				entry->SetValue(wxT("value"), wxString(node.m_right.m_value.GetString()));
+		}
+		if (!node.m_use)
+			entry->AddField(wxT("use"), ibDataValue::Bool(false));
+		entries.push_back(ibDataValue::Child(entry));
+	}
+	return entries;
+}
+
+ibDataValue TreeOfCondition(const ibFilterDescription& filter)
+{
+	if (filter.m_rootKind == ibFilterGroupKind_And)
+		return ibDataValue::Array(TreeOfCondition(filter.m_nodes));
+	ibFilterNodeDescription root;
+	root.m_kind = ibFilterNodeKind_Group;
+	root.m_groupKind = filter.m_rootKind;
+	root.m_children = filter.m_nodes;
+	return ibDataValue::Array(TreeOfCondition(std::vector<ibFilterNodeDescription>{ root }));
 }
 
 // (⭐ THIS WARNING GREW INTO ibMcpSayComposerComplaints above, and for a reason worth keeping: it
@@ -784,19 +1028,21 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Narrow what a report shows - a selection kept in the SETTING rather than written "
-			"into the query, so it belongs to the variant and a reader can change it. Give the "
-			"field, how to compare (equal, notEqual, greater, less, greaterEqual, lessEqual, "
-			"contains, in, inHierarchy) and the value. Pass remove:true with the same path to take "
-			"it out. A REFERENCE is written as a script writes one - "
+		return wxString::Format(ibMcpText("Narrow what a report shows - a selection kept in the SETTING rather than written "
+			"into the query, so it belongs to the variant and a reader can change it. On the report by default; name an "
+			"`output` (and a `groupBy`) to narrow that node's rows only. One line: the field, how to compare (%s) and the "
+			"value - none for filled / notFilled; the same path again changes that line, remove:true takes it out. "
+			"Several lines, a group (or / not) or a field compared with a field: give the whole `condition` as a tree, "
+			"which replaces what was there. A REFERENCE is written as a script writes one - "
 			"'Catalog.Warehouses.MainWarehouse', with 'EmptyRef' for the empty one - and anything "
-			"else is taken as it arrives: a number, a date, a word.");
+			"else is taken as it arrives: a number, a date, a word. With nothing to say, the condition is read back, "
+			"as the tree `condition` takes."), ComparisonWordList());
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments =
-			{ ArgId(), ArgPath(), ArgComparison(), ibMcpValueArgument(), ArgVariant(), ArgRemove() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgNodeOutput(), ArgGroupBy(),
+			ArgLinePath(), ArgComparison(), ibMcpValueArgument(), ArgCondition(), ArgVariant(), ArgRemove() };
 		return s_arguments;
 	}
 
@@ -813,13 +1059,20 @@ public:
 		if (variant == nullptr)
 			return false;
 
-		const wxString path = ArgPath().Text(params);
-		if (path.IsEmpty()) {
-			refusal = ibMcpText("Name the field to filter by - report_fields lists what the query offers.");
+		// WHOSE — the report's own settings, or a node's (SettingsOf), as every verb said per node finds them.
+		ibSettingsDescription* const settings = SettingsOf(*variant, params, refusal);
+		if (settings == nullptr)
+			return false;
+		ibFilterDescription& filter = settings->m_filter;
+
+		const wxString path = ArgLinePath().Text(params);
+		const ibDataValue* const tree = params.FindField(ArgCondition().Name());
+		if (tree != nullptr && !path.IsEmpty()) {
+			refusal = ibMcpText("Say the condition one way - the whole `condition` as a tree, or one line by `path`.");
 			return false;
 		}
 
-		std::vector<ibFilterNodeDescription>& nodes = variant->m_settings.m_filter.m_nodes;
+		std::vector<ibFilterNodeDescription>& nodes = filter.m_nodes;
 
 		// ⚠ THE FIELD IS THE LEFT OPERAND, not a member of the node: a condition is left, comparison,
 		// right, and either side may be a field or a literal. The one being matched here is always
@@ -828,7 +1081,21 @@ public:
 			[&path](const ibFilterNodeDescription& node) {
 				return node.m_left.m_path.IsSameAs(path, false); });
 
-		if (ArgRemove().Flag(params)) {
+		if (tree != nullptr) {
+			// THE WHOLE TREE, checked entry by entry before it replaces anything.
+			std::vector<ibFilterNodeDescription> said;
+			if (!ConditionFromTree(composition, *tree, said, refusal))
+				return false;
+			filter.m_rootKind = ibFilterGroupKind_And;
+			nodes = std::move(said);
+		}
+		else if (path.IsEmpty()) {
+			if (ArgRemove().Flag(params)) {
+				refusal = ibMcpText("Say which line to take out - its `path`.");
+				return false;
+			}
+		}
+		else if (ArgRemove().Flag(params)) {
 
 			if (found == nodes.end()) {
 				refusal = wxString::Format(ibMcpText("There is no filter on '%s'."), path);
@@ -843,22 +1110,17 @@ public:
 
 			// THE WORD, NOT A NUMBER. A comparison spelled out is one a caller can get right from
 			// the description; an integer is one they get right by luck.
-			const wxString said = ArgComparison().Text(params);
 			ibComparisonKind comparison = ibComparisonKind_Equal;
-
-			if (!said.IsEmpty() && !ComparisonFromWord(said, comparison)) {
-				refusal = wxString::Format(
-					ibMcpText("'%s' is not a comparison. Use equal, notEqual, greater, less, greaterEqual, "
-					  "lessEqual, contains, in or inHierarchy."), said);
+			if (!ComparisonFromWord(ArgComparison().Text(params), comparison, refusal))
 				return false;
-			}
 
-			ibValue value;
-			if (!ValueForPath(composition, path, params, value, refusal))
+			ibValue value;   // …none for «filled»: it asks the field alone
+			if (ibComparisonTakesValue(comparison) && !ValueForPath(composition, path, params, value, refusal))
 				return false;
 
 			if (found != nodes.end()) {
 				found->m_comparison = comparison;
+				found->m_right = ibFilterOperandDescription();   // a value said now, not the field it may have been
 				found->m_right.m_value = value;
 			}
 			else {
@@ -866,14 +1128,15 @@ public:
 			}
 		}
 
-		composer->SetCompositionDesc(composition);
-		activeMetaData->Modify(true);
+		if (tree != nullptr || !path.IsEmpty()) {
+			composer->SetCompositionDesc(composition);
+			activeMetaData->Modify(true);
+		}
 
-		std::vector<ibDataValue> shown;
-		for (const ibFilterNodeDescription& node : nodes)
-			shown.push_back(ibDataValue::String(node.m_left.m_path));
-
-		result.AddField(wxT("filters"), ibDataValue::Array(shown));
+		// THE CONDITION AS IT STANDS NOW — the whole tree, in the shape `condition` takes (groups and switched-off
+		// lines included: a list of paths hid both).
+		result.SetValue(wxT("settingsOf"), wxString(ArgNodeOutput().Given(params) ? wxT("node") : wxT("report")));
+		result.AddField(wxT("condition"), TreeOfCondition(filter));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}
@@ -984,20 +1247,13 @@ MCP_TOOL_REGISTER(ibMcpToolReportOrder);
 //---------------------------------------------------------------------------
 //
 // ⭐⭐ HOW THE REPORT BEHAVES AS A WHOLE — the settings window's Other settings page (ibOutputParameter): its
-// theme, its heading. Part of a VARIANT like the filter, and set per storey the way the filter is (Max,
+// theme, its heading. Part of a VARIANT like the filter, and set on the report or a node the way the filter is (Max,
 // 2026-09-29: "the other settings are part of the variant, exactly as the filters, only set within a node"):
 // on the report, or on a node, where a grouping paints its own rows. Said through the page's own door
 // (ibParameterValuesDescription::Say), one argument per parameter of the platform's list, the way report_field
 // says a field's appearance — so a heading set here and one set on the page are set the same way.
 class ibMcpToolReportOtherSettings : public ibMcpTool {
 
-	// THE STOREY — a node of an output, or the report when no output is named.
-	static const ibArg& ArgNodeOutput() {
-		static const ibArg a(wxT("output"), ibArg::Kind::Text,
-			ibMcpText("Set it on a NODE of this output - the level `groupBy` names, or the output's DETAIL level "
-				"without it. Omit to set the REPORT's own, which every node inherits."));
-		return a;
-	}
 	static const ibArg& ArgTheme() {
 		static const std::vector<wxString> s_ids = [] {
 			std::vector<wxString> ids;
@@ -1008,8 +1264,8 @@ class ibMcpToolReportOtherSettings : public ibMcpTool {
 		}();
 		static const ibArg a(wxT("theme"), ibArg::Kind::Text,
 			ibMcpText("The palette the report is painted in - the header, the headings by their depth, the records, "
-				"the grid, the title. On a node it tints that node's rows only. Empty gives it back to the storey "
-				"above. Omit to leave it."),
+				"the grid, the title. On a node it tints that node's rows only. Empty gives it back to the report's. "
+				"Omit to leave it."),
 			false, s_ids);
 		return a;
 	}
@@ -1080,7 +1336,7 @@ public:
 			"over the table. Part of a variant, like the filter. On the report by default; name an `output` (and a "
 			"`groupBy`) to set a node, which holds only a theme - a grouping tinted apart from the rest. A node "
 			"that says nothing takes the report's. Each argument omitted leaves its parameter as it is; an empty "
-			"one gives it back to the storey above. With none, the storey's settings are read back.");
+			"one gives it back to the report's. With none, the settings named are read back.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1103,53 +1359,15 @@ public:
 		if (variant == nullptr)
 			return false;
 
-		// THE STOREY — the report's own settings, or a node's, found the way report_level finds the one it removes.
-		ibOutputParametersDescription* said = &variant->m_settings.m_outputParameters;
-		ibOutputParameterScope scope = ibOutputParameterScope::Report;
-		if (ArgNodeOutput().Given(params)) {
-			const wxString outputName = ArgNodeOutput().Text(params);
-			ibOutputDescription* output = nullptr;
-			wxString available;
-			for (ibOutputDescription& candidate : variant->m_settings.m_structure) {
-				available << (available.IsEmpty() ? wxT("") : wxT(", ")) << candidate.m_name;
-				if (candidate.m_name.IsSameAs(outputName, false))
-					output = &candidate;
-			}
-			if (output == nullptr) {
-				refusal = available.IsEmpty()
-					? ibMcpText("This variant has no output yet - add one with report_output.")
-					: wxString::Format(ibMcpText("There is no output called '%s'. It has: %s."), outputName, available);
-				return false;
-			}
-			const wxString groupBy = ArgGroupBy().Text(params);
-			ibLevelDescription* node = nullptr;
-			wxString has;
-			for (std::vector<ibLevelDescription>* axis : { &output->m_rowGroups, &output->m_columnGroups })
-				for (ibLevelDescription& level : *axis) {
-					for (const ibGroupLineDescription& field : level.m_settings.m_group.m_lines)
-						has << (has.IsEmpty() ? wxT("") : wxT(", ")) << field.m_path;
-					if (node != nullptr)
-						continue;
-					if (groupBy.IsEmpty() ? level.m_kind == ibCompositionLevelKind::Details
-					                      : std::any_of(level.m_settings.m_group.m_lines.begin(),
-					                                    level.m_settings.m_group.m_lines.end(),
-					                                    [&groupBy](const ibGroupLineDescription& field) {
-					                                        return field.m_path.IsSameAs(groupBy, false); }))
-						node = &level;
-				}
-			if (node == nullptr) {
-				refusal = groupBy.IsEmpty()
-					? ibMcpText("This output has no detail level - name the grouping with `groupBy`.")
-					: has.IsEmpty()
-						? ibMcpText("This output has no level grouped by that - it has no groupings yet.")
-						: wxString::Format(ibMcpText("This output has no level grouped by that. It groups by: %s."), has);
-				return false;
-			}
-			said  = &node->m_settings.m_outputParameters;
-			scope = ibOutputParameterScope::Node;
-		}
+		// WHOSE — the report's own settings, or a node's (SettingsOf).
+		ibSettingsDescription* const settings = SettingsOf(*variant, params, refusal);
+		if (settings == nullptr)
+			return false;
+		ibOutputParametersDescription* said = &settings->m_outputParameters;
+		const ibOutputParameterScope scope = ArgNodeOutput().Given(params)
+			? ibOutputParameterScope::Node : ibOutputParameterScope::Report;
 
-		// EACH PARAMETER ITS OWN ARGUMENT — omitted leaves it, empty gives it back to the storey above. Everything
+		// EACH PARAMETER ITS OWN ARGUMENT — omitted leaves it, empty gives it back to the report's. Everything
 		// is checked before anything is said, so a refused call changes nothing.
 		const std::vector<ibOutputParameter>& offered = ibOutputParameters(scope);
 		std::vector<std::pair<ibOutputParameter, ibValue>> words;
@@ -1163,7 +1381,7 @@ public:
 			}
 			// (A word outside a closed set never gets here — the gate refuses it by name, ibMcpArgumentFault.)
 			const wxString text = word.second->Text(params);
-			ibValue value;   // empty — given back to the storey above
+			ibValue value;   // empty — given back to the report's
 			if (text.IsEmpty())
 				;
 			else if (word.first == ibOutputParameter::Theme)
@@ -1186,8 +1404,8 @@ public:
 			activeMetaData->Modify(true);
 		}
 
-		// WHAT THE STOREY SAYS NOW — only what it says; the rest is the storey above's.
-		result.SetValue(wxT("storey"), wxString(scope == ibOutputParameterScope::Node ? wxT("node") : wxT("report")));
+		// WHAT THEY SAY NOW — only what they say; the rest is the report's above them.
+		result.SetValue(wxT("settingsOf"), wxString(scope == ibOutputParameterScope::Node ? wxT("node") : wxT("report")));
 		for (const auto& word : Words()) {
 			if (!said->Says(word.first))
 				continue;
@@ -1202,6 +1420,370 @@ public:
 };
 
 MCP_TOOL_REGISTER(ibMcpToolReportOtherSettings);
+
+//---------------------------------------------------------------------------
+// report_conditional_appearance
+//---------------------------------------------------------------------------
+//
+// ⭐⭐ WHAT STANDS OUT, AND WHEN — the settings window's Conditional appearance page. A rule is a CONDITION (a filter,
+// the very one report_filter says), the FIELDS it paints (none = the whole line) and the APPEARANCE it paints them
+// with, said through the appearance's own door (ibParameterValuesDescription::Say) with the values the page's
+// choosers keep — so a rule said here and one set there are the same rule. Part of a variant like the filter, said
+// on the report's settings or on a node's, like the other settings (SettingsOf).
+class ibMcpToolReportConditionalAppearance : public ibMcpTool {
+
+	static const ibArg& ArgRuleAt() {
+		static const ibArg a(wxT("at"), ibArg::Kind::Whole,
+			ibMcpText("Which rule, 1 for the first - to change it, or with `remove` to take it out. Omit to add a new one "
+				"at the end. The rules apply in their order, a later one over an earlier one."));
+		return a;
+	}
+	static const ibArg& ArgConditionPath() {
+		static const ibArg a(wxT("path"), ibArg::Kind::Text,
+			ibMcpText("The field of a ONE-LINE condition - with `comparison` and `value`, as report_filter takes them. "
+				"Empty makes the rule hold on every row. Several lines or a group: give `condition` instead. Omit both "
+				"to leave the condition as it is."));
+		return a;
+	}
+	static const ibArg& ArgUse() {
+		static const ibArg a(wxT("use"), ibArg::Kind::Flag,
+			ibMcpText("Switch the rule on (true) or off (false) - it stays written either way. Omit to leave it."));
+		return a;
+	}
+	static const ibArg& ArgFields() {
+		static const ibArg a(wxT("fields"), ibArg::Kind::Many,
+			ibMcpText("The columns it paints, by field as report_fields lists them - [\"Amount\"]. An empty list paints "
+				"the whole line. Omit to leave them as they are."));
+		return a;
+	}
+	static const ibArg& ArgBackgroundColour() {
+		static const ibArg a(wxT("backgroundColour"), ibArg::Kind::Text,
+			ibMcpText("The cells' fill: `R,G,B` - `255,235,156` - or `#FFEB9C`. Empty takes it away. Omit to leave it."));
+		return a;
+	}
+	static const ibArg& ArgTextColour() {
+		static const ibArg a(wxT("textColour"), ibArg::Kind::Text,
+			ibMcpText("The text's colour: `R,G,B` - `192,0,0` - or `#C00000`. Empty takes it away. Omit to leave it."));
+		return a;
+	}
+	static const ibArg& ArgFont() {
+		static const ibArg a(wxT("font"), ibArg::Kind::Text,
+			ibMcpText("The text's font, in words: `bold`, `italic`, `underlined`, `strikethrough`, a size, a face - "
+				"`bold 12`, `italic Arial`. Only what is said is laid on the cell's own font: `italic` on a bold heading "
+				"keeps it bold, and the report's size stays unless a size is said. Empty takes it away. Omit to leave it."));
+		return a;
+	}
+	// THE THREE WORDS, and empty beside them — see ShowWordsOrEmpty in report_other_settings.
+	static const ibArg& ArgHorizontalAlignment() {
+		static const ibArg a(wxT("horizontalAlignment"), ibArg::Kind::Text,
+			ibMcpText("Where the text stands in the cell: `left`, `center` or `right`. Empty takes it away. Omit to leave it."),
+			false, { wxT("left"), wxT("center"), wxT("right"), wxEmptyString });
+		return a;
+	}
+	static const ibArg& ArgText() {
+		static const ibArg a(wxT("text"), ibArg::Kind::Text,
+			ibMcpText("What the cells say INSTEAD of their value. Several languages in the synonym form - "
+				"`en = 'Over the limit'; ru = '...'` - are read in the reader's. Empty takes it away. Omit to leave it."));
+		return a;
+	}
+	static const ibArg& ArgFormat() {
+		static const ibArg a(wxT("format"), ibArg::Kind::Text,
+			ibMcpText("How the cells write their value - a format string (`NFD=2`, `DF=dd.MM.yyyy`; format_string reads "
+				"one out and builds one). Empty takes it away. Omit to leave it."));
+		return a;
+	}
+
+	// WHICH ARGUMENT SAYS WHICH PARAMETER — the platform's list, in its order.
+	static const std::vector<std::pair<ibAppearanceParameter, const ibArg*>>& Words() {
+		static const std::vector<std::pair<ibAppearanceParameter, const ibArg*>> s_words = {
+			{ ibAppearanceParameter::Format,              &ArgFormat() },
+			{ ibAppearanceParameter::BackgroundColour,    &ArgBackgroundColour() },
+			{ ibAppearanceParameter::TextColour,          &ArgTextColour() },
+			{ ibAppearanceParameter::Font,                &ArgFont() },
+			{ ibAppearanceParameter::HorizontalAlignment, &ArgHorizontalAlignment() },
+			{ ibAppearanceParameter::Text,                &ArgText() },
+		};
+		return s_words;
+	}
+
+	// A WORD AS THE VALUE ITS PARAMETER KEEPS — a colour, a font, a member of the sheet's alignment, else the text as
+	// said. False, with the refusal, for a word that names no such value.
+	static bool ValueOfWord(ibAppearanceParameter parameter, const wxString& word, ibValue& value, wxString& refusal)
+	{
+		switch (parameter) {
+		case ibAppearanceParameter::BackgroundColour:
+		case ibAppearanceParameter::TextColour: {
+			wxColour colour;
+			if (!colour.Set(word.Find(wxT(',')) != wxNOT_FOUND ? wxT("rgb(") + word + wxT(")") : word) || !colour.IsOk()) {
+				refusal = wxString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`) or `#FFEB9C`."), word);
+				return false;
+			}
+			value = ibValue(new ibValueColour(colour));
+			return true;
+		}
+		case ibAppearanceParameter::Font: {
+			// OVER THE REPORT'S OWN FONT, word by word — what the words do not say stays that font's, so the rule
+			// says exactly the words (ibCompositionFont::Of reads them back out of it).
+			wxFont font = s_defaultSpreadsheetFont;
+			wxString face;
+			for (const wxString& one : wxSplit(word, wxT(' '), wxT('\0'))) {
+				long size = 0;
+				if (one.IsEmpty())
+					continue;
+				if (one.IsSameAs(wxT("bold"), false))
+					font.SetWeight(wxFONTWEIGHT_BOLD);
+				else if (one.IsSameAs(wxT("italic"), false))
+					font.SetStyle(wxFONTSTYLE_ITALIC);
+				else if (one.IsSameAs(wxT("underlined"), false))
+					font.SetUnderlined(true);
+				else if (one.IsSameAs(wxT("strikethrough"), false))
+					font.SetStrikethrough(true);
+				else if (one.ToLong(&size) && size > 0)
+					font.SetPointSize(static_cast<int>(size));
+				else
+					face << (face.IsEmpty() ? wxT("") : wxT(" ")) << one;
+			}
+			if (!face.IsEmpty() && !font.SetFaceName(face)) {
+				refusal = wxString::Format(ibMcpText("'%s' is not a font face here - say the font in words: `bold`, "
+					"`italic 12`, `bold 10 Arial`."), face);
+				return false;
+			}
+			value = ibValue(new ibValueFont(font));
+			return true;
+		}
+		case ibAppearanceParameter::HorizontalAlignment:
+			// (A word outside the three never gets here — the gate refuses it by name, ibMcpArgumentFault.)
+			value = ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(
+				word.IsSameAs(wxT("right"), false) ? ibAlignmentHorz_Right
+				: word.IsSameAs(wxT("center"), false) ? ibAlignmentHorz_Center : ibAlignmentHorz_Left);
+			return true;
+		default:
+			value = ibValue(word);
+			return true;
+		}
+	}
+
+	// …and back — what the answer reads out, in the words a call says it in.
+	static wxString WordOfValue(ibAppearanceParameter parameter, ibValue value)
+	{
+		switch (parameter) {
+		case ibAppearanceParameter::Font: {
+			// …WHAT IT SAYS, and only that: the parts it changes of the report's own font, in the words it takes.
+			ibValueFont* font = nullptr;
+			if (!value.ConvertToValue(font) || font == nullptr || !font->m_font.IsOk())
+				return wxString();
+			const ibCompositionFont said = ibCompositionFont::Of(font->m_font, s_defaultSpreadsheetFont);
+			wxString words;
+			const auto add = [&words](const wxString& one) { words << (words.IsEmpty() ? wxT("") : wxT(" ")) << one; };
+			if (said.IsBold())
+				add(wxT("bold"));
+			if (said.IsItalic())
+				add(wxT("italic"));
+			if (said.m_underlined)
+				add(wxT("underlined"));
+			if (said.m_strikethrough)
+				add(wxT("strikethrough"));
+			if (said.m_pointSize > 0)
+				add(wxString::Format(wxT("%d"), said.m_pointSize));
+			if (!said.m_face.IsEmpty())
+				add(said.m_face);
+			return words;
+		}
+		case ibAppearanceParameter::HorizontalAlignment: {
+			const ibSpreadsheetAlignmentHorz horizontal = value.ConvertToEnumValue<ibSpreadsheetAlignmentHorz>();
+			return horizontal == ibAlignmentHorz_Right ? wxT("right")
+				: horizontal == ibAlignmentHorz_Center ? wxT("center") : wxT("left");
+		}
+		default:
+			return wxString(value.GetString());   // a colour reads `R,G,B`, a text and a format as they were said
+		}
+	}
+
+public:
+
+	wxString GetName() const override { return wxT("report_conditional_appearance"); }
+
+	wxString GetActivity(const ibDataNode& params) const override
+	{
+		return wxString::Format(ibMcpText("saying what stands out in '%s'"), ibMcpNameOf(params));
+	}
+
+	wxString GetDescription() const override
+	{
+		return ibMcpText("The report's CONDITIONAL APPEARANCE - the settings window's page after Sort: rules that paint "
+			"the rows a condition holds on. A rule is a CONDITION (one line - a field, a comparison and a value - or the "
+			"whole `condition` as a tree with groups, as report_filter takes them; none = every row), the FIELDS it "
+			"paints (none = the whole line) and the APPEARANCE - a fill, a text colour, a font, an alignment, a text said "
+			"instead of the value, a format; `use` switches it off and on. Part of a variant, like the "
+			"filter. On the report by default; name an `output` (and a `groupBy`) to set a node's, which paints that "
+			"node's rows only, over the report's. One rule per call: omit `at` to add one, give it to change that rule "
+			"(each argument omitted leaves its part as it is, an empty one takes it away), with remove:true to take it "
+			"out. With nothing to say, the rules of the settings named are read back. A list shown by the same settings is painted "
+			"the same way.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgNodeOutput(), ArgGroupBy(), ArgRuleAt(),
+			ArgConditionPath(), ArgComparison(), ibMcpValueArgument(), ArgCondition(), ArgFields(), ArgBackgroundColour(),
+			ArgTextColour(), ArgFont(), ArgHorizontalAlignment(), ArgText(), ArgFormat(), ArgUse(), ArgVariant(),
+			ArgRemove() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	{
+		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		if (composer == nullptr)
+			return false;
+
+		ibCompositionDescription composition = composer->GetCompositionDesc();
+
+		ibVariantDescription* variant =
+			VariantOf(composition, ArgVariant().Text(params), refusal);
+		if (variant == nullptr)
+			return false;
+
+		ibSettingsDescription* const settings = SettingsOf(*variant, params, refusal);
+		if (settings == nullptr)
+			return false;
+		std::vector<ibConditionalAppearanceRuleDescription>& rules = settings->m_conditionalAppearance.m_rules;
+
+		// THE RULE — the one `at` names, or a new one.
+		const s64 at = ArgRuleAt().Given(params) ? ArgRuleAt().Whole(params) : 0;
+		if (ArgRuleAt().Given(params) && (at < 1 || static_cast<size_t>(at) > rules.size())) {
+			refusal = rules.empty()
+				? ibMcpText("These settings have no rules yet - omit `at` to add one.")
+				: wxString::Format(ibMcpText("There is no rule %d - these settings have %d."),
+					static_cast<int>(at), static_cast<int>(rules.size()));
+			return false;
+		}
+
+		bool changed = false;
+		if (ArgRemove().Flag(params)) {
+			if (at == 0) {
+				refusal = ibMcpText("Say which rule to take out - `at`, 1 for the first.");
+				return false;
+			}
+			rules.erase(rules.begin() + static_cast<std::ptrdiff_t>(at - 1));
+			changed = true;
+		}
+		else {
+			// EVERYTHING IS CHECKED BEFORE ANYTHING IS SAID, on a copy — a refused call changes nothing.
+			ibConditionalAppearanceRuleDescription rule = at > 0 ? rules[static_cast<size_t>(at - 1)]
+				: ibConditionalAppearanceRuleDescription();
+			bool says = false;
+
+			const ibDataValue* const tree = params.FindField(ArgCondition().Name());
+			if (tree != nullptr && ArgConditionPath().Given(params)) {
+				refusal = ibMcpText("Say the condition one way - the whole `condition` as a tree, or one line by `path`.");
+				return false;
+			}
+			if (tree != nullptr) {
+				says = true;
+				std::vector<ibFilterNodeDescription> said;
+				if (!ConditionFromTree(composition, *tree, said, refusal))
+					return false;
+				rule.m_condition = ibFilterDescription();
+				rule.m_condition.m_nodes = std::move(said);
+			}
+			if (ArgUse().Given(params)) {
+				says = true;
+				rule.m_use = ArgUse().Flag(params);
+			}
+
+			if (ArgConditionPath().Given(params)) {
+				says = true;
+				rule.m_condition = ibFilterDescription();
+				const wxString path = ArgConditionPath().Text(params);
+				if (!path.IsEmpty()) {
+					if (!PathIsOffered(composition, path, refusal))
+						return false;
+					ibComparisonKind comparison = ibComparisonKind_Equal;
+					if (!ComparisonFromWord(ArgComparison().Text(params), comparison, refusal))
+						return false;
+					ibValue value;   // …none for «filled»: it asks the field alone
+					if (ibComparisonTakesValue(comparison) && !ValueForPath(composition, path, params, value, refusal))
+						return false;
+					ibFilterDescription::Append(rule.m_condition.m_nodes, path, comparison, value);
+				}
+			}
+
+			if (const ibDataValue* many = params.FindField(ArgFields().Name())) {
+				says = true;
+				rule.m_fields.clear();
+				if (many->Kind() == ibDataKind::Array)
+					for (const ibDataValue& one : many->AsArray()) {
+						if (one.Kind() != ibDataKind::String || one.AsString().IsEmpty())
+							continue;
+						const wxString path = one.AsString();
+						// A resource is painted by the name it answers to, as report_select shows one.
+						if (!std::any_of(composition.m_resources.begin(), composition.m_resources.end(),
+						                 [&path](const ibResourceDescription& r) { return r.AnswersTo().IsSameAs(path, false); })
+						    && !PathIsOffered(composition, path, refusal))
+							return false;
+						rule.m_fields.push_back(path);
+					}
+			}
+
+			for (const auto& word : Words()) {
+				if (!word.second->Given(params))
+					continue;
+				says = true;
+				const wxString text = word.second->Text(params);
+				ibValue value;   // empty — taken away
+				if (!text.IsEmpty() && !ValueOfWord(word.first, text, value, refusal))
+					return false;
+				rule.m_appearance.Say(word.first, !value.IsEmpty(), value);
+			}
+
+			if (says) {
+				if (rule.m_appearance.IsEmpty()) {
+					refusal = ibMcpText("A rule with no appearance paints nothing - give it a `backgroundColour`, a "
+						"`textColour`, a `font`, a `horizontalAlignment`, a `text` or a `format`.");
+					return false;
+				}
+				if (at > 0)
+					rules[static_cast<size_t>(at - 1)] = std::move(rule);
+				else
+					rules.push_back(std::move(rule));
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			composer->SetCompositionDesc(composition);
+			activeMetaData->Modify(true);
+		}
+
+		// THE RULES AS THEY STAND NOW, in their order — each read out in the words a call says it in.
+		result.SetValue(wxT("settingsOf"), wxString(ArgNodeOutput().Given(params) ? wxT("node") : wxT("report")));
+		std::vector<ibDataValue> shown;
+		for (size_t i = 0; i < rules.size(); ++i) {
+			const ibConditionalAppearanceRuleDescription& rule = rules[i];
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(wxT("at"), static_cast<s32>(i + 1));
+			if (!rule.m_use)
+				entry->AddField(wxT("use"), ibDataValue::Bool(false));
+			// THE WHOLE CONDITION, groups included, in the shape `condition` takes. (It read the lines of the top only,
+			// and a rule built in the window with a group came back as an EMPTY condition — one that holds everywhere.)
+			entry->AddField(wxT("condition"), TreeOfCondition(rule.m_condition));
+			std::vector<ibDataValue> fields;
+			for (const wxString& field : rule.m_fields)
+				fields.push_back(ibDataValue::String(field));
+			entry->AddField(wxT("fields"), ibDataValue::Array(fields));
+			for (const auto& word : Words())
+				if (rule.m_appearance.Says(word.first))
+					entry->SetValue(word.second->Name(), WordOfValue(word.first, rule.m_appearance.ValueInForce(word.first)));
+			shown.push_back(ibDataValue::Child(entry));
+		}
+		result.AddField(wxT("rules"), ibDataValue::Array(shown));
+		ibMcpSayComposerComplaints(composition, result);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER(ibMcpToolReportConditionalAppearance);
 
 //---------------------------------------------------------------------------
 // report_parameter

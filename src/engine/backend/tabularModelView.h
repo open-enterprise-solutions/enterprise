@@ -339,12 +339,22 @@ public:
 	void SetItalic(bool set) { m_italic = set; }
 	void SetStrikethrough(bool set) { m_strikethrough = set; }
 	void SetBackgroundColour(const wxColour& colour) { m_bgColour = colour; }
+	// ⭐ …AND THE REST OF A FONT, PART BY PART, and a horizontal alignment — what a conditional appearance says of a
+	// cell (Max, 2026-09-30: "this is what has to be extended for conditional appearance"). Each is laid over the
+	// view's font like the three flags above, never in its place: a bold row made italic stays bold. The alignment is
+	// wxALIGN_LEFT, wxALIGN_CENTER_HORIZONTAL or wxALIGN_RIGHT and replaces the column's horizontal one.
+	void SetUnderlined(bool set) { m_underlined = set; }
+	void SetPointSize(int size) { m_pointSize = size; }
+	void SetFaceName(const wxString& face) { m_face = face; }
+	void SetAlignment(int alignment) { m_alignment = alignment; }
 
 	// accessors
 	bool HasColour() const { return m_colour.IsOk(); }
 	const wxColour& GetColour() const { return m_colour; }
 
-	bool HasFont() const { return m_bold || m_italic || m_strikethrough; }
+	bool HasFont() const {
+		return m_bold || m_italic || m_strikethrough || m_underlined || m_pointSize > 0 || !m_face.IsEmpty();
+	}
 	bool GetBold() const { return m_bold; }
 	bool GetItalic() const { return m_italic; }
 	bool GetStrikethrough() const { return m_strikethrough; }
@@ -352,7 +362,10 @@ public:
 	bool HasBackgroundColour() const { return m_bgColour.IsOk(); }
 	const wxColour& GetBackgroundColour() const { return m_bgColour; }
 
-	bool IsDefault() const { return !(HasColour() || HasFont() || HasBackgroundColour()); }
+	bool HasAlignment() const { return m_alignment != wxALIGN_INVALID; }
+	int GetAlignment() const { return m_alignment; }
+
+	bool IsDefault() const { return !(HasColour() || HasFont() || HasBackgroundColour() || HasAlignment()); }
 
 	// Return the font based on the given one with this attribute applied to it.
 	wxFont GetEffectiveFont(const wxFont& font) const;
@@ -363,6 +376,10 @@ private:
 	bool     m_italic;
 	bool     m_strikethrough;
 	wxColour m_bgColour;
+	bool     m_underlined = false;
+	int      m_pointSize = 0;                 // 0 = the view's own
+	wxString m_face;                          // empty = the view's own
+	int      m_alignment = wxALIGN_INVALID;   // wxALIGN_INVALID = the column's own
 };
 
 // ---------------------------------------------------------

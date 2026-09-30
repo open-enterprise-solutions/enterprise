@@ -27,23 +27,23 @@ public:
 	// Bind the RAM value-storage this composer filters + sorts (NON-owning — the model owns the storage AND us).
 	ibDataRamComposer& FromStorage(const ibRamValueStorage* storage) {
 		m_storage = storage;
-		m_availablePaths.clear();   // a new source answers anew
+		DropMemos();   // a new source answers anew
 		return *this;
 	}
 
 	bool HasSource() const override { return m_storage != nullptr; }
 
 	// The storage's own answer — the first hop is its column (a tabular section's or a record set's asks its
-	// attribute; a value table's has no option over it), the rest the query model's walk (WalkFrom).
-	bool IsWalkAvailable(const std::vector<wxString>& hops) const override;
+	// attribute and its type; a value table's has no option over it), the rest the query model's walk (WalkFrom).
+	ibQueryConstructorField WalkPath(const std::vector<wxString>& hops) const override;
 
 	// The ONLY output: filter + sort (+ group later) the storage's nodes → their STORAGE indices in display
 	// order (index i ↔ storage node i). The model (RunComposerPage) windows this by the browsed anchor and
 	// returns the LIVE nodes — the node IS the storage row. NO SQL on this road, so L5-2 stays
 	// self-contained; PRINTING the same composition goes through Run below. slice-1: filter + sort, flat.
-	// ⚠ NOT const: it builds the filter in force, and BUILDING a condition registers the values it
-	// compares against (ibDataComposer::AddParam). The const was covering that write.
-	std::vector<long> ComputeOrder();
+	// The filter in force is read by the one engine (ibCompositionFilterHolds), straight off the setting — nothing
+	// is built and nothing registered, so it is const again (it built a query AST once, and that registered values).
+	std::vector<long> ComputeOrder() const;
 
 	// ⭐⭐ THE DRIVER WALK, FOR RAM. A driver does not care where rows come from — it is handed a schema and
 	// then rows — so a table of values prints onto a sheet exactly as a query does; only the source differs,

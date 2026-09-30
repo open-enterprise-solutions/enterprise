@@ -6,6 +6,7 @@
 #include "frontend/win/dlgs/settings/settingsFilterEditor.h"   // SHARED with the list's world
 #include "frontend/win/dlgs/settings/settingsSortEditor.h"     // …and so is this one
 #include "frontend/win/dlgs/settings/settingsOutputParametersEditor.h"   // the other settings — theme, heading
+#include "frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.h"   // what stands out, when
 #include "frontend/win/dlgs/settings/settingsStyle.h"          // how a settings surface LOOKS — said once, for both worlds
 #include "frontend/win/dlgs/settings/savedSettings.h"          // the shelf window — shared with the list's world
 #include "backend/settings/settingsComposer.h"                 // saving / restoring a composer's settings
@@ -1921,6 +1922,8 @@ void ibComposerSettingsPanel::SetReadOnly(bool readOnly)
 		m_sortEditor->SetReadOnly(readOnly);
 	if (m_outputParametersEditor != nullptr)
 		m_outputParametersEditor->SetReadOnly(readOnly);
+	if (m_conditionalAppearanceEditor != nullptr)
+		m_conditionalAppearanceEditor->SetReadOnly(readOnly);
 
 	// …AND THE ACTIVATABLE CELL, which no veto reaches — the model is the one gate the fork asks on
 	// both the click and the Space road. See ibParameterModel::IsEnabledByRow.
@@ -2651,8 +2654,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	wxPanel* left = new wxPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
 	leftSizer->Add(new wxStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_groupingFieldTree = new wxTreeCtrl(left, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_SINGLE);
+	m_groupingFieldTree = CreateFieldTree(left);
 	leftSizer->Add(m_groupingFieldTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 	left->SetSizer(leftSizer);
 	// ⚠ ATTACH WIRES THE BEHAVIOUR, POPULATE PUTS THE FIELDS IN. Attaching alone leaves an empty
@@ -2782,8 +2784,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	wxPanel* left = new wxPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
 	leftSizer->Add(new wxStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	page.m_sourceTree = new wxTreeCtrl(left, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_SINGLE);
+	page.m_sourceTree = CreateFieldTree(left);
 	leftSizer->Add(page.m_sourceTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 	left->SetSizer(leftSizer);
 	if (m_fieldSource) {
@@ -3264,6 +3265,12 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	tabs->AddPage(m_filterEditor, _("Filter"), false, ibSettingsTabArt(ibSettingsTab::Filter));
 	m_sortEditor = new ibSortEditor(tabs, &EditedSettings().m_sort, m_fieldSource.get());
 	tabs->AddPage(m_sortEditor, _("Sort"), false, ibSettingsTabArt(ibSettingsTab::Sort));
+	// ⭐ …AND WHAT STANDS OUT, WHEN — the conditional appearance, a part of the setting like the filter (Max,
+	// 2026-09-30), on the report and on every node.
+	m_conditionalAppearanceEditor = new ibConditionalAppearanceEditor(tabs,
+		&EditedSettings().m_conditionalAppearance, m_fieldSource.get(), [this] { return GetEditedMetaData(); });
+	tabs->AddPage(m_conditionalAppearanceEditor, _("Conditional appearance"), false,
+		ibSettingsTabArt(ibSettingsTab::ConditionalAppearance));
 	// ⭐ …AND HOW THE REPORT BEHAVES — its theme, its heading (Max, 2026-09-29: "after Sort a tab appears").
 	// Pointed at the storey selected as the two before it are; a grouping lists only what it can hold.
 	m_outputParametersEditor = new ibOutputParametersEditor(tabs, &EditedSettings().m_outputParameters,
@@ -3285,6 +3292,7 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 	m_filterEditor->SetAuthoring(!m_readerRoad);
 	m_sortEditor->SetOnChanged([this] { MarkSettingsTouched(); });
 	m_outputParametersEditor->SetOnChanged([this] { MarkSettingsTouched(); });
+	m_conditionalAppearanceEditor->SetOnChanged([this] { MarkSettingsTouched(); });
 	sizer->Add(tabs, 1, wxEXPAND);
 
 	pane->SetSizer(sizer);
@@ -4339,6 +4347,8 @@ void ibComposerSettingsPanel::ReloadSettings()
 	if (m_sortEditor   != nullptr) m_sortEditor->SetSort(&EditedSettings().m_sort);
 	if (m_outputParametersEditor != nullptr)
 		m_outputParametersEditor->SetParameters(&EditedSettings().m_outputParameters, ibOutputParameterScope::Report);
+	if (m_conditionalAppearanceEditor != nullptr)
+		m_conditionalAppearanceEditor->SetConditionalAppearance(&EditedSettings().m_conditionalAppearance);
 	ReloadResources();
 	ReloadParameters();
 }
@@ -4391,6 +4401,8 @@ void ibComposerSettingsPanel::BindNodeEditors()
 	if (m_outputParametersEditor != nullptr)
 		m_outputParametersEditor->SetParameters(&target.m_outputParameters,
 			level != nullptr ? ibOutputParameterScope::Node : ibOutputParameterScope::Report);
+	if (m_conditionalAppearanceEditor != nullptr)
+		m_conditionalAppearanceEditor->SetConditionalAppearance(&target.m_conditionalAppearance);
 }
 
 // (CommitNodeSettings REMOVED. There is nothing to write back: the editors work on the node's own

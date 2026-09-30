@@ -73,6 +73,44 @@ void BoxCell(ibBackendSpreadsheetObject& area, int row, int col, bool top, bool 
 //  pure white between the tinted group rows, and pure white is the loudest thing on a page of soft colour.
 //  Max, 2026-08-19: "the last row stands out all white; give it something very neutral".)
 
+// wx's horizontal flag, in the sheet's word for it — the sheet's centre is wxALIGN_CENTER.
+int SheetAlignmentOf(const ibCompositionAttr& attr)
+{
+	return attr.m_horizontalAlignment == wxALIGN_RIGHT ? wxALIGN_RIGHT
+		: attr.m_horizontalAlignment == wxALIGN_CENTER_HORIZONTAL ? wxALIGN_CENTER : wxALIGN_LEFT;
+}
+
+// ⭐ WHAT A COMPOSITION DRAWS A CELL WITH, laid onto the sheet's cell — the walk's conditional appearance
+// (ibCompositionAttr), over what the theme gave the cell. The report's own taking of it: a sheet's cell has properties
+// a list's widget does not, and whatever the contract comes to carry for them is laid on here. (Its text is the
+// cell's value side — see where the text is written.)
+void ApplyAttr(ibBackendSpreadsheetObject& area, int row, int col, const ibCompositionAttr& attr)
+{
+	if (attr.m_backgroundColour.IsOk())
+		area.SetCellBackgroundColour(row, col, attr.m_backgroundColour);
+	if (attr.m_textColour.IsOk())
+		area.SetCellTextColour(row, col, attr.m_textColour);
+	if (attr.m_font.IsSaid())
+		area.SetCellFont(row, col, attr.m_font.Over(area.GetCellFont(row, col)));   // over the theme's, not instead of it
+	if (attr.m_horizontalAlignment != wxALIGN_INVALID)
+		area.SetCellAlignment(row, col, SheetAlignmentOf(attr), wxALIGN_CENTER);
+}
+
+// …and over a cell's description, for the table written a whole cell at a time (SetCell).
+void ApplyAttr(ibSpreadsheetCellDescription& cell, const ibCompositionAttr& attr)
+{
+	if (attr.m_backgroundColour.IsOk())
+		cell.m_backgroundColour = attr.m_backgroundColour;
+	if (attr.m_textColour.IsOk())
+		cell.m_textColour = attr.m_textColour;
+	if (attr.m_font.IsSaid())
+		cell.m_font = attr.m_font.Over(cell.m_font.IsOk() ? cell.m_font : s_defaultSpreadsheetFont);
+	if (attr.m_horizontalAlignment != wxALIGN_INVALID) {
+		cell.m_alignHorz = SheetAlignmentOf(attr);
+		cell.m_alignVert = wxALIGN_CENTER;
+	}
+}
+
 } // namespace
 
 // ⭐ THE SHAPE IS ASKED FOR ONCE, HERE, and everything downstream reads the answer off these three
@@ -83,6 +121,9 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 {
 	m_columnTotalCells.clear();
 	m_columnTotalSubtotals.clear();
+	m_columnTotalAttrs.clear();
+	m_crossGrandTotalAttr.reset();
+	m_crossHasAttr = false;
 	m_rowLevels = info.m_rowLevels;
 	m_colLevels = 0;
 	m_measureAt.clear();
@@ -188,7 +229,7 @@ void ibSpreadsheetComposeDriver::OnGroupBegin(const ibCompositionLine& line, con
 		PrintRow(line, values);   // the ordinary report, printed as it arrives
 		return;
 	}
-	OnCrossHeading(line.m_level, ThemeOf(line), values);
+	OnCrossHeading(line.m_level, ThemeOf(line), line.m_attr, values);
 }
 
 // A COLUMN — a heading that reads ACROSS the page. The walk says so now (it knows each level's
@@ -202,9 +243,9 @@ void ibSpreadsheetComposeDriver::OnColumn(const ibCompositionLine& line,
 	// WHERE IT IS DRAWN across the sheet — the rung plus the step into its tree, the same number the
 	// row axis lays out by. (It was `line.Page()` computed at the callsite; the line states it now.)
 	if (line.m_kind == ibSelectorNodeKind::Detail)
-		PrintCrossDetail(line.Page(), ThemeOf(line), values);
+		PrintCrossDetail(line.Page(), ThemeOf(line), line.m_attr, values);
 	else
-		OnCrossHeading(line.Page(), ThemeOf(line), values);
+		OnCrossHeading(line.Page(), ThemeOf(line), line.m_attr, values);
 }
 
 // ⭐⭐ A HEADING IS CLOSED — everything under it has been written, so its figures are final.
@@ -224,7 +265,7 @@ void ibSpreadsheetComposeDriver::OnGroupEnd(const ibCompositionLine& line, const
 	// wherever indent is zero, which is why nothing has shown it yet.
 	if (line.m_level != 0 || !m_hasMeasures)
 		return;   // only the root carries the grand total, and only where there are figures to show
-	WriteTotalLine(0, values, /*grand*/true);
+	WriteTotalLine(0, values, /*grand*/true, line.m_attr);
 	m_hasGrandTotal = false;   // …written here, so the end of the output has nothing left to do
 }
 
@@ -247,12 +288,14 @@ void ibSpreadsheetComposeDriver::OnRow(const ibCompositionLine& line, const std:
 		PrintRow(line, values);
 		return;
 	}
-	PrintCrossDetail(line.m_level, ThemeOf(line), values);
+	PrintCrossDetail(line.m_level, ThemeOf(line), line.m_attr, values);
 }
 
 void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const ibCompositionTheme& theme,
-	const std::vector<ibValue>& values)
+	ibCompositionLineAttr* attr, const std::vector<ibValue>& values)
 {
+	if (attr != nullptr)
+		m_crossHasAttr = true;   // …kept below, wherever this record lands
 
 	// ITS FIGURES, pulled out by role — the same as for a heading, because in a table a record IS
 	// figured like one: COUNT is 1, SUM is the value (see ibStreamingFold::Finish).
@@ -280,10 +323,14 @@ void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const ibComposition
 			m_colPath.resize(m_colLevels - 1);
 		m_colPath.push_back(key);
 		const size_t at = ColumnKeyIndex(m_colPath);
-		if (m_crossRows.empty())
+		if (m_crossRows.empty()) {
 			m_columnTotalCells[at] = measures;     // …under the root: what that column adds up to
-		else
+			KeepAttr(m_columnTotalAttrs, m_colPath, attr);
+		}
+		else {
 			m_crossRows.back().m_cells[at] = measures;
+			KeepAttr(m_crossRows.back().m_crossingAttrs, m_colPath, attr);
+		}
 		++m_crossDetailRows;
 		return;
 	}
@@ -291,6 +338,8 @@ void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const ibComposition
 	CrossRow row;
 	row.m_detail = true;
 	row.m_theme  = &theme;
+	if (attr != nullptr)
+		row.m_attr = std::make_unique<ibCompositionLineAttr>(std::move(*attr));
 	// PAST THE LAST GROUPING, whatever the fold numbered it. The tint and the indent are what a
 	// reader sees, and both are about where the line sits UNDER the headings — not about which
 	// level of the config produced it.
@@ -777,7 +826,8 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 			continue;
 
 		const ibValue& value = values[i];
-		wxString text = ColumnText(i, value);
+		// …in what its conditional appearance has it say, where that says anything (the attribute's text).
+		wxString text = ColumnText(i, value, line.m_attr != nullptr ? &line.m_attr->AttrOf(i) : nullptr);
 		// The indent rides on the FIRST field of the level — the column the grouping is read down.
 		if (isDimension && page > 0 && m_layout[i] == 0)
 			text.insert(0, page * kIndentPerLevel, wxT(' '));
@@ -835,6 +885,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		// stated by the side that is never merged.
 		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 	}
+	ApplyLineAttr(*row, line.m_attr);
 
 	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is DRAWN — the rung plus the
 	// hierarchy step. Where it lands, how far the group it opens reaches, which line carries the fold
@@ -844,11 +895,23 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	++m_rowsWritten;
 }
 
+void ibSpreadsheetComposeDriver::ApplyLineAttr(ibBackendSpreadsheetObject& area, const ibCompositionLineAttr* attr) const
+{
+	if (attr == nullptr)
+		return;
+	for (int col = 0; col < m_columnCount; ++col)
+		ApplyAttr(area, 0, col, attr->m_line);
+	for (const std::pair<size_t, ibCompositionAttr>& cell : attr->m_cells)   // the columns with an own, over the line's
+		if (cell.first < m_layout.size() && m_layout[cell.first] >= 0)
+			ApplyAttr(area, 0, m_layout[cell.first], cell.second);
+}
+
 // The total line itself — the measures, plus a caption saying what they add up.
 //
 // ⚠ ASCII ONLY IN THE CAPTION for the same reason every literal here is: this file is read as ANSI
 // by MSVC unless it carries a BOM.
-void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand)
+void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand,
+	const ibCompositionLineAttr* attr)
 {
 	if (m_document == nullptr || !m_hasMeasures)
 		return;   // nothing to total — a line saying "Total" with no figure says nothing
@@ -878,7 +941,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		if (col < m_dimWidth || isDimension)
 			continue;
 		const ibValue& value = values[i];
-		const wxString text = ColumnText(i, value);
+		const wxString text = ColumnText(i, value, attr != nullptr ? &attr->AttrOf(i) : nullptr);
 		row->SetCellValue(0, col, text);
 		// ⭐ THE GRAND TOTAL STANDS UNDER NOTHING — it is the figure over everything, so its cells are
 		// packed with no links at all. A click on it still opens the value; there is simply no
@@ -904,6 +967,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		row->SetCellFont(0, col, font);
 		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // closed like every other row, both ends
 	}
+	ApplyLineAttr(*row, attr);
 
 	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, level)));
 	++m_rowsWritten;
@@ -969,9 +1033,30 @@ size_t ibSpreadsheetComposeDriver::ColumnKeyIndex(const CrossKey& key)
 	return m_colKeyHint = m_colKeys.size() - 1;
 }
 
-void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTheme& theme,
-	const std::vector<ibValue>& values)
+void ibSpreadsheetComposeDriver::KeepAttr(std::vector<std::pair<CrossKey, ibCompositionLineAttr>>& kept,
+	const CrossKey& key, ibCompositionLineAttr* attr)
 {
+	if (attr == nullptr)
+		return;
+	for (std::pair<CrossKey, ibCompositionLineAttr>& held : kept)
+		if (held.first == key) { held.second = std::move(*attr); return; }
+	kept.emplace_back(key, std::move(*attr));
+}
+
+const ibCompositionLineAttr* ibSpreadsheetComposeDriver::AttrAt(
+	const std::vector<std::pair<CrossKey, ibCompositionLineAttr>>& kept, const CrossKey& key)
+{
+	for (const std::pair<CrossKey, ibCompositionLineAttr>& held : kept)
+		if (held.first == key)
+			return &held.second;
+	return nullptr;
+}
+
+void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTheme& theme,
+	ibCompositionLineAttr* attr, const std::vector<ibValue>& values)
+{
+	if (attr != nullptr)
+		m_crossHasAttr = true;   // …kept below, wherever this heading lands
 	// THE FIGURES, PULLED OUT BY ROLE. A table stores measures, never the row as it arrived: its
 	// cells are laid out per measure, and a row holds the dimension slots too. (The streaming layout
 	// keeps the whole row and reads it through `m_layout` — the same values, a different question,
@@ -986,6 +1071,8 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTh
 	if (level <= 0) {
 		m_crossGrandTotal = measures;
 		m_hasGrandTotal   = true;
+		if (attr != nullptr)
+			m_crossGrandTotalAttr = std::make_unique<ibCompositionLineAttr>(std::move(*attr));
 		return;
 	}
 
@@ -1007,6 +1094,7 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTh
 		if (m_colPath.size() >= inColumns)
 			m_colPath.resize(inColumns - 1);
 		m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
+		KeepAttr(m_columnTotalAttrs, m_colPath, attr);
 
 		// AN UPPER LEVEL TOTALS A PREFIX — and the bottom line needs that figure too, because the
 		// table has a column for it (see BuildColumnSlots).
@@ -1032,6 +1120,8 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTh
 		row.m_theme    = &theme;
 		row.m_heading  = ibValuesOfLevel(m_schema, values, level - 1);
 		row.m_measures = std::move(measures);
+		if (attr != nullptr)
+			row.m_attr = std::make_unique<ibCompositionLineAttr>(std::move(*attr));
 		return;
 	}
 
@@ -1051,6 +1141,7 @@ void ibSpreadsheetComposeDriver::OnCrossHeading(int level, const ibCompositionTh
 	else
 		m_colPath.push_back(ibValuesOfLevel(m_schema, values, level - 1));
 	// (A column with no row open at all is the ROOT's — the column total — and it was taken above.)
+	KeepAttr(m_crossRows.back().m_crossingAttrs, m_colPath, attr);
 
 	// ⭐ THE DEEPEST COLUMN HEADING IS A CELL; THE ONES ABOVE IT ARE SUBTOTALS. A column axis of
 	// Warehouse then Month has a figure per month AND a figure per warehouse, and the fold already
@@ -1490,6 +1581,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	const size_t width = static_cast<size_t>(std::max(totalCols, 0));
 	std::vector<wxString> cellText(width), cellLink(width);
 	std::vector<char>     cellSaid(width), cellRight(width);
+	// …and what its conditional appearance draws it with — the attribute of the line that wrote the cell: the row's
+	// on its heading and its total, a crossing's on its own figures. Null where no rule held; EMPTY where no line of
+	// the table carries one (m_crossHasAttr), so a table with no conditional appearance does nothing for it per cell.
+	std::vector<const ibCompositionAttr*> cellAttr(m_crossHasAttr ? width : 0);
 	// …AND A CANCEL IS HEARD LINE BY LINE — the composing session's own run (ibSession::RunState), as on the
 	// composer's walk: these lines are written after the walk has ended, so it cannot hear it for them.
 	ibSession* const composing = ibSession::Current();
@@ -1506,6 +1601,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		const int at = m_document->GetNumberRows();   // the row this line becomes
 		std::fill(cellSaid.begin(), cellSaid.end(), 0);
 		std::fill(cellRight.begin(), cellRight.end(), 0);
+		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);
 		for (wxString& link : cellLink)
 			link.clear();
 		// ⚠ THE DIGITS BY HAND. `wxString << int` formats through a printf, and this name is spelled
@@ -1545,8 +1641,14 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 
 		// The heading, indented by its depth — the same indent the streaming layout uses, so a
 		// nested row heading reads the same in both shapes.
+		// (A record's fields are the ones it says, its blanks skipped — no longer its columns, so its line's own.)
+		const ibCompositionLineAttr* const rowAttr = source.m_attr.get();
 		for (size_t f = 0; f < source.m_heading.size() && static_cast<int>(f) < dimWidth; ++f) {
-			wxString text = ColumnText(f < headingAt.size() ? headingAt[f] : m_schema.size(), source.m_heading[f]);
+			const size_t column = !source.m_detail && f < headingAt.size() ? headingAt[f] : m_schema.size();
+			const ibCompositionAttr* const drawn = rowAttr != nullptr ? &rowAttr->AttrOf(column) : nullptr;
+			if (drawn != nullptr)
+				cellAttr[f] = drawn;
+			wxString text = ColumnText(f < headingAt.size() ? headingAt[f] : m_schema.size(), source.m_heading[f], drawn);
 			if (f == 0)
 				text.insert(0, source.m_level * kIndentPerLevel, wxT(' '));
 			if (f < m_widest.size())
@@ -1561,16 +1663,24 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			}
 		}
 		KeepChain(source.m_level, rowChain);
+		// …and the rest of the heading area is the row's too, as wide as the widest heading.
+		for (size_t f = source.m_heading.size(); rowAttr != nullptr && f < static_cast<size_t>(dimWidth); ++f)
+			cellAttr[f] = &rowAttr->m_line;
 
 		// THE CELLS. A pair that never occurred writes nothing — an empty cell is what "this never
 		// happened" looks like, and a zero would state a measurement nobody made.
-		auto writeFigures = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain) {
+		auto writeFigures = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain,
+			const ibCompositionLineAttr* attr) {
 			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
 				const int col = firstCol + static_cast<int>(m);
 				if (col >= totalCols)
 					break;
 				const size_t c = static_cast<size_t>(col);
-				cellText[c] = ColumnText(m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(), figures[m]);
+				const size_t column = m < m_measureAt.size() ? m_measureAt[m] : m_schema.size();
+				const ibCompositionAttr* const drawn = attr != nullptr ? &attr->AttrOf(column) : nullptr;
+				if (drawn != nullptr)
+					cellAttr[c] = drawn;
+				cellText[c] = ColumnText(column, figures[m], drawn);
 				cellSaid[c] = 1;
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					cellRight[c] = 1;
@@ -1590,18 +1700,19 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		// BY SLOT, because a slot is what a column IS — a key's figures, or an upper heading's own.
 		for (size_t s = 0; s < slots.size(); ++s) {
 			const int slotCol = dimWidth + static_cast<int>(s) * perKey;   // the slot's first column (`at` is the row)
+			const ibCompositionLineAttr* const crossingAttr = AttrAt(source.m_crossingAttrs, slots[s].m_key);
 			if (!slots[s].m_subtotal) {
 				if (const std::vector<ibValue>* cell = source.m_cells.find_value(slots[s].m_at))
-					writeFigures(slotCol, *cell, slotChain[s]);
+					writeFigures(slotCol, *cell, slotChain[s], crossingAttr);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : source.m_subtotals)
-				if (kept.first == slots[s].m_key) { writeFigures(slotCol, kept.second, slotChain[s]); break; }
+				if (kept.first == slots[s].m_key) { writeFigures(slotCol, kept.second, slotChain[s], crossingAttr); break; }
 		}
 		// THE ROW TOTAL stands under the ROW only — it is what this heading adds up to across every
 		// column, so naming one of them would be a link that is not true.
 		if (measures > 0)
-			writeFigures(dimWidth + keys * perKey, source.m_measures, ibValue());
+			writeFigures(dimWidth + keys * perKey, source.m_measures, ibValue(), rowAttr);
 
 		// A HEADING IS TINTED BY ITS LEVEL AND BOLD; A RECORD IS NEITHER — same rule the streaming
 		// layout follows (OnRow), so a table and a grouping dress their lines alike — in the palette of the
@@ -1629,7 +1740,14 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			cell.m_alignHorz = cellRight[c] ? wxALIGN_RIGHT : plainHorz;
 			cell.m_alignVert = cellRight[c] ? wxALIGN_CENTER : plainVert;
 			cell.m_detailsParameter = std::move(cellLink[c]);   // …and its links cleared at its top
-			m_document->SetCell(at, col, cell);
+			if (c >= cellAttr.size() || cellAttr[c] == nullptr) {
+				m_document->SetCell(at, col, cell);
+				continue;
+			}
+			// …its conditional appearance over it, on a copy: the description is the next cell's too.
+			ibSpreadsheetCellDescription dressed = cell;
+			ApplyAttr(dressed, *cellAttr[c]);
+			m_document->SetCell(at, col, dressed);
 		}
 		// …and what PutArea said about the line besides its cells: the end of the printed rows, and the
 		// group it folds into at its depth. NO HEIGHT: a line of a report has automatic height, taller
@@ -1651,14 +1769,24 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		wxObjectDataPtr<ibBackendSpreadsheetObject> totals(new ibBackendSpreadsheetObject());
 		totals->SetCellValue(0, 0, wxT("Total"));
 
+		// The caption stands where the root's heading would — the root's line draws it, as a row's draws its heading.
+		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);
+		for (size_t f = 0; m_crossGrandTotalAttr != nullptr && f < static_cast<size_t>(dimWidth) && f < width; ++f)
+			cellAttr[f] = &m_crossGrandTotalAttr->m_line;
+
 		int wrote = 0;   // …and how many cells this line actually filled — see the journal below
-		auto writeAt = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain) {
+		auto writeAt = [&](int firstCol, const std::vector<ibValue>& figures, const ibValue& colChain,
+			const ibCompositionLineAttr* attr) {
 			for (size_t m = 0; m < figures.size() && static_cast<int>(m) < std::max(measures, 1); ++m) {
 				++wrote;
 				const int col = firstCol + static_cast<int>(m);
 				if (col >= totalCols)
 					break;
-				const wxString text = ColumnText(m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(), figures[m]);
+				const size_t column = m < m_measureAt.size() ? m_measureAt[m] : m_schema.size();
+				const ibCompositionAttr* const drawn = attr != nullptr ? &attr->AttrOf(column) : nullptr;
+				if (drawn != nullptr)
+					cellAttr[static_cast<size_t>(col)] = drawn;
+				const wxString text = ColumnText(column, figures[m], drawn);
 				totals->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
 					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
@@ -1678,17 +1806,18 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		};
 		for (size_t s = 0; s < slots.size(); ++s) {
 			const int at = dimWidth + static_cast<int>(s) * perKey;
+			const ibCompositionLineAttr* const totalAttr = AttrAt(m_columnTotalAttrs, slots[s].m_key);
 			if (!slots[s].m_subtotal) {
 				const auto cell = m_columnTotalCells.find(slots[s].m_at);
 				if (cell != m_columnTotalCells.end())
-					writeAt(at, cell->second, slotChain[s]);
+					writeAt(at, cell->second, slotChain[s], totalAttr);
 				continue;
 			}
 			for (const std::pair<CrossKey, std::vector<ibValue>>& kept : m_columnTotalSubtotals)
-				if (kept.first == slots[s].m_key) { writeAt(at, kept.second, slotChain[s]); break; }
+				if (kept.first == slots[s].m_key) { writeAt(at, kept.second, slotChain[s], totalAttr); break; }
 		}
 		if (m_hasGrandTotal && measures > 0)
-			writeAt(dimWidth + keys * perKey, m_crossGrandTotal, ibValue());
+			writeAt(dimWidth + keys * perKey, m_crossGrandTotal, ibValue(), m_crossGrandTotalAttr.get());
 
 		wxFont font = s_defaultSpreadsheetFont;
 		font.SetWeight(wxFontWeight::wxFONTWEIGHT_BOLD);
@@ -1696,6 +1825,8 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			totals->SetCellBackgroundColour(0, col, m_theme->m_headerFill);
 			totals->SetCellFont(0, col, font);
 			BoxCell(*totals, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // the line that closes the table
+			if (static_cast<size_t>(col) < cellAttr.size() && cellAttr[static_cast<size_t>(col)] != nullptr)
+				ApplyAttr(*totals, 0, col, *cellAttr[static_cast<size_t>(col)]);
 		}
 		m_document->PutArea(totals, 0);
 		++m_rowsWritten;
@@ -1718,6 +1849,9 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	m_crossDetailRows = 0;
 	m_columnTotalCells.clear();
 	m_columnTotalSubtotals.clear();   // the table is printed; whatever comes next is its own output
+	m_columnTotalAttrs.clear();
+	m_crossGrandTotalAttr.reset();
+	m_crossHasAttr = false;
 
 	// ⚠ EVERY COLUMN OF THE SHEET, not of this output. A narrower output would otherwise leave the
 	// columns past its own edge at whatever the previous one set — and, worse, re-set the shared

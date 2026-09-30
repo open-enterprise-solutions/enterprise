@@ -39,6 +39,7 @@
 
 #include <deque>    // the cross rows — see m_crossRows
 #include <map>      // the column total's cells — see m_columnTotalCells
+#include <memory>   // a cross row's conditional appearance — see CrossRow::m_attr
 #include <vector>
 
 class BACKEND_API ibSpreadsheetComposeDriver : public ibCompositionDriver
@@ -150,6 +151,14 @@ private:
 			return m_formats[column].Apply(value);
 		return value.GetString();
 	}
+	// …OR WHAT ITS CONDITIONAL APPEARANCE HAS IT SAY INSTEAD — a Text, or the value in its Format — where that says
+	// anything (ibCompositionAttr::TextOf).
+	wxString ColumnText(size_t column, const ibValue& value, const ibCompositionAttr* attr) const {
+		wxString text;
+		if (attr != nullptr && attr->TextOf(value, text))
+			return text;
+		return ColumnText(column, value);
+	}
 
 	// ⭐⭐ WHAT A CELL WAS COMPOSED FROM, PACKED WHERE IT IS WRITTEN. The value a figure shows and
 	// the headings it stands under are both known HERE and nowhere afterwards: the sheet keeps rows,
@@ -219,7 +228,11 @@ private:
 	// beside its name, so a "Total …" row under every group repeats what the line above it says and
 	// the report stops being readable (Max, 2026-08-22). One total row exists — the grand one, at
 	// the end of the section.
-	void WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand);
+	// `attr` — what the line's conditional appearance draws it with (null = nothing applied).
+	void WriteTotalLine(int level, const std::vector<ibValue>& values, bool grand,
+		const ibCompositionLineAttr* attr = nullptr);
+	// …and those attributes applied to the line's cells: the line's on every cell, each column's on its own.
+	void ApplyLineAttr(ibBackendSpreadsheetObject& area, const ibCompositionLineAttr* attr) const;
 
 	// -----------------------------------------------------------------------
 	//  THE CROSS-TABLE LAYOUT
@@ -246,6 +259,12 @@ private:
 	{
 		int                  m_level = 0;      // depth of the heading — indent and tint read off it
 		const ibCompositionTheme* m_theme = nullptr;   // …and the palette its node paints it in (ThemeOf)
+		// …and what its conditional appearance draws it with, taken from the line (the walk's lives only as long as
+		// its event) and kept until the table is written. Each line paints the cells IT writes: the row's own — its
+		// heading and its total — and each crossing's own, under the key or the prefix it stands at. Null and empty
+		// where no rule held.
+		std::unique_ptr<const ibCompositionLineAttr>            m_attr;
+		std::vector<std::pair<CrossKey, ibCompositionLineAttr>> m_crossingAttrs;
 		std::vector<ibValue> m_heading;        // its own dimension values (its level's fields)
 		std::vector<ibValue> m_measures;       // the heading's own figures = the row's total
 		// column key index -> the figures where that column meets this row. Sparse on purpose: a
@@ -282,14 +301,17 @@ private:
 		bool     m_subtotal = false;
 	};
 
-	// `theme` — the palette the line is painted in when the table is printed (ThemeOf).
-	void OnCrossHeading(int level, const ibCompositionTheme& theme, const std::vector<ibValue>& values);
+	// `theme` — the palette the line is painted in when the table is printed (ThemeOf); `attr` — what its
+	// conditional appearance draws it with (null = nothing applied).
+	void OnCrossHeading(int level, const ibCompositionTheme& theme, ibCompositionLineAttr* attr,
+		const std::vector<ibValue>& values);
 	// The STREAMING layout's row — an ordinary report's heading or record, printed as it arrives.
 	// Split off from the event when the kind started travelling on it: the dispatch is one question
 	// ("which layout is this output in"), the printing is another.
 	void PrintRow(const ibCompositionLine& line, const std::vector<ibValue>& values);
 	// …and a DETAIL record in the cross layout — its own line, with the cells across it.
-	void PrintCrossDetail(int level, const ibCompositionTheme& theme, const std::vector<ibValue>& values);
+	void PrintCrossDetail(int level, const ibCompositionTheme& theme, ibCompositionLineAttr* attr,
+		const std::vector<ibValue>& values);
 	// The output's columns, taken as the output begins. Not an event of its own any more: "which
 	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
 	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
@@ -311,6 +333,12 @@ private:
 	// column order — the read already came back sorted (the query's ORDER BY, the level's own sort),
 	// so re-sorting here would be a second opinion about an order somebody already stated.
 	size_t ColumnKeyIndex(const CrossKey& key);
+	// A CROSSING'S ATTRIBUTE, kept under the key it stands at — taken from the line, not copied; a later one at the
+	// same key replaces it, and nothing is kept where no rule held — and found again when the table is written.
+	static void KeepAttr(std::vector<std::pair<CrossKey, ibCompositionLineAttr>>& kept, const CrossKey& key,
+		ibCompositionLineAttr* attr);
+	static const ibCompositionLineAttr* AttrAt(const std::vector<std::pair<CrossKey, ibCompositionLineAttr>>& kept,
+		const CrossKey& key);
 
 	bool   m_cross = false;      // does this output have a column axis at all?
 	size_t m_rowLevels = 0;      // dimensions that read down the page; the rest read across
@@ -349,6 +377,13 @@ private:
 	// rather than the row they arrived in. (The streaming layout keeps the whole row in m_grandTotal
 	// and reads it through m_layout: same values, different question.)
 	std::vector<ibValue> m_crossGrandTotal;
+	// …and what the bottom line's conditional appearance draws it with — the root's (its caption and the corner) and
+	// each column total's, under its key or prefix, the way a row keeps its crossings' (CrossRow::m_crossingAttrs).
+	std::unique_ptr<const ibCompositionLineAttr>            m_crossGrandTotalAttr;
+	std::vector<std::pair<CrossKey, ibCompositionLineAttr>> m_columnTotalAttrs;
+	// …and whether ANY line of the table carries one — a table with no conditional appearance keeps nothing per cell
+	// for it when it is written (Max, 2026-09-30: "no conditional appearance, nothing to count").
+	bool m_crossHasAttr = false;
 };
 
 #endif // __SPREADSHEET_COMPOSE_DRIVER_H__

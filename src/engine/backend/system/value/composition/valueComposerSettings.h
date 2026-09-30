@@ -98,6 +98,8 @@ public:
 		// these long before a filter could.
 		AddEnumeration(ibComparisonKind_In,           wxT("In"),           _("In"));
 		AddEnumeration(ibComparisonKind_InHierarchy,  wxT("InHierarchy"),  _("In hierarchy"));
+		AddEnumeration(ibComparisonKind_Filled,       wxT("Filled"),       _("Filled"));
+		AddEnumeration(ibComparisonKind_NotFilled,    wxT("NotFilled"),    _("Not filled"));
 	}
 };
 

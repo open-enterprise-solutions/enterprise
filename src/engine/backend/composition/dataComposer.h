@@ -37,6 +37,7 @@
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
+#include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
 #include "backend/compositionDescription.h"   // ibFilterDescription — a level's filter is the stored one
 #include "compositionTheme.h"                 // ibCompositionTheme — the palette a run hands its driver
 #include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
@@ -182,6 +183,7 @@ public:
 		// …and the other settings, assembled like the rest — left out, the theme a person picked would be written
 		// into the setting on OK and gone from the window the next time it opened.
 		current.m_outputParameters = GetCurrentOutputParametersDesc();
+		current.m_conditionalAppearance = GetCurrentConditionalAppearanceDesc();
 		return current;
 	}
 
@@ -277,6 +279,11 @@ public:
 	const ibOutputParametersDescription& GetCurrentOutputParametersDesc() const {
 		return ReaderHasSetting() ? m_userSettings.m_outputParameters
 		                          : m_variants.front().m_settings.m_outputParameters;
+	}
+	// …AND WHAT STANDS OUT, WHEN — the conditional appearance, the same way again.
+	const ibConditionalAppearanceDescription& GetCurrentConditionalAppearanceDesc() const {
+		return ReaderHasSetting() ? m_userSettings.m_conditionalAppearance
+		                          : m_variants.front().m_settings.m_conditionalAppearance;
 	}
 
 	// ⭐⭐ WHAT AN OTHER SETTING IS IN FORCE — inherited the way a sort is (Max, 2026-09-29): the node's own where it
@@ -666,7 +673,7 @@ public:
 	// The config this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
 	// through THIS config's factory (sources register per-config). Set by whoever binds the source (the dynamic list
 	// from its own config; the script query from the running one). Null = a sourceless / transient-only composer.
-	ibDataComposer& SetMetaData(const class ibMetaData* metaData) { m_metaData = metaData; m_availablePaths.clear(); return *this; }
+	ibDataComposer& SetMetaData(const class ibMetaData* metaData) { m_metaData = metaData; DropMemos(); return *this; }
 	const class ibMetaData* GetMetaData() const { return m_metaData; }
 
 	// The driver-walk seam. A driver does not care where rows come from — it is handed a schema and
@@ -970,6 +977,27 @@ public:
 	// made of), and down the page is where a report puts them.
 	static ibTotalsAxis DetailAxisOf(const Output& output);
 
+	// ⭐⭐ AN OUTPUT'S CONDITIONAL APPEARANCE, MADE READY FOR ITS RUN — every rule in force made ready ONCE
+	// (ibCompositionRulesOf): the setting's and the output's for every line, each node's for its own. A report reads a
+	// million lines and a rule does not change between them; a line is left only its conditions. EMPTY where no storey
+	// declares a rule, and a walk then asks nothing of any line. Asked by every walk that draws — a report's read
+	// (ibDataDBComposer) and a printed list (ibDataRamComposer) — hence here, beside LevelAt; the bodies stand beside the
+	// evaluator they ask (compositionCondition.cpp).
+	struct BACKEND_API ConditionalAppearance {
+		std::vector<ibCompositionRule>                             m_rules;       // the setting's, then the output's
+		std::map<const GroupNode*, std::vector<ibCompositionRule>> m_nodes;       // each node's own
+		ibCompositionSubtreeOf                                     m_subtreeOf;   // «in hierarchy», as the composer reads it
+
+		bool IsEmpty() const { return m_rules.empty() && m_nodes.empty(); }
+
+		// A LINE'S — the rules that hold on its row: the setting's, then the output's, then its node's (a deeper storey
+		// paints over); one naming no field paints the line, one naming fields paints those columns. Into `attr`, the
+		// walk's buffer, refilled where it stands. False when nothing held.
+		bool AttrFor(const GroupNode* node, const std::vector<ibQueryLowering::OutputColumn>& schema,
+			const std::vector<ibValue>& row, ibCompositionLineAttr& attr) const;
+	};
+	ConditionalAppearance ConditionalAppearanceFor(const Output& output) const;
+
 	// HOW MANY DIMENSIONS AN AXIS CONTRIBUTES — and it counts levels that actually WRITE A KEY, not
 	// levels. A level with no fields is the detail records: it writes no `BY` (see
 	// AppendSettingsClauses) and never becomes a dimension, so counting it here would move the seam
@@ -1109,7 +1137,7 @@ public:
 	// did not fetch cannot be answered on.
 	//
 	// 🛑 AND THE ANSWER IS NOT AN ERROR — IT IS A SILENT YES. That is why nothing showed: a level
-	// filter that cannot find its column hides nothing (see ibLevelNodeShows), a sort key missing
+	// filter that cannot find its column hides nothing (see LevelShows), a sort key missing
 	// from the schema orders nothing (LevelOrder), and a field a node selected simply never arrives.
 	// The setting stays on screen, saves, travels through variants, and means nothing.
 	//
@@ -1257,6 +1285,15 @@ protected:
 	// the RAM composer's FromStorage) and a run starting (ApplyAvailableStructure, the RAM composer's ComputeOrder
 	// and Run).
 	mutable std::map<wxString, bool> m_availablePaths;
+	// …and SubtreeAt's, on the same terms: what «in hierarchy» of the named values admits for a field — its
+	// catalog's tree, read once per run however many rows ask. Null = the path resolves to no type.
+	mutable std::map<std::pair<wxString, std::vector<ibValue>>, std::shared_ptr<const ibQueryHierarchyScope>> m_subtrees;
+	// WHAT «IN HIERARCHY» OF `named` ADMITS FOR A FIELD — the field's catalog found by the leaf's type (WalkPath), its
+	// tree read once (ibQueryHierarchyScope) and kept (m_subtrees). Null where the path resolves to no type: the
+	// condition is then unknown, not guessed. What SubtreeOf hands the engine.
+	const ibQueryHierarchyScope* SubtreeAt(const wxString& path, const ibValue& named) const;
+	// …both dropped at once, since both answer "as the source and the base stand now".
+	void DropMemos() const { m_availablePaths.clear(); m_subtrees.clear(); }
 
 public:
 
@@ -1271,7 +1308,14 @@ public:
 	// (ibQueryColumnFromPath); a composer answers for the hops, from the source's own field on. Last in the
 	// class, so no slot moves.
 	bool IsAvailable(const wxString& path) const;
-	virtual bool IsWalkAvailable(const std::vector<wxString>& /*hops*/) const { return true; }
+	// ⭐ THE FIELD THE HOPS END IN — walked from the source's own field, each hop by its type, as every holder of
+	// fields walks a path (ibQueryConstructorModel::WalkPath). One walk, read for two answers: whether every hop may
+	// be shown (IsAvailable), and what the leaf holds (SubtreeAt). A composer with no source to walk answers an
+	// empty field — available, of no known type.
+	virtual ibQueryConstructorField WalkPath(const std::vector<wxString>& hops) const;
+	// ⭐ WHAT «IN HIERARCHY» ADMITS, handed to the engine as it asks it (ibCompositionSubtreeOf) — by every reader of
+	// rows in memory this composer feeds: the walk, the printed list, a table's filter, a list's appearance.
+	ibCompositionSubtreeOf SubtreeOf() const;
 
 	// ⭐ WHAT THE SOURCE CALLS A FIELD, asked the way availability is: a composer answers from its source's own
 	// fields, and one whose source says nothing (a RAM model's column) answers nothing. Read by the title a
@@ -1312,7 +1356,7 @@ public:
 
 	// The source's own answer — see m_sourceFields — walked the way every holder of fields walks a path
 	// (ibQueryConstructorModel::WalkPath: where it starts, then each hop by its type).
-	bool IsWalkAvailable(const std::vector<wxString>& hops) const override;
+	ibQueryConstructorField WalkPath(const std::vector<wxString>& hops) const override;
 	// …and what it calls a field, from the same list.
 	wxString SourceCaptionOf(const wxString& path) const override;
 

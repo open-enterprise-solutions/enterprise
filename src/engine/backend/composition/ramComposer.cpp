@@ -17,118 +17,27 @@
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>    // std::find / std::distance — the grouping paths are looked up by value
+#include <deque>        // the printed list's conditional appearance, one per rung
 #include <functional>   // std::function — the per-level walk is recursive
 
 // The DISPLAY-order source: filter + stable multi-key sort the storage's rows → their STORAGE indices in display
 // order (index i ↔ storage node i). A field path is split into a HEAD storage column + a dotted TAIL walked over
 // references per row (ibRamValueStorage::ResolveField). A path whose head is not a storage column is skipped: an
 // unevaluable filter passes (never hides a row), an unevaluable sort drops out.
-// ---------------------------------------------------------------------------
-// The filter TREE, evaluated over a RAM row
-// ---------------------------------------------------------------------------
 //
-// A DB source hands the condition to the engine and the engine lowers it. RAM
-// has no engine — the rows are right here — so the same AST is evaluated
-// directly against them. Same tree, same meaning; only the machinery differs.
+// ⭐ THE FILTER TREE IS READ BY THE ONE ENGINE (ibCompositionFilterHolds) — the one a DB list's walk hides its
+// headings by and a conditional appearance marks cells by. A DB source hands the condition to the server; RAM
+// has the rows right here, so the same description is read against them. Same tree, same meaning, same reader.
 //
-// Without this the tree would be applied on a DB list and SILENTLY IGNORED on a
-// RAM one — the same filter narrowing one list and not the other, which reads as
-// "the filter is broken" and cannot be told apart from an empty result.
+// 🛑 IT HAD A READER OF ITS OWN: the filter built into a query AST — every value registered as a parameter on
+// every pass — and walked by a second evaluator, two-valued, with no «in» and no «in hierarchy», so a NOT over
+// a line it could not read hid the row. The same setting filtered a table and a list differently (2026-09-30).
 
-namespace {
-
-// A side of a comparison, as a value: a Column reads the row, a Param and a
-// Literal read themselves. Anything else (an arithmetic node, a function) is a
-// shape the RAM path does not evaluate yet — the caller treats that as "cannot
-// answer" rather than guessing.
-bool RamSideValue(const ibQueryAstExpr& side, const ibRamValueStorage* storage, long row,
-	const std::map<wxString, ibValue>& params, ibValue& out)
-{
-	switch (side.m_kind) {
-	case ibQueryAstExprKind::Column: {
-		wxString path;
-		for (const wxString& seg : side.m_path)
-			path += path.IsEmpty() ? seg : wxT(".") + seg;
-		ibMetaID col; std::vector<wxString> tail;
-		if (storage == nullptr || !storage->SplitField(path, col, tail))
-			return false;
-		out = storage->ResolveField(row, col, tail);
-		return true;
-	}
-	case ibQueryAstExprKind::Param: {
-		const auto it = params.find(side.m_paramName);
-		if (it == params.end())
-			return false;
-		out = it->second;
-		return true;
-	}
-	case ibQueryAstExprKind::Literal:
-		out = side.m_literal;
-		return true;
-	default:
-		return false;
-	}
-}
-
-// Evaluate the condition for one row. `unknown` means the shape was not one this
-// path understands — the row is KEPT, because hiding rows on the strength of a
-// condition nobody evaluated is the one outcome a user cannot debug.
-bool RamEvalCondition(const ibQueryAstExpr& expr, const ibRamValueStorage* storage, long row,
-	const std::map<wxString, ibValue>& params, bool& unknown)
-{
-	switch (expr.m_kind) {
-	case ibQueryAstExprKind::Logical: {
-		if (!expr.m_lhs || !expr.m_rhs) { unknown = true; return true; }
-		const bool lhs = RamEvalCondition(*expr.m_lhs, storage, row, params, unknown);
-		const bool rhs = RamEvalCondition(*expr.m_rhs, storage, row, params, unknown);
-		return expr.m_isOr ? (lhs || rhs) : (lhs && rhs);
-	}
-	case ibQueryAstExprKind::Not: {
-		if (!expr.m_lhs) { unknown = true; return true; }
-		return !RamEvalCondition(*expr.m_lhs, storage, row, params, unknown);
-	}
-	case ibQueryAstExprKind::Compare: {
-		ibValue lhs, rhs;
-		if (!expr.m_lhs || !expr.m_rhs
-		 || !RamSideValue(*expr.m_lhs, storage, row, params, lhs)
-		 || !RamSideValue(*expr.m_rhs, storage, row, params, rhs)) {
-			unknown = true; return true;
-		}
-		switch (expr.m_cmp) {
-		case ibQueryCompareOp::Ne: return lhs != rhs;
-		case ibQueryCompareOp::Lt: return lhs <  rhs;
-		case ibQueryCompareOp::Le: return lhs <= rhs;
-		case ibQueryCompareOp::Gt: return lhs >  rhs;
-		case ibQueryCompareOp::Ge: return lhs >= rhs;
-		default:                   return lhs == rhs;
-		}
-	}
-	case ibQueryAstExprKind::Like: {
-		ibValue lhs, rhs;
-		if (!expr.m_lhs || !expr.m_rhs
-		 || !RamSideValue(*expr.m_lhs, storage, row, params, lhs)
-		 || !RamSideValue(*expr.m_rhs, storage, row, params, rhs)) {
-			unknown = true; return true;
-		}
-		// Same translation the flat RAM path uses — SQL wildcards to wx ones.
-		wxString pat = rhs.GetString();
-		pat.Replace(wxT("%"), wxT("*")); pat.Replace(wxT("_"), wxT("?"));
-		const bool matched = lhs.GetString().Lower().Matches(pat.Lower());
-		return expr.m_negated ? !matched : matched;
-	}
-	default:
-		unknown = true;
-		return true;
-	}
-}
-
-} // namespace
-
-std::vector<long> ibDataRamComposer::ComputeOrder()
+std::vector<long> ibDataRamComposer::ComputeOrder() const
 {
 	if (m_storage == nullptr)
 		return {};
-	m_availablePaths.clear();   // a new order reads the options as they stand now
+	DropMemos();   // a new order reads the options — and the catalogs' trees — as they stand now
 
 	// ⭐⭐ THE USER'S SETTING IS READ HERE TOO, and that is what makes it ONE construction (Max,
 	// 2026-08-23: "saved settings apply to the RAM table as well"). A value table, a tabular section
@@ -163,10 +72,26 @@ std::vector<long> ibDataRamComposer::ComputeOrder()
 		sorts.push_back({ col, std::move(tail), line.m_ascending });
 	}
 
-	// The condition this pass runs on — the filter in force, built here rather than kept: a setting
-	// is written by assignment, and what a read needs is made when a read is made. (The scope
-	// conditions above are separate and AND with it, as they do in the rendered query.)
-	const ibQueryAstExprPtr condition = BuildFilterAst(settings.m_filter);
+	// THE FILTER IN FORCE — the tree, read by the one engine (see the note above the function). The USER's filter
+	// replaces the declared one, exactly as the sort above does; the scope conditions are separate and AND with it,
+	// as they do in the rendered query. Each field it names is split ONCE — a switched-off line's too
+	// (AppendFilterFields) — and read once per row into a slot that stays where it is while the condition reads it.
+	const ibFilterDescription& filter = settings.m_filter;
+	std::vector<wxString> filterPaths;
+	for (const ibFilterNodeDescription& node : filter.m_nodes)
+		AppendFilterFields(filterPaths, node);
+	struct RamField { ibMetaID m_col = wxNOT_FOUND; std::vector<wxString> m_tail; bool m_resolved = false; };
+	std::vector<RamField> filterFields(filterPaths.size());
+	for (size_t i = 0; i < filterPaths.size(); ++i)
+		filterFields[i].m_resolved = m_storage->SplitField(filterPaths[i], filterFields[i].m_col, filterFields[i].m_tail);
+	std::vector<ibValue> filterCells(filterPaths.size());
+	const ibCompositionValueOf valueOf = [&](const wxString& path) -> const ibValue* {
+		for (size_t i = 0; i < filterPaths.size(); ++i)
+			if (filterFields[i].m_resolved && filterPaths[i].IsSameAs(path, false))
+				return &filterCells[i];
+		return nullptr;   // no column of this storage — unknown, and the row is kept
+	};
+	const ibCompositionSubtreeOf subtreeOf = SubtreeOf();
 
 	// One pass over the rows: evaluate the filters, and stash the sort keys (so the sort reads each row's key
 	// ONCE up front, not per comparison). Reads cells straight off the storage's nodes (dot-tail hops references).
@@ -177,11 +102,14 @@ std::vector<long> ibDataRamComposer::ComputeOrder()
 	for (long r = 0; r < n; ++r) {
 		bool pass = true;
 
-		// THE TREE, when there is one — evaluated first because it is the whole condition, not one
-		// line of it. The USER's filter replaces the declared one, exactly as the sort above does.
-		if (condition) {
-			bool unknown = false;
-			if (!RamEvalCondition(*condition, m_storage, r, m_params, unknown))
+		// THE TREE, when there is one — evaluated first because it is the whole condition, not one line of it. A
+		// condition this row cannot answer keeps it: hiding a row for a reason nobody can see is the one outcome a
+		// user cannot debug.
+		if (filter.IsOk()) {
+			for (size_t i = 0; i < filterFields.size(); ++i)
+				if (filterFields[i].m_resolved)
+					filterCells[i] = m_storage->ResolveField(r, filterFields[i].m_col, filterFields[i].m_tail);
+			if (!ibCompositionFilterHolds(filter, valueOf, subtreeOf, /*whenUnknown*/ true))
 				continue;
 		}
 
@@ -223,21 +151,22 @@ std::vector<long> ibDataRamComposer::ComputeOrder()
 // ibDataComposer::IsAvailable), asked of the storage the same way: the first hop is the storage's column (a
 // storage names its columns singly), the rest are hops by TYPE through the query model's walk, one hidden hop
 // hiding the walk. A value table belongs to no configuration, so the door never walks for one. A name the
-// storage does not have is not this question.
-bool ibDataRamComposer::IsWalkAvailable(const std::vector<wxString>& hops) const
+// storage does not have is not this question. …And the leaf's TYPE comes off the same walk (SubtreeAt asks it).
+ibQueryConstructorField ibDataRamComposer::WalkPath(const std::vector<wxString>& hops) const
 {
 	const ibValueModel::ibValueModelColumnCollection* columns = m_storage != nullptr ? m_storage->Columns() : nullptr;
 	if (columns == nullptr || hops.empty())
-		return true;
+		return ibQueryConstructorField();
 
 	const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* head = columns->GetColumnByName(hops.front());
 	if (head == nullptr)
-		return true;
+		return ibQueryConstructorField();
 
 	ibQueryConstructorField start;
+	start.m_name      = head->GetColumnName();
 	start.m_type      = head->GetColumnTypeValue();
 	start.m_available = head->IsColumnAvailable();
-	return ibQueryConstructorModel(m_metaData).WalkFrom(start, std::vector<wxString>(hops.begin() + 1, hops.end())).m_available;
+	return ibQueryConstructorModel(m_metaData).WalkFrom(start, std::vector<wxString>(hops.begin() + 1, hops.end()));
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +191,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 {
 	if (m_storage == nullptr)
 		return false;
-	m_availablePaths.clear();   // a run reads the options as they stand now
+	DropMemos();   // a run reads the options — and the catalogs' trees — as they stand now
 
 	// The fields to print — asked of the composition through the same accessor the DB side uses, so a
 	// reader's selected-fields table means the same thing on both.
@@ -380,6 +309,8 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// This is what a folded READ hands over by construction — a group node holds dimensions and
 	// resources, and its detail columns are empty — so blanking them here is not a special case for RAM,
 	// it is the same line the DB road already draws.
+	// ⚠ …WITH THE SAME WORD: NULL, a column the heading does not hold (ibSelector::GetValue). An empty value
+	// is a value the heading would HAVE, and a condition read on the heading compared it (ibCompositionFilterHolds).
 	std::vector<bool> isGroupField(resolved.size(), false);
 	for (size_t i = 0; i < fields.size() && i < isGroupField.size(); ++i)
 		isGroupField[i] = std::find(groupPaths.begin(), groupPaths.end(), fields[i]) != groupPaths.end();
@@ -388,15 +319,33 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 		std::vector<ibValue> values = valuesOf(index);
 		for (size_t i = 0; i < values.size(); ++i)
 			if (!isGroupField[i])
-				values[i] = ibValue();
+				values[i] = ibValue(ibValueTypes::TYPE_NULL);
 		return values;
+	};
+
+	// ⭐ …AND WHAT STANDS OUT, read by the walk's own reader — the rules made ready ONCE (ConditionalAppearanceFor) —
+	// so a printed list is painted as the grid showing it is. ONE BUFFER PER RUNG, as the DB walk keeps them: a
+	// heading's is handed over again at its close, and what is under it must not have written over it in between.
+	// Asked only where some storey declares a rule — a list with none makes nothing for it, not even the buffer.
+	const Output* const output = m_outputs.empty() ? nullptr : &m_outputs.front();
+	const ConditionalAppearance appearance = output != nullptr ? ConditionalAppearanceFor(*output) : ConditionalAppearance();
+	std::deque<ibCompositionLineAttr> attrAt;
+	const auto attrFor = [&](size_t rung, const GroupNode* node, const std::vector<ibValue>& values)
+		-> ibCompositionLineAttr* {
+		if (appearance.IsEmpty())
+			return nullptr;
+		while (attrAt.size() <= rung)
+			attrAt.emplace_back();
+		return appearance.AttrFor(node, info.m_schema, values, attrAt[rung]) ? &attrAt[rung] : nullptr;
 	};
 
 	if (groupPaths.empty()) {
 		for (const long index : order) {
 			ibCompositionLine line;                  // a flat read: rung 0, no hierarchy step
 			line.m_kind = ibSelectorNodeKind::Detail;
-			driver.OnRow(line, valuesOf(index));
+			const std::vector<ibValue> values = valuesOf(index);
+			line.m_attr = attrFor(0, output != nullptr ? DetailLevelOf(*output) : nullptr, values);
+			driver.OnRow(line, values);
 		}
 		driver.OnOutputEnd(false);
 		return true;
@@ -421,7 +370,9 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 				// own line — the doubling that reads as "the grouping did nothing".
 				line.m_level = static_cast<int>(groupPaths.size()) + 1;
 				line.m_kind  = ibSelectorNodeKind::Detail;
-				driver.OnRow(line, valuesOf(index));
+				const std::vector<ibValue> values = valuesOf(index);
+				line.m_attr = attrFor(groupPaths.size(), output != nullptr ? DetailLevelOf(*output) : nullptr, values);
+				driver.OnRow(line, values);
 			}
 			return;
 		}
@@ -448,6 +399,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 			// A HEADING CARRIES ITS OWN KEY and nothing of the rows beneath it — read off the first row
 			// of the part, whose value for this field IS the key by construction.
 			const std::vector<ibValue> heading = keyValuesOf(parts[at].front());
+			line.m_attr = attrFor(level, output != nullptr ? LevelAt(*output, line.m_level) : nullptr, heading);
 			driver.OnGroupBegin(line, heading);
 			walk(parts[at], level + 1);
 			driver.OnGroupEnd(line, heading);

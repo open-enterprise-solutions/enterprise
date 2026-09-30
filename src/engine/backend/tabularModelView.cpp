@@ -28,13 +28,19 @@ wxFont ibDataViewItemAttr::GetEffectiveFont(const wxFont& font) const
 	if (!HasFont())
 		return font;
 
-	wxFont f(font);
+	wxFont f(font);   // the view's, with what is said laid on it — never a font in its place
 	if (GetBold())
 		f.MakeBold();
 	if (GetItalic())
 		f.MakeItalic();
 	if (GetStrikethrough())
 		f.MakeStrikethrough();
+	if (m_underlined)
+		f.MakeUnderlined();
+	if (m_pointSize > 0)
+		f.SetPointSize(m_pointSize);
+	if (!m_face.IsEmpty())
+		f.SetFaceName(m_face);
 	return f;
 }
 

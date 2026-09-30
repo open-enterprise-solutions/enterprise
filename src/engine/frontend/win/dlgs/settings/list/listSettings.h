@@ -50,7 +50,8 @@ public:
 		Page_Filter = 1 << 2,   // the SHARED filter editor
 		Page_Sort   = 1 << 3,   // the SHARED sort editor
 		Page_Group  = 1 << 4,   // the list's OWN fold
-		Page_All    = Page_Query | Page_Filter | Page_Sort | Page_Group,
+		Page_ConditionalAppearance = 1 << 5,   // the SHARED conditional-appearance editor
+		Page_All    = Page_Query | Page_Filter | Page_Sort | Page_Group | Page_ConditionalAppearance,
 	};
 
 	// ⭐⭐ ON THE BASIS OF A DESCRIPTION ALONE — the only road there is. Nothing
@@ -225,6 +226,8 @@ private:
 	// exactly why they are not written here (settings/settingsFilterEditor.h, settingsSortEditor.h).
 	class ibFilterEditor* m_filterEditor = nullptr;
 	class ibSortEditor*   m_sortEditor   = nullptr;
+	// …and the conditional appearance, the third the two worlds share (settingsConditionalAppearanceEditor.h).
+	class ibConditionalAppearanceEditor* m_conditionalAppearanceEditor = nullptr;
 
 	// WHICH FIELDS THIS THING HAS — one answer, shared by the two editors above and by
 	// this panel's own tabs (settings/settingsFieldTree.h).

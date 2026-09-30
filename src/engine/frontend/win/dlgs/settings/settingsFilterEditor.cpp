@@ -707,8 +707,9 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 		new ibFilterValueRenderer(this, kFilterColDisplayMode),
 		kFilterColDisplayMode, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	m_view->GetRootColumnGroup()->AppendColumn(m_columnDisplayMode);
-	m_view->GetRootColumnGroup()->AppendTextColumn(_("Presentation"), kFilterColPresentation,
-		wxDATAVIEW_CELL_EDITABLE, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
+	// (NO "Presentation" COLUMN YET — the model answers kFilterColPresentation, but nothing reads a line's
+	//  presentation back to a reader, so the cell edited a word that went nowhere. Hidden until it does
+	//  (Max, 2026-09-30: "hide it for now, it does not work yet").)
 	// A TREE, not a list. The control defaults to ibDataViewList — it fetches the
 	// children and then draws them all at one level, so a nested filter reads as a
 	// flat one and the group a line sits in is invisible. That default is why the

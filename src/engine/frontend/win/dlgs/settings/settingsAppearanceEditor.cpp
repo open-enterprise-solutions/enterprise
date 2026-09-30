@@ -5,7 +5,14 @@
 #include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // a text parameter, every language of it
 #include "frontend/win/dlgs/formatConstructor/formatConstructor.h"         // ibFormatBoxEditor — a format, a language at a time
 #include "backend/backend_localization.h"               // ibTranslateString — a text read in the language in force
+#include "backend/system/value/valueColour.h"            // a colour parameter, kept as a value
+#include "backend/system/value/valueFont.h"              // …and a font
+#include "backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
+#include "backend/spreadsheetDescription.h"              // s_defaultSpreadsheetFont — the font a font is chosen from
 
+#include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
+#include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
+#include <wx/fontdlg.h>    // wxFontDialog — …and a font
 #include <wx/dialog.h>
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
 #include <wx/sizer.h>
@@ -33,6 +40,13 @@ bool IsTicked(const ibAppearanceDescription& appearance, ibAppearanceParameter p
 void SayText(ibAppearanceDescription& appearance, ibAppearanceParameter parameter, const wxString& raw)
 {
 	appearance.Say(parameter, !raw.IsEmpty(), raw.IsEmpty() ? ibValue() : ibValue(raw));
+}
+
+// WHICH PARAMETERS ARE WRITTEN AS TEXT — typed into the cell, in every language. The others are a colour, a font
+// or an alignment: chosen in their own window, never typed.
+bool IsTyped(ibAppearanceParameter parameter)
+{
+	return parameter == ibAppearanceParameter::Format || parameter == ibAppearanceParameter::Text;
 }
 
 // ONE LINE PER PARAMETER OF THE PLATFORM'S LIST — the tick, what it is called, its value.
@@ -69,16 +83,28 @@ public:
 		if (col == kColUse) {
 			if (variant.GetBool() == IsTicked(*m_appearance, parameter))
 				return false;
-			m_appearance->Say(parameter, variant.GetBool(), kept.IsEmpty() ? ibValue() : ibValue(kept));
+			// THE TICK KEEPS THE VALUE AS IT IS — a colour stays a colour; only the word "in force" changes.
+			const ibAppearanceValueDescription* said = m_appearance->Find(parameter);
+			m_appearance->Say(parameter, variant.GetBool(),
+				said != nullptr ? ibStoredValue(said->m_value, nullptr) : ibValue());
 			return true;
 		}
 		if (col != kColValue)
 			return false;
 
-		// TYPED IN THE CELL — the language in force; the others stay as they were (the "..." edits them all).
-		// Emptied, that language is taken out.
 		wxString text = variant.GetString();
 		text.Trim(true).Trim(false);
+		// A COLOUR, A FONT, AN ALIGNMENT ARE CHOSEN, NOT TYPED — their "..." opens their window. Emptied (the
+		// cell's "×"), the parameter is forgotten.
+		if (!IsTyped(parameter)) {
+			if (!text.IsEmpty() || kept.IsEmpty())
+				return false;
+			m_appearance->Say(parameter, false, ibValue());
+			return true;
+		}
+
+		// TYPED IN THE CELL — the language in force; the others stay as they were (the "..." edits them all).
+		// Emptied, that language is taken out.
 		ibTranslateString translated(kept);
 		if (text == translated.GetString())
 			return false;
@@ -175,8 +201,78 @@ private:
 			m_view->Refresh();   // the tick beside it may have changed with it
 			return true;
 		}
+		// WHAT THE CELL SAYS instead of its value — every language, as a title is written.
+		case ibAppearanceParameter::Text: {
+			const ibTranslateString before(KeptText(m_edited, parameter));
+			ibDialogTranslateConstructor dialog(this, ibAppearanceParameterCaption(parameter), before, m_metaData,
+				m_readOnly);
+			if (dialog.ShowModal() != wxID_OK)
+				return false;
+			const ibTranslateString after = dialog.GetTranslate();
+			if (after == before)
+				return false;
+			SayText(m_edited, parameter, after.GetRawText());
+			text = after.GetString();
+			m_view->Refresh();
+			return true;
+		}
+		// A COLOUR — the system's own colour window, standing on the colour kept.
+		case ibAppearanceParameter::BackgroundColour:
+		case ibAppearanceParameter::TextColour: {
+			wxColourData data;
+			if (const ibAppearanceValueDescription* said = m_edited.Find(parameter)) {
+				ibValue kept = ibStoredValue(said->m_value, nullptr);
+				ibValueColour* colour = nullptr;
+				if (kept.ConvertToValue(colour) && colour != nullptr && colour->m_colour.IsOk())
+					data.SetColour(colour->m_colour);
+			}
+			wxColourDialog dialog(this, &data);
+			if (dialog.ShowModal() != wxID_OK)
+				return false;
+			return Choose(parameter, ibValue(new ibValueColour(dialog.GetColourData().GetColour())), text);
+		}
+		// A FONT — the system's own font window, standing on the font kept, else on the REPORT'S own: what is chosen
+		// is read as what it changes of that one (ibCompositionFont::Of), so ticking italic says italic and nothing more.
+		case ibAppearanceParameter::Font: {
+			wxFontData data;
+			data.SetInitialFont(s_defaultSpreadsheetFont);
+			if (const ibAppearanceValueDescription* said = m_edited.Find(parameter)) {
+				ibValue kept = ibStoredValue(said->m_value, nullptr);
+				ibValueFont* font = nullptr;
+				if (kept.ConvertToValue(font) && font != nullptr && font->m_font.IsOk())
+					data.SetInitialFont(font->m_font);
+			}
+			wxFontDialog dialog(this, data);
+			if (dialog.ShowModal() != wxID_OK)
+				return false;
+			return Choose(parameter, ibValue(new ibValueFont(dialog.GetFontData().GetChosenFont())), text);
+		}
+		// AN ALIGNMENT — one of three words, picked in a small window of its own (the way the other settings pick
+		// a theme), in the sheet's own vocabulary.
+		case ibAppearanceParameter::HorizontalAlignment: {
+			const ibSpreadsheetAlignmentHorz offered[] = { ibAlignmentHorz_Left, ibAlignmentHorz_Center,
+				ibAlignmentHorz_Right };
+			wxArrayString labels;
+			for (const ibSpreadsheetAlignmentHorz one : offered)
+				labels.Add(ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(one).GetString());
+			const int current = labels.Index(KeptText(m_edited, parameter));
+			const int chosen = wxGetSingleChoiceIndex(ibAppearanceParameterCaption(parameter), _("Appearance"),
+				labels, current != wxNOT_FOUND ? current : 0, this);
+			if (chosen < 0 || chosen >= static_cast<int>(labels.size()))
+				return false;
+			return Choose(parameter,
+				ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(offered[chosen]), text);
+		}
 		}
 		return false;
+	}
+
+	// A VALUE CHOSEN IN ITS WINDOW — said ticked, and shown as its own text.
+	bool Choose(ibAppearanceParameter parameter, const ibValue& value, wxString& text) {
+		m_edited.Say(parameter, true, value);
+		text = KeptText(m_edited, parameter);
+		m_view->Refresh();
+		return true;
 	}
 
 	ibAppearanceDescription m_edited;

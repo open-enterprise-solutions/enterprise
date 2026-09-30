@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueColour.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 
 
@@ -82,6 +83,22 @@ bool ibValueColour::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		return true;
 	}
 	return false;
+}
+
+namespace {
+const wxString kColourText = wxT("v");
+}
+
+bool ibValueColour::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kColourText, typeConv::ColourToString(m_colour));
+	return true;
+}
+
+bool ibValueColour::DoDeserialize(const ibDataNode& node)
+{
+	m_colour = typeConv::StringToColour(node.GetValue<wxString>(kColourText));
+	return true;
 }
 
 //**********************************************************************

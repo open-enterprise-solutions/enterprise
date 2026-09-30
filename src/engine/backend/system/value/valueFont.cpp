@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueFont.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — the packed form
 
 //////////////////////////////////////////////////////////////////////
 
@@ -106,6 +107,22 @@ bool ibValueFont::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	}
 
 	return false;
+}
+
+namespace {
+const wxString kFontText = wxT("v");
+}
+
+bool ibValueFont::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(kFontText, typeConv::FontToString(m_font));
+	return true;
+}
+
+bool ibValueFont::DoDeserialize(const ibDataNode& node)
+{
+	m_font = typeConv::StringToFont(node.GetValue<wxString>(kFontText));
+	return true;
 }
 
 //**********************************************************************

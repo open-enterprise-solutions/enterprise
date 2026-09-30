@@ -68,7 +68,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 		const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
 		const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
 		m_snapshot.Reserve(static_cast<long>(driver.Rows().size()));
-		for (const ibListFetchDriver::Row& r : driver.Rows()) {
+		for (ibListFetchDriver::Row& r : driver.Rows()) {
 			if (r.m_level != 0)
 				continue;                                 // a flat / detail read emits every row at level 0
 			std::vector<ibValue> rowKey;
@@ -82,6 +82,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 			                      || q->GetHierarchyType() == ibHierarchyType::eItems
 			                      || r.m_expandable;
 			ibComposerNode* node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
+			node->TakeCompositionAttr(std::move(r.m_attr));         // …and what its conditional appearance draws it with, as it is
 			m_snapshot.AddValue(this, node, false);       // adopt (silent) — const-model op, no const_cast
 		}
 	}
@@ -480,7 +481,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	std::vector<ibValue> subChain;      // the folder chain of this rung, rebuilt as the pre-order goes by
 	size_t rowAt = static_cast<size_t>(-1);
 
-	for (const ibListFetchDriver::Row& r : rows) {
+	for (ibListFetchDriver::Row& r : rows) {
 		++rowAt;
 		// LAZY drill: a TOTALS result arrives pre-order over EVERY level, but the paged control wants only the
 		// CURRENT scope's TOP level per fetch — deeper rows load when the user drills into a node. The TOP level
@@ -563,7 +564,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 				// under this rung: the next grouping, or the records.
 				groupPath.push_back(dimValue);
 			}
-			groupNodes.push_back(new ibComposerNode(values, groupPath, /*container*/ r.m_keyed, subPath));
+			ibComposerNode* heading = new ibComposerNode(values, groupPath, /*container*/ r.m_keyed, subPath);
+			heading->TakeCompositionAttr(std::move(r.m_attr));      // …and what its conditional appearance draws it with, as it is
+			groupNodes.push_back(heading);
 			continue;   // collected — the client window (below) transfers the on-page groups into `out`
 		}
 		else {
@@ -593,6 +596,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// drilling it must re-enter at the rung it was found on — not at the top. Without the scope the
 			// drill came back with an empty path, depth 0, and the whole grouping tree re-grew under the folder.
 			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey), parentPath);
+			node->TakeCompositionAttr(std::move(r.m_attr));         // …and what its conditional appearance draws it with, as it is
 		}
 		out.Add(ibDataViewItem(node));   // ctor IncRefs to 2
 		node->DecRef();                  // -> `out` owns exactly one reference per row

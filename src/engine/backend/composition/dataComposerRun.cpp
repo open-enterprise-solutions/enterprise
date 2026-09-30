@@ -29,6 +29,7 @@
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
 #include "backend/backend_localization.h"     // a column title written in several languages, read in the reader's
 
+#include <algorithm>   // std::find_if — which rule field the read does not carry
 #include <deque>   // the walk's descents and closing buffers, one per depth
 
 ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals)
@@ -142,64 +143,27 @@ static bool OutputWrites(const ibDataComposer::Output& output, ibSelectorNodeKin
 // its filter description, and the composer's Filter() writes the COMPOSITION-wide one — so no line
 // ever landed there and this function could only ever answer yes. A level's filter was editable,
 // saved, and did nothing.
-static bool ibLevelNodeShows(const ibFilterNodeDescription& node,
-	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row)
-{
-	if (!node.m_use)
-		return true;   // switched off reads as if it were not written
-
-	if (node.m_kind == ibFilterNodeKind_Group) {
-		// AND is "every child agrees", OR is "some child does" — and an empty group narrows nothing,
-		// which is why the OR case starts from `false` only when it has something to ask.
-		if (node.m_children.empty())
-			return true;
-		const bool isOr = (node.m_groupKind == ibFilterGroupKind_Or);
-		for (const ibFilterNodeDescription& child : node.m_children) {
-			const bool shows = ibLevelNodeShows(child, schema, row);
-			if (isOr && shows)   return true;
-			if (!isOr && !shows) return false;
-		}
-		return !isOr;
-	}
-
-	// A CONDITION NAMES AN OUTPUT COLUMN — the same names a person picked from. A name this result
-	// does not carry cannot hide anything: it says nothing about the rows in hand, and hiding on it
-	// would be hiding for a reason nobody can see.
-	if (!node.m_left.IsField())
-		return true;
-	size_t at = schema.size();
-	for (size_t i = 0; i < schema.size(); ++i) {
-		if (schema[i].m_name.IsSameAs(node.m_left.m_path, false)
-		    || schema[i].m_alias.IsSameAs(node.m_left.m_path, false)) {
-			at = i;
-			break;
-		}
-	}
-	if (at >= schema.size() || at >= row.size())
-		return true;
-
-	// The right-hand side is a VALUE here. A field-to-field comparison is the query's business —
-	// both sides are columns and the server already answered it.
-	if (node.m_right.IsField())
-		return true;
-	return ibCompositionCompare(row[at], node.m_comparison, node.m_right.m_value);
-}
-
+//
+// ⭐ AND IT IS READ BY THE ONE ENGINE (ibCompositionFilterHolds, compositionCondition.cpp) — the conditional
+// appearance asks the same question of the same row, and a table in memory filters by it (2026-09-30). It had a
+// reading of its own here, which ANDed the root whatever its kind and let a switched-off line inside an OR group
+// answer "yes" for the whole group.
 bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNodeKind kind,
 	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
 {
 	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
 	// is nothing left to hide by.
 	const GroupNode* found = LevelAt(output, depth, kind);
-	if (found == nullptr)
-		return true;
+	if (found == nullptr || !found->m_settings.m_filter.IsOk())
+		return true;   // …and a level that hides on nothing asks nothing of the row
 
-	const GroupNode& level = *found;
-	for (const ibFilterNodeDescription& node : level.m_settings.m_filter.m_nodes)
-		if (!ibLevelNodeShows(node, schema, row))
-			return false;
-	return true;
+	// A condition this row cannot answer does not hide it: hiding for a reason nobody can see is worse.
+	return ibCompositionFilterHolds(found->m_settings.m_filter, ibComposerRowValueOf(schema, row), SubtreeOf(),
+		/*whenUnknown*/ true);
 }
+
+// (…and the row's conditional appearance — ConditionalAppearanceFor, made ready once per output — is the RAM
+//  composer's question too, so it is answered beside the evaluator, in compositionCondition.cpp.)
 
 // ⭐⭐ THE ORDER ONE LEVEL'S HEADINGS COME IN — and it is read the same way its filter is, off the
 // level a person set it on.
@@ -537,6 +501,26 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 
 
 	std::vector<ibValue> row(schema.size());
+	// ⭐ A ROW'S CONDITIONAL APPEARANCE — its rules made ready ONCE for the output (ConditionalAppearanceFor), and
+	// worked out per line only where some storey declares a rule: a report with none pays nothing per row. One buffer
+	// for the two flat roads, whose lines are handed over one at a time.
+	const ConditionalAppearance appearance = ConditionalAppearanceFor(output);
+	const bool hasConditionalAppearance = !appearance.IsEmpty();
+	ibCompositionLineAttr flatAttr;
+	// ⚠ …AND A FIELD A RULE NAMES THAT THIS READ DOES NOT CARRY, said by name once per output: its rule cannot hold,
+	// and on screen that reads exactly like a condition that is false.
+	if (hasConditionalAppearance) {
+		wxString unread;
+		for (const wxString& path : ibComposerRuleFieldsOf(output, GetCurrentConditionalAppearanceDesc())) {
+			const auto carried = std::find_if(schema.begin(), schema.end(),
+				[&path](const ibQueryLowering::OutputColumn& oc) { return ibComposerColumnAnswersTo(oc, path); });
+			if (carried == schema.end())
+				unread += (unread.IsEmpty() ? wxString() : wxString(wxT(", "))) + path;
+		}
+		if (!unread.IsEmpty())
+			ibJournalWarning(wxT("composer"), wxT("output '%s': conditional appearance cannot read %s - its rules do not hold"),
+				output.m_name, unread);
+	}
 	if (serverGrouped) {
 		// Server-paged GROUPS (one grouping level, keyset-paged by the DB) — already grouped, so emit each as a
 		// level-1 DRILLABLE group node WITHOUT the ByGroups fold (which folds a flat detail snapshot). The row
@@ -560,6 +544,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			head.m_level = 1;
 			head.m_hasChildren = true;
 			head.m_theme = &headTheme;
+			if (hasConditionalAppearance && appearance.AttrFor(LevelAt(output, 1), schema, row, flatAttr))
+				head.m_attr = &flatAttr;
 			driver.OnGroupBegin(head, row);
 		}
 	}
@@ -595,6 +581,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			ibCompositionLine flat;
 			flat.m_kind = ibSelectorNodeKind::Detail;
 			flat.m_theme = &detailTheme;
+			if (hasConditionalAppearance && appearance.AttrFor(DetailLevelOf(output), schema, row, flatAttr))
+				flat.m_attr = &flatAttr;
 			driver.OnRow(flat, row);
 		}
 	}
@@ -665,6 +653,14 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				closingAt.emplace_back();
 			return closingAt[depth];
 		};
+		// …and ONE CONDITIONAL APPEARANCE PER DEPTH, for the reason the closing buffer has one: a heading's closing
+		// line is handed over after its descent, and a deeper line must not have overwritten it in the meantime.
+		std::deque<ibCompositionLineAttr> attrAt;
+		const auto attrFor = [&attrAt](size_t depth) -> ibCompositionLineAttr& {
+			while (attrAt.size() <= depth)
+				attrAt.emplace_back();
+			return attrAt[depth];
+		};
 		std::function<void(ibSelector&, const std::vector<wxString>&, size_t)> walk =
 			[&](ibSelector& level, const std::vector<wxString>& shownAbove, size_t depth) {
 			// What a node shows depends on nothing but the level it stands on and what stood above it,
@@ -709,6 +705,12 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					shownKnown = true;
 				}
 				line.m_theme = themeHere;
+				// …AND ITS CONDITIONAL APPEARANCE, asked of this row.
+				if (hasConditionalAppearance) {
+					ibCompositionLineAttr& attr = attrFor(depth);
+					if (appearance.AttrFor(here, schema, row, attr))
+						line.m_attr = &attr;
+				}
 
 				// …AND EVERYTHING IT DOES NOT SHOW IS BLANKED, not removed. The COLUMNS belong to the
 				// output — a table has the columns it has — so a node fills the cells that are its

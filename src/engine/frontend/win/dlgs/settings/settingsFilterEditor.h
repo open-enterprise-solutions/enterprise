@@ -107,6 +107,13 @@ public:
 	// that already has its type is skipped.
 	void TypeFieldOperands();
 
+	// Open the filter on its root and every group under it. Runs on the NEXT turn of
+	// the event loop (RefreshFilterTree posts it): expanding a row the view has not
+	// fetched yet does nothing. The editor asks it itself when IT is shown (a notebook
+	// page); a window that hosts it whole asks it when the WINDOW is — a child is sent
+	// no show of its own (the condition of a conditional appearance, 2026-09-30).
+	void ExpandFilterTree();
+
 private:
 
 	// The value cell each side of a condition is edited through — a control-backed
@@ -119,10 +126,6 @@ private:
 	// result you have to go and find again reads as a command that did nothing.
 	// The line is named by its PATH, which is what a row is now.
 	void RefreshFilterTree(const ibFilterPath& select = ibFilterPath());
-	// Open the filter on its root and every group under it. Runs on the NEXT turn of
-	// the event loop (RefreshFilterTree posts it): expanding a row the view has not
-	// fetched yet does nothing.
-	void ExpandFilterTree();
 
 	// The verbs below are raised by the toolbar and by the context menu alike, so
 	// there is one implementation and one set of rules about what is possible where

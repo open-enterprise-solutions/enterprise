@@ -56,6 +56,8 @@
 
 class ibBackendQueryable;
 class ibBackendQueryColumn;
+class ibMetaData;
+struct ibTypeDescription;
 
 class BACKEND_API ibQueryHierarchyScope
 {
@@ -72,6 +74,12 @@ public:
 	// degradation and not a failure: «in hierarchy» over a flat list IS the list.
 	ibQueryHierarchyScope(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
 	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
+	// …and by the field's TYPE, where a holder of fields has the type with no column behind it — a setting's field,
+	// walked by its type (ibQueryConstructorModel::WalkFrom) and read against rows in memory. The same metadata
+	// owner names the targets (ibDbTableProvider::ReferenceTargetsOf); a type that names none leaves every named
+	// value standing for itself, as a flat list does above.
+	ibQueryHierarchyScope(const ibMetaData* metaData, const ibTypeDescription& type,
+	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
 
 	// Nothing named at all. NOT the same as "nothing matches": what an empty scope means is the
 	// caller's to decide - a register argument left out means every account, while an `IN ()`
@@ -80,6 +88,9 @@ public:
 
 	// Every value the filter admits - the named ones, their subordinates, or only the subordinates.
 	const std::vector<ibValue>& Accepted() const { return m_accepted; }
+	// …and whether it admits THIS one — asked of a row in memory, cell by cell, so a walked subtree is looked up
+	// by the value rather than scanned.
+	bool Admits(const ibValue& value) const;
 
 	// The value a row is REPORTED under. Named in hierarchy: the value that was asked for, which is
 	// what makes the subordinates add up into it. Otherwise the row's own value - and that is also
@@ -87,6 +98,11 @@ public:
 	ibValue ReportedUnder(const ibValue& value) const;
 
 private:
+	// Both doors land here once the targets are known — the column's, or the type's.
+	ibQueryHierarchyScope(const std::vector<const ibBackendQueryable*>& targets,
+	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
+
+	ibQueryDimUnfold     m_unfold = ibQueryDimUnfold::Elements;   // the word it was asked with
 	std::vector<ibValue> m_accepted;               // what the filter admits
 	// Keyed by the VALUE, not by a string rendered from it — see ibValueHash in
 	// value.h. A reference keys by its guid there just as it did through

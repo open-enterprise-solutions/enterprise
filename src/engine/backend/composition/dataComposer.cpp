@@ -18,6 +18,7 @@
 #include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them
 #include "backend/functionalOption/functionalOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
+#include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — the empty value of a type, for «filled»
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -116,7 +117,7 @@ void ibDataDBComposer::RefreshSourceFields()
 	const ibFunctionalOptionGate::AsApplication asTheApplication;
 
 	m_sourceFields.reset();
-	m_availablePaths.clear();   // a new source answers anew
+	DropMemos();   // a new source answers anew
 	// (Read whether or not anything is off in this base: the captions and the balance roles are asked on every
 	//  run — IsAvailable keeps its own fast answer for a base that switched nothing off.)
 
@@ -195,56 +196,27 @@ bool ibDataComposer::IsAvailable(const wxString& path) const
 	if (ibFunctionalOptionGate::AnyUnavailable(m_metaData)) {
 		// THE PATH AS HOPS — laid out the way the query carries it (ibQueryColumnFromPath), not by hand.
 		const ibQueryAstExprPtr column = ibQueryColumnFromPath(path);
-		available = !column || column->m_path.empty() || IsWalkAvailable(column->m_path);
+		available = !column || column->m_path.empty() || WalkPath(column->m_path).m_available;
 	}
 	m_availablePaths.emplace(path, available);
 	return available;
 }
 
+ibQueryConstructorField ibDataComposer::WalkPath(const std::vector<wxString>& /*hops*/) const
+{
+	return ibQueryConstructorField();
+}
+
 // Walked from the source's fields as every holder of fields walks a path: where it starts (a linked package's
 // `Sales.Qty` included), then each hop by its TYPE, one hidden hop hiding the walk. A name the source does not
 // have is not this question.
-bool ibDataDBComposer::IsWalkAvailable(const std::vector<wxString>& hops) const
+ibQueryConstructorField ibDataDBComposer::WalkPath(const std::vector<wxString>& hops) const
 {
-	return !m_sourceFields || ibQueryConstructorModel(m_metaData).WalkPath(*m_sourceFields, hops).m_available;
+	return m_sourceFields ? ibQueryConstructorModel(m_metaData).WalkPath(*m_sourceFields, hops) : ibQueryConstructorField();
 }
 
-bool ibCompositionCompare(const ibValue& cell, const wxString& op, const ibValue& value)
-{
-	if (op == wxT("="))                            return cell == value;
-	if (op == wxT("<>") || op == wxT("!="))        return cell != value;
-	if (op == wxT(">"))                            return cell >  value;
-	if (op == wxT(">="))                           return cell >= value;
-	if (op == wxT("<"))                            return cell <  value;
-	if (op == wxT("<="))                           return cell <= value;
-	if (op.CmpNoCase(wxT("LIKE")) == 0) {
-		wxString pattern = value.GetString();
-		pattern.Replace(wxT("%"), wxT("*"));
-		pattern.Replace(wxT("_"), wxT("?"));
-		return cell.GetString().Lower().Matches(pattern.Lower());
-	}
-	return true;   // unknown operator → do not hide anything over a line nobody can read
-}
-
-// ⭐ THE SAME COMPARISON, ASKED WITH THE KIND IT IS. A stored condition holds an ibComparisonKind,
-// not a spelling, and the string pair that used to translate between them is gone (there was an
-// inverse map that read "IN" back as Equal — see list-settings.md § 5a). So the row-side comparison
-// answers the kind directly; membership is the one that cannot be asked of a single value here, and
-// it hides nothing rather than pretending.
-bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind, const ibValue& value)
-{
-	switch (kind) {
-	case ibComparisonKind_Equal:        return cell == value;
-	case ibComparisonKind_NotEqual:     return cell != value;
-	case ibComparisonKind_Greater:      return cell >  value;
-	case ibComparisonKind_GreaterEqual: return cell >= value;
-	case ibComparisonKind_Less:         return cell <  value;
-	case ibComparisonKind_LessEqual:    return cell <= value;
-	case ibComparisonKind_Contains:     return ibCompositionCompare(cell, wxT("LIKE"),
-	                                        ibValue(wxT("%") + value.GetString() + wxT("%")));
-	default:                            return true;   // In / InHierarchy — a set is the server's question
-	}
-}
+// (Comparing a value and reading a condition against a row in hand — the evaluator — live in
+//  compositionCondition.cpp, with what a composer tells it; both composers call it the same way.)
 
 //////////////////////////////////////////////////////////////////////
 // settings
@@ -341,8 +313,50 @@ ibQueryAstExprPtr ibBuildFilterSide(ibDataComposer& composer, const ibFilterOper
 ibQueryAstExprPtr ibBuildFilterNodes(ibDataComposer& composer,
 	const std::vector<ibFilterNodeDescription>& nodes, ibFilterGroupKind kind);
 
+// ⭐ WHETHER THERE IS A VALUE, AS THE QUERY ASKS IT — `f IS NULL OR f IN (<the empty value of each of its types>)`,
+// turned over for «filled». NULL alone is not the question: a stored attribute is never NULL — a supplier nobody
+// chose is an EMPTY REFERENCE — and the row's reading (ibValue::IsEmpty) counts both, so the query must too, or one
+// condition would select one set of rows and paint another. The types are the field's own (WalkPath), a composite
+// giving one empty reference per kind; a field whose type cannot be read is asked for NULL alone.
+ibQueryAstExprPtr ibBuildFilledCondition(ibDataComposer& composer, const ibFilterNodeDescription& item)
+{
+	ibQueryAstExprPtr notFilled = ibQueryAstExpr::Make(ibQueryAstExprKind::IsNull);
+	notFilled->m_lhs = ibBuildFilterSide(composer, item.m_left);
+
+	const ibQueryAstExprPtr column = item.m_left.IsField() ? ibQueryColumnFromPath(item.m_left.m_path) : nullptr;
+	const ibTypeDescription type = column && !column->m_path.empty()
+		? composer.WalkPath(column->m_path).m_type : ibTypeDescription();
+	ibQueryAstExprPtr empty = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
+	empty->m_lhs = ibBuildFilterSide(composer, item.m_left);
+	for (const ibClassID& clsid : type.GetClsidList()) {
+		const ibValue emptyOfType = ibValueTypeDescription::AdjustValue(
+			ibTypeDescription(clsid, type.m_typeData), composer.GetMetaData());
+		if (emptyOfType.m_typeClass == ibValueTypes::TYPE_EMPTY)
+			continue;   // a class nothing can make here — NULL still answers for it
+		ibQueryAstExprPtr param = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
+		param->m_paramName = composer.AddParam(emptyOfType);
+		empty->m_list.push_back(param);
+	}
+	if (!empty->m_list.empty()) {
+		ibQueryAstExprPtr either = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		either->m_isOr = true;
+		either->m_lhs = notFilled;
+		either->m_rhs = empty;
+		notFilled = either;
+	}
+	if (item.m_comparison == ibComparisonKind_NotFilled)
+		return notFilled;
+	ibQueryAstExprPtr filled = ibQueryAstExpr::Make(ibQueryAstExprKind::Not);
+	filled->m_lhs = notFilled;
+	return filled;
+}
+
 ibQueryAstExprPtr ibBuildFilterCondition(ibDataComposer& composer, const ibFilterNodeDescription& item)
 {
+	// «FILLED» HAS NO RIGHT SIDE and is not one comparison but a question about the value — see above.
+	if (!ibComparisonTakesValue(item.m_comparison))
+		return ibBuildFilledCondition(composer, item);
+
 	// ⭐⭐ EVERYTHING THAT WAS PASSED IS SUBSTITUTED, AND THE ONLY SWITCH IS THE LINE'S OWN (Max,
 	// 2026-08-29: *"whatever value we pass must be substituted — the one exception is the `use` flag
 	// standing at false. Empty or not empty makes no difference: we can filter BY an empty value"*, and
@@ -709,6 +723,35 @@ static void CollectProjection(std::vector<wxString>& into, const std::vector<wxS
 		CollectProjection(into, here, child);
 }
 
+// ⭐ WHAT A CONDITIONAL APPEARANCE'S CONDITIONS NAME is fetched though nobody shows it — a rule that cannot see its
+// field cannot hold (AttrFor asks it with "unknown = no").
+static void AppendRuleFields(std::vector<wxString>& into, const ibConditionalAppearanceDescription& rules)
+{
+	for (const ibConditionalAppearanceRuleDescription& rule : rules.m_rules)
+		if (rule.m_use)
+			for (const ibFilterNodeDescription& node : rule.m_condition.m_nodes)
+				ibDataComposer::AppendFilterFields(into, node);
+}
+
+static void AppendNodeRuleFields(std::vector<wxString>& into, const ibDataComposer::GroupNode& level)
+{
+	AppendRuleFields(into, level.m_settings.m_conditionalAppearance);
+	for (const ibDataComposer::GroupNode& child : level.m_children)
+		AppendNodeRuleFields(into, child);
+}
+
+std::vector<wxString> ibComposerRuleFieldsOf(const ibDataComposer::Output& output,
+                                             const ibConditionalAppearanceDescription& setting)
+{
+	std::vector<wxString> fields;
+	AppendRuleFields(fields, setting);
+	AppendRuleFields(fields, output.m_settings.m_conditionalAppearance);
+	for (const std::vector<ibDataComposer::GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
+		for (const ibDataComposer::GroupNode& level : *axis)
+			AppendNodeRuleFields(fields, level);
+	return fields;
+}
+
 
 
 // ⭐ WHICH WAY THE RECORDS READ. A record declared on the COLUMN axis is a column of its own —
@@ -859,7 +902,7 @@ static void ibDropUnavailableLevels(std::vector<ibLevelDescription>& levels, con
 void ibDataComposer::ApplyAvailableStructure()
 {
 	const ibFunctionalOptionGate::AsApplication asTheApplication;   // one view of the options for the whole load
-	m_availablePaths.clear();   // a run reads the options as they stand now
+	DropMemos();   // a run reads the options — and the catalogs' trees — as they stand now
 
 	const std::vector<ibOutputDescription>& stored = GetCurrentStructure();
 	if (stored.empty())
@@ -994,6 +1037,13 @@ std::vector<wxString> ibDataComposer::ProjectionFor(const Output& output) const
 	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
 		for (const GroupNode& level : *axis)
 			CollectProjection(selected, atOutput, level);
+	// ⭐ …AND WHAT THE CONDITIONAL APPEARANCE LOOKS AT, read IN ADDITION to the selection — never in its place. An
+	// empty selection is not "nothing": it is answered by WhenNothingChosen, and a list answers it with EVERY field
+	// (and its rules' walks beside them, RenderTextFor). Named alone they were read alone — a list with one rule on
+	// AccountDr read that one column and blanked every other, on every row, the rule's or not (2026-09-30, the run:
+	// 15 columns → 1).
+	if (!selected.empty())
+		AppendFields(selected, ibComposerRuleFieldsOf(output, GetCurrentConditionalAppearanceDesc()));
 	return selected;
 }
 
@@ -1220,6 +1270,22 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		}
 		if (proj.IsEmpty())
 			ibBackendCoreException::Error(_("Composer: source '%s.%s' exposes no columns"), s0.m_namespace, s0.m_name);
+
+		// ⭐ …AND WHAT A RULE LOOKS AT THROUGH A REFERENCE (`Recorder.Supplier`). Every field of the source is read here,
+		// a walk from one is not — and a rule that cannot see its field cannot hold: a list's rule on a document's
+		// supplier painted nothing (2026-09-30). A plain name is one of the columns above (or switched off, and not to
+		// be spelled); a path this source cannot walk is left out, so a stale rule never takes the list down with it.
+		std::vector<wxString> walked;
+		for (const Output* out : outputs)
+			for (const wxString& path : ibComposerRuleFieldsOf(*out, GetCurrentConditionalAppearanceDesc())) {
+				if (path.Find(wxT('.')) == wxNOT_FOUND)
+					continue;
+				const ibQueryAstExprPtr column = ibQueryColumnFromPath(path);
+				if (column && !column->m_path.empty() && !WalkPath(column->m_path).m_name.IsEmpty())
+					AppendFields(walked, { path });
+			}
+		for (const wxString& path : walked)
+			proj += wxT(", ") + path;
 		}
 	}
 

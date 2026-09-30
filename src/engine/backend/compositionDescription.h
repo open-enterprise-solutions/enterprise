@@ -77,7 +77,20 @@ enum ibComparisonKind {
 	ibComparisonKind_Contains,       // → LIKE
 	ibComparisonKind_In,             // membership
 	ibComparisonKind_InHierarchy,    // membership that walks down
+	// ⭐ WHETHER THERE IS A VALUE AT ALL — no right-hand side. Not filled = NULL (the row has no such field: a
+	// recorder of a kind without that attribute) or the empty value of its type (an empty reference, "", 0, an
+	// empty date, False) — one question, since on screen both are an empty cell (Max, 2026-09-30). The row reads it
+	// as ibValue::IsEmpty; the query as `IS NULL OR IN (the empty values of its types)`.
+	ibComparisonKind_Filled,
+	ibComparisonKind_NotFilled,
 };
+
+// …AND WHETHER A COMPARISON HAS A RIGHT-HAND SIDE AT ALL — «filled» asks the field alone. Asked by whoever reads
+// or shows a condition, so the one fact is said once.
+inline bool ibComparisonTakesValue(ibComparisonKind kind)
+{
+	return kind != ibComparisonKind_Filled && kind != ibComparisonKind_NotFilled;
+}
 
 // The sort direction.
 enum ibSortDirection {
@@ -379,12 +392,84 @@ struct ibParameterValuesDescription {
 		ibStoreValue(said.m_value, value);
 		m_values.push_back(std::move(said));
 	}
+	// …and EVERYTHING ANOTHER SAYS, said over this — each parameter `other` ticks replaces this one's; the rest of
+	// this stands. How the storeys of a conditional appearance combine into what one cell wears.
+	void Say(const ibParameterValuesDescription& other) {
+		for (const ibParameterValueDescription<Parameter>& value : other.m_values) {
+			if (!value.m_use)
+				continue;
+			bool replaced = false;
+			for (ibParameterValueDescription<Parameter>& mine : m_values)
+				if (mine.m_parameter == value.m_parameter) { mine = value; replaced = true; break; }
+			if (!replaced)
+				m_values.push_back(value);
+		}
+	}
 
 	bool IsEmpty() const { return m_values.empty(); }
 	void Clear() { m_values.clear(); }
 
 	bool operator==(const ibParameterValuesDescription& o) const { return m_values == o.m_values; }
 	bool operator!=(const ibParameterValuesDescription& o) const { return !(*this == o); }
+};
+
+// --- APPEARANCE ------------------------------------------------------------
+// ⭐⭐ HOW A VALUE IS SHOWN — a description of its own, whose parameters are a FINITE LIST THE PLATFORM
+// DEFINES (Max, 2026-09-29: "the field points at this description, and the description has a fixed number
+// of parameters, decided on the platform's side"). Nobody invents a parameter: the window lists the
+// platform's, and each is set the way any setting is — ticked, and given a value. A field of the composition
+// carries one; a conditional-appearance rule carries the same one (below).
+//
+// The numbers are what the store writes, so they stay; a new parameter is APPENDED.
+enum class ibAppearanceParameter {
+	Format = 0,        // how a value is WRITTEN — a format string (`ND=10; NFD=2`), in every language it is written in
+	BackgroundColour,      // the cell's fill — an ibValueColour
+	TextColour,            // the colour the text is written in — an ibValueColour
+	Font,                  // the typeface, size and weight — an ibValueFont
+	HorizontalAlignment,   // left, centre or right — ibSpreadsheetAlignmentHorz, the sheet's own word for it
+	Text,              // what the cell SAYS instead of its value, in every language it is written in
+};
+
+// THE PLATFORM'S LIST, in the order a window shows it, and what each is called there.
+BACKEND_API const std::vector<ibAppearanceParameter>& ibAppearanceParameters();
+BACKEND_API wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
+
+// …said the way every list of the platform's parameters is (ibParameterValuesDescription): only what somebody
+// touched is kept — an untouched one is the value showing itself its own way.
+using ibAppearanceValueDescription = ibParameterValueDescription<ibAppearanceParameter>;
+using ibAppearanceDescription      = ibParameterValuesDescription<ibAppearanceParameter>;
+
+// --- CONDITIONAL APPEARANCE ------------------------------------------------
+// ⭐⭐ WHAT STANDS OUT, WHEN — a list of rules, each read as a sentence: WHEN its condition holds, the FIELDS
+// it names wear its APPEARANCE ("when the amount is below zero, the amount in red"). It lives in lists and in
+// reports alike, as a part of the setting like the filter (Max, 2026-09-30: "conditional appearance lives in
+// lists and in reports, one mechanism; the same logic of storage in the schema").
+//
+// The CONDITION is a filter — the same description, edited by the same editor ("you press the three dots and
+// the filter opens"), evaluated by the same engine the walk hides a node's headings with
+// (ibCompositionFilterHolds). It is PRESENTATION: it never reaches the query — though the fields it names are
+// read, as a node filter's are.
+struct ibConditionalAppearanceRuleDescription {
+	bool                    m_use = true;
+	ibFilterDescription     m_condition;    // empty = always
+	std::vector<wxString>   m_fields;       // the fields that wear it; empty = the whole row
+	ibAppearanceDescription m_appearance;
+
+	bool operator==(const ibConditionalAppearanceRuleDescription& o) const {
+		return m_use == o.m_use && m_condition == o.m_condition && m_fields == o.m_fields
+		    && m_appearance == o.m_appearance;
+	}
+	bool operator!=(const ibConditionalAppearanceRuleDescription& o) const { return !(*this == o); }
+};
+
+struct ibConditionalAppearanceDescription {
+	std::vector<ibConditionalAppearanceRuleDescription> m_rules;
+
+	bool IsEmpty() const { return m_rules.empty(); }
+	void Clear() { m_rules.clear(); }
+
+	bool operator==(const ibConditionalAppearanceDescription& o) const { return m_rules == o.m_rules; }
+	bool operator!=(const ibConditionalAppearanceDescription& o) const { return !(*this == o); }
 };
 
 // --- OTHER SETTINGS --------------------------------------------------------
@@ -492,6 +577,10 @@ struct ibSettingsDescription {
 	// with the rest of what they set.
 	ibOutputParametersDescription m_outputParameters;
 
+	// ⭐ …AND WHAT STANDS OUT, WHEN — the conditional appearance (above). A part like the filter, set on the
+	// report and on every node, and in a list's setting the same way.
+	ibConditionalAppearanceDescription m_conditionalAppearance;
+
 	// NOTHING SET AT ALL — which is a state of its own, not an accident, and the ONE question that
 	// answers "has anybody saved a setting": a composer whose reader has not runs on `m_variants[0]`.
 	bool IsOk() const;
@@ -587,26 +676,8 @@ struct ibResourceDescription {
 	bool operator!=(const ibResourceDescription& o) const { return !(*this == o); }
 };
 
-// --- APPEARANCE ------------------------------------------------------------
-// ⭐⭐ HOW A VALUE IS SHOWN — a description of its own, whose parameters are a FINITE LIST THE PLATFORM
-// DEFINES (Max, 2026-09-29: "the field points at this description, and the description has a fixed number
-// of parameters, decided on the platform's side"). Nobody invents a parameter: the window lists the
-// platform's, and each is set the way any setting is — ticked, and given a value. A field of the composition
-// carries one; a conditional-appearance rule is expected to carry the same one.
-//
-// The numbers are what the store writes, so they stay.
-enum class ibAppearanceParameter {
-	Format = 0,   // how a value is WRITTEN — a format string (`ND=10; NFD=2`), in every language it is written in
-};
-
-// THE PLATFORM'S LIST, in the order a window shows it, and what each is called there.
-BACKEND_API const std::vector<ibAppearanceParameter>& ibAppearanceParameters();
-BACKEND_API wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter);
-
-// …said the way every list of the platform's parameters is (ibParameterValuesDescription): only what somebody
-// touched is kept — an untouched one is the value showing itself its own way.
-using ibAppearanceValueDescription = ibParameterValueDescription<ibAppearanceParameter>;
-using ibAppearanceDescription      = ibParameterValuesDescription<ibAppearanceParameter>;
+// (THE APPEARANCE — how a value is shown — stands above the settings now, because a conditional-appearance
+//  rule, which is part of a setting, carries one: see «APPEARANCE» and «CONDITIONAL APPEARANCE» there.)
 
 // ⭐⭐ A FIELD OF THE COMPOSITION, AND WHAT IT IS CALLED. This is the entity a resource, a grouping
 // level and a printed column all REFER TO — they name a path, and the path is this. So the title
@@ -998,16 +1069,18 @@ struct ibOutputDescription {
 // every output has its own groupings, sorts, its own fields and its own filters"* (Max, 2026-08-24).
 inline bool ibSettingsDescription::IsOk() const {
 	return m_filter.IsOk() || m_sort.IsOk() || m_group.IsOk() || !m_structure.empty()
-	    || !m_selected.empty() || !m_parameters.empty() || !m_outputParameters.IsEmpty();
+	    || !m_selected.empty() || !m_parameters.empty() || !m_outputParameters.IsEmpty()
+	    || !m_conditionalAppearance.IsEmpty();
 }
 inline void ibSettingsDescription::Clear() {
 	m_filter.Clear(); m_sort.Clear(); m_group.Clear(); m_structure.clear(); m_selected.clear();
-	m_parameters.clear(); m_outputParameters.Clear();
+	m_parameters.clear(); m_outputParameters.Clear(); m_conditionalAppearance.Clear();
 }
 inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) const {
 	return m_filter == o.m_filter && m_sort == o.m_sort && m_group == o.m_group
 	    && m_structure == o.m_structure && m_selected == o.m_selected
-	    && m_parameters == o.m_parameters && m_outputParameters == o.m_outputParameters;
+	    && m_parameters == o.m_parameters && m_outputParameters == o.m_outputParameters
+	    && m_conditionalAppearance == o.m_conditionalAppearance;
 }
 
 // --- VARIANT ---------------------------------------------------------------

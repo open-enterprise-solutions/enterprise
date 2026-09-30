@@ -6,6 +6,7 @@
 
 #include "dataQueryBuilder.h"   // L3 door - the one read the whole walk needs
 #include "queryProvider.h"      // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
+#include "dbTableProvider.h"    // ibDbTableProvider::ReferenceTargetsOf - the same owner, asked by a type
 #include "queryException.h"     // ibBackendQueryException - a column that names no catalog, refused in words
 
 namespace {
@@ -49,10 +50,53 @@ void ReadChildrenMap(const ibBackendQueryable* target, std::unordered_map<ibValu
 	}
 }
 
+// ⭐ THE COLUMN SAYS WHERE THE SUBTREE LIVES, AND THE PROVIDER RESOLVES IT. Not the value: a value
+// would have to be cast to a reference and asked for its metaobject, which is metadata read in a
+// tier that owns none. A COMPOSITE reference names several targets and gets a map from each — the
+// keys carry their own type, so two charts cannot be confused for one another.
+std::vector<const ibBackendQueryable*> TargetsOfColumn(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
+                                                       const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
+{
+	std::vector<const ibBackendQueryable*> targets;
+	if (unfold == ibQueryDimUnfold::Elements || source == nullptr || column == nullptr)
+		return targets;
+	const ibBackendQueryProvider& provider = source->GetProvider();
+	if (const ibBackendQueryable* single = provider.ResolveReferenceTarget(source, column))
+		targets.push_back(single);
+	else
+		targets = provider.ResolveReferenceTargets(source, column);
+
+	// ⚠ A COLUMN THAT NAMES NO CATALOG CANNOT BE WALKED — a value table's column declared with no type, a
+	// source that answers no configuration. Standing for the named values alone, it found not one row under
+	// a group and said nothing (2026-09-29); refused instead, with the way out: the column is given a type.
+	if (targets.empty())
+		for (const ibValue& value : named)
+			if (!value.IsEmpty())
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, wxString::Format(
+					_("IN HIERARCHY over '%s', which names no catalog - give the column a type: declare it on the table, "
+					  "or select CAST(%s AS Catalog.<Name>)"),
+					column->GetName(), column->GetName()));
+	return targets;
+}
+
 } // namespace
 
 ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
                                              const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
+	: ibQueryHierarchyScope(TargetsOfColumn(source, column, named, unfold), named, unfold)
+{
+}
+
+ibQueryHierarchyScope::ibQueryHierarchyScope(const ibMetaData* metaData, const ibTypeDescription& type,
+                                             const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
+	: ibQueryHierarchyScope(unfold == ibQueryDimUnfold::Elements ? std::vector<const ibBackendQueryable*>()
+	                        : ibDbTableProvider::ReferenceTargetsOf(metaData, type), named, unfold)
+{
+}
+
+ibQueryHierarchyScope::ibQueryHierarchyScope(const std::vector<const ibBackendQueryable*>& targets,
+                                             const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
+	: m_unfold(unfold)
 {
 	// «in» asks the database nothing: the values passed ARE the answer, and nothing is implied about
 	// what stands under them.
@@ -63,37 +107,13 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 		return;
 	}
 
-	// ⭐ THE COLUMN SAYS WHERE THE SUBTREE LIVES, AND THE PROVIDER RESOLVES IT. Not the value: a value
-	// would have to be cast to a reference and asked for its metaobject, which is metadata read in a
-	// tier that owns none. A COMPOSITE reference names several targets and gets a map from each — the
-	// keys carry their own type, so two charts cannot be confused for one another.
 	std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual> childrenOf;
-	const ibBackendQueryColumn* namesNoCatalog = nullptr;   // refused below, once a value is named under it
-	if (source != nullptr && column != nullptr) {
-		const ibBackendQueryProvider& provider = source->GetProvider();
-		std::vector<const ibBackendQueryable*> targets;
-		if (const ibBackendQueryable* single = provider.ResolveReferenceTarget(source, column))
-			targets.push_back(single);
-		else
-			targets = provider.ResolveReferenceTargets(source, column);
-		for (const ibBackendQueryable* target : targets)
-			ReadChildrenMap(target, childrenOf);
-		if (targets.empty())
-			namesNoCatalog = column;
-	}
+	for (const ibBackendQueryable* target : targets)
+		ReadChildrenMap(target, childrenOf);
 
 	for (const ibValue& value : named) {
 		if (value.IsEmpty())
 			continue;
-
-		// ⚠ A COLUMN THAT NAMES NO CATALOG CANNOT BE WALKED — a value table's column declared with no type, a
-		// source that answers no configuration. Standing for the named values alone, it found not one row under
-		// a group and said nothing (2026-09-29); refused instead, with the way out: the column is given a type.
-		if (namesNoCatalog != nullptr)
-			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, wxString::Format(
-				_("IN HIERARCHY over '%s', which names no catalog - give the column a type: declare it on the table, "
-				  "or select CAST(%s AS Catalog.<Name>)"),
-				namesNoCatalog->GetName(), namesNoCatalog->GetName()));
 
 		// Descend from the named value. A node is expanded ONCE: a cycle in a parent link is a corrupt
 		// tree rather than a legitimate shape, and a reading is not the place to hang because of one.
@@ -122,6 +142,17 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 			m_reportedUnder[subtree[i]] = value;
 		}
 	}
+}
+
+bool ibQueryHierarchyScope::Admits(const ibValue& value) const
+{
+	// A walked subtree keys every value it admits (m_reportedUnder); the named values of «in» are the list itself.
+	if (m_unfold != ibQueryDimUnfold::Elements)
+		return m_reportedUnder.find(value) != m_reportedUnder.end();
+	for (const ibValue& accepted : m_accepted)
+		if (accepted == value)
+			return true;
+	return false;
 }
 
 ibValue ibQueryHierarchyScope::ReportedUnder(const ibValue& value) const

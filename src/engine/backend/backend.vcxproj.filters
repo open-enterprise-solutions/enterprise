@@ -2784,6 +2784,9 @@
     <ClCompile Include="composition\composeRunSchema.cpp">
       <Filter>composition</Filter>
     </ClCompile>
+    <ClCompile Include="composition\compositionCondition.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
     <ClCompile Include="composition\compositionTheme.cpp">
       <Filter>composition</Filter>
     </ClCompile>
@@ -2966,6 +2969,9 @@
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="composition\composeRunSchema.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionCondition.h">
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="composition\compositionTheme.h">

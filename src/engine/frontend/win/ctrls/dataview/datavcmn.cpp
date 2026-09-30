@@ -641,7 +641,7 @@ ibDataViewCustomRendererBase::WXCallRender(wxRect rectCell, wxDC* dc, int state)
 
 	// adjust the rectangle ourselves to account for the alignment
 	wxRect rectItem = rectCell;
-	const int align = GetEffectiveAlignment();
+	const int align = GetEffectiveItemAlignment();
 
 	const wxSize size = GetSize();
 
@@ -801,9 +801,17 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 		*dc,
 		text,
 		rectText,
-		GetEffectiveAlignment(),
+		GetEffectiveItemAlignment(),
 		flags,
 		GetEllipsizeMode());
+}
+
+int ibDataViewCustomRendererBase::GetEffectiveItemAlignment() const
+{
+	int alignment = GetEffectiveAlignment();
+	if (m_attr.HasAlignment())
+		alignment = (alignment & ~(wxALIGN_CENTER_HORIZONTAL | wxALIGN_RIGHT)) | m_attr.GetAlignment();
+	return alignment;
 }
 
 void ibDataViewCustomRendererBase::SetEnabled(bool enabled)

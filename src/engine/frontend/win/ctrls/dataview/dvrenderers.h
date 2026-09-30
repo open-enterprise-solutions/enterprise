@@ -384,6 +384,9 @@ public:
 	// that it can be accessed using GetAttr() from Render() if needed.
 	virtual void SetAttr(const ibDataViewItemAttr& attr) wxOVERRIDE { m_attr = attr; }
 	const ibDataViewItemAttr& GetAttr() const { return m_attr; }
+	// THE ALIGNMENT IN FORCE FOR THIS CELL — the item's own horizontal one (its attribute: a conditional
+	// appearance) over the renderer's and the column's.
+	int GetEffectiveItemAlignment() const;
 
 	// Store the enabled state of the item so that it can be accessed from
 	// Render() via GetEnabled() if needed.

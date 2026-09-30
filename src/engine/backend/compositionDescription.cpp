@@ -72,6 +72,11 @@ const wxString  kOutputParametersNode = wxT("OutputParameters");
 // Read and written as every list of the platform's parameters is — the pair stands with them, further down.
 void ReadOutputParameters(const ibDataNode& node, ibOutputParametersDescription& parameters);
 void WriteOutputParameters(ibDataNode& node, const ibOutputParametersDescription& parameters);
+// …and the conditional appearance, whose rules carry an appearance — beside the appearance's own pair.
+const wxString  kConditionalAppearanceNode = wxT("ConditionalAppearance");
+void ReadConditionalAppearance(const ibDataNode& node, ibConditionalAppearanceDescription& appearance,
+                               const ibMetaData* metaData);
+void WriteConditionalAppearance(ibDataNode& node, const ibConditionalAppearanceDescription& appearance);
 const wxString  kPathName       = wxT("Path");
 const wxString  kKindName       = wxT("Kind");
 // A LEVEL'S OWN SORT AND FILTER — written inside the level, because that is where they belong.
@@ -640,6 +645,9 @@ bool ibSettingsDescriptionMemory::ReadNode(const ibDataNode& node, ibSettingsDes
 	// ⭐ …AND HOW THE REPORT BEHAVES — the other settings. Absent from every record written before 2026-09-29,
 	// which reads as "nobody said anything": the platform's own answers.
 	ReadOutputParameters(node, settings.m_outputParameters);
+	// ⭐ …AND WHAT STANDS OUT, WHEN — its conditions hold references like a filter's, so they are read against
+	// the configuration too.
+	ReadConditionalAppearance(node, settings.m_conditionalAppearance, metaData);
 	return ok;
 }
 
@@ -649,6 +657,7 @@ bool ibSettingsDescriptionMemory::WriteNode(ibDataNode& node, const ibSettingsDe
 	// …and the reader's parameter values, written as a VARIANT's are: name and value, no declaration.
 	ibParameterDescriptionMemory::WriteNode(node, settings.m_parameters, /*full*/false);
 	WriteOutputParameters(node, settings.m_outputParameters);
+	WriteConditionalAppearance(node, settings.m_conditionalAppearance);
 	return ibFilterDescriptionMemory::WriteNode(node, settings.m_filter)
 		&& ibSortDescriptionMemory::WriteNode(node, settings.m_sort)
 		&& ibGroupDescriptionMemory::WriteNode(node, settings.m_group)
@@ -845,6 +854,49 @@ void WriteOutputParameters(ibDataNode& node, const ibOutputParametersDescription
 	if (!parameters.IsEmpty())
 		WriteParameterValues(node.Child(kOutputParametersNode), g_outputParameterNodeClsid, parameters);
 }
+
+// ONE RULE PER CHILD — its tick, its condition through the filter's own pair, its fields as a field list and its
+// appearance through the appearance's. Nothing here knows how any of the three is written.
+constexpr ibClassID g_appearanceRuleNodeClsid = make_clsid("CompositionAppearanceRule", ibClassKind_None);
+const wxString  kRuleUse        = wxT("Use");
+const wxString  kRuleFields     = wxT("Fields");
+const wxString  kRuleAppearance = wxT("Appearance");
+
+void ReadConditionalAppearance(const ibDataNode& node, ibConditionalAppearanceDescription& appearance,
+                               const ibMetaData* metaData)
+{
+	appearance.Clear();
+	const ibDataNode* sub = node.FindChild(kConditionalAppearanceNode);
+	if (sub == nullptr)
+		return;   // a setting written before 2026-09-30, or one that highlights nothing
+	for (const ibDataNode& child : sub->Children()) {
+		if (child.GetClsid() != g_appearanceRuleNodeClsid)
+			continue;
+		ibConditionalAppearanceRuleDescription rule;
+		rule.m_use = child.GetValue<bool>(kRuleUse);
+		ibFilterDescriptionMemory::ReadNode(child, rule.m_condition, metaData);
+		ReadFieldList(child, kRuleFields, rule.m_fields);
+		if (const ibDataNode* ruleAppearance = child.FindChild(kRuleAppearance))
+			ReadAppearance(*ruleAppearance, rule.m_appearance);
+		appearance.m_rules.push_back(std::move(rule));
+	}
+}
+
+void WriteConditionalAppearance(ibDataNode& node, const ibConditionalAppearanceDescription& appearance)
+{
+	if (appearance.IsEmpty())
+		return;
+	ibDataNode& sub = node.Child(kConditionalAppearanceNode);
+	for (size_t i = 0; i < appearance.m_rules.size(); ++i) {
+		const ibConditionalAppearanceRuleDescription& rule = appearance.m_rules[i];
+		ibDataNode& child = sub.AddChild(g_appearanceRuleNodeClsid, static_cast<ibMetaID>(i));
+		child.SetValue<bool>(kRuleUse, rule.m_use);
+		ibFilterDescriptionMemory::WriteNode(child, rule.m_condition);
+		WriteFieldList(child, kRuleFields, rule.m_fields);
+		if (!rule.m_appearance.IsEmpty())
+			WriteAppearance(child.Child(kRuleAppearance), rule.m_appearance);
+	}
+}
 } // namespace
 
 bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
@@ -978,7 +1030,12 @@ ibAppearanceDescription ibAppearanceForPath(const std::vector<ibSelectDescriptio
 const std::vector<ibAppearanceParameter>& ibAppearanceParameters()
 {
 	static const std::vector<ibAppearanceParameter> s_parameters = {
+		ibAppearanceParameter::BackgroundColour,
+		ibAppearanceParameter::TextColour,
+		ibAppearanceParameter::Font,
+		ibAppearanceParameter::HorizontalAlignment,
 		ibAppearanceParameter::Format,
+		ibAppearanceParameter::Text,
 	};
 	return s_parameters;
 }
@@ -986,7 +1043,12 @@ const std::vector<ibAppearanceParameter>& ibAppearanceParameters()
 wxString ibAppearanceParameterCaption(ibAppearanceParameter parameter)
 {
 	switch (parameter) {
-		case ibAppearanceParameter::Format: return _("Format");
+		case ibAppearanceParameter::Format:              return _("Format");
+		case ibAppearanceParameter::BackgroundColour:    return _("Background colour");
+		case ibAppearanceParameter::TextColour:          return _("Text colour");
+		case ibAppearanceParameter::Font:                return _("Font");
+		case ibAppearanceParameter::HorizontalAlignment: return _("Horizontal alignment");
+		case ibAppearanceParameter::Text:                return _("Text");
 	}
 	return wxEmptyString;
 }

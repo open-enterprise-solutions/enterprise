@@ -5979,13 +5979,18 @@ const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBack
 std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTargets(const ibBackendQueryable* queryable,
                                                                                   const ibBackendQueryColumn* refColumn) const
 {
-	std::vector<const ibBackendQueryable*> targets;
 	if (queryable == nullptr || refColumn == nullptr)
-		return targets;
-	const ibMetaData* metaData = queryable->GetMetaData();
+		return std::vector<const ibBackendQueryable*>();
+	return ReferenceTargetsOf(queryable->GetMetaData(), refColumn->GetTypeValueDesc());
+}
+
+std::vector<const ibBackendQueryable*> ibDbTableProvider::ReferenceTargetsOf(const ibMetaData* metaData,
+                                                                             const ibTypeDescription& type)
+{
+	std::vector<const ibBackendQueryable*> targets;
 	if (metaData == nullptr)
 		return targets;
-	for (const ibClassID& clsid : refColumn->GetTypeValueDesc().GetClsidList()) {
+	for (const ibClassID& clsid : type.GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
 		// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the

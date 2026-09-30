@@ -41,13 +41,13 @@ inline wxMenuItem* ibAppendCmd(wxMenu& menu, int id, const wxString& label,
 // the whole set; a page names its picture by what the page IS, so a page taken off and put back (the
 // grouping, the reader's parameters) finds it again without counting.
 enum class ibSettingsTab { Query, Fields, Resources, Parameters, Output, Grouping, SelectedFields, Filter, Sort,
-	OtherSettings };
+	OtherSettings, ConditionalAppearance };
 
 inline void ibStyleSettingsTabs(wxBookCtrlBase* tabs)
 {
 	static const wxString s_art[] = { wxART_QUERY_CONSTRUCTOR, wxART_TABLE, wxART_TOTALS, wxART_PARAMETERS,
 		wxART_OUTPUT, wxART_GROUPING, wxART_SELECTED_FIELDS, wxART_FILTER, wxART_SORT,
-		wxART_ADVANCED };   // in ibSettingsTab's order
+		wxART_ADVANCED, wxART_FORMAT_CONSTRUCTOR };   // in ibSettingsTab's order
 	wxWithImages::Images images;
 	for (const wxString& id : s_art)   // a bundle's size is at normal DPI — no FromDIP
 		images.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));
