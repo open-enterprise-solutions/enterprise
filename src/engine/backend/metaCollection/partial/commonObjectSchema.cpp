@@ -241,11 +241,10 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		const bool losesFolders = !HasFolders()    && folderAttr != nullptr;
 
 		if (losesParent || losesFolders) {
-			// THE PARENT IS FILLED WHEN ITS TARGET TYPE IS SET, not when its key is non-null: an empty
-			// reference is stored as an ALL-ZERO guid (valueInfo.h), so testing the _RRRef blob for NULL
-			// would count every row alive and refuse every time. The _RTRef id is 0 exactly when nothing
-			// is referenced.
-			const wxString parentField = losesParent  ? parentAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType) : wxString();
+			// A typed empty reference still carries its target type in _RTRef.  Its identity in _RRRef is
+			// the part that is empty (the all-zero guid), so that is the field the guard must inspect.
+			// Counting non-zero _RTRef values would call every ordinary top-level row nested.
+			const wxString parentField = losesParent  ? parentAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceId) : wxString();
 			const wxString folderField = losesFolders ? folderAttr->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Boolean)     : wxString();
 
 			t.m_beforeChange = [tableName, objectName, parentField, folderField](ibRestructureInfo* report) -> bool {
@@ -263,6 +262,20 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				if (!probe.TableExists(tableName))
 					return true;   // nothing was ever applied here; no row can be stranded
 
+				// A flat catalog still owns the predefined Parent / IsFolder metadata objects, but their
+				// physical columns are not part of the applied table.  The guard is attached to every
+				// schema snapshot, including a code-only apply, so asking such an already-flat table for
+				// one of those retired columns turns an otherwise empty diff into a database error.  Only
+				// a column that is present in the old physical shape can contain data that this change
+				// would strand.
+				const wxArrayString physicalColumns = probe.GetColumns(tableName);
+				auto physicallyHas = [&physicalColumns](const wxString& field) {
+					for (const wxString& column : physicalColumns)
+						if (column.CmpNoCase(field) == 0)
+							return true;
+					return false;
+				};
+
 				auto rowsWith = [&tableName](const wxString& field, const ibQueryExprPtr& filled) -> int {
 					ibDatabaseQueryBuilder q;
 					ibQueryIR ir;
@@ -271,11 +284,27 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 					ibQueryResult rs = q.ExecuteIR(ir);
 					return rs.Next() ? rs.GetResultInt(wxT("rowCount")) : 0;
 				};
+				auto rowsWithReference = [&tableName](const wxString& field) -> int {
+					ibDatabaseQueryBuilder q;
+					q.From(ibScan(tableName));
+					q.Project({ { ibCol(field), field } });
+					ibQueryResult rs = q.Execute();
+					int count = 0;
+					while (rs.Next()) {
+						wxMemoryBuffer bytes;
+						rs.GetResultBlob(field, bytes);
+						if (bytes.GetDataLen() < sizeof(ibReference))
+							continue;
+						const ibReference* reference = static_cast<const ibReference*>(bytes.GetData());
+						if (ibGuid(reference->m_guid).isValid())
+							++count;
+					}
+					return count;
+				};
 
 				bool allowed = true;
-				if (!parentField.IsEmpty()) {
-					const int nested = rowsWith(parentField,
-						ibBinOp(ibQueryBinOp::Ne, ibCol(parentField), ibConst(ibValue(0))));
+				if (!parentField.IsEmpty() && physicallyHas(parentField)) {
+					const int nested = rowsWithReference(parentField);
 					if (nested > 0) {
 						allowed = false;
 						if (report != nullptr)
@@ -284,7 +313,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 								objectName, nested));
 					}
 				}
-				if (!folderField.IsEmpty()) {
+				if (!folderField.IsEmpty() && physicallyHas(folderField)) {
 					const int folders = rowsWith(folderField,
 						ibBinOp(ibQueryBinOp::Eq, ibCol(folderField), ibConst(ibValue(true))));
 					if (folders > 0) {
