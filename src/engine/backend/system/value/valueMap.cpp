@@ -426,7 +426,7 @@ void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 		ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_entries.push_back({ varKeyValue, cValue, hash });
+	m_entries.emplace_back(varKeyValue, cValue, hash);
 	IndexNewEntry(indexed);
 }
 
@@ -476,7 +476,7 @@ bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue
 	if (idx >= 0)
 		m_entries[idx].value = varValue;
 	else {
-		m_entries.push_back({ varKeyValue, varValue, hash });
+		m_entries.emplace_back(varKeyValue, varValue, hash);
 		IndexNewEntry(indexed);
 	}
 	return true;

@@ -34,6 +34,11 @@ public:
 	// the index started at eight, a ten-field Structure cost 1 660 -> 2 760 ns — some 28 comparisons of
 	// key text below eight, then all eight keys hashed a second time.)
 	struct ibContainerEntry {
+		// BUILT IN PLACE (emplace_back), as the pair before it was: a braced temporary pushed in cost every
+		// insert two ibValue moves and two destructions, out of line — a one- or two-field Structure paid more
+		// for them than for its hash (CI, 2026-10-01).
+		ibContainerEntry(const ibValue& k, const ibValue& v, size_t h) : key(k), value(v), hash(h) {}
+
 		ibValue key;
 		ibValue value;
 		size_t  hash;
