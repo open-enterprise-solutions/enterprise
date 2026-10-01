@@ -973,9 +973,12 @@ const ibAccessPolicy* ibSession::GetAccessPolicy() const
 
 void ibSession::Cancel()
 {
+	// THIS session's base, through its registry - not the thread's. A cancel arrives on any thread: a kick on
+	// the registry's, which works for no base, and asking "the current one" there threw and stopped the
+	// application (2026-10-01).
+	ibJobManager* const jobs = ibApplicationInstance::GetJobManager(GetApplicationInstance());
 	const std::vector<std::shared_ptr<ibSession>> tenants =
-		ibApplicationInstance::GetJobManager() != nullptr ? ibApplicationInstance::GetJobManager()->TenantsOf(this)
-		                                              : std::vector<std::shared_ptr<ibSession>>();
+		jobs != nullptr ? jobs->TenantsOf(this) : std::vector<std::shared_ptr<ibSession>>();
 	ibJournalInfo(wxT("cancel"), wxT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
 		GetId(), static_cast<unsigned>(tenants.size()));
 	// The database first, then the runtime: the statement running now answers with the interruption, and
