@@ -443,6 +443,9 @@ private:
 	void LoadBig(BigImpl& out) const;
 	// Stores `src`. If it fits inline, packs as immediate; otherwise allocates heap.
 	void StoreBig(const BigImpl& src);
+	// …and the same for a value the caller is done with: on the heap its limbs MOVE in rather than being
+	// copied — one allocation fewer for every result that does not fit the immediate tier.
+	void StoreBig(BigImpl&& src);
 
 	uint64_t m_payload;
 };

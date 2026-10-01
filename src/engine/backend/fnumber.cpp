@@ -407,6 +407,7 @@ struct ibNumber::SharedBig
 
 	SharedBig() = default;
 	explicit SharedBig(const BigImpl& big) : m_big(big) {}
+	explicit SharedBig(BigImpl&& big) noexcept : m_big(std::move(big)) {}
 
 	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
 };
@@ -652,14 +653,14 @@ ibNumber::ibNumber(double v)
 
 	BigImpl big;
 	if (TryParseString(strDigits, big))
-		StoreBig(big);
+		StoreBig(std::move(big));
 }
 
 ibNumber::ibNumber(const wxString& s)
 	: m_payload(PackImmediate(0, 0))
 {
 	BigImpl big;
-	if (TryParseString(s, big)) StoreBig(big);
+	if (TryParseString(s, big)) StoreBig(std::move(big));
 }
 
 // A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
@@ -757,6 +758,23 @@ void ibNumber::StoreBig(const BigImpl& src)
 	StoreHeap(new SharedBig(src));
 }
 
+void ibNumber::StoreBig(BigImpl&& src)
+{
+	// The one decision is the copying store's: only where it lands on the HEAP does a value handed over move
+	// in — zero and the immediate tier take nothing from it, and go through it unchanged.
+	int64_t m64;
+	if (src.IsZero() || (src.MagToInt64(m64) && CanBeImmediate(m64, src.exp))) {
+		StoreBig(static_cast<const BigImpl&>(src));
+		return;
+	}
+	if (IsHeap() && Shared()->Alone()) {
+		*HeapPtr() = std::move(src);
+		return;
+	}
+	Clear();
+	StoreHeap(new SharedBig(std::move(src)));
+}
+
 // ---- arithmetic ----------------------------------------------------------------------
 
 // Cold halves of the compound operators — the immediate-integer fast paths live
@@ -769,7 +787,7 @@ ibNumber& ibNumber::AddBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	AlignExp(a, b);
 	a.Add(b);
-	StoreBig(a);
+	StoreBig(std::move(a));
 	return *this;
 }
 
@@ -780,7 +798,7 @@ ibNumber& ibNumber::SubBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	AlignExp(a, b);
 	a.Sub(b);
-	StoreBig(a);
+	StoreBig(std::move(a));
 	return *this;
 }
 
@@ -791,8 +809,50 @@ ibNumber& ibNumber::MulBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	a.Mul(b);
 	a.exp += b.exp;
-	StoreBig(a);
+	StoreBig(std::move(a));
 	return *this;
+}
+
+namespace
+{
+	// A QUOTIENT OF TWO IMMEDIATE NUMBERS, ON THE STACK: up to 128 bits, little-endian base 2^32 — what the
+	// division below builds before it is known whether the answer fits the immediate tier.
+	struct ibStackMag
+	{
+		uint32_t w[4] = {};
+
+		bool IsZero() const noexcept { return (w[0] | w[1] | w[2] | w[3]) == 0; }
+
+		// *this = *this * mul + add; false when the result would not fit the four words.
+		bool MulAdd(uint32_t mul, uint32_t add) noexcept
+		{
+			uint64_t carry = add;
+			for (uint32_t& limb : w) {
+				const uint64_t cur = static_cast<uint64_t>(limb) * mul + carry;
+				limb  = static_cast<uint32_t>(cur);
+				carry = cur >> 32;
+			}
+			return carry == 0;
+		}
+
+		uint32_t Mod(uint32_t d) const noexcept
+		{
+			uint64_t rem = 0;
+			for (int i = 3; i >= 0; --i)
+				rem = ((rem << 32) | w[i]) % d;
+			return static_cast<uint32_t>(rem);
+		}
+
+		void Div(uint32_t d) noexcept
+		{
+			uint64_t rem = 0;
+			for (int i = 3; i >= 0; --i) {
+				const uint64_t cur = (rem << 32) | w[i];
+				w[i] = static_cast<uint32_t>(cur / d);
+				rem  = cur % d;
+			}
+		}
+	};
 }
 
 ibNumber& ibNumber::operator/=(const ibNumber& rhs)
@@ -806,6 +866,83 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 	if (TryImmInts(rhs, am, bm) && bm != 0 && am % bm == 0) {
 		const int64_t q = am / bm;
 		if (CanBeImmediate(q, 0)) { StoreImmediate(q, 0); return *this; }
+	}
+
+	// ⭐⭐ TWO IMMEDIATE OPERANDS ARE DIVIDED WITHOUT THE HEAP — the long division below, a block of digits at a
+	// time, with every intermediate on the stack.
+	//
+	// The general road loads both operands into vectors, inflates the dividend, divides with vectors of its own
+	// for the quotient and the remainder, and copies the answer into a new heap number: some nine allocations
+	// for one `10^6 / 7`, and they were most of its 185 ns (CI, NumberBench, 2026-10-01; perf night PR #219
+	// measured the division at 135 times a native one). Here the dividend is never inflated at all: the whole
+	// part is one int64 division, and the digits after it come FIVE AT A TIME — a remainder is below the
+	// divisor, at most 2^46, so it times 10^5 still fits in 63 bits. The quotient is built in four words on
+	// the stack, and the heap is touched only to store it, when it does not fit the immediate tier.
+	//
+	// Every rule is the general road's, in its order — the operands trimmed of decimal zeros, the room sized
+	// on them, the last digit rounded half away from zero, the quotient's zeros dropped — so the answer is
+	// the same to the last bit (NumberDivision.TheImmediateRoadAnswersAsTheGeneralOne holds the two roads to
+	// it). A zero on either side, and a room past 24 places (past four words), take the general road.
+	if (IsImmediate() && rhs.IsImmediate() && ImmMantissa() != 0 && rhs.ImmMantissa() != 0) {
+		const int64_t ma = ImmMantissa(), mb = rhs.ImmMantissa();
+		uint64_t ua = ma < 0 ? 0 - static_cast<uint64_t>(ma) : static_cast<uint64_t>(ma);
+		uint64_t ub = mb < 0 ? 0 - static_cast<uint64_t>(mb) : static_cast<uint64_t>(mb);
+		int32_t ea = ImmExp(), eb = rhs.ImmExp();
+		while (ea < 0 && ua % 10 == 0) { ua /= 10; ++ea; }   // TrimFractionZeros, on one word
+		while (eb < 0 && ub % 10 == 0) { ub /= 10; ++eb; }
+
+		const int32_t fracA = ea < 0 ? -ea : 0;
+		const int32_t fracB = eb < 0 ? -eb : 0;
+		int32_t extra = kDivExtraDigits;
+		if (fracA + extra > kMaxDivFracDigits)
+			extra = fracA >= kMaxDivFracDigits ? 0 : kMaxDivFracDigits - fracA;
+		const int32_t inflate = extra + fracB;
+
+		// |dividend| < 2^47 and 10^24 < 2^80: a quotient carried to 24 places fits the four words.
+		if (inflate <= 24) {
+			static constexpr uint32_t kBlockPow10[] = { 1u, 10u, 100u, 1000u, 10000u, 100000u };
+			ibStackMag q;
+			const uint64_t whole = ua / ub;
+			uint64_t rem = ua % ub;
+			q.w[0] = static_cast<uint32_t>(whole);
+			q.w[1] = static_cast<uint32_t>(whole >> 32);
+			bool fits = true;
+			for (int32_t left = inflate; left > 0 && fits; ) {
+				const int32_t step = left < 5 ? left : 5;
+				rem *= kBlockPow10[step];
+				const uint64_t block = rem / ub;   // below 10^5: rem was below ub before it was scaled
+				rem %= ub;
+				fits = q.MulAdd(kBlockPow10[step], static_cast<uint32_t>(block));
+				left -= step;
+			}
+			if (fits && rem != 0 && 2 * rem >= ub)
+				fits = q.MulAdd(1u, 1u);   // the last digit rounded, as below
+			if (fits) {
+				int32_t exp = ea - inflate - eb;
+				while (exp < 0 && !q.IsZero() && q.Mod(10u) == 0) { q.Div(10u); ++exp; }
+				const bool negative = (ma < 0) != (mb < 0);
+
+				// Stored as StoreBig stores — the immediate tier when the magnitude fits it, the heap otherwise —
+				// but without building the vector first when it is not needed.
+				if (q.w[2] == 0 && q.w[3] == 0 && q.w[1] <= 0x7FFFFFFFu) {
+					const int64_t magnitude = static_cast<int64_t>((static_cast<uint64_t>(q.w[1]) << 32) | q.w[0]);
+					const int64_t signedMagnitude = negative ? -magnitude : magnitude;
+					if (CanBeImmediate(signedMagnitude, exp)) {
+						Clear();
+						StoreImmediate(signedMagnitude, exp);
+						return *this;
+					}
+				}
+				size_t used = 4;
+				while (used > 0 && q.w[used - 1] == 0) --used;
+				BigImpl quotient;
+				quotient.limbs.assign(q.w, q.w + used);
+				quotient.negative = negative;
+				quotient.exp      = exp;
+				StoreBig(std::move(quotient));
+				return *this;
+			}
+		}
 	}
 
 	BigImpl a, b;
@@ -877,7 +1014,7 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 	BigImpl::TrimMag(a.limbs);
 	TrimFractionZeros(a);
 
-	StoreBig(a);
+	StoreBig(std::move(a));
 	return *this;
 }
 
@@ -887,7 +1024,7 @@ ibNumber ibNumber::operator-() const
 	LoadBig(b);
 	b.ChangeSign();
 	ibNumber r;
-	r.StoreBig(b);
+	r.StoreBig(std::move(b));
 	return r;
 }
 
@@ -1034,7 +1171,7 @@ ibNumber ibNumber::Round() const
 	res.negative = b.negative && !res.IsZero();
 	res.exp     = 0;
 
-	ibNumber out; out.StoreBig(res);
+	ibNumber out; out.StoreBig(std::move(res));
 	return out;
 }
 
@@ -1052,7 +1189,7 @@ ibNumber ibNumber::Trunc() const
 		b.exp = 0;
 	}
 	ibNumber out;
-	out.StoreBig(b);
+	out.StoreBig(std::move(b));
 	return out;
 }
 
@@ -1080,7 +1217,7 @@ ibNumber ibNumber::Round(int n) const
 	res.negative = b.negative && !res.IsZero();
 	res.exp      = -n;
 
-	ibNumber out; out.StoreBig(res);
+	ibNumber out; out.StoreBig(std::move(res));
 	return out;
 }
 
@@ -1108,7 +1245,7 @@ void ibNumber::ChangeSign()
 	BigImpl b;
 	LoadBig(b);
 	b.ChangeSign();
-	StoreBig(b);
+	StoreBig(std::move(b));
 }
 
 ibNumber ibNumber::Abs() const
@@ -1117,7 +1254,7 @@ ibNumber ibNumber::Abs() const
 	LoadBig(b);
 	b.negative = false;
 	ibNumber r;
-	r.StoreBig(b);
+	r.StoreBig(std::move(b));
 	return r;
 }
 
@@ -1396,7 +1533,7 @@ ibNumber& ibNumber::operator%=(const ibNumber& rhs)
 	BigImpl::DivModMag(a.limbs, b.limbs, q, r);
 	a.limbs = std::move(r);
 	if (a.IsZero()) a.negative = false;
-	StoreBig(a);
+	StoreBig(std::move(a));
 	return *this;
 }
 
@@ -1804,7 +1941,7 @@ bool ibNumber::FromString(const wxString& s)
 		Clear();
 		return false;
 	}
-	StoreBig(big);
+	StoreBig(std::move(big));
 	return true;
 }
 
@@ -1907,7 +2044,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	BigImpl::TrimMag(b.limbs);
 	if (b.IsZero()) b.negative = false;
 
-	StoreBig(b);
+	StoreBig(std::move(b));
 	return true;
 }
 
@@ -2018,7 +2155,7 @@ void ibNumber::From128Bytes(const uint8_t bytes[16])
 	b.limbs.assign(limbs, limbs + 4);
 	BigImpl::TrimMag(b.limbs);
 	if (b.IsZero()) b.negative = false;
-	StoreBig(b);
+	StoreBig(std::move(b));
 }
 
 void ibNumber::ShiftDecimal(int32_t exp10)
@@ -2047,7 +2184,7 @@ void ibNumber::ShiftDecimal(int32_t exp10)
 	LoadBig(b);
 	b.exp += exp10;
 	TrimFractionZeros(b);
-	StoreBig(b);
+	StoreBig(std::move(b));
 }
 
 // ---- stream insertion ----------------------------------------------------------------
