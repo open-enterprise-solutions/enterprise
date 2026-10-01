@@ -3599,6 +3599,8 @@ void ProjectPlainColumn(ibDataQueryBuilder& b, OutputColumn& oc, const ibBackend
 		oc.m_col = c;
 }
 
+void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources);   // beside the rule, below
+
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
 // (1 = single source, >1 = JOIN) drives column resolution. explicitProjection (a subquery's inner
@@ -3675,6 +3677,15 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	bool aggregate = !ast.m_groupBy.empty();
 	for (const ibQueryProjection& p : ast.m_projections)
 		if (ibQueryMentionsAggregate(p.m_expr)) aggregate = true;
+
+	// ⭐⭐ …AND A FOLDING QUERY IS COMPLETE, OR IT DOES NOT RUN. The aggregate terminal builds its SELECT list from
+	// the group keys and the folds alone, so a projection that is neither never reaches the database: the schema
+	// declares it, and the caller gets it EMPTY with nothing said. Only the CHECK refused that (query_check,
+	// report_query, the constructor), and no road that RUNS a query passed the check — a script's Execute, the
+	// composer, a dynamic list, a report (2026-10-01: compose_run ran what query_check refused, and the column
+	// came back blank). Here is the one door every SELECT of every road is filled through, nested ones included.
+	if (aggregate)
+		RefuseUngrouped(ast, sources);
 
 	// projections -> output schema (+ door select for dot-walk / aggregates / explicit projection)
 	outSchema.clear();
@@ -5944,6 +5955,20 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 	return out;
 }
 
+// ⚠⚠ AN INCOMPLETE GROUPING IS REFUSED — asked of the SAME door a host asks to complete one, so what the
+// check calls wrong and what the constructor fixes are one answer (see the header). Said by the check
+// (CheckSelectNames) and by every query that RUNS (PopulateBuilder) in these words.
+void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources)
+{
+	const std::vector<ibQueryAstExprPtr> ungrouped = CollectUngrouped(ast, sources);
+	if (ungrouped.empty())
+		return;
+	const ibQueryAstExprPtr& first = ungrouped.front();
+	ThrowQueryException(first->m_line, first->m_col, wxString::Format(
+		_("'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"),
+		first->m_path.back()));
+}
+
 // ⭐⭐ THE LINKS MUST NOT CONTRADICT ONE ANOTHER, and it is the ENGINE that says so.
 //
 // A join condition is a sentence about TWO tables. Two ways of writing one are not links at all, and
@@ -6454,15 +6479,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		}
 	}
 
-	// ⚠⚠ AN INCOMPLETE GROUPING IS REFUSED — asked of the SAME door a host asks to complete one, so
-	// what the check calls wrong and what the constructor fixes are one answer (see the header).
-	const std::vector<ibQueryAstExprPtr> ungrouped = CollectUngrouped(ast, sources);
-	if (!ungrouped.empty()) {
-		const ibQueryAstExprPtr& first = ungrouped.front();
-		ThrowQueryException(first->m_line, first->m_col, wxString::Format(
-			_("'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"),
-			first->m_path.back()));
-	}
+	RefuseUngrouped(ast, sources);
 }
 
 
