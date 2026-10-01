@@ -77,14 +77,14 @@ ibValue ibValue::CloneValue() const
 	// an alias to one cannot answer on its behalf.
 	if (!IsTransferable()) {
 		ibBackendCoreException::Error(
-			_("A value of type \"%s\" cannot be copied — it belongs to its session"),
+			_("A value of type \"%s\" cannot be copied - it belongs to its session"),
 			GetClassName());
 	}
 
 	ibDataNode node;
 	if (!Serialize(node)) {
 		ibBackendCoreException::Error(
-			_("A value of type \"%s\" cannot be copied — it has no packed form"),
+			_("A value of type \"%s\" cannot be copied - it has no packed form"),
 			GetClassName());
 	}
 
