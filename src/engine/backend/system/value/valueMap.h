@@ -26,7 +26,19 @@ constexpr ibClassID g_valueStructureCLSID = value_to_clsid("VL_STRUT");
 //     carries only the fixed METHODS; the keys never touch it.
 //   * The method table is the TYPE's, not the instance's — see DoGetPMethods.
 class BACKEND_API ibValueContainer : public ibValue {
-	public:
+public:
+	// AN ENTRY: the key, its value, and the key's HASH — taken once, when the entry is made. A container
+	// below kIndexMin is walked, and an insert walks it for a repeat: with the hash at hand that walk
+	// compares numbers and reads a key's text only where two agree; and the index, built when the count
+	// reaches kIndexMin, takes the hashes it finds instead of folding every key again. (2026-10-01: once
+	// the index started at eight, a ten-field Structure cost 1 660 -> 2 760 ns — some 28 comparisons of
+	// key text below eight, then all eight keys hashed a second time.)
+	struct ibContainerEntry {
+		ibValue key;
+		ibValue value;
+		size_t  hash;
+	};
+
 protected:
 	// What a string key is - see m_keyKind.
 	enum class ibKeyKind { Value, Name };
@@ -47,7 +59,7 @@ private:
 	// stable index for the property protocol (FindProp -> GetPropVal) and a
 	// deterministic iteration / serialisation order. `m_index` buckets it.
 	// The two are maintained together by every mutating method.
-	std::vector<std::pair<ibValue, ibValue>> m_entries;
+	std::vector<ibContainerEntry> m_entries;
 
 	// WHAT A STRING KEY IS depends on which of the two this is, and neither renders a value to text:
 	//
@@ -91,12 +103,15 @@ private:
 	// Hash and lookup, split because every mutating path wants both and hashing
 	// twice was the other half of the old shape's cost.
 	size_t HashOf(const ibValue& key) const;
+	// A key whose hash the caller already holds (an insert, a put): the index when there is one, otherwise a
+	// walk comparing the stored hashes. A READ walks by FindByWalk — it holds no hash, and needs none: a field
+	// name of another length is told apart without hashing the one looked for.
 	long FindWithHash(const ibValue& key, size_t hash) const;
 	long FindByWalk(const ibValue& key) const;
 	bool KeyMatches(const ibValue& candidate, const ibValue& key) const;
-	// The entry just appended goes into the index — with the hash taken while the container was already
-	// indexed — or, when it is the one that brings the count to kIndexMin, the whole index is built.
-	void IndexNewEntry(bool wasIndexed, size_t hash);
+	// The entry just appended goes into the index when the container was already indexed — or, when it is the
+	// one that brings the count to kIndexMin, the whole index is built, from the hashes the entries hold.
+	void IndexNewEntry(bool wasIndexed);
 
 protected:
 	// A Structure's constructor: its string keys are field NAMES (see m_keyKind).
@@ -107,11 +122,11 @@ protected:
 	long IndexOf(const ibValue& key) const;
 
 public:
-	// THE PAIRS, IN INSERTION ORDER — read-only, for a consumer that takes a whole map at once rather
+	// THE ENTRIES, IN INSERTION ORDER — read-only, for a consumer that takes a whole map at once rather
 	// than asking key by key (an accounting posting is written as *(kind -> value)* pairs and poured
 	// into the movement's slots). Nothing else about the store is exposed: this is the same order a
 	// script sees when it iterates, so a caller cannot observe an arrangement the language does not.
-	const std::vector<std::pair<ibValue, ibValue>>& Entries() const { return m_entries; }
+	const std::vector<ibContainerEntry>& Entries() const { return m_entries; }
 
 protected:
 

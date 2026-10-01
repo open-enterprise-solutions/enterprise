@@ -707,13 +707,13 @@ ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
 	// "no rows" would be the wrong way to say it.
 	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
 	std::vector<Term> terms;
-	for (const std::pair<ibValue, ibValue>& entry : filter.Entries()) {
-		const wxString name = entry.first.GetString();
+	for (const auto& entry : filter.Entries()) {
+		const wxString name = entry.key.GetString();
 		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
 			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
 		if (colInfo == nullptr)
 			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
-		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.second, colInfo->IsColumnIndexed() });
+		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.value, colInfo->IsColumnIndexed() });
 	}
 
 	// Born held (development.md, "A new value is born owned").

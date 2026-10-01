@@ -1164,36 +1164,56 @@ TEST(RuntimeBench, DISABLED_MillionRowScale) {
     size_t residentAt[kScales] = {};
 
     const size_t residentBase = ResidentBytes();
-    for (size_t s = 0; s < kScales; ++s) {
+
+    // One shape at one scale; false when it could not be completed, and the larger scales of its pass are skipped.
+    const auto measure = [&](size_t k, size_t s) -> bool {
         const long rows = scales[s];
         const int repeats = rows <= 64000L ? 3 : 1;
         ibValue argRows((int)rows), ret;
-        pu.CallAsProc(wxT("Fill"), argRows);
-
-        bool scaleCompleted = true;
-        for (size_t k = 0; k < kShapes && scaleCompleted; ++k) {
-            try {
-                const double tot = BestTotalNs(repeats, [&] {
-                    if (shapes[k].takesRows) pu.CallAsFunc(shapes[k].fn, ret, argRows);
-                    else                     pu.CallAsFunc(shapes[k].fn, ret);
-                    g_sink += (uint64_t)ret.GetInteger();
-                });
-                nsPerRow[k][s] = tot / double(rows);
-                wallNs[k][s] = tot;
-            }
-            catch (const std::bad_alloc&) {
-                std::cout << "  !! " << shapes[k].label << " n=" << rows
-                          << " -- out of memory; larger scales skipped\n";
-                scaleCompleted = false;
-            }
-            catch (const ibBackendException& err) {
-                std::cout << "  !! " << shapes[k].label << " n=" << rows << " raised: "
-                          << err.GetErrorDescription().ToStdString()
-                          << "; larger scales skipped\n";
-                scaleCompleted = false;
-            }
+        try {
+            const double tot = BestTotalNs(repeats, [&] {
+                if (shapes[k].takesRows) pu.CallAsFunc(shapes[k].fn, ret, argRows);
+                else                     pu.CallAsFunc(shapes[k].fn, ret);
+                g_sink += (uint64_t)ret.GetInteger();
+            });
+            nsPerRow[k][s] = tot / double(rows);
+            wallNs[k][s] = tot;
+            return true;
         }
+        catch (const std::bad_alloc&) {
+            std::cout << "  !! " << shapes[k].label << " n=" << rows
+                      << " -- out of memory; larger scales skipped\n";
+        }
+        catch (const ibBackendException& err) {
+            std::cout << "  !! " << shapes[k].label << " n=" << rows << " raised: "
+                      << err.GetErrorDescription().ToStdString()
+                      << "; larger scales skipped\n";
+        }
+        return false;
+    };
+
+    // ⚠ THE RECORDS FIRST, AT EVERY SCALE — THE PIPELINE AFTER THEM. Measured scale by scale in one loop, the
+    // pipeline at a scale ran in the heap the previous scale's records had just given back, so its line carried
+    // what THAT phase left behind: on 2026-10-01 a record shrank from 2.3 KB to 264 bytes, and `select` over
+    // plain NUMBERS moved 370 -> 530 ns a row from 64 000 rows up without a line of its own code changing.
+    // Now every pipeline point follows the same history — the whole record series — and the resident set is
+    // read right after each scale's records, the rows it reports (the pipeline's arrays no longer sit in it).
+    for (size_t s = 0; s < kScales; ++s) {
+        bool scaleCompleted = true;
+        for (size_t k = 0; k < kShapes && scaleCompleted; ++k)
+            if (shapes[k].takesRows)
+                scaleCompleted = measure(k, s);
         residentAt[s] = ResidentBytes();
+        if (!scaleCompleted)
+            break;
+    }
+    for (size_t s = 0; s < kScales; ++s) {
+        ibValue argRows((int)scales[s]);
+        pu.CallAsProc(wxT("Fill"), argRows);
+        bool scaleCompleted = true;
+        for (size_t k = 0; k < kShapes && scaleCompleted; ++k)
+            if (!shapes[k].takesRows)
+                scaleCompleted = measure(k, s);
         if (!scaleCompleted)
             break;
     }

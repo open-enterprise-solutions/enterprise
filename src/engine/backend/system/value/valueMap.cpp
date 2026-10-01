@@ -89,10 +89,17 @@ bool ibValueContainer::KeyMatches(const ibValue& candidate, const ibValue& key) 
 
 long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 {
-	const auto range = m_index.equal_range(hash);
-	for (auto it = range.first; it != range.second; ++it)
-		if (KeyMatches(m_entries[it->second].first, key))
-			return (long)it->second;
+	if (Indexed()) {
+		const auto range = m_index.equal_range(hash);
+		for (auto it = range.first; it != range.second; ++it)
+			if (KeyMatches(m_entries[it->second].key, key))
+				return (long)it->second;
+		return wxNOT_FOUND;
+	}
+	// Walked: the stored hashes decide almost every entry, and a key's text is read only where two agree.
+	for (size_t at = 0; at < m_entries.size(); ++at)
+		if (m_entries[at].hash == hash && KeyMatches(m_entries[at].key, key))
+			return (long)at;
 	return wxNOT_FOUND;
 }
 
@@ -100,7 +107,7 @@ long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
 long ibValueContainer::FindByWalk(const ibValue& key) const
 {
 	for (size_t at = 0; at < m_entries.size(); ++at)
-		if (KeyMatches(m_entries[at].first, key))
+		if (KeyMatches(m_entries[at].key, key))
 			return (long)at;
 	return wxNOT_FOUND;
 }
@@ -110,10 +117,10 @@ long ibValueContainer::IndexOf(const ibValue& key) const
 	return Indexed() ? FindWithHash(key, HashOf(key)) : FindByWalk(key);
 }
 
-void ibValueContainer::IndexNewEntry(const bool wasIndexed, const size_t hash)
+void ibValueContainer::IndexNewEntry(const bool wasIndexed)
 {
 	if (wasIndexed) {
-		m_index.emplace(hash, m_entries.size() - 1);
+		m_index.emplace(m_entries.back().hash, m_entries.size() - 1);
 		return;
 	}
 	if (!Indexed())
@@ -121,7 +128,7 @@ void ibValueContainer::IndexNewEntry(const bool wasIndexed, const size_t hash)
 	// The count just reached kIndexMin: every entry is indexed now, the new one with the rest.
 	m_index.reserve(m_entries.size());
 	for (size_t at = 0; at < m_entries.size(); ++at)
-		m_index.emplace(HashOf(m_entries[at].first), at);
+		m_index.emplace(m_entries[at].hash, at);
 }
 
 // The other side as a container, or nullptr. dynamic_cast for the reason
@@ -139,9 +146,9 @@ const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) con
 	return dynamic_cast<const ibValueContainer*>(cParam.GetRef());
 }
 
-// An entry is a PAIR, so it orders as one: key first, value only as the
-// tiebreak. Same element walk as the array — the vector's own comparison, handed
-// the comparator for what it holds.
+// An entry orders as a PAIR: key first, value only as the tiebreak (its hash is the
+// key's, so it says nothing more). Same element walk as the array — the vector's own
+// comparison, handed the comparator for what it holds.
 int ibValueContainer::CompareValueLS(const ibValue& cParam) const
 {
 	const ibValueContainer* rhs = AsContainer(cParam);
@@ -149,10 +156,9 @@ int ibValueContainer::CompareValueLS(const ibValue& cParam) const
 		return ibValue::CompareValueLS(cParam);   // not a container — the base places it by KIND
 
 
-	using Entry = std::pair<ibValue, ibValue>;
-	const auto less = [](const Entry& a, const Entry& b) {
-		const int c = a.first.CompareValueLS(b.first);
-		return c != 0 ? c < 0 : a.second.CompareValueLS(b.second) < 0;
+	const auto less = [](const ibContainerEntry& a, const ibContainerEntry& b) {
+		const int c = a.key.CompareValueLS(b.key);
+		return c != 0 ? c < 0 : a.value.CompareValueLS(b.value) < 0;
 	};
 	if (std::lexicographical_compare(m_entries.begin(), m_entries.end(),
 	                                 rhs->m_entries.begin(), rhs->m_entries.end(), less))
@@ -170,8 +176,8 @@ size_t ibValueContainer::GetValueHash() const
 {
 	std::uint64_t h = ibHashCombine(kIbHashBasis, m_entries.size());
 	for (const auto& entry : m_entries) {
-		h = ibHashCombine(h, entry.first.GetValueHash());
-		h = ibHashCombine(h, entry.second.GetValueHash());
+		h = ibHashCombine(h, entry.key.GetValueHash());
+		h = ibHashCombine(h, entry.value.GetValueHash());
 	}
 	return (size_t)h;
 }
@@ -184,12 +190,11 @@ bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
 	if (rhs == nullptr)
 		return false;
 
-	using Entry = std::pair<ibValue, ibValue>;
 	return m_entries.size() == rhs->m_entries.size()
 		&& std::equal(m_entries.begin(), m_entries.end(), rhs->m_entries.begin(),
-		              [](const Entry& a, const Entry& b) {
-			              return a.first.CompareValueEQ(b.first)
-			                  && a.second.CompareValueEQ(b.second);
+		              [](const ibContainerEntry& a, const ibContainerEntry& b) {
+			              return a.key.CompareValueEQ(b.key)
+			                  && a.value.CompareValueEQ(b.value);
 		              });
 }
 
@@ -300,7 +305,7 @@ const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 	// column with no name. That text is nowhere to be lent from, so it is made into this thread's one slot and
 	// lives until the next such name here; every caller copies it on the spot. (FindProp still cannot reach
 	// such a key by name — a text is not a number.)
-	const ibValue& key = m_entries[lPropNum].first;
+	const ibValue& key = m_entries[lPropNum].key;
 	if (key.m_typeClass == ibValueTypes::TYPE_STRING)
 		return key.m_sData;
 	static thread_local ibString s_made;
@@ -312,7 +317,7 @@ bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
 		return false;
-	pvarPropVal = m_entries[lPropNum].second;
+	pvarPropVal = m_entries[lPropNum].value;
 	return true;
 }
 
@@ -320,7 +325,7 @@ bool ibValueContainer::SetPropVal(const long lPropNum, const ibValue& varPropVal
 {
 	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
 		return false;
-	m_entries[lPropNum].second = varPropVal;
+	m_entries[lPropNum].value = varPropVal;
 	return true;
 }
 
@@ -396,19 +401,19 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 
 void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
-	// ONE HASH OF THE KEY, and none while the container is walked. The hash is a fold
-	// over the key's whole text, so on a Structure — where keys are field names —
-	// walking it twice was a visible share of an insert. Computed here, then handed to
-	// both the duplicate check and the index.
+	// ONE HASH OF THE KEY, taken here and kept in the entry. The hash is a fold over the
+	// key's whole text, so on a Structure — where keys are field names — taking it twice
+	// was a visible share of an insert. Handed to the duplicate check, then stored: the
+	// walks after this one compare it, and the index is built from it.
 	const bool indexed = Indexed();
-	const size_t hash = indexed ? HashOf(varKeyValue) : 0;
+	const size_t hash = HashOf(varKeyValue);
 	// A repeat is refused, in every process: an owner for whom a repeat is no error says so with SetAt.
-	if ((indexed ? FindWithHash(varKeyValue, hash) : FindByWalk(varKeyValue)) >= 0) {
+	if (FindWithHash(varKeyValue, hash) >= 0) {
 		ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_entries.emplace_back(varKeyValue, cValue);
-	IndexNewEntry(indexed, hash);
+	m_entries.push_back({ varKeyValue, cValue, hash });
+	IndexNewEntry(indexed);
 }
 
 bool ibValueContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound)
@@ -416,7 +421,7 @@ bool ibValueContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound
 	const long idx = IndexOf(varKeyValue);
 	if (idx < 0)
 		return false;
-	cValueFound = m_entries[idx].second;
+	cValueFound = m_entries[idx].value;
 	return true;
 }
 
@@ -429,9 +434,9 @@ std::shared_ptr<ibValueIteratorState> ibValueContainer::CreateIterator()
 		bool MoveNext(ibValue& current) override {
 			if (m_started) ++m_pos; else m_started = true;
 			if (m_pos >= m_entries.size()) return false;
-			ibValue valueCopy = m_entries[m_pos].second;
+			ibValue valueCopy = m_entries[m_pos].value;
 			current = ibValue(static_cast<ibValue*>(
-				new ibValueReturnContainer(m_entries[m_pos].first, valueCopy)));
+				new ibValueReturnContainer(m_entries[m_pos].key, valueCopy)));
 			return true;
 		}
 		void Reset() override { m_pos = 0; m_started = false; }
@@ -452,13 +457,13 @@ bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue
 	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
 	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
 	const bool indexed = Indexed();
-	const size_t hash = indexed ? HashOf(varKeyValue) : 0;      // one hash for both branches, none when walked
-	const long idx = indexed ? FindWithHash(varKeyValue, hash) : FindByWalk(varKeyValue);
+	const size_t hash = HashOf(varKeyValue);      // one hash for both branches, kept by a new entry
+	const long idx = FindWithHash(varKeyValue, hash);
 	if (idx >= 0)
-		m_entries[idx].second = varValue;
+		m_entries[idx].value = varValue;
 	else {
-		m_entries.emplace_back(varKeyValue, varValue);
-		IndexNewEntry(indexed, hash);
+		m_entries.push_back({ varKeyValue, varValue, hash });
+		IndexNewEntry(indexed);
 	}
 	return true;
 }
@@ -467,7 +472,7 @@ bool ibValueContainer::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	const long idx = IndexOf(varKeyValue);
 	if (idx >= 0) {
-		pvarValue = m_entries[idx].second;
+		pvarValue = m_entries[idx].value;
 		return true;
 	}
 	ibBackendCoreException::Error(_("Key '%s' not found!"), varKeyValue.GetString());
@@ -603,11 +608,11 @@ bool ibValueContainer::DoSerialize(ibDataNode& node) const
 	node.SetValue(wxT("n"), (s32)m_entries.size());
 
 	for (const auto& entry : m_entries) {
-		ibDataNode& keyNode = node.AddChild(entry.first.GetClassType(), 0);
-		if (!entry.first.Serialize(keyNode))
+		ibDataNode& keyNode = node.AddChild(entry.key.GetClassType(), 0);
+		if (!entry.key.Serialize(keyNode))
 			return false;   // one unpackable side voids the container
-		ibDataNode& valueNode = node.AddChild(entry.second.GetClassType(), 0);
-		if (!entry.second.Serialize(valueNode))
+		ibDataNode& valueNode = node.AddChild(entry.value.GetClassType(), 0);
+		if (!entry.value.Serialize(valueNode))
 			return false;
 	}
 

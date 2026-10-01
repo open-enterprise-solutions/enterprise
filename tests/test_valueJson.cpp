@@ -133,7 +133,7 @@ TEST(JsonReader, RepeatedKeysCostOneLookupEach) {
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
 	ASSERT_EQ(object->Entries().size(), 4000u);
-	EXPECT_TRUE(object->Entries()[0].second.GetNumber() == ibNumber(1)) << "the LAST value of a repeated key";
+	EXPECT_TRUE(object->Entries()[0].value.GetNumber() == ibNumber(1)) << "the LAST value of a repeated key";
 }
 
 TEST(JsonReader, TheTokensComeInTheOrderOfTheText) {
@@ -160,9 +160,9 @@ TEST(JsonReader, AnObjectKeepsItsKeysAndTheirOrder) {
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
 	ASSERT_EQ(object->Entries().size(), 3u);
-	EXPECT_EQ(object->Entries()[0].first.GetString(), wxString(wxT("z")));
-	EXPECT_EQ(object->Entries()[1].first.GetString(), wxString(wxT("odd key")));
-	EXPECT_EQ(object->Entries()[2].first.GetString(), wxString(wxT("a")));
+	EXPECT_EQ(object->Entries()[0].key.GetString(), wxString(wxT("z")));
+	EXPECT_EQ(object->Entries()[1].key.GetString(), wxString(wxT("odd key")));
+	EXPECT_EQ(object->Entries()[2].key.GetString(), wxString(wxT("a")));
 }
 
 TEST(JsonReader, ANameMetTwiceKeepsItsLastValue) {
@@ -170,7 +170,7 @@ TEST(JsonReader, ANameMetTwiceKeepsItsLastValue) {
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
 	ASSERT_EQ(object->Entries().size(), 2u);
-	EXPECT_TRUE(object->Entries()[0].second.GetNumber() == ibNumber(3));
+	EXPECT_TRUE(object->Entries()[0].value.GetNumber() == ibNumber(3));
 }
 
 // 🛑 A Structure's keys FOLD CASE and JSON's do not. `ab12` and `AB12` are two members there and would be one

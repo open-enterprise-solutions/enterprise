@@ -498,7 +498,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	// to know WHICH entry it was.
 	bool authorized = false;
 	for (const auto& entry : request.Headers().Entries()) {
-		const wxString key = entry.first.GetString();
+		const wxString key = entry.key.GetString();
 		const std::string field = ibHttpUtf8(key);
 		if (!ibHttpIsToken(field))
 			ibBackendCoreException::Error(_("HTTPConnection: '%s' is not a header name"), key);
@@ -506,10 +506,10 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			if (key.IsSameAs(owned, false))
 				ibBackendCoreException::Error(_("HTTPConnection: the header '%s' says how the message is carried, and that is not a script's to set"), key);
 		}
-		const ibValueTypes kind = entry.second.GetType();
+		const ibValueTypes kind = entry.value.GetType();
 		if (kind != ibValueTypes::TYPE_STRING && kind != ibValueTypes::TYPE_NUMBER)
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' is a string or a number"), key);
-		const wxString value = ibHttpTrimmed(entry.second.GetString());
+		const wxString value = ibHttpTrimmed(entry.value.GetString());
 		if (ibHttpHoldsControl(value))
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' holds a line break or a control character"), key);
 		message.headers.emplace(field, ibHttpUtf8(value));
@@ -698,7 +698,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			value = wxString::From8BitData(field.second.data(), field.second.size());
 		const long held = headers->FindProp(key);
 		if (held >= 0 && !key.IsSameAs(wxT("Set-Cookie"), false))
-			value = headers->Entries()[static_cast<size_t>(held)].second.GetString() + wxT(", ") + value;
+			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + wxT(", ") + value;
 		headers->SetAt(ibValue(key), ibValue(value));
 	}
 

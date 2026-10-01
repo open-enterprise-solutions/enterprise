@@ -478,8 +478,8 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::SetPropVal
 		ibValueContainer* pairs = nullptr;
 		if (!varPropVal.ConvertToValue(pairs) || pairs == nullptr)
 			return false;   // anything that is neither a map nor emptiness is not a breakdown
-		for (const std::pair<ibValue, ibValue>& pair : pairs->Entries())
-			if (!target.SetAt(pair.first, pair.second))
+		for (const auto& entry : pairs->Entries())
+			if (!target.SetAt(entry.key, entry.value))
 				return false;
 		return true;
 	}
