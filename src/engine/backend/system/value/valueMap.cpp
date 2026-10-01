@@ -75,32 +75,54 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 // itself — a field name against a field name folded (Structure), text against text exactly
 // (Container), value against value otherwise. Text is kept apart from every other kind in both:
 // the value ordering puts an enumeration beside the text of its presentation, and a key is not that.
-long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
+bool ibValueContainer::KeyMatches(const ibValue& candidate, const ibValue& key) const
 {
 	const bool isText = (key.GetType() == ibValueTypes::TYPE_STRING);
-	const ibString keyText = isText ? key.GetString() : ibString();
-
-	const auto range = m_index.equal_range(hash);
-	for (auto it = range.first; it != range.second; ++it) {
-		const size_t at = it->second;
-		const ibValue& candidate = m_entries[at].first;
-		if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
-			continue;                                        // text never matches a non-text key
-		if (isText) {
-			const ibString candText = candidate.GetString();   // shared, not copied
-			if (m_keyKind == ibKeyKind::Name ? FoldedEquals(candText, keyText) : candText == keyText)
-				return (long)at;
-		}
-		else if (candidate.CompareValueLS(key) == 0) {
-			return (long)at;
-		}
+	if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
+		return false;                                        // text never matches a non-text key
+	if (isText) {
+		const ibString candText = candidate.GetString();     // shared, not copied
+		const ibString keyText = key.GetString();
+		return m_keyKind == ibKeyKind::Name ? FoldedEquals(candText, keyText) : candText == keyText;
 	}
+	return candidate.CompareValueLS(key) == 0;
+}
+
+long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
+{
+	const auto range = m_index.equal_range(hash);
+	for (auto it = range.first; it != range.second; ++it)
+		if (KeyMatches(m_entries[it->second].first, key))
+			return (long)it->second;
+	return wxNOT_FOUND;
+}
+
+// A container with no index (fewer than kIndexMin entries) is walked: the same rule of equality, no hash.
+long ibValueContainer::FindByWalk(const ibValue& key) const
+{
+	for (size_t at = 0; at < m_entries.size(); ++at)
+		if (KeyMatches(m_entries[at].first, key))
+			return (long)at;
 	return wxNOT_FOUND;
 }
 
 long ibValueContainer::IndexOf(const ibValue& key) const
 {
-	return FindWithHash(key, HashOf(key));
+	return Indexed() ? FindWithHash(key, HashOf(key)) : FindByWalk(key);
+}
+
+void ibValueContainer::IndexNewEntry(const bool wasIndexed, const size_t hash)
+{
+	if (wasIndexed) {
+		m_index.emplace(hash, m_entries.size() - 1);
+		return;
+	}
+	if (!Indexed())
+		return;
+	// The count just reached kIndexMin: every entry is indexed now, the new one with the rest.
+	m_index.reserve(m_entries.size());
+	for (size_t at = 0; at < m_entries.size(); ++at)
+		m_index.emplace(HashOf(m_entries[at].first), at);
 }
 
 // The other side as a container, or nullptr. dynamic_cast for the reason
@@ -176,7 +198,7 @@ bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
 //*                          ibValueReturnMap                           *
 //**********************************************************************
 
-void ibValueContainer::ibValueReturnContainer::FillMembers(ibMemberTable& helper) const
+void ibValueContainer::ibValueReturnContainer::BindNames(ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendProp(wxT("Key"));
 	helper.AppendProp(wxT("Value"));
@@ -206,36 +228,41 @@ bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, i
 //*                            ibValueContainer                         *
 //**********************************************************************
 
-ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
-	m_members.Bind(&BindContainerNames, this);
+ibValueContainer::ibValueContainer() : ibValue(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
 }
 
-ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
-	m_members.Bind(&BindContainerNames, this);
+ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValue(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
 	// SetAt, not Insert: should the source map hold two keys this store calls one, a
 	// build keeps the last rather than throwing.
 	for (const auto& cntVal : containerValues)
 		ibValueContainer::SetAt(cntVal.first, cntVal.second);
 }
 
-ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
-	m_members.Bind(&BindContainerNames, this);
+ibValueContainer::ibValueContainer(bool readOnly) : ibValue(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
 }
 
-ibValueContainer::ibValueContainer(bool readOnly, ibKeyKind keyKind) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
-	m_members.Bind(&BindContainerNames, this);
+ibValueContainer::ibValueContainer(bool readOnly, ibKeyKind keyKind) : ibValue(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
 }
 
 ibValueContainer::~ibValueContainer() {
 }
 
-// The FIXED method surface — methods only. It no longer publishes the keys, so
-// it is type-invariant (given the read-only flag), built ONCE, and never rebuilt
-// on a data mutation. The keys are the store's job (FindProp / GetPropName).
-void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* ctx)
-{
-	const ibValueContainer* self = static_cast<const ibValueContainer*>(ctx);
+namespace {
+void BindWritableContainerNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueContainer::BindContainerNames(helper, false); }
+void BindReadOnlyContainerNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueContainer::BindContainerNames(helper, true); }
+}
 
+ibValue::ibMemberTable* ibValueContainer::DoGetPMethods() const
+{
+	return m_bReadOnly ? ibMemberTable::Shared<&BindReadOnlyContainerNames>()
+	                   : ibMemberTable::Shared<&BindWritableContainerNames>();
+}
+
+// The FIXED method surface — methods only. It does not publish the keys, so it is
+// type-invariant given the read-only flag, and shared (DoGetPMethods). The keys are
+// the store's job (FindProp / GetPropName).
+void ibValueContainer::BindContainerNames(ibMemberTable& helper, const bool readOnly)
+{
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Property"), 2, wxT("Property(key : any, valueFound : any)"));
 	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
@@ -246,7 +273,7 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 	// is a method number, and a field that is not there is the same question.
 	helper.AppendFunc(wxT("Get"), 1, wxT("Get(key : any)"));
 
-	if (!self->m_bReadOnly) {
+	if (!readOnly) {
 		helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
 		helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
 		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
@@ -254,9 +281,10 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 }
 
 // ---- the key surface, straight off the store --------------------------------
-// FindProp is the `container.key` resolver: a hash probe, not a member-table
-// scan. GetNProps / GetPropName / Get / SetPropVal are the index side of the
-// same store, used by the interpreter after FindProp and by introspection.
+// FindProp is the `container.key` resolver: a probe of the store (hash or walk,
+// IndexOf), not a member-table scan. GetNProps / GetPropName / Get / SetPropVal
+// are the index side of the same store, used by the interpreter after FindProp
+// and by introspection.
 
 long ibValueContainer::FindProp(const ibString& strPropName) const
 {
@@ -352,6 +380,10 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 	// index; `[key] = value` replaces a value in place and is the put.
 	const size_t hole = static_cast<size_t>(idx);
 	m_entries.erase(m_entries.begin() + idx);
+	if (!Indexed()) {
+		m_index.clear();   // back below kIndexMin: walked again, as Indexed() says
+		return;
+	}
 	for (auto it = m_index.begin(); it != m_index.end();) {
 		if (it->second == hole) {
 			it = m_index.erase(it);
@@ -365,18 +397,19 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 
 void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
-	// ONE HASH OF THE KEY. The hash is a fold over the key's whole text, so on a
-	// Structure — where keys are field names — walking it twice was a visible
-	// share of an insert. Computed here, then handed to both the duplicate check
-	// and the index.
-	const size_t hash = HashOf(varKeyValue);
-	if (FindWithHash(varKeyValue, hash) >= 0) {
+	// ONE HASH OF THE KEY, and none while the container is walked. The hash is a fold
+	// over the key's whole text, so on a Structure — where keys are field names —
+	// walking it twice was a visible share of an insert. Computed here, then handed to
+	// both the duplicate check and the index.
+	const bool indexed = Indexed();
+	const size_t hash = indexed ? HashOf(varKeyValue) : 0;
+	if ((indexed ? FindWithHash(varKeyValue, hash) : FindByWalk(varKeyValue)) >= 0) {
 		if (!appData->DesignerMode())
 			ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_index.emplace(hash, m_entries.size());
 	m_entries.emplace_back(varKeyValue, cValue);
+	IndexNewEntry(indexed, hash);
 }
 
 bool ibValueContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound)
@@ -419,13 +452,14 @@ bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue
 {
 	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
 	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
-	const size_t hash = HashOf(varKeyValue);      // one hash for both branches
-	const long idx = FindWithHash(varKeyValue, hash);
+	const bool indexed = Indexed();
+	const size_t hash = indexed ? HashOf(varKeyValue) : 0;      // one hash for both branches, none when walked
+	const long idx = indexed ? FindWithHash(varKeyValue, hash) : FindByWalk(varKeyValue);
 	if (idx >= 0)
 		m_entries[idx].second = varValue;
 	else {
-		m_index.emplace(hash, m_entries.size());
 		m_entries.emplace_back(varKeyValue, varValue);
+		IndexNewEntry(indexed, hash);
 	}
 	return true;
 }
