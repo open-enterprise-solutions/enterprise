@@ -54,6 +54,7 @@ struct ibSchemaIndex
 	wxString                                 m_name;
 	std::vector<const ibBackendQueryColumn*> m_columns;        // logical columns it covers (expand to fields at apply)
 	bool                                     m_unique = false;
+	bool                                     m_descending = false;   // the twin a backward read walks
 };
 
 // A DATA row of the table — a value-table row declared as schema. The STRUCTURE says "what columns" (the
@@ -336,6 +337,13 @@ struct ibSchemaTable
 	// matches columns across config instances by identity.
 	ibSchemaTable& Add(const ibBackendQueryColumn* qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
 	ibSchemaTable& Index(const wxString& name, std::vector<const ibBackendQueryColumn*> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
+	// The index a list reads by, BOTH ways: `name` ascending, and `name` + "D" descending for an engine that walks
+	// an index forward only (ibDialectDictionary::m_descendingIndexWord; elsewhere the twin is never made).
+	ibSchemaTable& ListIndex(const wxString& name, std::vector<const ibBackendQueryColumn*> cols) {
+		m_indexes.push_back({ name, cols, false });
+		m_indexes.push_back({ name + wxT("D"), std::move(cols), false, true });
+		return *this;
+	}
 
 	// Declare this table as DERIVED from `source`, maintained by trigger. Returns the materialize
 	// spec for fluent filling: Derived(movQueryable, view).Key(dim).Period(col, expr, unit)

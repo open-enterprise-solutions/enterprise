@@ -186,12 +186,15 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// (ibValuePointInTime::CompareValueLS): the same index serves "up to this instant" and "up to
 	// this document within the instant", and the second needs no re-sort.
 	//
-	// ⚠ NOT the line number. It already rides the key index above, where it is asked for; on its own
-	// it is a small integer repeated across every document — an index the planner would never choose
-	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
+	// ⭐ …AND THE LINE NUMBER LAST, BOTH WAYS: (Period, Recorder, LineNumber) is the register's LIST order,
+	// and an index that ends before the order does is one the engine cannot walk. Without it every page of
+	// the list sorted the whole register — a million movements, 1100 ms a page scrolling down and the same
+	// scrolling up, against 235 ms walked by the index (2026-10-01). Scrolling up reads the order
+	// backwards, which Firebird walks only on a descending twin (ListIndex).
 	// (Only where the register HAS a Period column — a calculation register is dated otherwise, HasPeriod.)
 	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
-		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn() });
+		t.ListIndex(t.m_name + wxT("_PIX"), { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
+			GetRegisterLineNumber()->GetQueryColumn() });
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
 	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers

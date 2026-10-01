@@ -1477,8 +1477,14 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		return sql;
 	}
 	case ibDdlKind::CreateIndex: {
-		wxString sql = ddl.m_unique ? wxT("CREATE UNIQUE INDEX ") : wxT("CREATE INDEX ");
-		sql += QuoteIdent(ddl.m_indexName) + wxT(" ON ") + QuoteIdent(ddl.m_table) + wxT(" (");
+		// A descending twin exists only where the engine needs one (m_descendingIndexWord): elsewhere it renders
+		// empty, and its DROP below does the same, so it is never made and never missed.
+		if (ddl.m_descending && m_dialect.m_descendingIndexWord.empty())
+			return wxString();
+		wxString sql = ddl.m_unique ? wxT("CREATE UNIQUE ") : wxT("CREATE ");
+		if (ddl.m_descending)
+			sql += m_dialect.m_descendingIndexWord + wxT(" ");
+		sql += wxT("INDEX ") + QuoteIdent(ddl.m_indexName) + wxT(" ON ") + QuoteIdent(ddl.m_table) + wxT(" (");
 		for (size_t i = 0; i < ddl.m_indexColumns.size(); ++i) {
 			if (i) sql += wxT(", ");
 			sql += QuoteIdent(ddl.m_indexColumns[i]);
@@ -1487,6 +1493,8 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		return sql;
 	}
 	case ibDdlKind::DropIndex: {
+		if (ddl.m_descending && m_dialect.m_descendingIndexWord.empty())
+			return wxString();   // the twin this engine never made
 		wxString sql = wxT("DROP INDEX ") + QuoteIdent(ddl.m_indexName);
 		if (m_dialect.m_dropIndexNeedsTable && !ddl.m_table.empty())
 			sql += wxT(" ON ") + QuoteIdent(ddl.m_table);

@@ -150,6 +150,13 @@ struct ibDialectDictionary
 	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
 	bool m_dropIndexNeedsTable = false;
 
+	// A list read BACKWARDS (scrolling up: ORDER BY … DESC) walks an index only where the engine can walk
+	// one in that direction. Firebird walks an ascending index forward only, so a descending twin is
+	// declared beside the index a list reads by, and this is the word that makes one there
+	// (`CREATE DESCENDING INDEX`). EMPTY (default) = the engine walks an ascending index both ways
+	// (PostgreSQL, SQLite, MySQL, MSSQL) — the twin would only cost every write, so it is not made.
+	wxString m_descendingIndexWord;
+
 	// ⭐⭐ HOW MANY FIELDS AN INDEX MAY COVER. 0 (the default) = no limit worth declaring.
 	//
 	// A key is a list of LOGICAL columns; an index is built over their PHYSICAL fields, and a

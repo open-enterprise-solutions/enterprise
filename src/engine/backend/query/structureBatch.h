@@ -68,10 +68,13 @@ public:
 	void DropTable(std::vector<const ibBackendQueryColumn*> columns);
 	// Index over LOGICAL columns — each expands to its physical field names through the layout tier
 	// (a raw uuid column -> "uuid"; a reference attribute -> its _RTRef/_RRRef pair; a dimension -> its
-	// fields). The structure speaks columns, not bare field strings.
-	void CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false);
+	// fields). The structure speaks columns, not bare field strings. `descending` — the twin an engine walks
+	// when a list reads backwards (ibDialectDictionary::m_descendingIndexWord).
+	void CreateIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false,
+		bool descending = false);
 	// Its mirror, carrying what CreateIndex was given — so a failed second phase can put the index back.
-	void DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique);
+	void DropIndex(const wxString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+		bool descending = false);
 	void Ddl(const ibDdlStatement& ddl);                        // any other prebuilt statement, in order
 
 	// --- data seed the subclass pours in --------------------------------------------------------

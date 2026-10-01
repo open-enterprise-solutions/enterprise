@@ -2156,14 +2156,13 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 // A reference's identity is (guid, type). ColumnValueFields gives the _RRRef guid; the _RTRef type follows as the
 // tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of type B — in lockstep with
 // BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID). A single-type / self-reference column
-// has a constant _RTRef, so this is a harmless no-op there.
+// has a constant _RTRef, so this is a harmless no-op there. The fields are ColumnSortFields — the same an index is
+// built over (ibStructureBatch::CreateIndex), so the engine can walk the index instead of sorting.
 static std::vector<ibQueryExprPtr> SortFieldsOf(const ibBackendQueryColumn* col, const wxString& qual)
 {
 	std::vector<ibQueryExprPtr> fields;
-	for (const wxString& name : ColumnValueFields(col))
+	for (const wxString& name : ColumnSortFields(col))
 		fields.push_back(ibColQ(qual, name));
-	if (IsReferenceValued(col))
-		fields.push_back(ibColQ(qual, col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType)));
 	return fields;
 }
 
@@ -2267,6 +2266,13 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		ibQueryExprPtr clause = AndFold(eqUpTo(i), ibBinOp(op, terms[i].field, terms[i].operand));
 		predicate = OrFold(predicate, clause);
 	}
+
+	// ⭐ …AND THE FIRST FIELD'S BOUND IN FRONT OF IT. Every clause above holds the first field past or at the
+	// anchor, so the bound says nothing new about the rows — it says where the index walk STARTS. Without it
+	// the engine walks the list's index from its first entry and tests each against the OR, so a page near
+	// the end of a million movements cost the whole walk up to it.
+	if (terms.size() > 1)
+		predicate = AndFold(ibBinOp(inclusiveOp(terms[0].asc), terms[0].field, terms[0].operand), predicate);
 
 	return predicate;
 }

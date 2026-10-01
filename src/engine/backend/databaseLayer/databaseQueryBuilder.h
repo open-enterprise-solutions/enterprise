@@ -741,6 +741,8 @@ struct ibDdlStatement
 	wxString              m_indexName;
 	std::vector<wxString> m_indexColumns;   // CreateIndex: the indexed columns
 	bool                  m_unique = false; // CreateIndex: UNIQUE
+	bool                  m_descending = false; // CreateIndex / DropIndex: the twin a backward read walks
+	                                            // (ibDialectDictionary::m_descendingIndexWord)
 
 	bool m_ifExists    = false;   // DropTable
 	bool m_ifNotExists = false;   // CreateTable
@@ -873,15 +875,16 @@ inline ibDdlStatement ibAlterTable(const wxString& table, std::vector<ibAlterCla
 	return s;
 }
 
-// CREATE [UNIQUE] INDEX <name> ON <table> (<columns>).
+// CREATE [UNIQUE] [DESCENDING] INDEX <name> ON <table> (<columns>).
 inline ibDdlStatement ibCreateIndex(const wxString& table, const wxString& indexName,
-                                    std::vector<wxString> columns, bool unique = false)
+                                    std::vector<wxString> columns, bool unique = false, bool descending = false)
 {
 	ibDdlStatement s(ibDdlKind::CreateIndex);
 	s.m_table        = table;
 	s.m_indexName    = indexName;
 	s.m_indexColumns = std::move(columns);
 	s.m_unique       = unique;
+	s.m_descending   = descending;
 	return s;
 }
 
@@ -898,13 +901,14 @@ inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& tab
 // The same DROP INDEX carrying the index's COLUMNS and uniqueness — for the compensation ledger,
 // which re-creates it if the second phase fails. The renderer spells only the name.
 inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& table,
-                                  std::vector<wxString> columns, bool unique)
+                                  std::vector<wxString> columns, bool unique, bool descending = false)
 {
 	ibDdlStatement s(ibDdlKind::DropIndex);
 	s.m_indexName    = indexName;
 	s.m_table        = table;
 	s.m_indexColumns = std::move(columns);
 	s.m_unique       = unique;
+	s.m_descending   = descending;
 	return s;
 }
 

@@ -146,6 +146,12 @@ BACKEND_API std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* 
 // Give the role alongside the name and the question is answerable where it is asked.
 BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col);
 
+// ⭐ WHAT A COLUMN IS SORTED ON, in order: its value fields, and a reference's _RTRef after its key (an
+// empty key of one type orders apart from an empty key of another). One answer for the ORDER BY a read
+// writes and for the fields an index is built over — an index whose leading fields are not the order's
+// own is one the engine cannot walk, and every page of a list sorts the whole table instead.
+BACKEND_API std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col);
+
 // The column's FIRST value slot — the field a scalar comparison / sort / anchor rides. Empty name
 // and Raw role when the column spreads to nothing.
 BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col);

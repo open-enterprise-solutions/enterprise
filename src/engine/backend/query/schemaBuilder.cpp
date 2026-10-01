@@ -158,7 +158,8 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 		break;
 	case ibDdlKind::CreateIndex:
 		if (!onCreatedTable) {
-			const ibDdlStatement undo = ibDropIndex(ddl.m_indexName, ddl.m_table);
+			const ibDdlStatement undo = ibDropIndex(ddl.m_indexName, ddl.m_table, ddl.m_indexColumns, ddl.m_unique,
+				ddl.m_descending);   // a twin this engine never made is never dropped either
 			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
 		}
 		break;
@@ -196,7 +197,8 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 		if (!onCreatedTable && !ddl.m_indexColumns.empty()) {
 			// The same for an index: a REBUILT index is dropped in the first phase and created again, so a
 			// failed second phase left the baseline's index missing and the next apply's DROP INDEX refused.
-			const ibDdlStatement undo = ibCreateIndex(ddl.m_table, ddl.m_indexName, ddl.m_indexColumns, ddl.m_unique);
+			const ibDdlStatement undo = ibCreateIndex(ddl.m_table, ddl.m_indexName, ddl.m_indexColumns, ddl.m_unique,
+				ddl.m_descending);
 			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
 		}
 		else if (!onCreatedTable) {

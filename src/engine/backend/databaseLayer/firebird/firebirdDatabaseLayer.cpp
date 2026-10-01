@@ -119,6 +119,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// It does NOT ask RDB$INDICES — reading the physical schema to decide what to emit is banned
 		// (docs/private/schema-authority.md § 3); the introspection this line used to describe, and the
 		// `m_indexListQuery` behind it, were removed 2026-08-14. Do not revive either.
+		d.m_descendingIndexWord = wxT("DESCENDING");   // FB walks an ascending index forward only — measured 2026-10-01: 1100 ms a page backwards, 235 forwards
 		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 16;                     // "too many keys defined for index" past this — and a failed DDL rolls the apply back
 		// …and the BYTE ceiling beside it: Firebird bounds an index key at roughly page_size/4, and the
