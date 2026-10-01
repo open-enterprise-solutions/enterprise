@@ -2492,8 +2492,11 @@ public:
 	// date silently disappeared and the balance surface was read whole (measured 2026-09-05: as of
 	// 2020 the same rows came back as as of today), and `BalanceAndTurnovers` — a name the schema
 	// deliberately never creates — asked Firebird for a table that does not exist.
-	ibRefJoinChain(const ibBackendQueryable* root, const wxString& rootTable)
-		: m_root(root), m_rootTable(rootTable), m_from(SourceRelationOf(root, rootTable)) {}
+	// `rootRelation`, when given, stands where the root's own relation would — under the same name, so every
+	// join and every column qualified by `rootTable` reads it unchanged (BuildPageIR's windowed root).
+	ibRefJoinChain(const ibBackendQueryable* root, const wxString& rootTable, ibQueryRelPtr rootRelation = nullptr)
+		: m_root(root), m_rootTable(rootTable),
+		  m_from(rootRelation ? std::move(rootRelation) : SourceRelationOf(root, rootTable)) {}
 
 	// Resolve a reference path to its LEAF's join alias + target queryable, appending (deduped) joins.
 	// Returns false if a segment is not a single-target reference (an unresolvable / composite edge).
@@ -5131,6 +5134,58 @@ static bool ReadWalks(const ibDataQuerySpec& spec, const std::vector<ibQuerySort
 		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty());
 }
 
+// Does an expression compute a window anywhere in it? (A partition or an order key hangs off a window,
+// which has answered already.)
+static bool ExprHasWindow(const ibQueryColumnExpr* e)
+{
+	if (e == nullptr)
+		return false;
+	if (e->m_kind == ibQueryColumnExprKind::WindowAgg)
+		return true;
+	if (ExprHasWindow(e->m_lhs.get()) || ExprHasWindow(e->m_rhs.get()) || ExprHasWindow(e->m_else.get()))
+		return true;
+	for (const ibQueryColumnExprPtr& a : e->m_args)
+		if (ExprHasWindow(a.get())) return true;
+	for (const auto& wt : e->m_cases)
+		if (ExprHasWindow(wt.second.get())) return true;
+	return false;
+}
+
+// ⭐ A WINDOW IS COMPUTED OVER THE SOURCE, NOT OVER THE JOIN. A read whose outputs hold a window and whose
+// outputs or order walk a reference is answered with the window computed in a derived table over the source
+// alone, under the source's own name, and the joins and the order outside it (BuildPageIR).
+//
+// MEASURED 2026-10-01 — a million movements of a stock register, a running total per item, ordered by the
+// item (its presentation, so a join): the window beside the join and the order took 37 s with an ample sort
+// cache and 47 s with the default; the same window in a derived table, joined and ordered outside, 8 s and
+// 22 s. The window alone, with no join and in its own order, 3.8 s.
+//
+// The rows are the same either way: a walk is a LEFT join to the one row a key names, and the read's own
+// filter goes inside with the window, which counts the rows the read keeps. What has to filter THROUGH a
+// join — a walked condition — keeps the read as it was; so does DISTINCT, which projects its own list, a
+// read by keys, a grouping's walked dimension, a lock, and an order computed through a window.
+static bool WindowBeforeJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
+	const std::vector<ibQuerySortItem>& effective)
+{
+	if (spec.m_selectExprs == nullptr || spec.m_distinct || !spec.m_keyIn->empty() || req.m_lockForUpdate
+		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()))
+		return false;
+	if (std::none_of(spec.m_selectExprs->begin(), spec.m_selectExprs->end(),
+			[](const ibQueryColumnSelect& sc) { return ExprHasWindow(sc.m_expr.get()); }))
+		return false;
+	for (const ibQueryCondition& c : *spec.m_conditions)
+		if (!c.m_path.empty()) return false;
+	if (PredicateHasPath(spec.m_predicate))
+		return false;
+	bool joins = !spec.m_dotWalks->empty();
+	for (const ibQuerySortItem& s : effective) {
+		if (s.m_expr && ExprHasWindow(s.m_expr.get()))
+			return false;
+		joins = joins || !s.m_path.empty();
+	}
+	return joins;
+}
+
 // Generate L2-1 by substituting names — all read from the spec; Build() is connection-free.
 // The dot-walk join-tree + projection, the parent/tree filter, the user conditions, the
 // key-in set, the keyset anchor, the sort keys, the limit.
@@ -5147,6 +5202,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		const bool hasDimWalk  = spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty();
 		const bool hasDotWalk  = ReadWalks(spec, effective);
 		const wxString mainQual = hasDotWalk ? mainTable : wxString();
+		const bool windowFirst = WindowBeforeJoin(spec, req, effective);   // implies hasDotWalk
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 
@@ -5157,7 +5213,28 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (hasDotWalk) {
 			// The reference dot-walk join chain — shared by the projection, the path filters, and the path
 			// sorts (a prefix joined once is reused). MUST run before q.From() (it mutates the from-tree).
-			ibRefJoinChain chain(queryable, mainTable);
+			//
+			// The windowed root (WindowBeforeJoin): the source with its own filter, its whole row and the computed
+			// outputs written once — the ones a spread does not carry — as a derived table under the source's name.
+			// Every join, column and sort below reads it as it would the source; the outputs ride its star.
+			ibQueryRelPtr windowedRoot;
+			if (windowFirst) {
+				std::vector<ibQueryProjItem> inner{ ibQueryProjItem{ ibCol(mainTable, wxT("*")), wxString() } };
+				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+					if (ExprSpreadColumn(sc.m_expr.get()) == nullptr)
+						inner.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainTable),
+							ibSqlAliasOf(sc.m_alias) });
+				ibQueryExprPtr innerWhere = ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainTable);
+				innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainTable));
+				if (req.m_hierarchyFilter && !req.m_flatScan)
+					innerWhere = AndFold(innerWhere, ibMetaIRBuilder::BuildParentRefPredicate(queryable,
+						ReferenceFieldOf(req.m_hierarchyCol), req.m_hierarchyKey, req.m_isTopLevel, mainTable));
+				ibQueryRelPtr source = SourceRelationOf(queryable, mainTable);
+				if (innerWhere)
+					source = ibFilter(source, innerWhere);
+				windowedRoot = ibSubquery(ibProject(source, std::move(inner)), mainTable);
+			}
+			ibRefJoinChain chain(queryable, mainTable, windowedRoot);
 			auto resolvePath = [&chain](const std::vector<const ibBackendQueryColumn*>& path,
 			                            wxString& outAlias, const ibBackendQueryable*& outTarget) {
 				return chain.Resolve(path, outAlias, outTarget);
@@ -5307,8 +5384,9 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					const wxString              alias  = ibSqlAliasOf(sc.m_alias);
 					const ibBackendQueryColumn* spread = ExprSpreadColumn(sc.m_expr.get());
 					if (spread == nullptr) {
-						projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
-							alias });
+						if (!windowFirst)   // …else computed in the windowed root, and read out of its star
+							projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
+								alias });
 						continue;
 					}
 
@@ -5405,7 +5483,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 
 			// boolean predicate TREE — lowered HERE (before From) so a dot-walk leaf joins through the chain
 			// (ibRefJoinChain::Predicate), the same lowering the aggregate uses.
-			treeWhere = chain.Predicate(spec.m_predicate, mainQual);
+			if (!windowFirst)   // …the windowed root carries it inside
+				treeWhere = chain.Predicate(spec.m_predicate, mainQual);
 
 			q.From(chain.From());
 			q.Project(std::move(projection));
@@ -5441,7 +5520,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			}
 		}
 
-		if (req.m_hierarchyFilter && !req.m_flatScan) {
+		// (A windowed root has its parent filter and its conditions inside, where the window counts them.)
+		if (req.m_hierarchyFilter && !req.m_flatScan && !windowFirst) {
 			// The envelope carries the parent COLUMN; the physical field derives HERE
 			// — the field machinery is the provider's job, not the consumer's.
 			const wxString parentField = ReferenceFieldOf(req.m_hierarchyCol);
@@ -5451,7 +5531,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 
 		// WHERE = flat plain conditions  AND  the boolean tree  AND  the flat dot-walk conditions.
 		// hasDotWalk: the tree was lowered above (path-aware, treeWhere). Else: lower it here by mainQual.
-		ibQueryExprPtr where = ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainQual);
+		ibQueryExprPtr where = windowFirst ? ibQueryExprPtr()
+			: ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainQual);
 		where = AndFold(where, hasDotWalk ? treeWhere
 		                                  : ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainQual));
 		where = AndFold(where, dotWalkWhere);
@@ -5832,6 +5913,10 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				//
 				// Lowered exactly as the ordinary projected read lowers it (BuildColumnExpr AS the
 				// alias) — one way of writing a computed column, wherever it is written.
+				// ⚠ …EXCEPT WHERE THE BODY HAS COMPUTED IT: a windowed root (WindowBeforeJoin) writes the
+				// outputs inside itself, and evaluating them again here would compute the window twice. Asked
+				// the way the body asked it, so the two agree.
+				const bool computedInBody = leaves.empty() && WindowBeforeJoin(innerSpec, ibReadPageRequest(), innerSort);
 				if (hasExprs) {
 					for (const ibQueryColumnSelect& se : *innerSpec.m_selectExprs) {
 						if (se.m_alias.IsEmpty())
@@ -5839,9 +5924,11 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 						if (std::find(projectedNames.begin(), projectedNames.end(), se.m_alias) != projectedNames.end())
 							continue;
 						projectedNames.push_back(se.m_alias);
+						const wxString alias = ibSqlAliasOf(se.m_alias);
 						proj.push_back(ibQueryProjItem{
-							ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
-							ibSqlAliasOf(se.m_alias) });
+							computedInBody && ExprSpreadColumn(se.m_expr.get()) == nullptr ? ibColQ(innerQual, alias)
+								: ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
+							alias });
 					}
 				}
 
