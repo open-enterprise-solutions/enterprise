@@ -43,7 +43,14 @@ public:
 
 	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
 
+	// The value's picture, read off the value when the grid draws (advpropValuePicture.h).
+	virtual wxSize OnMeasureImage(int item = -1) const override;
+	virtual void OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata) override;
+
 protected:
+
+	// The chosen type's own picture (a metaobject's, a family's metatype's, AnyRef's); none for several.
+	wxBitmapBundle GetValuePicture() const;
 
 	const ibPropertyObject* m_ownerProperty = nullptr;
 

@@ -23,6 +23,10 @@ public:
 
 	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
 
+	// The event's picture, answered when the grid draws (advpropValuePicture.h).
+	virtual wxSize OnMeasureImage(int item = -1) const override;
+	virtual void OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata) override;
+
 private:
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGEventProperty);
 };

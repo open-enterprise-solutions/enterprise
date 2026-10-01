@@ -1929,6 +1929,9 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>

@@ -1384,8 +1384,14 @@ wxString ibMcpTool::GetDetail(const ibDataNode& params) const
 	return out;
 }
 
+// ⚠ ANY VALUE COMES HERE, NOT ONLY A SHAPE — the setter answers every property it wrote through these two. A
+// scalar is no picture and is left as it is; AsChild on one raises (`wrong value kind (expected 6, got 2)`), and
+// it did, after the write had succeeded: a number, a Boolean or a plain string was set and then refused in
+// the answer (#100, 2026-10-01).
 void ibMcpPictureIdAsText(ibDataValue& shape)
 {
+	if (shape.Kind() != ibDataKind::Child)
+		return;
 	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
 	if (!node)
 		return;
@@ -1400,6 +1406,8 @@ void ibMcpPictureIdAsText(ibDataValue& shape)
 
 void ibMcpPictureIdAsNumber(ibDataValue& shape)
 {
+	if (shape.Kind() != ibDataKind::Child)
+		return;
 	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
 	if (!node)
 		return;

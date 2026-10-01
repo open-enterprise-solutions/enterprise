@@ -1,4 +1,5 @@
 #include "advpropEvent.h"
+#include "advpropValuePicture.h"                                         // the value's picture, read when drawn
 
 #include "backend/propertyManager/property/eventControl.h"
 #include "backend/stringUtils.h"
@@ -31,7 +32,17 @@ ibPGEventProperty::ibPGEventProperty(const wxString& label, const wxString& name
 	: wxStringProperty(label, name, value)
 {
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
-	SetValueImage(ibBackendPicture::GetPicture(g_picEventCLSID));   // an event, as an event handler's Event list shows one
+}
+
+// An event, as an event handler's Event list shows one — answered when the grid draws (advpropValuePicture.h).
+wxSize ibPGEventProperty::OnMeasureImage(int /*item*/) const
+{
+	return ibMeasureValuePicture(ibBackendPicture::GetPicture(g_picEventCLSID), GetGrid());
+}
+
+void ibPGEventProperty::OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata)
+{
+	ibPaintValuePicture(ibBackendPicture::GetPicture(g_picEventCLSID), dc, rect, paintdata);
 }
 
 wxString ibPGEventProperty::ValueToString(wxVariant& value,

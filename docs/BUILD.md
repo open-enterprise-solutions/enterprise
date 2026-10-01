@@ -290,8 +290,9 @@ The root `CMakeLists.txt` adds eight engine subdirectories, each with its own
 | codeRunner | executable (GUI) |
 | simplePlugin | shared lib (plugin example) |
 
-The web runtime targets (`wfrontend`, `wenterprise-server`) build under the
-MSBuild solution only; they are not yet wired into the CMake build.
+The web runtime targets (`wfrontend`, `wenterprise-server`) build under CMake with
+`-DOES_BUILD_WEB=ON` (default OFF) and under the MSBuild solution. CI does not set the option, so
+the web is not built there.
 
 ### macOS-specific Notes
 

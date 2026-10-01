@@ -22,8 +22,8 @@ jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `cte
 Read the current figure off the last run rather than from here.
 
 Two boundaries, so the claim is not read wider than it is: the **web** targets
-(`wenterprise-server`, `wfrontend`) build under the MSBuild solution only and are absent from
-CMake, so they are Windows-only in practice; and of the five drivers, all compile everywhere but
+(`wenterprise-server`, `wfrontend`) build under CMake only with `-DOES_BUILD_WEB=ON`, which CI does
+not set — so a break in the web keeps CI green; and of the five drivers, all compile everywhere but
 only **SQLite executes** in CI — Firebird and PostgreSQL load their clients at run time, which
 the runners do not have. Details and the day's findings: [docs/portability.md](docs/portability.md).
 
