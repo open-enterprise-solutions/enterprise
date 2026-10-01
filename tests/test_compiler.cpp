@@ -1863,3 +1863,47 @@ TEST(CompilerTest, AVariableTakesItsModifierAfterTheNameToo) {
 		}
 	}
 }
+
+// A date literal followed by a SPACE and a word is two lexems — `If d <> '20200101' Then` is the
+// ordinary VES comparison. The guard after the closing quote asked IsWord(), which skips spaces
+// first, and refused it as "Constant date expected"; an assignment ending in `;` slipped through,
+// which is why it read as a format problem. A word TOUCHING the quote is still a malformed literal.
+TEST(CompilerTest, ADateLiteralBeforeAKeywordIsTwoLexems) {
+	{
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		EXPECT_TRUE(TryCompile(cc,
+			wxT("Var d public; Var r public; d = '20200101';\n")
+			wxT("If d <> '20200101' Then r = 1; EndIf;\n")))
+			<< "a date literal followed by Then must compile";
+	}
+	{
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		EXPECT_FALSE(TryCompile(cc, wxT("Var d public; d = '20200101'abc;\n")))
+			<< "a word touching the closing quote is a malformed literal";
+	}
+}
+
+// A NESTED EXPRESSION IS A NESTED CALL: every level of parentheses is a GetExpression frame on the
+// native stack. Two thousand of them overflowed it and the process went down with no diagnostic;
+// past the ceiling (400) the expression is refused as a compile error. The point of the first test
+// is that the assertion is REACHED at all.
+static wxString NestedInParentheses(int depth)
+{
+	wxString src = wxT("Var a public; a = ");
+	for (int i = 0; i < depth; ++i) src += wxT('(');
+	src += wxT('1');
+	for (int i = 0; i < depth; ++i) src += wxT(')');
+	return src + wxT(";\n");
+}
+
+TEST(CompilerTest, AnExpressionNestedPastTheCeilingIsRefusedNotACrash) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompile(cc, NestedInParentheses(2000)))
+		<< "2000 levels of parentheses must be a compile error, not a stack overflow";
+}
+
+TEST(CompilerTest, AnExpressionNestedWithinTheCeilingStillCompiles) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_TRUE(TryCompile(cc, NestedInParentheses(100)))
+		<< "generous but ordinary nesting must still compile";
+}

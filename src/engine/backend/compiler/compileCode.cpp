@@ -3687,8 +3687,26 @@ ibParamUnit ibCompileCode::FindConst(const ibValue& constData)
  * compiling an arbitrary expression (service calls from the function itself)
  */
 
+// ⚠ A NESTED EXPRESSION IS A NESTED CALL. Each level of `((((…` is one more GetExpression frame on
+// the native stack, and with no ceiling a pathological or broken module overflowed it: the process
+// went down without a word. What runs out is the THREAD's stack, so the count is the thread's — a
+// compile started inside another (an eval during a run) spends the same stack. Past the ceiling
+// the expression is refused like any other bad expression.
+static thread_local int ts_expressionDepth = 0;
+static constexpr int gs_maxExpressionDepth = 400;
+
 ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriority)
 {
+	struct ibExpressionDepthGuard {
+		ibExpressionDepthGuard() { ++ts_expressionDepth; }
+		~ibExpressionDepthGuard() { --ts_expressionDepth; }
+	} depthGuard;
+	if (ts_expressionDepth > gs_maxExpressionDepth) {
+		SetError(ERROR_EXPRESSION, wxString::Format(
+			_("it is nested deeper than %d levels - split it into steps"), gs_maxExpressionDepth));
+		return ibParamUnit();
+	}
+
 	const ibLexem& lex = GETLexem();
 
 	// create variable 

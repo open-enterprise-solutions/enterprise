@@ -33,11 +33,11 @@ std::shared_ptr<ibQueryAstExpr> Record(const wxString& body, const wxString& row
 
 class LambdaRecorderCES : public ::testing::Test {
 protected:
-	void SetUp() override { ibCompileCode::SetCodeStyle(CODE_CES); }
+	ibTestCodeStyle m_style{ CODE_CES };
 };
 class LambdaRecorderVES : public ::testing::Test {
 protected:
-	void SetUp() override { ibCompileCode::SetCodeStyle(CODE_VES); }
+	ibTestCodeStyle m_style{ CODE_VES };
 };
 
 } // namespace

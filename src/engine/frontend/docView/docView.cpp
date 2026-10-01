@@ -836,6 +836,7 @@ ibView::~ibView()
         // prevent it from doing anything with us
         m_docChildFrame->SetView(nullptr);
 
+#ifndef OES_USE_WEB
         // it doesn't make sense to leave the frame alive if its associated
         // view doesn't exist any more so unconditionally close it as well
         //
@@ -845,6 +846,12 @@ ibView::~ibView()
         // the view, as it happens if its creation fails in ibDocTemplate::
         // CreateView() for example
         m_docChildFrame->GetWindow()->Destroy();
+#else
+        // WEB: the tab is owned by ibWebFrame::m_tabs (a unique_ptr), not by its view. Here
+        // ibWebWindow::Destroy() is `delete this`, so destroying it would free a tab its owner
+        // still holds, and DrainPendingCloses would free it again — closing any form tab took
+        // the whole web server down. The view only severs the edge above; the owner deletes.
+#endif
     }
 
     if ( m_viewDocument )

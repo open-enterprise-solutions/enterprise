@@ -570,14 +570,18 @@ bool ibDatabaseLayerFirebird::Open()
 		dpbBuffer.push_back(SQL_DIALECT_CURRENT);
 
 		// page_size DPB: only honoured by isc_create_database (ignored on
-		// attach). Encoded as big-endian 2 bytes per legacy DPB. FB 5
-		// supports up to 32768; widen via uint32 before shifting so
-		// 32768 doesn't sign-overflow.
+		// attach). A numeric DPB item is a LITTLE-endian integer, like
+		// num_buffers below. It was written big-endian: 16384 (0x4000) reached
+		// the engine as 64, was rejected without a word, and every base came
+		// up at the 4096 default — where an index key ends near 1 KB, not the
+		// ~4 KB the dialect's m_maxIndexKeyBytes counts on. FB 5 supports up
+		// to 32768; widen via uint32 before shifting so 32768 doesn't
+		// sign-overflow.
 		const uint32_t pageSize = (uint32_t)m_pageSize;
 		dpbBuffer.push_back(isc_dpb_page_size);
 		dpbBuffer.push_back(2);
-		dpbBuffer.push_back((char)((pageSize >> 8) & 0xFF));
 		dpbBuffer.push_back((char)(pageSize & 0xFF));
+		dpbBuffer.push_back((char)((pageSize >> 8) & 0xFF));
 
 		// UTF8 character set:
 		//   isc_dpb_set_db_charset — only honoured on CREATE DATABASE; sets

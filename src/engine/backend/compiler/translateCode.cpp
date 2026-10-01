@@ -991,9 +991,19 @@ bool ibTranslateCode::GetDate(wxString* strDate) const
 #endif
 		return false;
 	}
-	else if (IsWord()) {
-		SetError(ERROR_TRANSLATE_DATE, error_pos);
-		return false;
+	// A word TOUCHING the closing quote ('20230101'abc) is a malformed literal; a word after a space is
+	// simply the next lexem. IsWord() skips spaces first, so it refused `If d <> '20200101' Then` —
+	// read the adjacent character itself, with IsWord's own test.
+	else if (m_currentPos < m_bufferSize) {
+		const auto& c = m_strBuffer[m_currentPos];
+#ifdef wxUSE_UNICODE
+		if ((c == wxT('_')) || iswalpha(c) || (c == wxT('#'))) {
+#else
+		if ((c == wxT('_')) || isalpha(c) || (c == wxT('#'))) {
+#endif
+			SetError(ERROR_TRANSLATE_DATE, error_pos);
+			return false;
+		}
 	}
 	return true;
 }

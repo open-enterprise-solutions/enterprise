@@ -481,9 +481,13 @@ IB_NOINLINE void RaiseRecursionLimit(ibProcUnitState* state)
 		const ibByteCode* stackByteCode = stackContext->GetByteCode();
 		wxASSERT(stackByteCode);
 
+		// Same rule as the diagnostic's stack walk: a position outside its own bytecode prints as
+		// line 0 — the message about a runaway must not itself read past the array.
+		const long curLine = stackContext->m_lCurLine;
 		const ibString frame = ibString::Format(wxT("%s (#line %d)"),
 			stackByteCode->m_strModuleName,
-			stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
+			(curLine >= 0 && (size_t)curLine < stackByteCode->m_listCode.size())
+				? (int)stackByteCode->m_listCode[curLine].m_numLine + 1 : 0
 		);
 
 		if (frame == previous) {

@@ -34,6 +34,22 @@
 #include <iostream>
 #include <memory>
 
+// ⚠ THE CODE STYLE IS PROCESS-GLOBAL, AND THIS BINARY RUNS IN VES (test_compiler.cpp's
+// environment). A suite that sets CES and leaves it set changes the language of every test
+// that runs after it: a VES test then passes or fails by its place in the link order. Set it
+// through this, and it is put back when the scope ends — on a failed assertion too.
+class ibTestCodeStyle {
+public:
+	explicit ibTestCodeStyle(short style) : m_saved(ibCompileCode::GetCodeStyle()) {
+		ibCompileCode::SetCodeStyle(style);
+	}
+	~ibTestCodeStyle() { ibCompileCode::SetCodeStyle(m_saved); }
+	ibTestCodeStyle(const ibTestCodeStyle&) = delete;
+	ibTestCodeStyle& operator=(const ibTestCodeStyle&) = delete;
+private:
+	const short m_saved;
+};
+
 // ⭐ A NULL WITH NO REASON COSTS A REBUILD TO INVESTIGATE. Every road out of the
 // helper says WHY on the way, so a red line in the report carries its own
 // diagnosis — the recorder's own refusal text where there is one, and the

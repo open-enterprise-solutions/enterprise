@@ -418,7 +418,11 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 			wxASSERT(stackByteCode);
 			ibDiagnostic::Frame frame;
 			frame.m_module = stackByteCode->m_strModuleName;
-			frame.m_line = stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1;
+			// The report of one failure must not become a second one: a frame whose position is
+			// outside its own bytecode is printed with line 0 rather than read past the array.
+			const long curLine = stackContext->m_lCurLine;
+			frame.m_line = (curLine >= 0 && (size_t)curLine < stackByteCode->m_listCode.size())
+				? stackByteCode->m_listCode[curLine].m_numLine + 1 : 0;
 			diagnostic.m_stack.push_back(std::move(frame));
 		}
 	}

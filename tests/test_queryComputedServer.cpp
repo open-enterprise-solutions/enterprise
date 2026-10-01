@@ -219,7 +219,7 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 {
 	if (!ready) return;
-	ibCompileCode::SetCodeStyle(CODE_CES);   // the lambda body below is CES ('{ return … ; }')
+	ibTestCodeStyle style(CODE_CES);   // the lambda body below is CES ('{ return … ; }')
 
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
