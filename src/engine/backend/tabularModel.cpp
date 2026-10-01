@@ -198,7 +198,7 @@ void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 	// try/catch IS the fallback: StartBackground refuses out loud (no session to
 	// rent from, no free connection within the tenant's short wait, the manager
 	// stopping), and a refusal here means "read it here instead", never "no data".
-	if (ibJobManager* const jobs = ibApplicationData::GetJobManager()) {
+	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager()) {
 		try {
 			// The handle is KEPT, not dropped: it is what the destructor waits on so
 			// a read cannot outlive this model. One at a time by construction — the

@@ -231,7 +231,7 @@ void ibPanelMcpSettings::OnCopyBlock(wxCommandEvent& WXUNUSED(event))
 
 void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 {
-	ibMcpServer* server = ibApplicationData::GetMcpServer();
+	ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 	if (server == nullptr)
 		return;
 
@@ -277,7 +277,7 @@ void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 // cannot disagree.
 void ibPanelMcpSettings::RefreshRunState()
 {
-	const ibMcpServer* server = ibApplicationData::GetMcpServer();
+	const ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 
 	const bool running = server != nullptr && server->IsRunning();
 

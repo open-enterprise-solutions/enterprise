@@ -9,7 +9,7 @@
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
 #include "backend/query/querySelector.h"      // ibSelector — the TOTALS pre-order walk
-#include "backend/appData.h"                  // ibApplicationData::GetQueryableFactory
+#include "backend/appData.h"                  // ibApplicationInstance::GetQueryableFactory
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
@@ -135,7 +135,7 @@ void ibDataDBComposer::RefreshSourceFields()
 		}
 
 		const ibQueryableFactory* const factory = m_metaData != nullptr
-			? m_metaData->GetSourceFactory() : ibApplicationData::GetQueryableFactory();
+			? m_metaData->GetSourceFactory() : ibApplicationInstance::GetQueryableFactory();
 		for (const Source& source : m_sources) {
 			ibQueryableSourceDescriptor* const descriptor = factory != nullptr
 				? factory->FindDescriptor(source.m_namespace, source.m_name) : nullptr;
@@ -1249,7 +1249,7 @@ wxString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 			// Resolve through THIS query's OWN config factory (per-config sources); no config → the global base.
 			ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
 			if (factory == nullptr)
-				factory = ibApplicationData::GetQueryableFactory();
+				factory = ibApplicationInstance::GetQueryableFactory();
 			if (factory == nullptr)
 				ibBackendCoreException::Error(_("Composer: the query engine is not available (no application data)"));
 			src = factory->Resolve(s0.m_namespace, s0.m_name);

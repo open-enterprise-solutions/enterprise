@@ -2,6 +2,7 @@
 #include "postgresDatabaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <atomic>   // the statement-name counter
 #include <wx/tokenzr.h>
 #include <wx/arrimpl.cpp>
 
@@ -30,6 +31,12 @@ ibPreparedStatementPostgres::~ibPreparedStatementPostgres()
 void ibPreparedStatementPostgres::Close()
 {
 	CloseResultSets();
+	// ⭐ FREED ON THE SERVER TOO. A prepared statement lives on its connection until somebody deallocates it, and
+	// nothing here ever did: a pooled connection kept every statement it had prepared for as long as it stayed
+	// open — hours, on a server. The layer closes its statements before it closes the connection (Close), so
+	// the connection is still there to ask.
+	for (size_t i = 0; i < m_Statements.size(); i++)
+		m_Statements[i].Deallocate();
 	m_Statements.Clear();
 }
 
@@ -49,7 +56,7 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 	ibPreparedStatementPostgres* pStatement = new ibPreparedStatementPostgres(pInterface);
 	while (start != stop)
 	{
-		wxString strName = ibPreparedStatementPostgres::GenerateRandomStatementName();
+		wxString strName = ibPreparedStatementPostgres::GenerateStatementName();
 		pStatement->AddStatement(pDatabase, (*start), strName);
 		wxCharBuffer nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
 		wxCharBuffer sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
@@ -205,15 +212,16 @@ ibDatabaseResultSet* ibPreparedStatementPostgres::RunQueryWithResults()
 	return pResultSet;
 }
 
-wxString ibPreparedStatementPostgres::GenerateRandomStatementName()
+// ⭐ A NAME NO STATEMENT OF THIS PROCESS HAS HAD — the server keeps a prepared statement for the life of its
+// connection (nothing here deallocates one), and the pool hands a connection from thread to thread, so a
+// name must never come round again. It was ten digits of rand(), whose state the CRT keeps PER THREAD from
+// the same seed: a registry thread drew exactly the names the main thread had already prepared on the same
+// connection ("prepared statement … already exists", 2026-10-01, the first application-server run on
+// PostgreSQL). A counter cannot repeat.
+wxString ibPreparedStatementPostgres::GenerateStatementName()
 {
-	// Just come up with a string prefixed with "databaselayer_" and 10 random characters
-	wxString strReturn = wxT("databaselayer_");
-	for (int i = 0; i < 10; i++)
-	{
-		strReturn << (int)(10.0*rand() / (RAND_MAX + 1.0));
-	}
-	return strReturn;
+	static std::atomic<unsigned long long> s_counter{ 0 };
+	return wxString::Format(wxT("databaselayer_%llu"), ++s_counter);
 }
 
 int ibPreparedStatementPostgres::FindStatementAndAdjustPositionIndex(int* pPosition)

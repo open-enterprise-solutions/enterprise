@@ -48,7 +48,7 @@ void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 {
 	// Short names are legacy (matched what the /flag-style spawner used);
 	// long names match wenterprise-server so one builder emits flags that
-	// parse identically across enterprise/designer/daemon/wes.
+	// parse identically across enterprise/designer/appserver/wes.
 	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("p"),      wxT("dbport"),   "Database server port",    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
@@ -102,7 +102,7 @@ int ibAppEnterprise::DoOnRun()
 	// Decide whether this is a file-based launch (Firebird embedded /
 	// SQLite — `--file=…`) or a server launch (`--server=… --db=…`).
 	// Reject the no-arg case explicitly: the previous behaviour fell
-	// through to appDataCreateServer with empty server/port/db, the
+	// through to CreateServerAppDataEnv with empty server/port/db, the
 	// PostgreSQL driver opened a connection with all-empty credentials
 	// and the resulting ThrowDatabaseException re-entered the
 	// half-initialised session registry. Surfacing the missing-arg case
@@ -120,13 +120,21 @@ int ibAppEnterprise::DoOnRun()
 	// at the code that prints it.
 	auto bringUp = [&]() -> bool {
 		if (!m_strFile.IsEmpty()) {
-			return appDataCreateFile(ibRunMode::eRUNTIME_MODE,
-				m_strFile, m_strLocale
-			);
+			ibFileInstanceRequest request;
+			request.m_runMode   = ibRunMode::eRUNTIME_MODE;
+			request.m_directory = m_strFile;
+			request.m_locale    = m_strLocale;
+			return ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
 		}
-		return appDataCreateServer(ibRunMode::eRUNTIME_MODE,
-			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
-		);
+		ibServerInstanceRequest request;
+		request.m_runMode  = ibRunMode::eRUNTIME_MODE;
+		request.m_server   = m_strServer;
+		request.m_port     = m_strPort;
+		request.m_user     = m_strUser;
+		request.m_password = m_strPassword;
+		request.m_database = m_strDatabase;
+		request.m_locale   = m_strLocale;
+		return ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
 	};
 
 	wxString thrown;   // what escaped, when it was not an ibBackendException (those record themselves)

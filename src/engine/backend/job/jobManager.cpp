@@ -5,6 +5,7 @@
 #include "jobManager.h"
 
 #include "backend/appData.h"
+#include "backend/appHost.h"                   // SetThreadOwner — the tick's journal lines name its base
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"   // a run opens a session of its own
 #include "backend/lock/lockManager.h"          // cross-process claim on a job's key
@@ -82,7 +83,10 @@ void ibJobManager::CheckTransferable(const std::vector<ibValue>& args)
 		args[static_cast<std::size_t>(bad)].GetClassName());
 }
 
-ibJobManager::ibJobManager(ib::AppDataCtorToken)
+// A manager made outside any base (the tests) takes the base of the thread that makes it — the one that
+// opened it — so it works for exactly what the caller does.
+ibJobManager::ibJobManager(ib::AppDataCtorToken owner)
+	: m_applicationInstance(owner.GetApplicationInstance() != nullptr ? owner.GetApplicationInstance() : ibApplicationInstance::Get())
 {
 }
 
@@ -296,7 +300,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	// Exclusive jobs only: a parameterised one has an entry per instance, so there
 	// is no shared "when did THIS last run" that means anything.
 	if (!e.m_workRemains && e.m_desc.m_exclusive) {
-		const ibDateTime sharedLast = ReadSharedLastRun(KeyOf(e.m_desc));
+		const ibDateTime sharedLast = ReadSharedLastRun(KeyOf(e.m_desc), m_applicationInstance);
 		if (!sharedLast.IsEmpty()) {
 			const long long since    = ibDateTime::Now().ElapsedSince(sharedLast);          // ms of real time, a clock change counted
 			const long long interval = e.m_desc.m_schedule.m_intervalSeconds * 1000ll;    // ms
@@ -327,7 +331,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		// have several instances running at once, so there is nothing to claim and
 		// nothing to be blocked by — see ibJobDescription::m_exclusive.
 		if (ibLockManager* const locks = desc.m_exclusive
-			? ibApplicationData::GetLockManager() : nullptr) {
+			? ibApplicationInstance::GetLockManager() : nullptr) {
 			try {
 				std::vector<ibLockItem> items;
 				// `.str()` spelled out, and the literal wrapped: a bare `wxT("Job.") + guid` is a
@@ -348,7 +352,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				//
 				// Logged, because "it did not run here" is a question an
 				// administrator will otherwise ask the wrong way round.
-				if (ibLogger* const log = ibApplicationData::GetLogger()) {
+				if (ibLogger* const log = ibApplicationInstance::GetLogger()) {
 					log->Audit(wxT("job"), wxT("blocked"),
 					           wxString::Format(_("Job '%s' is already running elsewhere"),
 					                            desc.m_name));
@@ -412,7 +416,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		//    afterwards. A scheduled job runs unattended by definition — without a
 		//    row here, "did it run last night, and how did it go?" has no answer
 		//    short of watching Active Users at the right moment.
-		if (ibLogger* const log = ibApplicationData::GetLogger()) {
+		if (ibLogger* const log = ibApplicationInstance::GetLogger()) {
 			const bool ok = result->m_ok.load(std::memory_order_acquire);
 			if (ok) {
 				// A completed run is a business event: it belongs to the trail an administrator
@@ -543,7 +547,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 	}
 
 	// DECLARATION ONLY — no session is built here. Registering has to be callable
-	// from wherever the platform's job list lives (ibApplicationData, right after
+	// from wherever the platform's job list lives (ibApplicationInstance, right after
 	// the database opens), and at that moment there is no metadata, no user and
 	// no reason to spend a Connect on a job that may not come due for six hours.
 	// The session is materialised on first launch instead; see EnsureSession.
@@ -565,7 +569,8 @@ bool ibJobManager::Register(ibJobDescription desc)
 
 ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 {
-	if (ibApplicationData::GetSessionRegistry() == nullptr || appData == nullptr)
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(m_applicationInstance);
+	if (registry == nullptr)
 		return ibSessionHolder();
 
 	// The session's KIND follows the job's origin, so Active Users shows what is
@@ -574,14 +579,21 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 		? ibSessionKind::SystemJob
 		: ibSessionKind::ScheduledJob;
 
-	ibSessionHolder holder = ibApplicationData::GetSessionRegistry()->CreateSessionOfKind(
-		appData->GetAppMode(), appData->GetComputerName(), kind,
+	ibSessionHolder holder = registry->CreateSessionOfKind(
+		m_applicationInstance->GetAppMode(), m_applicationInstance->GetComputerName(), kind,
 		&ib_detail::MakeSessionFactory<ibSession>);
 
 	if (!holder) {
 		ibJournalInfo(wxT("job"),wxT("job '%s': session could not be created"), desc.m_name);
 		return ibSessionHolder();
 	}
+
+	// ⭐ THE TICK WORKS FOR THIS RUN'S SESSION while it makes it ready — the user read from sys_user through
+	// `db_query`, the identity installed, the Authenticated notification that builds its runtime. The tick's
+	// own thread works for no base: read without the session, the user came back "not found", and a
+	// configuration's job with a run-as user never ran (2026-10-01, the census of threads without a base).
+	// Scoped, because the notification binds the session to the thread, and the scope gives that back.
+	const ibSessionScope preparing(holder.Get());
 
 	// WHOSE session this is.
 	//
@@ -594,8 +606,6 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 	// same RLS, same result as if they had run it themselves. The identity is
 	// installed without a password: `Login` is already split into the check and the
 	// commit, and only the commit applies here.
-	ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry();
-
 	if (desc.m_runAsUser.isValid()) {
 		// BY GUID, never by name: a user can be renamed, and a schedule that
 		// resolved by name would then either stop running or — worse — find
@@ -717,6 +727,9 @@ void ibJobManager::ThreadBody()
 	// mutex and a clock read. Anything coarser would make a job declared "every
 	// 5 seconds" mean something else.
 	constexpr auto kInterval = std::chrono::seconds(1);
+
+	// Its lines name its base — the journal's label, not a binding: the manager asks its own base.
+	ibApplicationHost::SetThreadOwner(m_applicationInstance);
 
 	while (!m_tickStop.load(std::memory_order_acquire)) {
 		{

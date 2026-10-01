@@ -98,7 +98,7 @@ jobs:
       # The programs and what they link — not wx's own extras (webview, media, gl, ribbon, richtext),
       # which the default target also builds and nothing here loads.
       - name: Build
-        run: cmake --build --preset windows-x64-release --target enterprise designer launcher codeRunner daemon simplePlugin
+        run: cmake --build --preset windows-x64-release --target enterprise designer launcher codeRunner appserver simplePlugin
 
       - name: Package
         shell: pwsh
@@ -142,7 +142,7 @@ jobs:
         run: cmake --preset linux-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build
-        run: cmake --build --preset linux-release --target enterprise designer launcher codeRunner daemon simplePlugin
+        run: cmake --build --preset linux-release --target enterprise designer launcher codeRunner appserver simplePlugin
 
       # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE, as the Windows kit does: a file base is an embedded Firebird, and
       # no Linux distribution ships version 5 (Ubuntu 22.04 and Debian 12 have 3, which cannot open these
@@ -186,7 +186,7 @@ jobs:
         run: cmake --preset macos-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build
-        run: cmake --build --preset macos-release --target enterprise designer launcher codeRunner daemon simplePlugin
+        run: cmake --build --preset macos-release --target enterprise designer launcher codeRunner appserver simplePlugin
 
       # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE — the official macOS build, PINNED. It ships as an installer
       # package; `pkgutil --expand-full` unpacks it without installing anything, and the framework's

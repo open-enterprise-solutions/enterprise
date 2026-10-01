@@ -13,7 +13,7 @@
 // person to carry out.
 //
 // It is the same door the designer's Debug menu takes —
-// ibApplicationData::RunApplication — which is why the connection flags, the
+// ibApplicationInstance::RunApplication — which is why the connection flags, the
 // manifest handshake for the web server and the debug port offset all come for
 // free. What the MENU does around that door is ask questions: it saves a
 // modified configuration first, and it refuses to start a second debug session.

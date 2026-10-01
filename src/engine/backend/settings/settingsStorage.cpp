@@ -20,7 +20,7 @@ inline ibValue Text(const ibGuid& guid) { return ibValue(guid.str()); }
 
 ibSettingsStorage::ibSettingsStorage(ib::AppDataCtorToken)
 {
-	// Nothing to bring up. The table is created by ibApplicationData with the
+	// Nothing to bring up. The table is created by ibApplicationInstance with the
 	// other app-tables (one owner of the schema, as sys_job and sys_lock have),
 	// and every call below opens its own builder on the infra channel.
 }

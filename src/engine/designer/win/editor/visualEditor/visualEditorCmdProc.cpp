@@ -867,7 +867,7 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 	wxASSERT(m_valueForm);
 	try
 	{
-		//LogDebug("[ibApplicationData::CreateObject] New " + name );
+		//LogDebug("[ibApplicationInstance::CreateObject] New " + name );
 		ibValueFrame* old_selected = GetSelectedObject();
 		ibValueFrame* parent = old_selected;
 

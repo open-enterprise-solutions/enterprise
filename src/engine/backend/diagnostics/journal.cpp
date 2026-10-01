@@ -29,10 +29,20 @@ wxString           s_path;
 // be looked at and the whole point is to decide WITHOUT taking one.
 std::atomic<bool>  s_open{ false };
 
-// Set while the journal is echoing a line through wx. Our own wx target checks it and lets that
-// line pass: the file already has it, and taking it again is how a message becomes a loop.
-// Per-thread, because two threads may be writing at once and one must not silence the other.
-thread_local bool  s_echoing = false;
+// Asked by the program itself to echo every line on standard error (EchoToStderr) — the variable's twin.
+std::atomic<bool>  s_echoToStderr{ false };
+
+// Who installed the question "which base is this line about" (SetContext); null when nobody did.
+std::atomic<ibTechJournal::ContextFn> s_context{ nullptr };
+
+// The mark a line the journal echoes through wx carries IN ITS RECORD (wxLogRecordInfo). Our own wx target
+// lets a marked line pass: the file already has it, and taking it again is how a message becomes a loop.
+// ⚠ IN THE RECORD, NOT IN THE THREAD. It was a thread_local flag, and wx does not deliver a line on the thread
+// that logged it: a line from any thread but the main one is BUFFERED and handed over later on the main
+// thread, where the flag was never set — every line of a registry thread came back as `wx.debug` (an
+// application server's journal, 2026-10-01: 260 of its 876 lines, all at exit). A record keeps its values when
+// wx buffers it.
+const char* const kEchoKey = "oes.journal.echo";
 
 unsigned long CurrentTid()
 {
@@ -50,7 +60,8 @@ class ibJournalLogTarget : public wxLog
 protected:
 	void DoLogRecord(wxLogLevel level, const wxString& msg, const wxLogRecordInfo& info) override
 	{
-		if (s_echoing)
+		wxUIntPtr echoed = 0;
+		if (info.GetNumValue(kEchoKey, &echoed))
 			return;                   // the journal's own line, on its way to the debugger
 
 		const wxChar* kind =
@@ -188,6 +199,16 @@ void ibTechJournal::Close()
 	}
 }
 
+void ibTechJournal::EchoToStderr()
+{
+	s_echoToStderr.store(true, std::memory_order_relaxed);
+}
+
+void ibTechJournal::SetContext(ContextFn context)
+{
+	s_context.store(context, std::memory_order_release);
+}
+
 void ibTechJournal::SysError(const wxString& source, long code, const wxString& message)
 {
 	// The platform's own words for the number, when it has any. wxSysErrorMsgStr answers for the
@@ -213,6 +234,12 @@ wxString ibTechJournal::Path()
 
 void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxString& message)
 {
+	// …AND WHICH BASE THE LINE IS ABOUT, in brackets before the source — asked of whoever installed the
+	// question (SetContext), before the lock: the journal knows nothing about bases. Empty for a line about
+	// none (a process with no base yet, a thread that works for none), and then the line is what it always was.
+	const ContextFn context = s_context.load(std::memory_order_acquire);
+	const wxString about = context != nullptr ? context() : wxString();
+
 	wxString line;
 	{
 		wxCriticalSectionLocker lock(s_lock);
@@ -240,7 +267,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 			kind,
 			wxDateTime::UNow().Format(wxT("%H:%M:%S.%l")),
 			CurrentTid(),
-			source,
+			about.IsEmpty() ? source : wxT("(") + about + wxT(") ") + source,
 			message);
 
 		s_file.Write(line);
@@ -256,8 +283,11 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// written; the stream is for a run that has been asked to narrate itself.
 	//
 	//     set OES_JOURNAL_STDERR=1
+	//
+	// …or the program asks, when narrating is what it is for: the application server started by hand shows in its
+	// console exactly what goes to the file (EchoToStderr) — one road, not a print of its own beside it.
 	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");
-	if (s_toStderr) {
+	if (s_toStderr || s_echoToStderr.load(std::memory_order_relaxed)) {
 		std::fputs(line.utf8_str(), stderr);
 		std::fflush(stderr);
 	}
@@ -265,16 +295,12 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// ⭐ AND THE SAME LINE INTO THE DEBUGGER, so the two views never disagree: what is watched live
 	// is what is read afterwards, in the same words and the same order.
 	//
-	// ⚠ THE LOOP IS BROKEN BY A FLAG, not by bypassing wx. The line would otherwise come straight
-	// back through the chain into this function; instead the echo announces itself and the wx target
-	// lets a line marked this way pass. Written OUTSIDE the lock — wx may take locks of its own, and
-	// holding two in one order here and the other order there is how a deadlock is built.
+	// ⚠ THE LOOP IS BROKEN BY A MARK, not by bypassing wx. The line would otherwise come straight
+	// back through the chain into this function; instead the echo carries kEchoKey in its record and
+	// the wx target lets a line marked this way pass — on whichever thread wx delivers it. Written
+	// OUTSIDE the lock — wx may take locks of its own, and holding two in one order here and the other
+	// order there is how a deadlock is built.
 	{
-		struct EchoGuard {
-			EchoGuard()  { s_echoing = true;  }
-			~EchoGuard() { s_echoing = false; }
-		} echo;
-
 		// ⭐⭐ THE ECHO SPEAKS IN THE SEVERITY IT WAS GIVEN — and this is what makes migrating a
 		// `wxLogError` callsite to `ibJournalError` safe. wx's verbs are not interchangeable: in a
 		// GUI application wxLogError puts a dialog in front of the user, wxLogMessage shows a
@@ -307,9 +333,19 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 		//
 		// ⚠ AN ERROR STILL DOES. That one says the thing the person asked for did not happen, which
 		// they have to be told whether or not anybody ever opens the journal.
+		//
+		// (wxLogError / wxLogDebug spelled out — the same logger the two macros make, with the mark stored.)
 		switch (mark) {
-		case ibJournalMark::Error:   wxLogError(wxT("%s"), message); break;
-		default:                     wxLogDebug(wxT("%s"), line.Left(line.Len() - 1)); break;
+		case ibJournalMark::Error:
+			if (wxLOG_IS_ENABLED(Error))
+				wxMAKE_LOGGER(Error).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), message);
+			break;
+		default:
+#if wxUSE_LOG_DEBUG
+			if (wxLOG_IS_ENABLED(Debug))
+				wxMAKE_LOGGER(Debug).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), line.Left(line.Len() - 1));
+#endif
+			break;
 		}
 	}
 

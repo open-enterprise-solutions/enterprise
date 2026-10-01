@@ -336,6 +336,23 @@ bool InitBackend(const CmdArgs& args)
 	return false;
 }
 
+// httplib's own pool, with every connection served for the web server's session (wfrontendServe): the
+// pool's threads have no session of their own, and the base this server serves is that session's.
+class ServedTaskQueue final : public httplib::TaskQueue {
+public:
+	ServedTaskQueue()
+		: m_pool(CPPHTTPLIB_THREAD_POOL_COUNT, CPPHTTPLIB_THREAD_POOL_MAX_COUNT) {}
+
+	bool enqueue(std::function<void()> fn) override {
+		return m_pool.enqueue([fn = std::move(fn)]() { wfrontendServe(fn); });
+	}
+	void shutdown() override { m_pool.shutdown(); }
+	void on_idle() override { m_pool.on_idle(); }
+
+private:
+	httplib::ThreadPool m_pool;
+};
+
 } // namespace
 
 #ifdef _WIN32
@@ -414,6 +431,7 @@ int main(int argc, char** argv)
 
 	httplib::Server svr;
 	g_svr = &svr;
+	svr.new_task_queue = [] { return new ServedTaskQueue(); };
 #if defined(_WIN32)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #else

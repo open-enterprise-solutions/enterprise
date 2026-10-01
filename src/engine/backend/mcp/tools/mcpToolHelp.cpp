@@ -71,7 +71,7 @@ wxString KindWord(ibHelpKind kind)
 
 std::shared_ptr<const ibHelpCorpus> Corpus(wxString& refusal)
 {
-	ibHelpService* service = ibApplicationData::GetHelpService();
+	ibHelpService* service = ibApplicationInstance::GetHelpService();
 	if (service == nullptr) {
 		refusal = ibMcpText("The syntax helper is not loaded in this process.");
 		return nullptr;
@@ -428,7 +428,7 @@ public:
 			result.SetValue(wxT("syntaxNote"),
 				ibMcpText("This entry is written down only in the other syntax form."));
 
-		// WHERE IT IS VALID AT ALL. "Works in the daemon, not in the designer" is
+		// WHERE IT IS VALID AT ALL. "Works in appserver, not in the designer" is
 		// the class of mistake that costs a run to discover.
 		if (!entry->availability.IsEmpty())
 			result.SetValue(wxT("availability"), entry->availability);

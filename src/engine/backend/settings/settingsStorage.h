@@ -29,8 +29,8 @@
 // Everything about who may use which category is decided by whoever owns the
 // category, never here.
 //
-// OWNED BY ibApplicationData, like the job manager and the lock manager —
-// created with it, reached through ibApplicationData::GetSettingsStorage()
+// OWNED BY ibApplicationInstance, like the job manager and the lock manager —
+// created with it, reached through ibApplicationInstance::GetSettingsStorage()
 // (nullptr pre-appData / post-appData; callers must null-check).
 /////////////////////////////////////////////////////////////////////////////
 
@@ -121,7 +121,7 @@ struct BACKEND_API ibSettingsEntry {
 
 class BACKEND_API ibSettingsStorage {
 public:
-	// Construction restricted to ibApplicationData via the token gate — the same
+	// Construction restricted to ibApplicationInstance via the token gate — the same
 	// pattern as the connection pool, the lock manager and the job manager.
 	explicit ibSettingsStorage(ib::AppDataCtorToken);
 	~ibSettingsStorage();

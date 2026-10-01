@@ -85,7 +85,7 @@ bool ibValueRecordDataObjectRef::TryAcquireFormLock(ibLockMode mode)
 	// Default options — wait at driver's normal lock-timeout. Throws
 	// ibBackendLockException::LockConflict if another session holds an
 	// incompatible lock; caller propagates as form-open failure.
-	auto* lm = ibApplicationData::GetLockManager();
+	auto* lm = ibApplicationInstance::GetLockManager();
 	if (lm == nullptr)
 		ibBackendCoreException::Error(_("Lock manager not initialised"));
 	m_formLockHandle = lm->Acquire({

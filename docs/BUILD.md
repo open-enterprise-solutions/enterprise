@@ -166,7 +166,7 @@ bin\
       enterprise.exe
       designer.exe
       launcher.exe
-      daemon.exe
+      appserver.exe
       codeRunner.exe
       wenterprise-server.exe
   Win64\            (Platform=x64)
@@ -283,7 +283,7 @@ The root `CMakeLists.txt` adds eight engine subdirectories, each with its own
 |---|---|
 | backend | shared lib (`BACKEND_EXPORTS`) |
 | frontend | shared lib (`FRONTEND_EXPORTS`, links wx GUI) |
-| daemon | executable (console) |
+| appserver | executable (console) — the application server; `daemon` is kept as an alias target |
 | enterprise | executable (GUI) |
 | designer | executable (GUI) |
 | launcher | executable (GUI) |
@@ -495,7 +495,8 @@ reads a row back** — Firebird's own `isql` put into the kit for that minute �
 are not a working engine: the engine plugin, the character sets and ICU are loaded at run time.
 
 It is a separate workflow from `ci.yml`: no tests (CI runs them on every push), Release built from
-scratch, only the programs' own targets (`enterprise designer launcher codeRunner daemon simplePlugin`).
+scratch, only the programs' own targets (`enterprise designer launcher codeRunner appserver simplePlugin`;
+the nightly that master still runs names `daemon`, which CMake keeps as an alias of `appserver`).
 The release is published only when **all three** packed, so it never offers one platform from tonight
 beside another from last week. Each packing script under `.github/nightly/` **refuses** a tree that
 would not start — a missing piece, or a library that does not resolve from the unpacked folder — and
@@ -585,4 +586,4 @@ git submodule update --init --recursive
 **Symptom:** `LNK1168: cannot open <name>.exe for writing` during link.
 
 **Fix:** Close any running OES processes (`enterprise.exe`, `designer.exe`,
-`launcher.exe`, `daemon.exe`) before linking — they hold the output file open.
+`launcher.exe`, `appserver.exe`) before linking — they hold the output file open.

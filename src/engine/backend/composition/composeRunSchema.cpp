@@ -492,7 +492,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	auto     work = [&composer, &composed]() { composed = composer.Run(); };
 
 	std::shared_ptr<ibBackgroundRun> rented;
-	if (ibJobManager* const jobs = ibApplicationData::GetJobManager()) {
+	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager()) {
 		try {
 			rented = jobs->StartBackground(
 				[work](ibSession*) -> ibValue { work(); return ibValue(); },

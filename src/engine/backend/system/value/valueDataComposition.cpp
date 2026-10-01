@@ -909,7 +909,7 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 	// ONE SHEET, ONE SLOT: a second Compose means the first read is no longer wanted.
 	CancelFetch();
 
-	if (ibJobManager* const jobs = ibApplicationData::GetJobManager()) {
+	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager()) {
 		try {
 			// The handle is KEPT: CancelFetch waits on it, so a read cannot outlive this composition.
 			//
@@ -1094,7 +1094,7 @@ const ibMetaData* ibValueDataComposition::GetMetaData() const
 	if (const ibPropertyObject* o = GetAttachOwner())
 		return o->GetMetaData();
 
-	return ibApplicationData::GetActiveMetaData();
+	return ibApplicationInstance::GetActiveMetaData();
 }
 
 const ibMetaData* ibValueDataComposition::GetSourceMetaData() const
@@ -1102,7 +1102,7 @@ const ibMetaData* ibValueDataComposition::GetSourceMetaData() const
 	// READ — the STORED source config, captured in RebuildSource. Returned straight from the field: no
 	// owner-walk, no queryable re-resolve, so a form's metadata may fall back here without looping.
 	// Nothing stored yet → the ACTIVE config.
-	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationData::GetActiveMetaData();
+	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationInstance::GetActiveMetaData();
 }
 
 // --- settings surface -------------------------------------------------------

@@ -68,12 +68,12 @@ bool ibValueReferenceDataObject::ReadData(bool createData)
 	// It stays non-throwing (a presentation asking "who is this reference" must not blow up a form),
 	// but the fault is now SAID, with the table it happened on.
 	catch (const ibBackendException& err) {
-		if (ibLogger* const log = ibApplicationData::GetLogger())
+		if (ibLogger* const log = ibApplicationInstance::GetLogger())
 			log->Error(wxT("reference"), wxT("read"),
 				m_metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
 	}
 	catch (...) {
-		if (ibLogger* const log = ibApplicationData::GetLogger())
+		if (ibLogger* const log = ibApplicationInstance::GetLogger())
 			log->Error(wxT("reference"), wxT("read"),
 				m_metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
 	}
@@ -166,12 +166,12 @@ void ibValueReferenceDataObject::ReadBatch()
 		// its references raw: each reads itself when it is asked, and says there what it found, with the
 		// object it happened on.
 		catch (const ibBackendException& err) {
-			if (ibLogger* const log = ibApplicationData::GetLogger())
+			if (ibLogger* const log = ibApplicationInstance::GetLogger())
 				log->Error(wxT("reference"), wxT("read"),
 					metaObject->GetPhysicalTableName() + wxT(": ") + err.GetErrorDescription());
 		}
 		catch (...) {
-			if (ibLogger* const log = ibApplicationData::GetLogger())
+			if (ibLogger* const log = ibApplicationInstance::GetLogger())
 				log->Error(wxT("reference"), wxT("read"),
 					metaObject->GetPhysicalTableName() + wxT(": ") + _("unknown exception"));
 		}

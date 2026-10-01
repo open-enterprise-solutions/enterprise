@@ -2,7 +2,7 @@
 // OES Enterprise — ibConnectionPool unit tests
 //
 // Exercises the pool's public lifecycle on a directly-constructed instance
-// (no global ibApplicationData required). Concurrency / Checkout-deleter
+// (no global ibApplicationInstance required). Concurrency / Checkout-deleter
 // behaviour is integration-test scope — needs real holders + sessions wired
 // up against a live driver — and is not covered here.
 // =============================================================================

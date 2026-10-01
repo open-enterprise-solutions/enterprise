@@ -45,7 +45,7 @@
 //     harness) or is saturated, the scope is "passive" — it has no
 //     connection of its own and does not touch the TL slot. The
 //     `db_query` macro then continues to resolve via the process-
-//     wide ibApplicationData::m_db, preserving legacy behaviour
+//     wide ibApplicationInstance::m_db, preserving legacy behaviour
 //     rather than failing.
 
 #include "backend/backend.h"

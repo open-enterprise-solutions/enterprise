@@ -13,7 +13,7 @@
 //     behaviour-identical alongside the Submit-based Connect(req) flow).
 //   - Queue + worker-thread plumbing (Start / Stop / Submit / request
 //     bins). Thread stays idle until Start() is called explicitly by
-//     `ibApplicationData::CreateSession`; the appData dtor invokes
+//     `ibApplicationInstance::CreateSession`; the appData dtor invokes
 //     Stop() before the pool is shut down. DrainAll takes snapshots
 //     per-priority top-down (strict descending Urgent → Normal → Low →
 //     Background, FIFO within each bin) so Urgent evictions overtake
@@ -32,6 +32,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <climits>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -124,7 +125,7 @@ struct BACKEND_API ibConnectRequest {
 
 	// Optional session factory — when set, Connect() builds the session
 	// through this callback instead of make_shared<ibSession>. Lets the
-	// typed factory path (ibApplicationData::CreateSession<T>)
+	// typed factory path (ibApplicationInstance::CreateSession<T>)
 	// construct derived sessions (ibGUISession on desktop,
 	// ibWebClientSession per web tab) while the registry's Add/Attach/Remove
 	// pipeline keeps working through the base ibSession interface.
@@ -158,8 +159,8 @@ class ibDatabaseLayer;
 class BACKEND_API ibSessionRegistry {
 public:
 	// No static `Instance()` on the class itself — the registry is a
-	// member of ibApplicationData, owned for the duration of appData's
-	// lifetime. Reach it through `ibApplicationData::GetSessionRegistry()`
+	// member of ibApplicationInstance, owned for the duration of appData's
+	// lifetime. Reach it through `ibApplicationInstance::GetSessionRegistry()`
 	// (static accessor — returns nullptr pre-appData / post-appData).
 	// This keeps a single coordinator pattern: subsystems do not own
 	// their own global state, they exist only because appData is alive.
@@ -339,10 +340,15 @@ public:
 	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetExclusive asks it.
 	size_t SettleSilentPeers(const std::vector<wxString>& peers);
 
+	// THE ONE SILENCE, in seconds of lastActive: a row whose last beat is this old has no owner. The sweep and
+	// the question above go by it, and so does a base asked at open whether another process holds it
+	// (ibServiceExclusivePolicy::CanOpen).
+	static int GetSilentSeconds();
+
 	// ---- Lifecycle events ----
 	// Process-wide event hooks fired by registry as sessions move through
 	// their lifecycle. Listeners are wired once during app bootstrap (in
-	// ibApplicationData::WireSessionEvents from the ctor) and drive the
+	// ibApplicationInstance::WireSessionEvents from the ctor) and drive the
 	// metadata + per-session runtime bring-up/teardown that used to live
 	// inside the monolithic Connect/Disconnect path. All callbacks run
 	// synchronously on the thread that triggered the event (Authenticate
@@ -400,34 +406,17 @@ public:
 	void NotifyReload(ibSession* s);
 
 	// ---- Worker pool ----
-	// Per-session task dispatcher. Owned here because worker scheduling
-	// is part of session management — sessions hold the queue keys, the
-	// registry hands them out and tears them down. The pool is allocated
-	// in the ctor when maxWorkers > 0; ProcessRemove drops the leaving
-	// session's queue from the pool automatically.
+	// The per-session task dispatcher its sessions run on — the PROCESS's (ibApplicationHost::GetWorkerPool),
+	// one for every base it holds; reached down the chain registry → base → host. The registry owns none of
+	// it but its own sessions' share: ProcessRemove drops a leaving session's queue, and Stop drains every
+	// own session's queue before the sessions go (the pool itself outlives the base).
 	//
 	// This is the pool a session reaches through ibSession::GetWorkerPool()
 	// unless the session class overrides that — the desktop GUI session
 	// does, so an interactive session keeps running script inline on the
 	// wx main thread while background / scheduled sessions in the same
-	// process use the pool installed here.
-	class ibWorkerPool* GetWorkerPool() const { return m_workerPool.get(); }
-
-	// Install (or replace) the pool after construction. The ctor's
-	// maxWorkers covers hosts that know their sizing up front; a host that
-	// decides later — a desktop process that needs background sessions
-	// even though its own session runs on the wx main thread — calls this
-	// during startup instead of being forced to pick at ctor time.
-	//
-	// Stops the previous pool before dropping it, so its pending tasks
-	// finish against still-valid sessions (ibWorkerPool::Stop is an
-	// actor-style drain, not a force-kill). Passing nullptr removes the
-	// pool: sessions then fall back to running tasks inline.
-	//
-	// Call during startup, before sessions are handed out. Replacing a
-	// pool that already has in-flight work is not a supported sequence —
-	// the drained tasks would complete against a pool nobody can reach.
-	void SetWorkerPool(std::unique_ptr<class ibWorkerPool> pool);
+	// process use this pool.
+	class ibWorkerPool* GetWorkerPool() const;
 
 	// Close every session this process owns. force=true interrupts any
 	// in-flight script and closes each window without asking; force=false
@@ -465,7 +454,7 @@ public:
 	// policy: Single-mode app has 1 session and resolution is constant;
 	// Client-mode runs N concurrent sessions strictly per-thread; Server-
 	// mode is per-thread with a process-wide fallback. Mode is set by
-	// ibApplicationData ctor based on runMode and persists for the
+	// ibApplicationInstance ctor based on runMode and persists for the
 	// process lifetime. ibSession::Current() reads through here.
 	void                SetAccessMode(ibSession::AccessMode mode);
 	ibSession::AccessMode GetAccessMode() const;
@@ -491,6 +480,11 @@ public:
 	void UnregisterDebugThread(std::thread::id tid);
 	bool IsDebugThread(std::thread::id tid) const;
 
+	// The registry the CALLING thread registered itself with as a debug worker; null for any other thread.
+	// A debug thread has no session and names no base — this is how ibSession::Current() on it finds the
+	// registry whose parked session it redirects to (docs/private/multi-base-process.md).
+	static ibSessionRegistry* ForDebugThread();
+
 	// Worker (script thread) parking lifecycle. Called from
 	// ibDebuggerServer::DoDebugLoop around the CV wait. Idempotent on
 	// duplicates — a session entering the loop twice (re-entrant
@@ -515,14 +509,15 @@ public:
 	ibSessionRegistry(const ibSessionRegistry&)            = delete;
 	ibSessionRegistry& operator=(const ibSessionRegistry&) = delete;
 
-	// Construction restricted to ibApplicationData via the
+	// Construction restricted to ibApplicationInstance via the
 	// ib::AppDataCtorToken gate — only appData can mint the token.
-	// maxWorkers — hard cap on the worker pool's OS-thread count. 0
-	// means no pool (single-session GUI modes); headless modes pass a
-	// positive value sized by hardware concurrency. Pool is allocated
-	// here so the registry's lifecycle owns it end-to-end.
-	explicit ibSessionRegistry(ib::AppDataCtorToken,
-	                           std::size_t maxWorkers = 0);
+	// The token names the base this registry serves; every session it creates is
+	// stamped with it (ibSession::GetApplicationInstance), so a process holding several
+	// bases answers "which one" from the session alone.
+	explicit ibSessionRegistry(ib::AppDataCtorToken owner);
+
+	// The base this registry serves — the middle of the chain session → registry → base → pool.
+	ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
 
 private:
 
@@ -637,10 +632,8 @@ private:
 	mutable std::shared_mutex                                    m_ownMutex;
 	std::unordered_map<wxString, ibSessionWatch>                 m_own;
 
-	// Worker pool. Allocated by appData ctor for headless modes via
-	// SetWorkerPool; nullptr otherwise. Stop'd before m_own teardown
-	// in our own Stop() so pending tasks complete with valid sessions.
-	std::unique_ptr<class ibWorkerPool>                          m_workerPool;
+	// The base this registry belongs to — stamped onto every session it creates.
+	ibApplicationInstance* const                                     m_applicationInstance;
 
 	// Policy chain. Built at Start-time, read-only once the thread runs
 	// (no need for extra locking — only ThreadBody touches on Add).
@@ -688,7 +681,7 @@ private:
 	// it to auto-populate Server() on subsequent (non-server) sessions
 	// so wes per-tab clients link to the wes system session without the
 	// caller threading a parameter through. Empty weak in single-session
-	// apps (desktop GUI, daemon, codeRunner) — no WebServer kind ever
+	// apps (desktop GUI, appserver, codeRunner) — no WebServer kind ever
 	// registers, no auto-attach happens.
 	//
 	// weak_ptr (not raw) — single writer (registry thread in ProcessAdd /
@@ -805,6 +798,12 @@ private:
 	mutable std::shared_mutex                              m_snapshotMtx;
 	std::unique_ptr<ibSessionSnapshot>         m_snapshot;
 
+	// What the journal was last told about the snapshot — per registry, the snapshot's own: function-level
+	// statics counted every base of the process as one (a count flipping between bases, a skip said once
+	// for all of them). Registry thread only.
+	unsigned                                   m_loggedSnapshotRows = UINT_MAX;
+	bool                                       m_loggedRefreshSkip  = false;
+
 	// WHEN the snapshot above was last read from the table. Only the registry thread touches it
 	// (JobRefreshSnapshot writes it, SnapshotOlderThan reads it), so it needs no lock of its own.
 	//
@@ -836,7 +835,7 @@ private:
 };
 
 // ---------------------------------------------------------------------
-// ibApplicationData::CreateSession<SessionT> — template bodies live here
+// ibApplicationInstance::CreateSession<SessionT> — template bodies live here
 // (not in session.h) because they delegate through
 // ibSessionRegistry::CreateSessionWithFactory and need the registry's
 // full type at instantiation. Each callsite that uses the typed
@@ -863,7 +862,7 @@ inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind 
 // empty holder is the failure, and letting it die is the cleanup.
 
 template<class SessionT>
-ibSessionHolder ibApplicationData::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession()
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
@@ -873,7 +872,7 @@ ibSessionHolder ibApplicationData::CreateSession()
 }
 
 template<class SessionT>
-ibSessionHolder ibApplicationData::CreateSession(const wxString& presetGuid,
+ibSessionHolder ibApplicationInstance::CreateSession(const wxString& presetGuid,
                                                  const wxString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,

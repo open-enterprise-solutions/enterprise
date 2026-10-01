@@ -20,6 +20,7 @@
 #include <wx/mstream.h>
 
 #include "backend/appData.h"
+#include "backend/appHost.h"   // ibApplicationInstanceScope — the HTTP and sweep threads work for the served base
 #include "backend/guid.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
@@ -61,6 +62,9 @@ namespace {
 // even after the session itself was evicted (in which case /session
 // returns the unauthenticated stub but still carries the current gen).
 std::atomic<std::uint64_t> g_metaGeneration{ 1 };
+
+// The web server's own session, while it has one — defined below, beside the holder.
+ibSession* ServerSession();
 
 class SessionManager {
 public:
@@ -326,9 +330,17 @@ private:
 		// to the live sys_config.file_guid on every tick — any diff
 		// means Designer pushed a new config; evict all user sessions
 		// so their stale compiled state can't leak into responses.
+		//
+		// ⭐ THE SWEEP WORKS FOR THE BASE THE SERVER SERVES — this thread has no session of its own. Bound to
+		// the server session's base, its metadata and its pool answer, and ibSession::Current answers the
+		// server's own session through the registry, as it always did. Bound per tick (the session comes after
+		// the thread and goes before it) and thread-local: nothing the rest of the process has to notice.
 		wxString lastObservedMetaGuid;
-		if (activeMetaData != nullptr)
-			lastObservedMetaGuid = activeMetaData->GetConfigGuid().str();
+		if (ibSession* const server = ServerSession()) {
+			ibApplicationInstanceScope serving(server->GetApplicationInstance());
+			if (activeMetaData != nullptr)
+				lastObservedMetaGuid = activeMetaData->GetConfigGuid().str();
+		}
 
 		for (;;) {
 			std::vector<std::string> requested;
@@ -354,14 +366,13 @@ private:
 			}
 
 			// Guard against shutdown that landed between wait and the
-			// registry / metadata accesses below. wfrontendShutdown
-			// destroys appData; with the post-2026-05-26 nullable
-			// Instance() this branch is no longer the only safety net
-			// (each Instance() callsite null-checks too), but bailing
-			// early avoids the metadata-watch + signal-check work when
-			// we already know there's nothing left to do.
-			if (appData == nullptr)
+			// registry / metadata accesses below: wfrontendShutdown lets
+			// the server's session go before it destroys the base, and
+			// with no session there is no base to sweep.
+			ibSession* const server = ServerSession();
+			if (server == nullptr)
 				return;
+			ibApplicationInstanceScope serving(server->GetApplicationInstance());
 
 			// 1) Idle eviction.
 			const std::int64_t nowMs = duration_cast<milliseconds>(
@@ -397,7 +408,7 @@ private:
 			//    watch so an operator can force a re-login cycle even
 			//    if the file_guid hasn't changed (e.g. ad-hoc kick-all
 			//    from an admin console).
-			auto* reloadReg = ibApplicationData::GetSessionRegistry();
+			auto* reloadReg = ibApplicationInstance::GetSessionRegistry();
 			if (reloadReg != nullptr && reloadReg->ConsumeReloadRequest()) {
 				std::cerr << "[signal] reload directive - evicting "
 				          << "all user sessions" << std::endl;
@@ -551,6 +562,13 @@ std::string       g_lastError;
 // shutdown is what removes the technical sys_session row.
 ibSessionHolder   g_serverSession;
 
+// Null before wfrontendInit* has finished and after wfrontendShutdown has begun: the flag is raised after
+// the session is made and lowered before it is let go.
+ibSession* ServerSession()
+{
+	return g_initialized.load() ? g_serverSession.Get() : nullptr;
+}
+
 // HTTP host:port the container is bound on. Set by
 // wfrontendSetServerAddress from the host (wenterprise-server main);
 // read by ibWebSession::Login to stamp `sys_session.address` when a
@@ -644,7 +662,7 @@ namespace {
 bool FinishConnect(const std::string& ibUser, const std::string& ibPassword)
 {
 	// CreateSession + Authenticate. Registry's lifecycle event listeners
-	// (wired in ibApplicationData ctor) drive metadata load, root mm
+	// (wired in ibApplicationInstance ctor) drive metadata load, root mm
 	// allocation/compile and runtime init through OnFirstConnect /
 	// OnAuthenticated; nothing to do here beyond auth.
 	//
@@ -697,9 +715,11 @@ WFRONTEND_API bool wfrontendInitFile(
 	g_lastError.clear();
 
 	if (!RunBringUp([&] {
-		return appDataCreateFile(ibRunMode::eWEB_RUNTIME_MODE,
-			wxString::FromUTF8(filePath.c_str()),
-			wxString::FromUTF8(locale.c_str()));
+		ibFileInstanceRequest request;
+		request.m_runMode   = ibRunMode::eWEB_RUNTIME_MODE;
+		request.m_directory = wxString::FromUTF8(filePath.c_str());
+		request.m_locale    = wxString::FromUTF8(locale.c_str());
+		return ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
 	}))
 		return false;
 
@@ -736,13 +756,15 @@ WFRONTEND_API bool wfrontendInitServer(
 	g_lastError.clear();
 
 	if (!RunBringUp([&] {
-		return appDataCreateServer(ibRunMode::eWEB_RUNTIME_MODE,
-			wxString::FromUTF8(server.c_str()),
-			wxString::FromUTF8(port.c_str()),
-			wxString::FromUTF8(user.c_str()),
-			wxString::FromUTF8(password.c_str()),
-			wxString::FromUTF8(database.c_str()),
-			wxString::FromUTF8(locale.c_str()));
+		ibServerInstanceRequest request;
+		request.m_runMode  = ibRunMode::eWEB_RUNTIME_MODE;
+		request.m_server   = wxString::FromUTF8(server.c_str());
+		request.m_port     = wxString::FromUTF8(port.c_str());
+		request.m_user     = wxString::FromUTF8(user.c_str());
+		request.m_password = wxString::FromUTF8(password.c_str());
+		request.m_database = wxString::FromUTF8(database.c_str());
+		request.m_locale   = wxString::FromUTF8(locale.c_str());
+		return ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
 	}))
 		return false;
 
@@ -761,13 +783,13 @@ WFRONTEND_API bool wfrontendKickSessionByGuid(const std::string& sessionGuid)
 	// Delegates to the registry's admin helper — same UPDATE path the
 	// designer dialog uses, so kick-via-HTTP and kick-via-designer share
 	// exactly one implementation.
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	return reg != nullptr && reg->Kick(wxString::FromUTF8(sessionGuid.c_str()));
 }
 
 WFRONTEND_API bool wfrontendReloadSessionByGuid(const std::string& sessionGuid)
 {
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	return reg != nullptr && reg->Reload(wxString::FromUTF8(sessionGuid.c_str()));
 }
 
@@ -783,7 +805,7 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	};
 
 	// --- Worker pool (headless impl carries the size counters) -----
-	if (auto* registry = ibApplicationData::GetSessionRegistry()) {
+	if (auto* registry = ibApplicationInstance::GetSessionRegistry()) {
 		if (auto* base = registry->GetWorkerPool()) {
 			if (auto* hl = dynamic_cast<ibWorkerPoolHeadless*>(base)) {
 				root["workerPool"] = {
@@ -796,7 +818,7 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	}
 
 	// --- Connection pool ------------------------------------------
-	if (auto* pool = ibApplicationData::GetConnectionPool()) {
+	if (auto* pool = ibApplicationInstance::GetConnectionPool()) {
 		root["connectionPool"] = {
 			{ "live",    static_cast<unsigned>(pool->LiveSize()) },
 			{ "idle",    static_cast<unsigned>(pool->IdleSize()) },
@@ -806,7 +828,7 @@ WFRONTEND_API std::string wfrontendDiagJSON()
 	}
 
 	// --- Sessions snapshot ---------------------------------------
-	auto* snapReg = ibApplicationData::GetSessionRegistry();
+	auto* snapReg = ibApplicationInstance::GetSessionRegistry();
 	const ibSessionSnapshot snap = snapReg != nullptr
 		? snapReg->GetClusterSnapshot()
 		: ibSessionSnapshot();
@@ -834,7 +856,7 @@ WFRONTEND_API std::string wfrontendLocksJSON()
 {
 	nlohmann::json arr = nlohmann::json::array();
 	try {
-		auto* lm = ibApplicationData::GetLockManager();
+		auto* lm = ibApplicationInstance::GetLockManager();
 		const auto rows = lm != nullptr ? lm->GetSnapshot() : std::vector<ibLockSnapshotRow>{};
 		for (const auto& r : rows) {
 			// Render key as "field1=val1, field2=val2" for at-a-glance UI.
@@ -868,7 +890,7 @@ WFRONTEND_API bool wfrontendForceReleaseLockByGuid(const std::string& lockGuid)
 		const ibGuid g(wxString::FromUTF8(lockGuid.c_str()));
 		if (!g.isValid()) return false;
 		std::vector<ibGuid> one{ g };
-		auto* lm = ibApplicationData::GetLockManager();
+		auto* lm = ibApplicationInstance::GetLockManager();
 		if (lm == nullptr) return false;
 		lm->ReleaseRows(one);
 		return true;
@@ -893,6 +915,15 @@ WFRONTEND_API void wfrontendShutdown()
 	g_serverSession.Reset();
 	appDataDestroy();
 	g_lastError.clear();
+}
+
+WFRONTEND_API void wfrontendServe(const std::function<void()>& work)
+{
+	// The base the server serves, bound for the connection — thread-local, so a request costs the rest of the
+	// process nothing: a session binding moves the epoch every thread's cached binding is read at.
+	ibSession* const server = ServerSession();
+	ibApplicationInstanceScope serving(server != nullptr ? server->GetApplicationInstance() : nullptr);
+	work();
 }
 
 WFRONTEND_API std::string wfrontendLastError()
@@ -949,13 +980,13 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 		// is called from main() after InitBackend, so the registry is alive
 		// here — null-check is defensive against a future caller that wires
 		// hooks before InitBackend.
-		auto* reg = ibApplicationData::GetSessionRegistry();
+		auto* reg = ibApplicationInstance::GetSessionRegistry();
 		if (reg == nullptr) return;
 
 		// Keep-alive predicate: wes process stays up while at least
 		// one WebClient session is registered against the WebServer.
 		reg->OnShouldKeepAlive([]() {
-			auto* r = ibApplicationData::GetSessionRegistry();
+			auto* r = ibApplicationInstance::GetSessionRegistry();
 			return r != nullptr && r->HasClients();
 		});
 
@@ -996,7 +1027,7 @@ WFRONTEND_API bool wfrontendSessionPaused(const std::string& sessionId)
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	if (reg == nullptr) return false;
 	auto sess = reg->Find(wxString::FromUTF8(sessionId.c_str())).Share();
 	if (!sess) return false;

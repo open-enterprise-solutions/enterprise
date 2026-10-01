@@ -19,7 +19,7 @@ class ibValue;
 
 // ibLogger — central audit + trace facade.
 //
-// One per process, owned by ibApplicationData. Callers go through the
+// One per process, owned by ibApplicationInstance. Callers go through the
 // `ibLog` macro: `ibLog->Audit("auth", "login", _("ok"))`.
 //
 // Routing:
@@ -33,8 +33,8 @@ class ibValue;
 // dropped-count surfaces as a self-log row from the writer.
 class BACKEND_API ibLogger {
 public:
-    // Owned by ibApplicationData (`m_logger`) — production callers reach
-    // it through `ibApplicationData::GetLogger()` or the `ibLog` macro.
+    // Owned by ibApplicationInstance (`m_logger`) — production callers reach
+    // it through `ibApplicationInstance::GetLogger()` or the `ibLog` macro.
     // The ctor stays public only so unit tests (tests/test_logger.cpp)
     // can construct standalone instances against scratch directories;
     // application code MUST NOT instantiate it directly.
@@ -92,7 +92,7 @@ public:
     void StartDailySweep(int retentionDays);
 
     // Block until the writer has drained the current queue. Used by tests
-    // and by ~ibApplicationData to flush before pool shutdown.
+    // and by ~ibApplicationInstance to flush before pool shutdown.
     void FlushBlocking();
 
 private:

@@ -202,7 +202,7 @@ bool ibValueRecordDataObjectParameterizedJob::ExecuteJob()
 	//   * A CLIENT MAY NOT BE WHERE THE WORK RUNS. A thin client has no scheduler and no
 	//     database; asking the manager is a request that reaches whoever does, while calling the
 	//     handler in place could only ever work on a fat client over a file base.
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		ibBackendCoreException::Error(_("scheduled jobs are not available in this context"));
 

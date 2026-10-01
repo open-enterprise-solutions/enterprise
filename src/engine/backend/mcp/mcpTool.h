@@ -37,6 +37,8 @@
 
 #include <wx/string.h>
 
+class ibApplicationInstance;   // the base a description is about (ibMcpDescribePlatform)
+
 // ⭐⭐ TEXT THAT GOES DOWN THE WIRE — English, never translated, and a `wxString` rather than a bare
 // literal so it can be stored, formatted and compared like any other.
 //
@@ -563,7 +565,7 @@ BACKEND_API std::vector<wxString> ibMcpComplaints(class ibValueMetaObject* objec
 //
 // One function, two readers: the orientation renders it into prose, `platform_state` returns it as
 // it stands. Two places computing the dialect would agree until the day they did not.
-BACKEND_API void ibMcpDescribePlatform(ibDataNode& into);
+BACKEND_API void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibDataNode& into);
 
 // ⭐ A DETAIL IS SHOWN, NOT DUMPED. The window is a running log: a five-hundred-line module pasted
 // into it scrolls everything else out of reach, and the reader loses the thing they were watching

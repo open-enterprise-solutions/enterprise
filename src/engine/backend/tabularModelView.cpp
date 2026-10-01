@@ -1,5 +1,8 @@
 #include "tabularModelView.h"
 
+#include "backend/appData.h"
+#include "backend/appHost.h"   // ibApplicationInstanceScope — the read works for the base of whoever asked for it
+
 #include <system_error>
 #include <thread>
 
@@ -123,7 +126,11 @@ void ibDataViewModel::SubmitFetchAsync(std::function<void()> work)
 	// logs it and reports the portion as failed), but an escape into std::thread
 	// calls std::terminate, so this is the last line of defence.
 	auto locked = GuardFetch(std::move(work));
-	auto guarded = [locked]() {
+	// The thread is the model's, the base is the asker's: a fresh thread has no session and no base, and a
+	// read that reaches the database (a presentation, db_query) must reach the one the asking thread works for.
+	ibApplicationInstance* const applicationInstance = ibApplicationInstance::Get(false);
+	auto guarded = [locked, applicationInstance]() {
+		ibApplicationInstanceScope working(applicationInstance);
 		try { locked(); } catch (...) { /* swallowed: the work owns its own reporting; letting it out kills the process */ }
 	};
 

@@ -18,6 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/mcp/mcpTool.h"
+#include "backend/appData.h"   // appData — the caller's base
 
 //---------------------------------------------------------------------------
 // platform_state
@@ -60,7 +61,7 @@ public:
 		// account are facts either way, and `configurationOpen: false` is the answer to "what
 		// dialect" rather than an error about it. A caller orienting itself should never be told
 		// off for asking.
-		ibMcpDescribePlatform(result);
+		ibMcpDescribePlatform(appData, result);   // a tool runs in the caller's session — its base
 
 		return true;
 	}

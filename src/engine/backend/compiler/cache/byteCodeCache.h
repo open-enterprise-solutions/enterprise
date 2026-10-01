@@ -2,7 +2,7 @@
 // Name        : byteCodeCache.h
 // Purpose     : Persistent storage for compiled ibByteCode blobs, keyed by
 //               descriptor GUID. Backed by sys_bytecode_cache (DDL via
-//               ibApplicationData::MigrateTableBytecodeCache).
+//               ibApplicationInstance::MigrateTableBytecodeCache).
 //
 // Cache is transparent — when Load returns true the descriptor skips the
 // compile path; when it returns false the descriptor falls back to

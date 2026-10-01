@@ -62,11 +62,11 @@ struct JobTenancyFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
-		if (ibApplicationData::GetSessionRegistry() == nullptr)
+		if (ibApplicationInstance::GetSessionRegistry() == nullptr)
 			GTEST_SKIP() << "no session registry after CreateAppDataEnv";
-		ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		db = std::make_shared<ibDatabaseLayerSQLite>();
@@ -86,8 +86,8 @@ struct JobTenancyFix : ::testing::Test {
 	void TearDown() override {
 		bound.reset();
 		parent.reset();
-		if (ibApplicationData::Get() != nullptr)
-			ibApplicationData::DestroyAppDataEnv();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
 
@@ -164,7 +164,7 @@ TEST_F(JobTenancyFix, RentedRunLeavesNoRowInTheRegistry)
 {
 	if (!ready) GTEST_SKIP();
 
-	ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry();
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 
 	ibJobManager manager(ib::AppDataCtorToken{});
@@ -198,7 +198,7 @@ TEST_F(JobTenancyFix, RentedRunsDoNotExhaustTheConnectionPool)
 {
 	if (!ready) GTEST_SKIP();
 
-	ibConnectionPool* const pool = ibApplicationData::GetConnectionPool();
+	ibConnectionPool* const pool = ibApplicationInstance::GetConnectionPool();
 	ASSERT_NE(pool, nullptr);
 
 	ibJobManager manager(ib::AppDataCtorToken{});

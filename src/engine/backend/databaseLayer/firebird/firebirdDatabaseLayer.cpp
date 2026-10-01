@@ -826,14 +826,14 @@ bool ibDatabaseLayerFirebird::Open()
 	// ⚠⚠ THE REGISTRATION USED TO HAPPEN HERE, AND IT COULD NOT WORK FROM HERE.
 	//
 	// Declaring a job WRITES to the database: the manager reads sys_job for a stored schedule and
-	// seeds a row when there is none. This is `Open()` — it runs before ibApplicationData exists,
+	// seeds a row when there is none. This is `Open()` — it runs before ibApplicationInstance exists,
 	// before the connection pool is initialised, and long before the startup sequence creates
 	// sys_job. So the very first thing a fresh base did was fail to record `firebird.sweep`, out of
 	// a call stack that has no business writing rows at all.
 	//
 	// Eligibility is still the DRIVER's knowledge (a local standalone file base, not leader-mode,
 	// not a remote server), so the test stays; only the ACTION moved. See
-	// ibApplicationData::CreateFileAppDataEnv — it registers after the tables, which is the only
+	// ibApplicationInstance::CreateFileAppDataEnv — it registers after the tables, which is the only
 	// place that can honestly promise they exist.
 	m_localMaintenanceEligible = m_strServer.IsEmpty()
 		&& ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone;

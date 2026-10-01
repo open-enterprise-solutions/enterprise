@@ -2600,7 +2600,7 @@ void ibValueRecordDataObjectRef::Modify(bool mod)
 	// that is right; what is wrong is that MARKING AN OBJECT MODIFIED went looking for one at all.
 	// This runs on EVERY field assignment, so `usd.Code = "840"` came through here before any write
 	// did — MEASURED 2026-09-06 on the first line of a hundred-payment fill, which refused at
-	// JobCode line 2 and left a background job, a daemon and codeRunner unable to assign a field.
+	// JobCode line 2 and left a background job, an appserver and codeRunner unable to assign a field.
 	//
 	// So the refusal is caught HERE, where the question was asked wrongly, rather than softened
 	// THERE, where it is answered correctly (Max, 2026-09-06: *"the problem is not in getting the

@@ -31,7 +31,7 @@ static constexpr int kBackupEveryDays    = 7;
 
 void ibFirebirdMaintenanceJob::Register()
 {
-	ibJobManager* const jobs = ibApplicationData::GetJobManager();
+	ibJobManager* const jobs = ibApplicationInstance::GetJobManager();
 	if (jobs == nullptr)
 		return;
 

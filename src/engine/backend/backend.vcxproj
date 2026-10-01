@@ -22,6 +22,8 @@
     <ClInclude Include="standardCommand.h" />
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
+    <ClInclude Include="appHost.h" />
+    <ClInclude Include="cipher\fieldCipher.h" />
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h" />
@@ -48,6 +50,7 @@
     <ClInclude Include="diagnostics\journal.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
+    <ClInclude Include="session\serviceExclusivePolicy.h" />
     <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionHolder.h" />
@@ -454,6 +457,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="appData.cpp" />
+    <ClCompile Include="appHost.cpp" />
+    <ClCompile Include="cipher\fieldCipher.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="appEnv.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
@@ -477,6 +482,7 @@
     <ClCompile Include="diagnostics\journal.cpp" />
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
+    <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
     <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />

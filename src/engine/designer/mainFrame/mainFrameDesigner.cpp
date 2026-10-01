@@ -225,7 +225,7 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 		// listening and nothing on screen that said so (2026-09-23, exactly that). The step below
 		// is the road this tree already has for "there is something to read" — this joins it
 		// instead of raising a pane of its own.
-		if (ibMcpServer* server = ibApplicationData::GetMcpServer()) {
+		if (ibMcpServer* server = ibApplicationInstance::GetMcpServer()) {
 			if (server->GetSettings().m_enabled && !server->IsRunning()) {
 
 				wxString refusal;

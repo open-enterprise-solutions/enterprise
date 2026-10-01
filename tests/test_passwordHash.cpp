@@ -6,7 +6,7 @@
 // accept path, and the lazy-upgrade predicates (IsLegacy / NeedsRehash).
 //
 // Security-critical surface that previously had no coverage. See the
-// "Password Hashing" note in enterprise/CLAUDE.md and ibApplicationData::
+// "Password Hashing" note in enterprise/CLAUDE.md and ibApplicationInstance::
 // AuthenticateUser for the live upgrade flow.
 // =============================================================================
 

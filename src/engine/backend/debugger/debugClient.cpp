@@ -87,7 +87,8 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 } // namespace
 ///////////////////////////////////////////////////////////////////////
 
-ibDebuggerClient::ibDebuggerClient() :
+ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
+	m_metaData(metaData),
 	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
 	m_enterLoop(false), m_connectionSuccess(false)
@@ -982,7 +983,10 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(m_userName);
 		commandReader.r_stringZ(m_compName);
 
-		m_verifiedConnection = activeMetaData->GetConfigGuid() == ibGuid(m_confGuid);
+		// Against the configuration that owns this debugger — down the chain: this is a connection's own
+		// thread, with no session to ask "the current one" through.
+		const ibMetaDataConfigurationBase* const ours = debugClient->GetMetaData();
+		m_verifiedConnection = ours->GetConfigGuid() == ibGuid(m_confGuid);
 
 		if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Waiter)
 			m_connectionType = ConnectionType::ConnectionType_Debugger;
@@ -997,7 +1001,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 				m_hostName, m_verifiedConnection
 					? wxT("this connection is neither a waiter nor a scanner")
 					: wxT("it runs a different configuration"),
-				m_confGuid, activeMetaData->GetConfigGuid().str());
+				m_confGuid, ours->GetConfigGuid().str());
 
 			m_connectionType = ConnectionType::ConnectionType_Unknown;
 		}

@@ -4,7 +4,7 @@
 
 #include "queryableFactory.h"
 
-#include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (the global fallback the per-config factory descends to)
+#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (the global fallback the per-config factory descends to)
 #include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (ResolveById)
 
 //////////////////////////////////////////////////////////////////////
@@ -150,7 +150,7 @@ const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const wxString& ns, co
 {
 	if (const ibBackendQueryable* q = ibQueryableFactory::Resolve(ns, objectName, paParams, lSizeArray))
 		return q;
-	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
 	return global != nullptr ? global->Resolve(ns, objectName, paParams, lSizeArray) : nullptr;
 }
 
@@ -158,7 +158,7 @@ ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const wxStri
 {
 	if (ibQueryableSourceDescriptor* own = ibQueryableFactory::FindDescriptor(ns, objectName))
 		return own;
-	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
 	return global != nullptr ? global->FindDescriptor(ns, objectName) : nullptr;
 }
 
@@ -166,7 +166,7 @@ const ibBackendQueryable* ibMetaQueryableFactory::ResolveById(ibMetaID tableId) 
 {
 	if (const ibBackendQueryable* q = ibQueryableFactory::ResolveById(tableId))
 		return q;
-	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
 	return global != nullptr ? global->ResolveById(tableId) : nullptr;
 }
 
@@ -174,7 +174,7 @@ ibQueryableSourceDescriptor* ibMetaQueryableFactory::ResolveDescriptorById(ibMet
 {
 	if (ibQueryableSourceDescriptor* d = ibQueryableFactory::ResolveDescriptorById(tableId))
 		return d;
-	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
 	return global != nullptr ? global->ResolveDescriptorById(tableId) : nullptr;
 }
 

@@ -48,8 +48,8 @@ struct BACKEND_API ibLockSnapshotRow {
 class BACKEND_API ibLockManager {
 public:
 	// No public static accessor — `ibLockManager` is created exclusively
-	// by `ibApplicationData` (ctor reaches it via `friend` below) and
-	// reached through `ibApplicationData::GetLockManager()` which
+	// by `ibApplicationInstance` (ctor reaches it via `friend` below) and
+	// reached through `ibApplicationInstance::GetLockManager()` which
 	// returns nullptr pre-appData / post-appData. Mirrors the
 	// session-registry and connection-pool ownership pattern: subsystems
 	// do not own their own global state, they exist for the duration
@@ -120,10 +120,10 @@ public:
 	// construction path.
 	~ibLockManager() = default;
 
-	// Construction restricted to ibApplicationData via the
+	// Construction restricted to ibApplicationInstance via the
 	// ib::AppDataCtorToken gate — appData is the owning coordinator;
 	// lifetime is tied to its ctor/dtor.
-	explicit ibLockManager(ib::AppDataCtorToken);
+	explicit ibLockManager(ib::AppDataCtorToken owner);
 
 private:
 	ibLockManager(const ibLockManager&) = delete;

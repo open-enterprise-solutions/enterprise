@@ -7,7 +7,7 @@
 // carries one (ibSession::m_userInfo); other GUIs (designer's Active
 // Users, admin tools) display copies built from sys_session /
 // sys_user reads. Was named ibApplicationDataUserInfo while the
-// singleton ibApplicationData owned the only copy; the registry
+// singleton ibApplicationInstance owned the only copy; the registry
 // refactor distributed ownership, the name is now scope-neutral.
 
 #include "backend/backend.h"

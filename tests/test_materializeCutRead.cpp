@@ -263,9 +263,9 @@ struct CutReadFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
-		ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		db = std::make_shared<ibDatabaseLayerSQLite>();
@@ -284,8 +284,8 @@ struct CutReadFix : ::testing::Test {
 		ASSERT_TRUE(sql.Apply(*db));
 	}
 	void TearDown() override {
-		if (ibApplicationData::Get() != nullptr)
-			ibApplicationData::DestroyAppDataEnv();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
 	void Move(const wxString& rec, int line, const wxString& when, const wxString& wh, bool receipt, double qty, bool active = true) {

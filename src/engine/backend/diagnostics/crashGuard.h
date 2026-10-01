@@ -79,7 +79,7 @@ BACKEND_API void TerminateProcessFast(int exitCode);
 // escape to `<exeName>_startup.log` AND surfaces a PlatformNativeMessage.
 // Returns body's int on success, 1 on caught error. ibWxApp::OnRun
 // wraps DoOnRun with a wx-aware variant that prefers wxMessageBox
-// over PlatformNativeMessage; for console / daemon / wes, this is the
+// over PlatformNativeMessage; for console / appserver / wes, this is the
 // direct path.
 BACKEND_API int WrapStartup(const wxString& exeName,
                              std::function<int()> body);

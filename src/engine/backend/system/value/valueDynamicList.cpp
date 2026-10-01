@@ -675,7 +675,7 @@ const ibMetaData* ibValueDynamicList::GetMetaData() const
 	if (const ibPropertyObject *o = GetAttachOwner())
 		return o->GetMetaData();
 
-	return ibApplicationData::GetActiveMetaData();
+	return ibApplicationInstance::GetActiveMetaData();
 }
 
 const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
@@ -685,7 +685,7 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 	// queryable re-resolve (GetSourceQueryable -> GetQueryable re-resolves through m_owner->GetMetaData,
 	// which walks the form → would recurse here). TERMINAL, so a form's metadata may fall back to this list without
 	// looping. Nothing stored yet (no source picked) -> the ACTIVE config. Selection is GetMetaData.
-	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationData::GetActiveMetaData();
+	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationInstance::GetActiveMetaData();
 }
 
 // FETCH lives ONLY in the parent now (Max: "fetch lives only in the parent"). The dynamic list NO LONGER overrides

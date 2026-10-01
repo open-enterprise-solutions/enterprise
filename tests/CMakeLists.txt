@@ -49,6 +49,7 @@ add_executable(oes_tests
     test_helpCorpus.cpp
     bench_runtime.cpp
     test_connectionPool.cpp
+    test_fieldCipher.cpp
     test_session.cpp
     test_jobManager.cpp
     test_jobSchedule.cpp
@@ -463,6 +464,42 @@ set_target_properties(oes_job_tenancy_test PROPERTIES
 )
 
 oes_discover_tests(oes_job_tenancy_test)
+
+# ---------------------------------------------------------------------------
+# Several bases in one process (ibApplicationHost) — integration scope.
+#
+# Opens two bases in the test process, each with its own in-memory SQLite, and
+# asks the rule that names "the current base" from bound and unbound threads.
+# Its own target for the reason the tenancy test is: an appData bring-up must
+# not perturb the main oes_tests run.
+#   cmake --build build --target oes_multi_base_test --config Debug
+#   ./bin/oes_multi_base_test
+# ---------------------------------------------------------------------------
+add_executable(oes_multi_base_test test_multiBase.cpp)
+
+target_link_libraries(oes_multi_base_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_multi_base_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_multi_base_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_multi_base_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+oes_discover_tests(oes_multi_base_test)
 
 # ---------------------------------------------------------------------------
 # Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx

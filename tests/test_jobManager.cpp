@@ -4,7 +4,7 @@
 // Scope: everything the manager decides WITHOUT a live process behind it — the
 // window arithmetic, the registration contract, and the refusal paths.
 //
-// Registering a job creates a session, which needs a running ibApplicationData
+// Registering a job creates a session, which needs a running ibApplicationInstance
 // (registry thread + connection pool + metadata). That is integration scope and
 // is not covered here; what IS covered is that a manager with no application
 // data behind it refuses cleanly instead of half-registering — the failure mode

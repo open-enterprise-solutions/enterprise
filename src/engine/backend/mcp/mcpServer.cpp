@@ -619,7 +619,8 @@ private:
 //---------------------------------------------------------------------------
 // the subsystem
 //---------------------------------------------------------------------------
-ibMcpServer::ibMcpServer(ib::AppDataCtorToken)
+ibMcpServer::ibMcpServer(ib::AppDataCtorToken owner) :
+	m_applicationInstance(owner.GetApplicationInstance())
 {
 	// Empty, and still out of line — see the note in the header: the listener is
 	// incomplete there, and an inline constructor would need its destructor.
@@ -796,8 +797,8 @@ void ibMcpServer::WatchMetadata()
 
 	// The open configuration, or nothing — a server outlives any one configuration and must not
 	// keep a subscription on one that has been closed.
-	m_metaBridge->Watch(activeMetaData != nullptr && activeMetaData->IsConfigOpen()
-		? activeMetaData : nullptr);
+	ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	m_metaBridge->Watch(metaData != nullptr && metaData->IsConfigOpen() ? metaData : nullptr);
 }
 
 ibMcpServer::~ibMcpServer()
@@ -827,7 +828,7 @@ ibSettingsKey KeyFor(const ibSession* session)
 
 bool ibMcpServer::LoadSettings(ibSession* session)
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage(m_applicationInstance);
 	if (storage == nullptr)
 		return false;
 
@@ -864,7 +865,7 @@ bool ibMcpServer::LoadSettings(ibSession* session)
 
 bool ibMcpServer::SaveSettings(ibSession* session) const
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage(m_applicationInstance);
 	if (storage == nullptr)
 		return false;
 
@@ -986,13 +987,13 @@ void ibMcpServer::Stop()
 {
 	// 🛑 OFF THE METADATA FIRST, AND BEFORE THE `IsRunning` GATE. The bridge holds a bare pointer to
 	// the configuration it watches, and the process tears down in the other order:
-	// `~ibApplicationData` destroys `m_activeMetaData` (it needs db_query on the way out, so it goes
+	// `~ibApplicationInstance` destroys `m_activeMetaData` (it needs db_query on the way out, so it goes
 	// early) and reaches `m_mcpServer` several fields later — where the bridge's own destructor
 	// called `RemoveNotifier` on a vector that had been freed, and the designer died on every exit
 	// with a configuration open (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside
 	// `ibMetaData::RemoveNotifier`).
 	//
-	// The subscription comes off HERE because this is the pre-dtor hook `~ibApplicationData` already
+	// The subscription comes off HERE because this is the pre-dtor hook `~ibApplicationInstance` already
 	// calls first (step 0), while everything the server points at is still alive — the same
 	// arrangement the file's teardown contract uses for every other subsystem. Unconditional and
 	// idempotent: the server can be watching a configuration while switched off, so the gate below
@@ -1209,8 +1210,9 @@ wxString ibMcpServer::Greeting() const
 
 	// WHAT IS OPEN, because that is what an assistant would be working on and what makes the
 	// line worth reading rather than a status light.
-	if (activeMetaData != nullptr && activeMetaData->IsConfigOpen())
-		if (const ibValueMetaObject* root = activeMetaData->GetCommonMetaObject())
+	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+	if (metaData != nullptr && metaData->IsConfigOpen())
+		if (const ibValueMetaObject* root = metaData->GetCommonMetaObject())
 			out += wxString::Format(_(" Configuration '%s' is open."), root->GetName());
 
 	// ⚠ AND WHETHER ANYBODY IS ACTUALLY THERE. "Running" is not "connected", and a person waiting
@@ -1338,7 +1340,7 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 // ⭐ NOTHING HAD TO BE BUILT. ibGUISession already holds an ibWorkerPoolGUI whose Submit hands the
 // task to wxTheApp::CallAfter — the main loop, which is where a click arrives — and it runs a task
 // INLINE when the caller is already on that thread, so nothing that worked before pays for this.
-// The pool is asked of the SESSION, so a headless host (daemon, tests) answers null and the tool
+// The pool is asked of the SESSION, so a headless host (appserver, tests) answers null and the tool
 // runs here, which is correct: there is no UI thread to reach.
 //
 // ⚠ THE STATE IS SHARED, NOT CAPTURED BY REFERENCE. A timeout does not cancel the task — it only
@@ -1610,7 +1612,7 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 //
 //---------------------------------------------------------------------------
 
-void ibMcpDescribePlatform(ibDataNode& into)
+void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibDataNode& into)
 {
 	into.AddField(wxT("build"), ibDataValue::Int((s64)GetBuildId()));
 
@@ -1619,11 +1621,11 @@ void ibMcpDescribePlatform(ibDataNode& into)
 	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
 	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
 	// else had open). The mode is said beside it because a path means a file base and nothing else does.
-	into.SetValue(wxT("connection"), appData->GetDatabaseModeDescr());
-	if (!appData->GetFile().IsEmpty())
-		into.SetValue(wxT("base"), appData->GetFile());
+	into.SetValue(wxT("connection"), applicationInstance->GetDatabaseModeDescr());
+	if (!applicationInstance->GetFile().IsEmpty())
+		into.SetValue(wxT("base"), applicationInstance->GetFile());
 
-	const ibUserInfo& who = appData->GetUserInfo();
+	const ibUserInfo& who = applicationInstance->GetUserInfo();
 
 	if (!who.IsOk()) {
 
@@ -1665,7 +1667,7 @@ void ibMcpDescribePlatform(ibDataNode& into)
 			user.SetValue(wxT("language"), who.m_strLanguageName);
 	}
 
-	ibMetaDataConfigurationBase* metaData = activeMetaData;
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		into.AddField(wxT("configurationOpen"), ibDataValue::Bool(false));
@@ -1897,7 +1899,7 @@ namespace {
 const size_t kOrientationNotesLimit = 20000;
 
 
-wxString BuildOrientation()
+wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 {
 	wxString out;
 
@@ -1914,9 +1916,9 @@ wxString BuildOrientation()
 	//
 	// ⚠ THE PASSWORD FIELD IS IN THE SAME STRUCTURE and is deliberately not touched. Nothing about
 	// what a caller may do needs it.
-	// ⚠ Through `appData`, not the class: GetUserInfo is an instance method — who is logged in is
+	// ⚠ Through the base, not the class: GetUserInfo is an instance method — who is logged in is
 	// a fact about a RUNNING application, not about the type.
-	const ibUserInfo& who = appData->GetUserInfo();
+	const ibUserInfo& who = applicationInstance->GetUserInfo();
 
 	if (who.IsOk()) {
 
@@ -2034,7 +2036,7 @@ wxString BuildOrientation()
 		<< wxT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
 		<< wxT("tells your changes from somebody else's.\n\n");
 
-	ibMetaDataConfigurationBase* metaData = activeMetaData;
+	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData(applicationInstance);
 
 	if (metaData == nullptr || !metaData->IsConfigOpen()) {
 		out << wxT("NO CONFIGURATION IS OPEN in this designer yet.\n");
@@ -2529,7 +2531,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		serverInfo.SetValue(wxT("version"), wxString::Format(wxT("build %d"), GetBuildId()));
 
 		// The same orientation text initialize hands over - one source, two doors.
-		result.SetValue(wxT("instructions"), BuildOrientation());
+		result.SetValue(wxT("instructions"), BuildOrientation(m_applicationInstance));
 
 		return ibMcpWriteResult(parsed.m_id, result);
 	}
@@ -2636,7 +2638,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// place this is in a few lines; the notes themselves are NOT inlined, because they can run
 		// to pages and this is read in full at every single connection. It says they exist and
 		// what reads them, which is the part that cannot be guessed.
-		result.SetValue(wxT("instructions"), BuildOrientation());
+		result.SetValue(wxT("instructions"), BuildOrientation(m_applicationInstance));
 
 		// ⭐ THE PERSON IS TOLD SOMEBODY ARRIVED. Until now a client could connect, read the whole
 		// configuration and start working, and the window in front of the person showed nothing
@@ -3094,7 +3096,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
 			wxString text = ok
-				? ibMcpRenderNode(payload, ibMetaTypeResolver(activeMetaData))
+				? ibMcpRenderNode(payload, ibMetaTypeResolver(ibApplicationInstance::GetActiveMetaData(m_applicationInstance)))
 				: refusal;
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
@@ -3206,10 +3208,11 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					// per-cell and per-object, and there may be hundreds. A caller that has this
 					// early writes every language as it goes, which costs nothing extra when the one
 					// writing is a model that can translate.
-					if (!m_saidLanguages && activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+					ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData(m_applicationInstance);
+					if (!m_saidLanguages && metaData != nullptr && metaData->IsConfigOpen()) {
 
 						const std::vector<wxString> languages =
-							ibListMetaObjectNames(activeMetaData, wxT("Language"));
+							ibListMetaObjectNames(metaData, wxT("Language"));
 
 						if (languages.size() > 1) {
 
@@ -3462,7 +3465,8 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		// assistant asking whether anything was said — and it arrives on a timer whether or not
 		// anything happened. Logging it would bury the record it exists to keep, which is the
 		// same reason the window does not show it. Everything else goes in, chat included.
-		if (toolRan && ibLog != nullptr) {
+		ibLogger* const journal = ibApplicationInstance::GetLogger(m_applicationInstance);
+		if (toolRan && journal != nullptr) {
 
 			if (!toolFruitless) {
 
@@ -3476,7 +3480,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 						line << wxT(": ") << toolRefusal;
 				}
 
-				ibLog->Audit(wxT("assistant"), toolOk ? wxT("mcp.did") : wxT("mcp.refused"), line);
+				journal->Audit(wxT("assistant"), toolOk ? wxT("mcp.did") : wxT("mcp.refused"), line);
 			}
 		}
 	}

@@ -104,7 +104,7 @@ public:
 	// happens IN PLACE, so whoever holds this value already has the new one when the call returns;
 	// there is nothing to re-assign and nothing to re-create.
 	//
-	// No frame means no interactive context (daemon, codeRunner, a background job) — and that is
+	// No frame means no interactive context (appserver, codeRunner, a background job) — and that is
 	// said out loud rather than silently ignored: a script that opens an editor where none can be
 	// opened is a mistake, not a no-op.
 	virtual void ShowValue() override;

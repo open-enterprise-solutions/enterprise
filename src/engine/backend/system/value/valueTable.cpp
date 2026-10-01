@@ -270,7 +270,7 @@ const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 	// A RAM table has no metaobject of its own → expose the ACTIVE config, so reference-typed columns resolve
 	// their targets. Mirrors the dynamic list, which gets real config metaData from its queryable; a value-table
 	// has none of its own, so it falls to active.
-	return ibApplicationData::GetActiveMetaData();
+	return ibApplicationInstance::GetActiveMetaData();
 }
 
 const ibUniqueKey& ibValueModelTable::GetGuid() const
@@ -500,7 +500,7 @@ const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueM
 {
 	// The column has no metaobject of its own — expose the active configuration so a reference-typed
 	// column resolves its targets (mirror ibValueModelTable::GetSourceMetaData / ibFormAttribute).
-	return ibApplicationData::GetActiveMetaData();
+	return ibApplicationInstance::GetActiveMetaData();
 }
 
 void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)

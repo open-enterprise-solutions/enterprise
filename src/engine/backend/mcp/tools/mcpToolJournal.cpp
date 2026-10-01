@@ -111,7 +111,7 @@ int LevelFromWord(const wxString& word)
 // binary writes no file at all, which is a different answer from "nothing matched" and is reported
 // as one.
 
-const ibArg& ArgTraceApp() { static const ibArg a(wxT("app"), ibArg::Kind::Text, ibMcpText("Only this application's run: designer, enterprise, daemon, codeRunner. Leave it out to read every application at once - that is usually what is wanted, because the run being debugged is a different process from this one.")); return a; }
+const ibArg& ArgTraceApp() { static const ibArg a(wxT("app"), ibArg::Kind::Text, ibMcpText("Only this application's run: designer, enterprise, appserver, codeRunner. Leave it out to read every application at once - that is usually what is wanted, because the run being debugged is a different process from this one.")); return a; }
 const ibArg& ArgTraceSource() { static const ibArg a(wxT("source"), ibArg::Kind::Text, ibMcpText("Only this subsystem, matched by PREFIX: query catches query.sql, query.road, query.compose and query.stitch; db.firebird is the driver, exception is a raise with its site.")); return a; }
 const ibArg& ArgTraceLevel() { static const ibArg a(wxT("level"), ibArg::Kind::Text, ibMcpText("Lowest severity to report: info, warning, error. The engine's journal has no audit level - that one belongs to journal_read.")); return a; }
 

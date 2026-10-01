@@ -852,6 +852,11 @@ public:
 	/// dtor so this back-pointer is always valid while non-null.
 	ibDatabaseConnectionHolder* GetHolder() const { return m_holder; }
 
+	/// The pool this layer belongs to — the base its transactions run in; nullptr for a layer no pool knows,
+	/// whose transactions are the driver's alone. (Taken into "the current base's" pool, such a layer was
+	/// handed out to that base's queries — see loggerSinkSqlite.cpp.)
+	class ibConnectionPool* GetPool() const { return m_pool; }
+
 	/// True while at least one ibPreparedStatement / ibDatabaseResultSet
 	/// is alive on this layer. The pool consults this in Checkout so a
 	/// conn whose result set is mid-iteration cannot be handed to
@@ -1120,6 +1125,10 @@ protected:
 	/// active TX. Maintained exclusively by ibConnectionPool — see
 	/// ReserveTx / ReleaseTx. nullptr when not pinned.
 	ibDatabaseConnectionHolder* m_holder = nullptr;
+
+	/// The pool that made this layer (Clone) or took it in (Init's primary, an outside layer in ReserveTx).
+	/// Maintained exclusively by ibConnectionPool; nullptr for a layer no pool knows.
+	class ibConnectionPool* m_pool = nullptr;
 	friend class ibConnectionPool;
 
 	/// Add result set object pointer to the list for "garbage collection"

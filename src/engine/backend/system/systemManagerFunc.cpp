@@ -453,7 +453,7 @@ ibBackendValueForm* ibValueSystemFunction::ActiveWindow()
 void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStatusMessage status,
 	const wxString& strEvent, const ibValue& objectValue)
 {
-	ibLogger* const logger = ibApplicationData::GetLogger();
+	ibLogger* const logger = ibApplicationInstance::GetLogger();
 	if (logger == nullptr)
 		return;             // no journal in this process — saying so is not this function's business
 
@@ -591,7 +591,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 
 	// Route through the frame's MessageBox virtual so backend stays
 	// wx-free here. No frame = script is running in a context without
-	// UI (daemon, codeRunner) — default to "Cancel" to keep flows that
+	// UI (appserver, codeRunner) — default to "Cancel" to keep flows that
 	// assume success conservative.
 	auto* frame = ibSession::CurrentFrame();
 	int retCode = frame != nullptr
@@ -1034,7 +1034,7 @@ int ibValueSystemFunction::RunScheduledJobs()
 	if (ibBackendException::IsEvalMode())
 		return 0;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return 0;   // no appData (launcher / pre-bootstrap) — nothing scheduled
 
@@ -1048,7 +1048,7 @@ bool ibValueSystemFunction::RunJob(const wxString& strJobName)
 	if (ibBackendException::IsEvalMode())
 		return false;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return false;
 
@@ -1065,7 +1065,7 @@ ibValue ibValueSystemFunction::RunBackground(const wxString& strProcedureName, i
 	if (ibBackendException::IsEvalMode())
 		return wxEmptyValue;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		ibBackendCoreException::Error(_("Background job: the application is not running"));
 

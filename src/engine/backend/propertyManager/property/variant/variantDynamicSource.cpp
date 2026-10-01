@@ -21,7 +21,7 @@ ibVariantDataDynamicSource::ibVariantDataDynamicSource(const ibBackendQueryable*
 static ibQueryableFactory* ibVariantSourceFactory(const ibMetaData* md)
 {
 	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
-	return factory != nullptr ? factory : ibApplicationData::GetQueryableFactory();
+	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
 const ibBackendQueryable* ibVariantDataDynamicSource::GetQueryable() const

@@ -82,7 +82,7 @@ public:
 	// Open the SCHEDULE editor on `schedule`, editing it IN PLACE; true when the user accepted and
 	// the value actually changed. Same shape as the spreadsheet door above and for the same reason:
 	// the backend owns the value and knows nothing about wx, the frontend owns the window and knows
-	// nothing about jobs. A host without a UI (daemon, codeRunner) inherits the default and simply
+	// nothing about jobs. A host without a UI (appserver, codeRunner) inherits the default and simply
 	// declines, which is the honest answer there.
 	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) { return false; }
 

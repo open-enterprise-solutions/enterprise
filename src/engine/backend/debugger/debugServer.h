@@ -123,12 +123,17 @@ class BACKEND_API ibDebuggerServer {
 		friend class ibDebuggerServer;
 	};
 
-	ibDebuggerServer();
+	// metaData — the configuration that made it and owns it; the debugger asks ITS base through it, never
+	// "the current one" (docs/private/multi-base-process.md).
+	explicit ibDebuggerServer(class ibMetaDataConfigurationBase* metaData);
 	friend class ibMetaDataConfiguration;
 
 public:
 
 	virtual ~ibDebuggerServer();
+
+	class ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData; }
+	class ibApplicationInstance* GetApplicationInstance() const;
 
 	// Process-wide cache. ms_debugServer is maintained by ctor/dtor —
 	// owner is always the active ibMetaDataConfiguration::m_debugServer
@@ -236,6 +241,8 @@ protected:
 private:
 
 	static ibDebuggerServer* ms_debugServer;
+
+	class ibMetaDataConfigurationBase* const m_metaData;
 
 	std::atomic<bool> m_bUseDebug;
 	std::atomic<bool> m_bDebugStopLine;

@@ -11,29 +11,29 @@ namespace appEnv {
 
 ibSessionRegistry* SessionRegistry()
 {
-	return ibApplicationData::GetSessionRegistry();
+	return ibApplicationInstance::GetSessionRegistry();
 }
 
 ibConnectionPool* ConnectionPool()
 {
-	return ibApplicationData::GetConnectionPool();
+	return ibApplicationInstance::GetConnectionPool();
 }
 
 ibLockManager* LockManager()
 {
-	return ibApplicationData::GetLockManager();
+	return ibApplicationInstance::GetLockManager();
 }
 
 ibLogger* Logger()
 {
-	return ibApplicationData::GetLogger();
+	return ibApplicationInstance::GetLogger();
 }
 
 ibPluginManager* PluginManager()
 {
 	// No public static accessor on appData yet — pluginManager has only
 	// been used from inside appData itself. When an outside caller
-	// emerges, promote ibApplicationData::GetPluginManager() and route
+	// emerges, promote ibApplicationInstance::GetPluginManager() and route
 	// here. For now we return nullptr defensively (the function exists
 	// so the namespace surface is symmetric, not because anyone calls it).
 	return nullptr;
@@ -41,7 +41,7 @@ ibPluginManager* PluginManager()
 
 ibMetaDataConfigurationBase* ActiveMetaData()
 {
-	return ibApplicationData::GetActiveMetaData();
+	return ibApplicationInstance::GetActiveMetaData();
 }
 
 ibDebuggerServer* DebugServer()

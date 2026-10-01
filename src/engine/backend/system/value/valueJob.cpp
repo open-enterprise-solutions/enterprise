@@ -4,7 +4,7 @@
 
 #include "valueJob.h"
 
-#include "backend/appData.h"          // ibApplicationData::GetJobManager
+#include "backend/appData.h"          // ibApplicationInstance::GetJobManager
 #include "backend/job/jobManager.h"
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaScheduledJobCLSID
@@ -268,7 +268,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 			ibBackendCoreException::Error(
 				_("the schedule of '%s' could not be written to the base"), m_jobName);
 
-		if (ibJobManager* const manager = ibApplicationData::GetJobManager())
+		if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
 			manager->ApplySettings(m_jobKey, m_active, m_schedule);
 
 		pvarRetValue = true;
@@ -282,7 +282,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 		//
 		// The manager's own handle on an entry is its NAME, so the key is resolved through it
 		// rather than assumed: a job not registered in this session simply says false.
-		ibJobManager* const manager = ibApplicationData::GetJobManager();
+		ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 		if (manager == nullptr) {
 			pvarRetValue = false;
 			return true;

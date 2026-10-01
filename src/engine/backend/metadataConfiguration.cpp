@@ -8,12 +8,12 @@
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
-// to ibApplicationData::m_activeMetaData (a unique_ptr). The fabric
-// lives on ibApplicationData::CreateActiveMetaData / DestroyActiveMetaData;
+// to ibApplicationInstance::m_activeMetaData (a unique_ptr). The fabric
+// lives on ibApplicationInstance::CreateActiveMetaData, its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
 //
-// Subclass ctors are private + friend ibApplicationData, so `new
+// Subclass ctors are private + friend ibApplicationInstance, so `new
 // ibMetaDataConfiguration()` outside that fabric is a compile error —
 // matches the strict ownership rule used by the rest of the appEnv
 // subsystems (sessionRegistry / lockManager / ...).
@@ -246,7 +246,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 	// and whatever is left in the table belongs to something that did not survive the
 	// restructuring. Doing it at the Designer's delete instead would throw the record away while
 	// the user could still walk away without saving.
-	if (ibJobManager* const jobs = ibApplicationData::GetJobManager())
+	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager())
 		jobs->PurgeSharedState();
 
 	// Success — keep the image (LoadGuard.Commit): its presence IS the open state.
@@ -451,8 +451,8 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 	// remain shared if a process ever hosted multiple configurations
 	// simultaneously). Today the runtime stays 1:1, so owning it here
 	// keeps the lifecycle close to where flags arrive. Move up to
-	// ibApplicationData::m_debugServer if multi-metadata lands.
-	m_debugServer.reset(new ibDebuggerServer());
+	// ibApplicationInstance::m_debugServer if multi-metadata lands.
+	m_debugServer.reset(new ibDebuggerServer(this));
 
 	if (!LoadDatabase())
 		return false;
@@ -496,9 +496,10 @@ ibMetaDataConfiguration::~ibMetaDataConfiguration() = default;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibMetaDataConfiguration::ibMetaDataConfiguration(ib::AppDataCtorToken) :
+ibMetaDataConfiguration::ibMetaDataConfiguration(ib::AppDataCtorToken owner) :
 	ibMetaDataConfigurationFile(), m_configNew(true)
 {
+	m_applicationInstance = owner.GetApplicationInstance();
 }
 
 //**************************************************************************************************
@@ -516,9 +517,9 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 	}
 
 	// Designer-side debugger client. Same 1:1-with-metadata footing as
-	// m_debugServer above — promoted to ibApplicationData if multi-metadata
+	// m_debugServer above — promoted to ibApplicationInstance if multi-metadata
 	// hosting becomes a thing.
-	m_debugClient.reset(new ibDebuggerClient());
+	m_debugClient.reset(new ibDebuggerClient(this));
 
 	// Load database
 	if (!LoadDatabase())
@@ -553,9 +554,9 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 
 ////////////////////////////////////////////////////////////////////////////////
 
-ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken token) :
-	ibMetaDataConfiguration(token),
-	m_configMetadata(new ibMetaDataConfiguration(token)) {
+ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner) :
+	ibMetaDataConfiguration(owner),
+	m_configMetadata(new ibMetaDataConfiguration(owner)) {
 	// Designer-edit configuration carries a compile-value cache + its module-manager —
 	// built with the runtime image (CreateDesignerCache below); callsites gate on
 	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().

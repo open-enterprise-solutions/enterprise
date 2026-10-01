@@ -212,7 +212,7 @@ the gap silent.
 ⚠ The description types themselves still HOLD a `wxFont` and two `wxColour`
 (`backend/spreadsheetDescription.h`), which is a standing exception to the GUI-free backend rule and
 the reason a sheet cannot be composed headlessly at all. Naming it here because it bounds what
-`daemon` and `codeRunner` can do on Linux; changing it is an arc of its own.
+`appserver` and `codeRunner` can do on Linux; changing it is an arc of its own.
 
 ### 1.8 An initialiser list that disagrees with the declaration order is a lie
 
@@ -339,7 +339,8 @@ covers the screen.
 
 The engine — backend, compiler, interpreter, query engine, all four drivers — is cross-platform
 as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
-`daemon`, `launcher`, `codeRunner` and `simplePlugin` link on Linux and Windows in CI. Three
+`appserver` (named `daemon` until 2026-10-01), `launcher`, `codeRunner` and `simplePlugin` link on Linux and
+Windows in CI. Three
 toolchains, three standard libraries, two 64-bit models, two CPU architectures, one result.
 
 What that claim does **not** cover, so nobody reads more into the table than it says:

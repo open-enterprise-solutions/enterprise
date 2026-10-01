@@ -11,7 +11,7 @@
 // through the L3 door.
 //
 // Unlike the pure parity tests, this one DOES bring up the global appData env
-// (the way codeRunner does — ibApplicationData::CreateAppDataEnv) plus a
+// (the way codeRunner does — ibApplicationInstance::CreateAppDataEnv) plus a
 // SQLite-only pool, because the temp manager pins a HOLDER's connection and
 // every later statement (fill / read / drop) must land on it. maxSize=1 so the
 // pool always hands out the SINGLE master connection (a :memory: clone would be
@@ -54,9 +54,9 @@ struct TempDbSqliteFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
-		ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		db = std::make_shared<ibDatabaseLayerSQLite>();
@@ -67,8 +67,8 @@ struct TempDbSqliteFix : ::testing::Test {
 		ready = true;
 	}
 	void TearDown() override {
-		if (ibApplicationData::Get() != nullptr)
-			ibApplicationData::DestroyAppDataEnv();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
 

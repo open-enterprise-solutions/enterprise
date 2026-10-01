@@ -195,7 +195,7 @@ Foreach item In items Do Message(item.Name) EndDo
 ### 4.4 Designer = compile-only; runtime fetches data
 
 Generated metadata is loaded by the **Designer** to compile and
-validate. Runtime (Enterprise / Web / Daemon) is where data flows
+validate. Runtime (Enterprise / Web / the application server) is where data flows
 happen. When generating control logic, remember:
 
 - A form opened in Designer's **form editor** must not assume data

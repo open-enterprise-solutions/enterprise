@@ -10,12 +10,12 @@
 // housekeeping runs unattended and how often. One list, one place to read the
 // answer to "what does this process do on its own?".
 //
-// WHO CALLS THIS. ibApplicationData, when a database opens — so every host that
+// WHO CALLS THIS. ibApplicationInstance, when a database opens — so every host that
 // opens one gets the same list without repeating it in its own main.
 //
 // NOT a privileged path. This file holds no mechanism of its own: it fills in
 // ibJobDescription and calls ibJobManager::Register, exactly as any other code
-// would. Reach the manager through ibApplicationData::GetJobManager() and
+// would. Reach the manager through ibApplicationInstance::GetJobManager() and
 // register whatever you like, whenever it makes sense for you to — this is just
 // where the ENGINE's own jobs happen to be listed.
 //
@@ -24,7 +24,7 @@
 
 #include "backend/backend.h"
 
-// Register every platform-owned job with ibApplicationData::GetJobManager().
+// Register every platform-owned job with ibApplicationInstance::GetJobManager().
 // No-op when there is no job manager (launcher, pre-bootstrap). Individual
 // failures are logged and skipped: a housekeeping job that could not register
 // must not stop the application from starting.

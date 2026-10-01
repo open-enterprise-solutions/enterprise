@@ -1,6 +1,7 @@
 #include "connectionPool.h"
 
 #include "backend/appData.h"
+#include "backend/appHost.h"             // Holds — is a holder's pool still standing
 #include "backend/backend_exception.h"   // ibBackendCoreException on pool-exhaustion timeout
 #include "connectionHolder.h"
 #include "connectionScope.h"
@@ -30,19 +31,13 @@ ibDatabaseConnectionHolder* ibConnectionPool::CurrentHolder()
 	return ThreadHolder();
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetActiveTxConnection()
-{
-	auto* pool = ibApplicationData::GetConnectionPool();
-	if (pool == nullptr) return nullptr;
-	auto* holder = CurrentHolder();
-	if (holder == nullptr) return nullptr;
-	return pool->GetReservedTx(holder);
-}
-
 void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> conn)
 {
 	if (!conn) return;
-	auto* pool = ibApplicationData::GetConnectionPool();
+	// ⭐ PINNED IN THE BASE THE TRANSACTION RUNS IN — the layer's own pool: one layer, one pool, one base, one
+	// DBMS. Not "the current base": that is the thread's, another base's or none — a registry thread ending a
+	// session works for none, and asking it threw on every session close (2026-10-01, appserver on Ctrl+C).
+	auto* pool = conn->GetPool();
 	if (pool == nullptr) return;
 	// ⭐⭐ A TRANSACTION TAKES THE CALLING THREAD'S db_query CHANNEL — UNLESS SOMEBODY IS ALREADY IN IT.
 	//
@@ -94,7 +89,7 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 void ibConnectionPool::ClearActiveTxConnection(ibDatabaseLayer* conn)
 {
 	if (conn == nullptr) return;
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = conn->GetPool();   // the one it was pinned in
 	if (pool == nullptr) return;
 	// The holder that pinned this layer is the source of truth — set
 	// by ReserveTx, cleared by ReleaseTx. Read it before calling
@@ -137,16 +132,7 @@ void ibConnectionPool::ReserveTx(ibDatabaseConnectionHolder* holder,
 			return;
 		}
 	}
-	// Conn isn't in our registry — register as a reserved entry.
-	// Happens when a holder begins a TX on a layer the pool didn't hand
-	// out (Designer single-conn mode, externally-supplied conn).
-	conn->m_holder = holder;
-	ibConnectionEntry e;
-	e.conn      = std::move(conn);
-	e.txHolder  = holder;
-	e.startedAt = now;
-	e.lastUsed  = now;
-	m_entries.push_back(std::move(e));
+	// Nothing else comes here: a layer names this pool (m_pool) only while its entry is in it.
 }
 
 void ibConnectionPool::ReleaseTx(ibDatabaseConnectionHolder* holder)
@@ -226,8 +212,22 @@ ibSingleConnectionHolder::~ibSingleConnectionHolder()
 	// Self-clean on dtor — covers static instance teardown at process
 	// exit and stack-local scope unwind. ReleaseAll is idempotent:
 	// no-op if this holder never reserved anything.
-	if (auto* pool = ibApplicationData::GetConnectionPool())
+	//
+	// ⚠ ITS OWN POOL ONLY WHILE ITS BASE STANDS — a session can outlive its base on the way out (a window
+	// destroyed late), and then there is nothing to release into; the process is asked, the pool is not
+	// touched.
+	ibConnectionPool* const pool = m_pool != nullptr
+		? (ibApplicationHost::HasPool(m_pool) ? m_pool : nullptr)
+		: GetPool();
+	if (pool != nullptr)
 		pool->ReleaseAll(this);
+}
+
+ibConnectionPool* ibDatabaseConnectionHolder::GetPool() const
+{
+	// The unnamed holder asks the way that cannot throw (not `required`): it is asked from destructors and
+	// from a scope's unwinding too. The db_query door itself still refuses a thread that named no base.
+	return m_pool != nullptr ? m_pool : ibApplicationInstance::GetConnectionPool(ibApplicationInstance::Get(false));
 }
 
 ibConnectionScope ibDatabaseConnectionHolder::OpenConnectionScope()
@@ -241,14 +241,14 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::AcquireFreeConnecti
 	// deleter parks the entry back in the pool when the caller drops
 	// the last reference. Side-channel for work that must NOT join
 	// the holder's current TX (parallel side query, async refresh).
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = GetPool();
 	return pool != nullptr ? pool->Checkout() : nullptr;
 }
 
 std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection(
 	std::chrono::milliseconds wait)
 {
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = GetPool();
 	if (pool == nullptr) return nullptr;
 	// 1. TX-pinned > 2. scope-bound > 3. fresh Checkout + bind as scope.
 	// Single entry point — replaced the old read-only GetConnection.
@@ -269,7 +269,7 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection(
 
 void ibDatabaseConnectionHolder::Cancel()
 {
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = GetPool();
 	if (pool == nullptr) return;
 	// Read under the pool's lock, cancelled outside it — a driver call never runs under m_mutex.
 	const std::shared_ptr<ibDatabaseLayer> tx    = pool->GetReservedTx(this);
@@ -325,12 +325,6 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetScopeConn(
 	return nullptr;
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetPrimaryConnection()
-{
-	auto* pool = ibApplicationData::GetConnectionPool();
-	return pool != nullptr ? pool->m_source : nullptr;
-}
-
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetDatabaseLayer()
 {
 	// `db_query` macro target — always ThreadHolder. Resolution is fixed to
@@ -340,7 +334,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::GetDatabaseLayer()
 	//   3. Primary fallback (m_source)
 	// Session-aware work uses session->Holder() directly (ses_query) and
 	// never goes through CurrentHolder — pool stays holder-agnostic.
-	auto* pool = ibApplicationData::GetConnectionPool();
+	auto* pool = ibApplicationInstance::GetConnectionPool();
 	if (pool == nullptr) return nullptr;
 	auto* holder = ThreadHolder();
 	if (auto txConn = pool->GetReservedTx(holder))
@@ -362,7 +356,8 @@ ibConnectionScope ibConnectionPool::GetFreeConnection()
 }
 
 
-ibConnectionPool::ibConnectionPool(ib::AppDataCtorToken) {}
+ibConnectionPool::ibConnectionPool(ib::AppDataCtorToken owner)
+	: m_applicationInstance(owner.GetApplicationInstance()) {}
 
 ibConnectionPool::~ibConnectionPool()
 {
@@ -375,7 +370,7 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (auto& e : m_entries) {
-		if (e.conn) e.conn->m_holder = nullptr;
+		if (e.conn) { e.conn->m_holder = nullptr; e.conn->m_pool = nullptr; }
 	}
 	m_entries.clear();
 	m_source   = primary;
@@ -386,6 +381,7 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 		// Master is the first entry and the seed for Clone(). Marked
 		// idle (no holder, not in-use) so the earliest Checkout hands
 		// it out directly rather than paying a Clone() cost.
+		primary->m_pool = this;
 		ibConnectionEntry e;
 		e.conn     = primary;
 		e.lastUsed = now;
@@ -399,6 +395,7 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 	while (m_entries.size() < m_minIdle && m_entries.size() < m_maxSize) {
 		ibDatabaseLayer* raw = primary ? primary->Clone() : nullptr;
 		if (raw == nullptr) break;
+		raw->m_pool = this;
 		ibConnectionEntry e;
 		e.conn     = std::shared_ptr<ibDatabaseLayer>(raw);
 		e.lastUsed = now;
@@ -422,8 +419,9 @@ void ibConnectionPool::Shutdown()
 	for (auto& e : m_entries) {
 		if (e.conn) {
 			e.conn->m_holder = nullptr;
+			e.conn->m_pool   = nullptr;   // a hand-out still alive must not reach a pool that is going away
 			try { if (e.conn->IsOpen()) e.conn->Close(); }
-			catch (...) { /* swallowed: shutdown-time Close failures (e.g. Firebird isc_io_error on already-disconnected DB) must not propagate from this destructor-style path — see ~ibApplicationData → Shutdown chain; an unhandled throw here lands in std::terminate during process exit. */ }
+			catch (...) { /* swallowed: shutdown-time Close failures (e.g. Firebird isc_io_error on already-disconnected DB) must not propagate from this destructor-style path — see ~ibApplicationInstance → Shutdown chain; an unhandled throw here lands in std::terminate during process exit. */ }
 		}
 	}
 	m_entries.clear();
@@ -482,6 +480,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 			ibDatabaseLayer* raw = m_source->Clone();
 			if (raw == nullptr)
 				return nullptr;
+			raw->m_pool = this;
 			// FIRST shared_ptr wrapping `raw` — initialises the weak_ptr
 			// inside std::enable_shared_from_this so future
 			// shared_from_this() calls route through this control block.
@@ -527,6 +526,7 @@ void ibConnectionPool::ReapStaleLocked()
 			&& (now - it->lastUsed >= kIdleTimeout);
 		if (!reapable) { ++it; continue; }
 		if (it->conn->IsOpen()) it->conn->Close();
+		it->conn->m_pool = nullptr;
 		it = m_entries.erase(it);
 		--idleCount;
 	}

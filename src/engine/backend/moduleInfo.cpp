@@ -373,7 +373,7 @@ void ibRuntimeModuleDataObject::UnbindVariable(const wxString& name)
 void ibRuntimeModuleDataObject::Run(bool delta)
 {
 	// Designer never executes script — the editor only cares about
-	// AST / symbol table. Runtime / codeRunner / daemon all go through
+	// AST / symbol table. Runtime / codeRunner / appserver all go through
 	// here.
 	if (appData->DesignerMode())
 		return;

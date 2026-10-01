@@ -118,14 +118,22 @@ int ibAppDesigner::DoOnRun()
 	// exception walked out past the reporting below and closed the process with no message at all.
 	try {
 		if (m_strFile.IsEmpty()) {
-			ret = appDataCreateServer(ibRunMode::eDESIGNER_MODE,
-				m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
-			);
+			ibServerInstanceRequest request;
+			request.m_runMode  = ibRunMode::eDESIGNER_MODE;
+			request.m_server   = m_strServer;
+			request.m_port     = m_strPort;
+			request.m_user     = m_strUser;
+			request.m_password = m_strPassword;
+			request.m_database = m_strDatabase;
+			request.m_locale   = m_strLocale;
+			ret = ibApplicationInstance::CreateServerAppDataEnv(request) != nullptr;
 		}
 		else {
-			ret = appDataCreateFile(ibRunMode::eDESIGNER_MODE,
-				m_strFile, m_strLocale
-			);
+			ibFileInstanceRequest request;
+			request.m_runMode   = ibRunMode::eDESIGNER_MODE;
+			request.m_directory = m_strFile;
+			request.m_locale    = m_strLocale;
+			ret = ibApplicationInstance::CreateFileAppDataEnv(request) != nullptr;
 		}
 	}
 	catch (const ibBackendException&) {

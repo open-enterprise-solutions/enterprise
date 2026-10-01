@@ -350,12 +350,12 @@ struct SessionBench : ::testing::Test {
         wxInitAllImageHandlers();
         if (wxLog::GetActiveTarget() != nullptr)
             delete wxLog::SetActiveTarget(new wxLogStderr());
-        if (ibApplicationData::Get() == nullptr) {
-            if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+        if (ibApplicationInstance::Get() == nullptr) {
+            if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
                 GTEST_SKIP() << "appData env unavailable headless";
             m_ownsAppData = true;
         }
-        if (ibApplicationData::GetSessionRegistry() == nullptr)
+        if (ibApplicationInstance::GetSessionRegistry() == nullptr)
             GTEST_SKIP() << "no session registry after CreateAppDataEnv";
         m_session = std::make_shared<ibSession>(wxString(wxT("bench")), ibSessionKind::Enterprise);
         m_bound   = std::make_unique<ibSessionScope>(m_session.get());
@@ -365,8 +365,8 @@ struct SessionBench : ::testing::Test {
     void TearDown() override {
         m_bound.reset();
         m_session.reset();
-        if (m_ownsAppData && ibApplicationData::Get() != nullptr)
-            ibApplicationData::DestroyAppDataEnv();
+        if (m_ownsAppData && ibApplicationInstance::Get() != nullptr)
+            ibApplicationInstance::DestroyAppDataEnv();
     }
 };
 

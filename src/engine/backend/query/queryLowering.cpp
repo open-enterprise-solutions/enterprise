@@ -21,7 +21,7 @@
 #include "queryProvider.h"                // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
 #include "dbTableProvider.h"              // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
-#include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
+#include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
@@ -122,7 +122,7 @@ ibQueryableFactory* ibSourceMetaDataScope::GetFactory()
 		if (ibQueryableFactory* factory = md->GetSourceFactory())
 			return factory;
 
-	return ibApplicationData::GetQueryableFactory();
+	return ibApplicationInstance::GetQueryableFactory();
 }
 
 namespace {

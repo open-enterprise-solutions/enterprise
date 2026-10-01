@@ -113,7 +113,7 @@ struct BACKEND_API ibHelpEntry {
 	wxString exampleVes;
 
 	// Free-form tier list — OES runtime targets the entry is valid on
-	// (e.g. "Designer, codeRunner, daemon, wenterprise-server").
+	// (e.g. "Designer, codeRunner, appserver, wenterprise-server").
 	// Localised string, no parsing required by readers.
 	wxString availability;
 

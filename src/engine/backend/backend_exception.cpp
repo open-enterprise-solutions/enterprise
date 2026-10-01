@@ -329,7 +329,7 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			// constantly and by design; recording those would bury the failures that matter under
 			// the ones nobody asked about.
 			if (!isEvalMode) {
-				if (ibLogger* const logger = ibApplicationData::GetLogger())
+				if (ibLogger* const logger = ibApplicationInstance::GetLogger())
 					logger->Error(wxT("script"), wxT("runtime.error"),
 						wxString::Format(wxT("%s (%s, line %d)"),
 							err.GetErrorDescription(), strModuleName, (int)error.m_numLine + 1));

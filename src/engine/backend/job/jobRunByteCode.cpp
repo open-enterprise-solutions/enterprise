@@ -172,7 +172,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		return false;
 	}
 
-	ibJobManager* const jobs = ibApplicationData::GetJobManager();
+	ibJobManager* const jobs = ibApplicationInstance::GetJobManager();
 	if (jobs == nullptr) {
 		state.m_refusal = _("Running code: the application is not running");
 		return false;

@@ -45,10 +45,17 @@ const wxString kSysLockTable = wxT("sys_lock");
 
 } // namespace
 
-// No Instance() — ibApplicationData owns the only instance. Callers
-// reach it through ibApplicationData::GetLockManager().
+// No Instance() — ibApplicationInstance owns the only instance. Callers
+// reach it through ibApplicationInstance::GetLockManager().
 
-ibLockManager::ibLockManager(ib::AppDataCtorToken) {}
+ibLockManager::ibLockManager(ib::AppDataCtorToken owner)
+{
+	// Its holder takes connections from ITS base's pool — named once, here (the base builds the pool first),
+	// never asked of "the current one". The holder dies with the base, after the registry that question is
+	// answered through: unnamed, it asked a freed registry on the way out, and every process crashed on exit
+	// (2026-10-01, ~ibLockManager → GetPool → Current → IsDebugThread).
+	m_lockHolder.SetPool(ibApplicationInstance::GetConnectionPool(owner.GetApplicationInstance()));
+}
 
 ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
                                      const ibLockOptions&           opts,

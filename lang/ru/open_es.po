@@ -28,8 +28,8 @@ msgid "Thick client"
 msgstr "Толстый клиент"
 
 #: backend/appData.h:205
-msgid "Deamon"
-msgstr "Демон"
+msgid "Application server"
+msgstr "Сервер приложений"
 
 #: backend/appDataQuery.cpp:238
 #, c-format

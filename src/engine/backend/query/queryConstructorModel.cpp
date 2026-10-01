@@ -8,7 +8,7 @@
 #include "queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
 #include "queryable.h"                   // ibBackendQueryable::GetSourceMetaObject — a table's own reference type
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference
-#include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (no config open)
+#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no config open)
 #include "backend/metaData.h"            // ibMetaData::GetSourceFactory — the config the query runs on behalf of
 #include "backend/srcDataObject.h"       // ibSourceDataObject::ibSourceExplorer — what a source answers its fields with
 
@@ -94,7 +94,7 @@ ibQueryableFactory* ibQueryConstructorModel::Factory() const
 	// The config's OWN factory first (sources register per-config, and it descends to the global one
 	// on a miss); with no config open the global factory is the honest answer, not an error.
 	ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
-	return factory != nullptr ? factory : ibApplicationData::GetQueryableFactory();
+	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
 std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() const

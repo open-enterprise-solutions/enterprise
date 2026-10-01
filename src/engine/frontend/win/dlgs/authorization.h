@@ -36,7 +36,7 @@ private:
 // ibSessionScope, so m_userInfo / m_sessionRawPassword on the scoped
 // session are populated on confirm. Returns true if user confirmed
 // (ShowModal != wxID_CANCEL), false on cancel. Registered as
-// ibApplicationData's InteractiveAuthHook by GUI apps (enterprise /
+// ibApplicationInstance's InteractiveAuthHook by GUI apps (enterprise /
 // designer) at startup so the Authenticate() fallback can prompt
 // without depending on the main frame's lifecycle.
 FRONTEND_API bool ibPromptAuthenticationDialog(const wxString& userName, const wxString& userPassword);

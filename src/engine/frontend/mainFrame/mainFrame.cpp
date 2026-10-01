@@ -83,7 +83,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 	// reacts — it tells the user and closes itself, and closing releases
 	// the holder, which ends the session. Backend stays UI-free: it only
 	// says "this session should reload", never touches a window.
-	if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+	if (auto* reg = ibApplicationInstance::GetSessionRegistry()) {
 		ibSession* const self = GetSession();
 		reg->OnReload([self](ibSession* target) {
 			if (target != self || wxTheApp == nullptr) return;
@@ -852,7 +852,7 @@ ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long
 
 void ibDocBottomStatusBar::OnAssistantPoll(wxTimerEvent& WXUNUSED(event))
 {
-	const ibMcpServer* server = ibApplicationData::GetMcpServer();
+	const ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 	const bool running = server != nullptr && server->IsRunning();
 
 	// ⭐ NOTHING IS TOUCHED WHILE NOTHING CHANGES. SetStatusText invalidates the field,

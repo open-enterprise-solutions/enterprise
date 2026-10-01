@@ -30,13 +30,12 @@ void ibDatabaseLayer::BeginTransaction(const ibTxOptions& opts)
 	if (m_txDepth == 0) {
 		DoBeginTransaction(opts);   // may throw — depth stays 0, state clean
 		m_txAborted = false;
-		// Pin this conn to the current holder (ibSession::Current())
-		// for the whole TX. While set, every db_query call from the
-		// same session — across threads, across worker dispatch —
-		// resolves to this exact conn. SetActiveTxConnection is a
-		// no-op on threads that have no Current() session bound; in
-		// that mode the TX runs at the driver level only and the
-		// caller's own scope is responsible for routing.
+		// Pin this conn for the whole TX, in its own pool (m_pool — the
+		// base the TX runs in): to the calling thread's db_query channel
+		// when that is free, else to its own holder. While set, db_query
+		// on that channel resolves to this exact conn. A layer no pool
+		// knows is not pinned: the TX runs at the driver level and the
+		// caller's own scope routes it.
 		ibConnectionPool::SetActiveTxConnection(shared_from_this());
 	}
 	++m_txDepth;

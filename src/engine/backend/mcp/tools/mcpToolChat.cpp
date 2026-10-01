@@ -24,7 +24,7 @@ namespace {
 
 ibMcpServer* Server(wxString& refusal)
 {
-	ibMcpServer* server = ibApplicationData::GetMcpServer();
+	ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 	if (server == nullptr) {
 		refusal = ibMcpText("There is no assistant server in this process.");
 		return nullptr;

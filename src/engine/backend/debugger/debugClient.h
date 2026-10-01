@@ -333,10 +333,14 @@ class BACKEND_API ibDebuggerClient {
 		friend class ibDebuggerClient;
 	};
 
-	ibDebuggerClient();
+	// metaData — the configuration that made it and owns it; a connection's thread asks it, never "the
+	// current one" (docs/private/multi-base-process.md).
+	explicit ibDebuggerClient(class ibMetaDataConfigurationBase* metaData);
 	friend class ibMetaDataConfigurationStorage;
 
 public:
+
+	class ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData; }
 
 	void SetBridge(ibDebuggerClientBridge* bridge) { m_adapter->SetBridge(bridge); }
 
@@ -682,6 +686,8 @@ private:
 	}
 
 	static ibDebuggerClient* ms_debugClient;
+
+	class ibMetaDataConfigurationBase* const m_metaData;
 
 	ibDebuggerClientConnection* m_activeSocket = nullptr;
 	ibDebuggerClientAdapter* m_adapter = nullptr;

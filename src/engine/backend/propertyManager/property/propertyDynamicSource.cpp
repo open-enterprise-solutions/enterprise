@@ -18,7 +18,7 @@ static ibQueryableFactory* ibDynamicSourceFactory(const ibPropertyObject* owner)
 	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
 	// No owner config → knock on the global base factory (the common/plugin one). It is empty today, so this is a
 	// harmless safety net, not a source of the copy bug (which is fixed by resolving through the config when present).
-	return factory != nullptr ? factory : ibApplicationData::GetQueryableFactory();
+	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
 void ibPropertyDynamicSource::SetSource(const wxString& ns, const wxString& name)

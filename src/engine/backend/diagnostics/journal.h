@@ -93,6 +93,19 @@ public:
 	// complete before it does something drastic can ask.
 	static void Close();
 
+	// Echo every line on standard error as well — the journal's own word for a copy of a line elsewhere (it
+	// echoes to the debugger the same way), and what OES_JOURNAL_STDERR=1 asks, asked by the program itself.
+	// A console host that exists to be watched (the application server) turns it on; everything else leaves it off.
+	static void EchoToStderr();
+
+	// WHICH BASE A LINE IS ABOUT, beyond the thread that wrote it (docs/private/multi-base-process.md § 5.3).
+	// The journal knows nothing about bases, so the process's host installs the question and removes it (null)
+	// when it goes. The answer is put in brackets before the source (`(trade) query.sql`); an empty answer — a
+	// line about no base — leaves the line as it always was. Must not throw, must not wait and must not write
+	// to the journal.
+	using ContextFn = wxString (*)();
+	static void SetContext(ContextFn context);
+
 	// Is anything listening? One atomic read, and the gate every write tests BEFORE formatting, so
 	// a callsite on a hot path costs a load and a branch when the journal is off.
 	static bool IsOpen();

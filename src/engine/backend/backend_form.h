@@ -79,7 +79,7 @@ class BACKEND_API ibBackendValueForm : public ibBackendValue, public ibBackendCo
 public:
 
 	// ibBackendCommandSender — the form IS the command SOURCE, declared HERE (server-side) so a headless caller
-	// (the web server / daemon / codeRunner holding a bare ibBackendValueForm*) can start the command walk and run a
+	// (the web server / appserver / codeRunner holding a bare ibBackendValueForm*) can start the command walk and run a
 	// command with NO front-end. PURE: every concrete form (desktop, web) must vend its commands.
 	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override = 0;
 

@@ -386,10 +386,10 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     wxInitializer wxInit;
     if (!wxInit.IsOk())
         GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-    if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+    if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
         GTEST_SKIP() << "appData env unavailable headless";
-    struct EnvGuard { ~EnvGuard() { if (ibApplicationData::Get() != nullptr) ibApplicationData::DestroyAppDataEnv(); } } guard;
-    ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+    struct EnvGuard { ~EnvGuard() { if (ibApplicationInstance::Get() != nullptr) ibApplicationInstance::DestroyAppDataEnv(); } } guard;
+    ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
     if (pool == nullptr)
         GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
     auto db = std::make_shared<ibDatabaseLayerSQLite>();

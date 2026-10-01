@@ -92,7 +92,7 @@ TEST(ValueStructure, FieldNamesFoldCase) {
 // process locale says how, and a gtest binary runs in "C", where it does not.
 //
 // ⚠ WORTH KNOWING, because it is not a property of this code: the same script
-// sees case-SENSITIVE Cyrillic field names in a headless run (daemon, codeRunner,
+// sees case-SENSITIVE Cyrillic field names in a headless run (appserver, codeRunner,
 // this suite) and case-INSENSITIVE ones under a UI locale. Deciding that is a
 // language question, not a folding one, so this test states the rule and skips
 // where the platform will not honour it rather than asserting either answer.

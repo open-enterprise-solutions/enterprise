@@ -10,19 +10,23 @@
 // signatures) instead of `backend/appData.h` (which transitively
 // brings the connection pool, plugin manager, FB driver headers, ...).
 //
-// Ownership is unchanged — ibApplicationData still creates and destroys
+// Ownership is unchanged — ibApplicationInstance still creates and destroys
 // every subsystem via its m_X unique_ptr members; ctor of each subsystem
-// stays private with `friend ibApplicationData`. The free functions here
-// are out-of-line and delegate to ibApplicationData::GetX() inside
+// stays private with `friend ibApplicationInstance`. The free functions here
+// are out-of-line and delegate to ibApplicationInstance::GetX() inside
 // appEnv.cpp, which is the only file that depends on the heavyweight
 // appData.h.
 //
-// All accessors return nullptr when no appData is alive (pre-init and
-// post-destroy). Callers MUST null-check — the signatures document the
-// precondition explicitly. Subsystems that are mode-gated (logger,
-// metadata, debugger) also return nullptr when the active runMode does
-// not allocate them (e.g. launcher has no metadata; designer has no
-// debug server; codeRunner has no metadata + no debug server).
+// Every accessor answers for the base the calling thread works for — its
+// session's, down the chain (docs/private/multi-base-process.md). They
+// return nullptr when the process holds no base (pre-init and
+// post-destroy), and REFUSE (throw) on a thread with no session and no
+// base while one is open: with several there is no right guess. Callers
+// MUST null-check — the signatures document the precondition explicitly.
+// Subsystems that are mode-gated (logger, metadata, debugger) also return
+// nullptr when the active runMode does not allocate them (e.g. launcher
+// has no metadata; designer has no debug server; codeRunner has no
+// metadata + no debug server).
 
 #include "backend/backend.h"
 
@@ -37,9 +41,9 @@ class ibDebuggerClient;
 
 namespace appEnv {
 
-// ---- Always-on subsystems (created in ibApplicationData ctor) ---------
+// ---- Always-on subsystems (created in ibApplicationInstance ctor) ---------
 // Present in every runMode that has appData at all. nullptr only between
-// process start and ibApplicationData::CreateAppDataEnv, or after
+// process start and ibApplicationInstance::CreateAppDataEnv, or after
 // DestroyAppDataEnv.
 
 BACKEND_API ibSessionRegistry* SessionRegistry();
@@ -52,7 +56,7 @@ BACKEND_API ibPluginManager*   PluginManager();
 // actually use them. Caller's null-check matters more here.
 
 // Audit + trace logger. Created for every mode that opens a DB
-// (enterprise / designer / daemon / wes); nullptr in launcher.
+// (enterprise / designer / appserver / wes); nullptr in launcher.
 BACKEND_API ibLogger* Logger();
 
 // Active configuration metadata — the one the engine has loaded into
@@ -64,7 +68,7 @@ BACKEND_API ibLogger* Logger();
 // live as runtime nodes under ibValueModuleRuntimeManagerExternalDataProcessor
 // / ibValueModuleRuntimeManagerExternalReport on each open session, with their
 // own per-instance ibMetaData. ActiveMetaData() is exclusively the
-// process-wide configuration that backs the running database.
+// configuration that backs the base the calling session works for.
 BACKEND_API ibMetaDataConfigurationBase* ActiveMetaData();
 
 // Debugger endpoints — exclusive of each other. enterprise / wes own

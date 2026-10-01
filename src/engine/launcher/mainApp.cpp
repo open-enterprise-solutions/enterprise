@@ -14,7 +14,7 @@ bool ibAppLauncher::DoOnInit()
 	// ibWxApp::OnInit already armed ibCrashGuard. wxApp.h is header-only,
 	// so no frontend.dll dependency was added — launcher still links
 	// only backend.lib + wxlibs.
-	ibApplicationData::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
+	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
 	m_launcher = new ibFrameLauncher(nullptr, wxID_ANY);
 
 	return wxApp::OnInit() && m_launcher->Show();
@@ -22,7 +22,7 @@ bool ibAppLauncher::DoOnInit()
 
 int ibAppLauncher::OnExit()
 {
-	ibApplicationData::DestroyAppDataEnv();
+	ibApplicationInstance::DestroyAppDataEnv();
 	return wxApp::OnExit();
 }
 

@@ -15,22 +15,21 @@ class ibDebuggerClient;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // activeMetaData — process-wide configuration metadata. Owned by
-// ibApplicationData (m_activeMetaData); reached through the thin
+// ibApplicationInstance (m_activeMetaData); reached through the thin
 // appEnv accessor. nullptr in modes that don't host metadata
 // (launcher, codeRunner). See backend/appEnv.h for the rationale on
 // the namespace-fasad over appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// Lifecycle — fabric on ibApplicationData picks the concrete subclass
+// Lifecycle — fabric on ibApplicationInstance picks the concrete subclass
 // by runMode and stashes the unique_ptr in m_activeMetaData. Returns
 // true on success (or true with no-op for modes that don't allocate
 // metadata, like launcher).
 //
 // `metaDataDestroy()` macro was retired — nobody called it; teardown
-// happens through `~ibApplicationData`, which resets m_activeMetaData
-// (firing the polymorphic dtor chain). Outside-caller-driven destroy
-// would go through `ibApplicationData::DestroyActiveMetaData()` directly.
-#define metaDataCreate(mode, f)	(ibApplicationData::CreateActiveMetaData(mode, f))
+// happens in the base's Close (ibApplicationInstance::Close), which calls
+// OnDestroy and then releases m_activeMetaData (the polymorphic dtor chain).
+#define metaDataCreate(mode, f)	(ibApplicationInstance::CreateActiveMetaData(mode, f))
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {
@@ -52,14 +51,21 @@ public:
 #pragma endregion
 
 protected:
-	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
 	// via the ib::AppDataCtorToken gate. Concrete subclasses take the
 	// token as the first ctor argument; the base ctor stays protected
 	// + arg-less so the chain compiles without re-passing the token at
 	// every level.
 	ibMetaDataConfigurationBase() : ibMetaData() {}
 
+	// ⭐ THE BASE THIS CONFIGURATION WAS MADE FOR — set by the concrete class from its constructor, the way a
+	// registry stamps its sessions: a process may hold several bases, and what a configuration owns (its
+	// debugger) asks its base through here rather than through "the current one".
+	ibApplicationInstance* m_applicationInstance = nullptr;
+
 public:
+
+	ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
 
 	virtual wxString GetConfigMD5() const = 0;
 	virtual wxString GetConfigName() const = 0;
@@ -179,10 +185,10 @@ public:
 	// Called by the appData fabric right after construction (OnInitialize)
 	// and right before destruction (OnDestroy). Subclasses override to
 	// wire run-mode-specific state. Singleton Get()/Initialize()/Destroy()
-	// retired — ownership is on ibApplicationData::m_activeMetaData; the
-	// fabric is ibApplicationData::CreateActiveMetaData.
+	// retired — ownership is on ibApplicationInstance::m_activeMetaData; the
+	// fabric is ibApplicationInstance::CreateActiveMetaData.
 	//
-	// Public so the appData fabric / ~ibApplicationData can call them
+	// Public so the appData fabric / ~ibApplicationInstance can call them
 	// through a base-class pointer without a friend declaration.
 	// Construction itself stays gated on ib::AppDataCtorToken.
 	virtual bool OnInitialize(const int flag) { return true; }
@@ -204,7 +210,7 @@ public:
 	// Public ctor — `ibMetaDataConfigurationFile` is NOT the appData-
 	// owned active metadata (those are the leaf subclasses
 	// `ibMetaDataConfiguration` and `ibMetaDataConfigurationStorage`,
-	// which have private ctor + friend ibApplicationData). The File
+	// which have private ctor + friend ibApplicationInstance). The File
 	// base is instantiated directly by designer document views that
 	// load a stand-alone .obk / XML / JSON for inspection — that is
 	// per-document scratch state, not a coordinator singleton.
@@ -322,13 +328,14 @@ protected:
 	virtual bool OnDestroy();
 
 public:
-	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
 	// (and to ibMetaDataConfigurationStorage, which composes an inner
 	// ibMetaDataConfiguration as the "saved" reference baseline against
 	// which designer edits are compared). Both gate on the
 	// ib::AppDataCtorToken — appData mints once, Storage forwards the
-	// token it received when constructing its inner baseline.
-	explicit ibMetaDataConfiguration(ib::AppDataCtorToken);
+	// token it received when constructing its inner baseline. The token names
+	// the base it is made for (GetApplicationInstance).
+	explicit ibMetaDataConfiguration(ib::AppDataCtorToken owner);
 
 protected:
 
@@ -355,10 +362,10 @@ public:
 
 	virtual ~ibMetaDataConfigurationStorage();
 
-	// Construction restricted to ibApplicationData::CreateActiveMetaData
+	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
 	// via the ib::AppDataCtorToken gate. The inner baseline reference
-	// (m_configMetadata) is constructed by forwarding the same token.
-	explicit ibMetaDataConfigurationStorage(ib::AppDataCtorToken);
+	// (m_configMetadata) is constructed by forwarding the same token — and with it the same base.
+	explicit ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner);
 
 
 	//is config save

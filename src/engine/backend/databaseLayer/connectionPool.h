@@ -24,13 +24,13 @@
 //
 // Public surface — minimal:
 //
-//   Init / Shutdown            — lifecycle (driven by ibApplicationData).
+//   Init / Shutdown            — lifecycle (driven by ibApplicationInstance).
 //   IsInitialised()            — lifecycle probe.
 //   GetFreeConnection()        — RAII scope factory; same as a
 //                                default ibConnectionScope().
 //   GetDatabaseLayer()         — backs the global `db_query` macro.
 //
-// Everything else (CurrentHolder, ThreadHolder, GetPrimaryConnection,
+// Everything else (CurrentHolder, ThreadHolder,
 // Checkout, holder-keyed reservation primitives, scope-binding) is
 // internal. End users go through the holder methods
 // (GetConnection / AcquireFreeConnection) or ibConnectionScope, never
@@ -58,11 +58,15 @@ public:
 	ibConnectionPool(const ibConnectionPool&) = delete;
 	ibConnectionPool& operator=(const ibConnectionPool&) = delete;
 
-	// Construction restricted to ibApplicationData via the
+	// Construction restricted to ibApplicationInstance via the
 	// ib::AppDataCtorToken gate — appData owns the pool for its
 	// lifetime, same pattern as the other appData-owned subsystems.
-	// Callers reach the pool through ibApplicationData::GetConnectionPool().
-	explicit ibConnectionPool(ib::AppDataCtorToken);
+	// Callers reach the pool through ibApplicationInstance::GetConnectionPool().
+	// The token names the base it belongs to; a pool made on its own (the tests) belongs to none.
+	explicit ibConnectionPool(ib::AppDataCtorToken owner);
+
+	// The base this pool belongs to — the chain runs both ways: base → pool, pool → base.
+	class ibApplicationInstance* GetApplicationInstance() const { return m_applicationInstance; }
 
 
 	// Initialise. `primary` is the already-opened master connection —
@@ -151,10 +155,6 @@ private:
 	// (ThreadHolder moved to the public section above — the barrier in ibSchemaBuilder resolves the
 	//  db_query channel's holder through it; CurrentHolder still uses it internally.)
 
-	// Master connection accessor — the conn that the pool Clone()s
-	// from. Used as a fallback by GetDatabaseLayer.
-	static std::shared_ptr<ibDatabaseLayer> GetPrimaryConnection();
-
 	// Borrow a connection. Blocks if all clones are checked out and
 	// the pool is at maxSize. Returns nullptr after Shutdown.
 	// External use is funneled through ibDatabaseConnectionHolder::
@@ -177,13 +177,13 @@ private:
 	void Return(std::shared_ptr<ibDatabaseLayer> conn);
 
 	// Active-transaction state — driven by ibDatabaseLayer's
-	// BeginTransaction / Commit / RollBack at depth 0↔1 transitions.
+	// BeginTransaction / Commit / RollBack at depth 0↔1 transitions,
+	// in the layer's own pool (ibDatabaseLayer::GetPool).
 	// SetActiveTxConnection resolves the holder via CurrentHolder()
 	// (or the conn's existing scope-binding for the ad-hoc holder
 	// pattern); ClearActiveTxConnection reads conn->GetHolder() and
 	// releases that holder's pin. Internal — exposed only to the
 	// layer through static-method visibility.
-	static std::shared_ptr<ibDatabaseLayer> GetActiveTxConnection();
 	static void SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> conn);
 	static void ClearActiveTxConnection(ibDatabaseLayer* conn);
 
@@ -240,6 +240,9 @@ private:
 
 	mutable std::mutex              m_mutex;
 	std::condition_variable         m_cv;
+
+	// The base this pool belongs to (GetApplicationInstance).
+	class ibApplicationInstance* const                m_applicationInstance;
 
 	// Master connection. Always kept alive by the pool so Clone() has
 	// a live source even when every clone is currently checked out.

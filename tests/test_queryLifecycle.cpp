@@ -5,7 +5,7 @@
 // ibQueryResult releases its statement + result set in its destructor — on the
 // normal path, during exception unwind, and exactly once across a move. The
 // full "pool returns to rest after Execute" invariant is integration scope
-// (ibDatabaseQueryBuilder routes through the global ibApplicationData pool) and
+// (ibDatabaseQueryBuilder routes through the global ibApplicationInstance pool) and
 // is exercised against a real SQLite database, not here.
 //
 // Counting mocks: the connection's CloseResultSet / CloseStatement forward to

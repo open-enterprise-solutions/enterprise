@@ -123,9 +123,9 @@ struct FrontendRuntimeFix : ::testing::Test {
 	void SetUp() override {
 		if (ibWxGuiEnvironment::s_instance == nullptr || !ibWxGuiEnvironment::s_instance->IsOk())
 			GTEST_SKIP() << "GUI wxApp unavailable (no display / headless)";
-		if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
-		ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		db = std::make_shared<ibDatabaseLayerSQLite>();
@@ -135,8 +135,8 @@ struct FrontendRuntimeFix : ::testing::Test {
 		ready = true;
 	}
 	void TearDown() override {
-		if (ibApplicationData::Get() != nullptr)
-			ibApplicationData::DestroyAppDataEnv();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
 

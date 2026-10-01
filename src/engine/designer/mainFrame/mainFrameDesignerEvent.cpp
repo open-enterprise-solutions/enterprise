@@ -92,7 +92,7 @@ void ShowBackendErrorChain(wxWindow* parent,
 // proceed without asking anybody anything.
 int CountOtherLiveSessions()
 {
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	if (reg == nullptr)
 		return 0;
 	const ibSession* self = ibSession::Current();
@@ -430,7 +430,7 @@ void ibFrontendMainFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
 	try {
 		if (appData->LoadDatabase(openFileDialog.GetPath())) {
 			wxMessageBox(_("Loading of tasks completed successful. Restart the program!"));
-			if (auto* reg = ibApplicationData::GetSessionRegistry())
+			if (auto* reg = ibApplicationInstance::GetSessionRegistry())
 				reg->CloseAll(true);
 		}
 		else {
@@ -765,7 +765,7 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 	// state kept in an options file — it belongs to the PERSON in this base, so
 	// it is read from and written back to the server that owns it.
 	ibPanelMcpSettings* mcpSettings = dialog.GetMcpSettingsPanel();
-	ibMcpServer* mcpServer = ibApplicationData::GetMcpServer();
+	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer();
 	if (mcpServer != nullptr) {
 		mcpSettings->SetSettings(mcpServer->GetSettings());
 		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
@@ -829,7 +829,7 @@ void ibFrontendMainFrameDesigner::OnToolsSettings(wxCommandEvent& event)
 // sentence at all. Where the answer is in the settings page, the menu says nothing by being grey.
 void ibFrontendMainFrameDesigner::OnUpdateMcpAssistant(wxUpdateUIEvent& event)
 {
-	const ibMcpServer* server = ibApplicationData::GetMcpServer();
+	const ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 
 	event.Enable(server != nullptr && server->IsRunning());
 }

@@ -325,7 +325,7 @@ public:
 // wrong and callers need to tell it apart from everything else that can fail in the same line.
 //
 // USING A FORM ON THE SERVER IS NOT ALLOWED, and this exception is how that rule is enforced rather
-// than worked around. A server (a background job, the daemon, codeRunner, a web-server worker) has
+// than worked around. A server (a background job, appserver, codeRunner, a web-server worker) has
 // no windows; code that reaches for one there has asked the wrong process, and softening the refusal
 // to a silent null would let form-driven logic run half-done and answer DIFFERENTLY on the server
 // than on the client — the failure nobody audits (Max, 2026-09-06: *"you have no right to use forms

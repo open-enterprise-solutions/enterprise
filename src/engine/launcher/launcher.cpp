@@ -374,7 +374,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Shared helper adds --port=0 --manifest=<tempfile>, spawns wes,
 	// polls the manifest and opens the browser at the reported URL.
 	// Any change to the spawn/handshake protocol lives in one place.
-	const long pid = ibApplicationData::SpawnWebServerWithManifest(cmd);
+	const long pid = ibApplicationInstance::SpawnWebServerWithManifest(cmd);
 	if (pid == 0) {
 		ibJournalError(wxT("launcher"), _("Failed to start wenterprise-server: %s"), cmd);
 		return;

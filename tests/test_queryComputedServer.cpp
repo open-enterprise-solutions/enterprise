@@ -30,7 +30,7 @@
 
 #include <wx/init.h>                                         // wxInitializer — bring up wxBase
 
-#include "backend/appData.h"                                 // ibApplicationData
+#include "backend/appData.h"                                 // ibApplicationInstance
 #include "backend/compiler/value.h"                          // ibValue / ibNumber / g_value*CLSID
 #include "backend/typeDescription.h"                         // ibTypeDescription
 #include "backend/databaseLayer/connectionPool.h"            // ibConnectionPool::ThreadHolder
@@ -153,9 +153,9 @@ struct ComputedServerFix : ::testing::Test {
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-		if (!ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
-		ibConnectionPool* pool = ibApplicationData::GetConnectionPool();
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		db = std::make_shared<ibDatabaseLayerSQLite>();
@@ -165,8 +165,8 @@ struct ComputedServerFix : ::testing::Test {
 		ready = true;
 	}
 	void TearDown() override {
-		if (ibApplicationData::Get() != nullptr)
-			ibApplicationData::DestroyAppDataEnv();
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
 	}
 };
 

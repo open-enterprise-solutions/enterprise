@@ -15,7 +15,7 @@
 //
 // DB-free by construction:
 //   * ibMetaDataConfigurationFile has a public ctor (the standalone file-config
-//     holder; the appData-owned subclasses are private + friend ibApplicationData).
+//     holder; the appData-owned subclasses are private + friend ibApplicationInstance).
 //   * SaveConfigToBuffer serializes with saveToFileFlag, which makes SaveSubtree
 //     skip OnSaveMetaObject (the only DB-touching hook on the save path).
 //   * A freshly-built File is never "run" (m_configOpened == false), so

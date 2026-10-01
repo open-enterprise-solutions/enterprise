@@ -75,7 +75,7 @@ void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, co
 	// its own window without asking. The app then ends through wx's
 	// normal teardown, and each window's holder release removes its row.
 	if (retCode == 3) {
-		if (auto* reg = ibApplicationData::GetSessionRegistry())
+		if (auto* reg = ibApplicationInstance::GetSessionRegistry())
 			reg->CloseAll(true);
 	}
 }

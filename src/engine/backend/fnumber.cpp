@@ -638,7 +638,7 @@ ibNumber::ibNumber(double v)
 
 	// `%g` PRINTS THE DECIMAL SEPARATOR OF THE PROCESS LOCALE, and the parser
 	// below reads only the dot. A host sets a locale on startup
-	// (ibApplicationData -> wxLocale::Init -> setlocale), so under any language
+	// (ibApplicationInstance -> wxLocale::Init -> setlocale), so under any language
 	// that separates with a comma — Russian, Ukrainian, German, French — this
 	// produced "0,25", the parse failed, and the value stayed silently ZERO.
 	//

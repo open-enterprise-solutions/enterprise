@@ -14,7 +14,7 @@
 //   desktop     ibFrontendMainFrame   (via ibBackendDocFrame)
 //   web         ibWebFrame            (same base)
 //   compute srv the server-side frame projection driving a thin client
-//   headless    ibApplicationData / the host process itself
+//   headless    ibApplicationInstance / the host process itself
 //
 // Because the holder lives on ibBackendDocFrame, all three UI-bearing
 // cases get it from one place rather than from three parallel

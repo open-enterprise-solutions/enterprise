@@ -80,7 +80,9 @@ namespace {
 // a command from a designer that has not learnt to say which.
 std::shared_ptr<ibSession> ParkedSession(const wxString& sessionGuid)
 {
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	// The registry of the base whose configuration owns this debugger — asked down the chain, because this
+	// runs on the debug thread, which has no session of its own.
+	auto* reg = debugServer != nullptr ? ibApplicationInstance::GetSessionRegistry(debugServer->GetApplicationInstance()) : nullptr;
 	if (reg == nullptr)
 		return nullptr;
 
@@ -122,7 +124,8 @@ bool EvalInParkedSession(const wxString& sessionGuid, const wxString& expr, ibVa
 }
 } // namespace
 
-ibDebuggerServer::ibDebuggerServer() :
+ibDebuggerServer::ibDebuggerServer(ibMetaDataConfigurationBase* metaData) :
+	m_metaData(metaData),
 	m_bUseDebug(false), m_bDebugStopLine(false),
 	m_numCurrentNumberStopContext(0),
 	m_socketConnectionThread(nullptr)
@@ -134,6 +137,11 @@ ibDebuggerServer::ibDebuggerServer() :
 	// first dies, last-writer wins and the first will null the slot
 	// in its dtor only if it still owns it.
 	ms_debugServer = this;
+}
+
+ibApplicationInstance* ibDebuggerServer::GetApplicationInstance() const
+{
+	return m_metaData != nullptr ? m_metaData->GetApplicationInstance() : nullptr;
 }
 
 ibDebuggerServer::~ibDebuggerServer()
@@ -273,7 +281,7 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 	// stay parked at their own breakpoints.
 	if (sessionGuid.IsEmpty()) { WakeAllDebugSessions(); return; }
 
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance());
 	if (reg == nullptr) return;
 
 	// Resolve by sid (GetId(), echoed back by the designer from EnterLoop).
@@ -399,7 +407,7 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// each one resumes and is removed from the queue. Skip when the
 	// registry is gone (post-teardown debug step) — the loop below will
 	// just exit on dbg->m_debugLoop being false anyway.
-	if (auto* reg = ibApplicationData::GetSessionRegistry())
+	if (auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance()))
 		reg->EnterDebugLoop(sess);
 
 	//create stream for this loop
@@ -429,7 +437,7 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// parked session (if any) becomes the new active target for any
 	// debug-thread Current() lookup. Same tolerance as EnterDebugLoop
 	// above for the post-teardown case.
-	if (auto* reg = ibApplicationData::GetSessionRegistry())
+	if (auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance()))
 		reg->LeaveDebugLoop(sess);
 
 #ifdef __WXMSW__
@@ -958,8 +966,13 @@ wxThread::ExitCode ibDebuggerServer::ibDebuggerServerConnection::Entry()
 	// breakpoint instead of returning nullptr (we never bind an
 	// ibSession to this thread directly). Symmetric Unregister at
 	// every exit path below.
+	//
+	// The registry is its OWNER's — the base whose configuration made this debugger — and the registration
+	// is what lets ibSession::Current() on this thread find that registry at all: the thread has no session
+	// and names no base (ibSessionRegistry::ForDebugThread).
 	const auto debugTid = std::this_thread::get_id();
-	if (auto* reg = ibApplicationData::GetSessionRegistry())
+	if (auto* reg = ms_debugServer != nullptr
+			? ibApplicationInstance::GetSessionRegistry(ms_debugServer->GetApplicationInstance()) : nullptr)
 		reg->RegisterDebugThread(debugTid);
 
 	ExitCode retCode = 0;
@@ -978,9 +991,10 @@ wxThread::ExitCode ibDebuggerServer::ibDebuggerServerConnection::Entry()
 #endif // !_WXMSW
 
 	// Symmetric unregister — tolerate a teardown that's already nulled
-	// appData (debug listener thread can outlive ibApplicationData on the
+	// appData (debug listener thread can outlive ibApplicationInstance on the
 	// crash path; we don't want to AV here on the way out).
-	if (auto* reg = ibApplicationData::GetSessionRegistry())
+	if (auto* reg = ms_debugServer != nullptr
+			? ibApplicationInstance::GetSessionRegistry(ms_debugServer->GetApplicationInstance()) : nullptr)
 		reg->UnregisterDebugThread(debugTid);
 
 	if (ms_debugServer != nullptr)
@@ -1225,10 +1239,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		ibWriterMemory commandChannel_VerifyConnection;
 		commandChannel_VerifyConnection.w_u16(CommandId_VerifyConnection);
-		commandChannel_VerifyConnection.w_stringZ(activeMetaData->GetConfigGuid());
-		commandChannel_VerifyConnection.w_stringZ(activeMetaData->GetConfigMD5());
-		commandChannel_VerifyConnection.w_stringZ(appData->GetUserName());
-		commandChannel_VerifyConnection.w_stringZ(appData->GetComputerName());
+		// The configuration that owns this debugger, and its base — down the chain, not "the current one":
+		// this is the debug thread, which has no session of its own.
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetConfigGuid());
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetConfigMD5());
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetApplicationInstance()->GetUserName());
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetApplicationInstance()->GetComputerName());
 		SendCommand(commandChannel_VerifyConnection.pointer(), commandChannel_VerifyConnection.size());
 	}
 	else if (commandFromClient == CommandId_SetConnectionType) {
@@ -1917,7 +1933,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// It goes to the ACCOUNTANT'S journal, not the engine's: this is not a technical event, it
 		// is something that was done with a person's data, and that is exactly the surface an
 		// auditor reads.
-		if (appData != nullptr && appData->GetLogger() != nullptr) {
+		if (ibLogger* const logger = ibApplicationInstance::GetLogger(debugServer->GetApplicationInstance())) {
 
 			const bool taken = png.GetDataLen() > 0;
 
@@ -1932,7 +1948,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					_("The user was asked for a picture of their window and DECLINED. Nothing was "
 					  "captured. Reason given: %s"), reason);
 
-			appData->GetLogger()->Audit(wxT("assistant"),
+			logger->Audit(wxT("assistant"),
 				taken ? wxT("screen.captured") : wxT("screen.refused"), said);
 		}
 
@@ -2049,7 +2065,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// abort rather than pause-and-inspect. Acceptable for now — users
 		// should set breakpoints for inspection; Pause is the "I gave up,
 		// stop it" button.
-		if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+		if (auto* reg = ibApplicationInstance::GetSessionRegistry(debugServer->GetApplicationInstance())) {
 			// Find() now resolves via the live m_own map (see
 			// WakeDebugSession). Fall back to the parked session (front of
 			// the debug queue) so a sid drift still cancels the right

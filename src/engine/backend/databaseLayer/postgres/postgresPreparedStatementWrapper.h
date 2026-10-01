@@ -45,6 +45,10 @@ public:
 	int DoRunQuery();
 	ibDatabaseResultSet* DoRunQueryWithResults();
 
+	// Frees the statement on the server. Called by its owner's Close, once — not by this dtor: the owner's
+	// array holds copies, and a temporary copy dying would free a statement still in use.
+	void Deallocate();
+
 private:
 	ibInterfacePostgres* m_pInterface;
 	PGconn* m_pDatabase;

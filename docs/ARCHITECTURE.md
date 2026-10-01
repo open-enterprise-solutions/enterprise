@@ -21,7 +21,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Executables                             │
-│  designer.exe   enterprise.exe   launcher.exe   daemon.exe   │
+│  designer.exe   enterprise.exe   launcher.exe  appserver.exe │
 │  codeRunner.exe                                              │
 └────────────┬─────────────────┬────────────────┬─────────────┘
              │                 │                │
@@ -29,7 +29,7 @@
 ┌────────────────────┐  ┌────────────────────────────────────┐
 │   frontend.dll     │  │           backend.dll              │
 │                    │  │                                    │
-│  ibValueForm       │◄─►  ibApplicationData (singleton)     │
+│  ibValueForm       │◄─►  ibApplicationHost → its bases     │
 │  ibVisualHost      │  │  ibMetaDataConfiguration           │
 │  18 Controls       │  │  ibCompileCode / ibProcUnit        │
 │  ibMainFrame       │  │  ibDatabaseLayer (+ 4 drivers)     │
@@ -60,7 +60,7 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 | `designer.exe` | `eDESIGNER_MODE` | Full IDE — metadata editor, form designer, debugger client |
 | `enterprise.exe` | `eRUNTIME_MODE` | Desktop thick-client runtime (GUI, single user session per process) |
 | `wenterprise-server.exe` | `eWEB_RUNTIME_MODE` | Web runtime host — HTTP server, N per-cookie user sessions, browser client |
-| `daemon.exe` | `eSERVICE_MODE` | Headless background service |
+| `appserver.exe` | `eSERVICE_MODE` | The application server: holds the bases of its server folder, headless |
 | `codeRunner.exe` | `eSERVICE_MODE` | Executes a single script module |
 
 > Both thick-client and web hosts are "runtime", differing only in UI transport — hence `eRUNTIME_MODE` / `eWEB_RUNTIME_MODE` (renamed from the former `eENTERPRISE_MODE` / `eWEB_ENTERPRISE_MODE`).
@@ -69,16 +69,17 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 
 The backend is the core engine. It is self-contained — no GUI dependencies. Key objects:
 
-- **`ibApplicationData`** (`src/engine/backend/appData.h`) — master runtime object; holds the database connection pool, run mode, and application metadata. Accessed via the `appData` macro. No longer holds per-session state (user info, ProcUnits, frame moved to `ibSession`) and no longer mediates table-level queries — sys_user lives on `ibUserInfo` (`Read` / `Save` / `HasAny` / `ListAll` / `Serialize` / `Deserialize`), sys_session snapshot lives on `ibSessionSnapshot` produced by `ibSessionRegistry`. `appData` is now the *process*-level coordinator (run mode, DB pool, metadata factory), not a generic gateway.
+- **`ibApplicationHost`** (`src/engine/backend/appHost.h`) — the PROCESS: the bases it holds, and what belongs to the process rather than to any base — the plugins, the platform locale and the syntax-helper corpus, the one worker pool, the limits read from `backend.conf`. See [Processes and bases](#processes-and-bases).
+- **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, MCP server, settings storage, logger and metadata. A process holds one (every desktop host, the web host, the tests) or several (the application server). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
 - **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData`. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
-- **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and process-wide session manager. The session is reachable via `ibSession::Current()`, which dispatches by `AccessMode` — `Single` (one session per process: desktop, daemon, codeRunner) returns the lone session regardless of thread; `Shared` (wenterprise-server) does per-thread lookup with a process-wide fallback. `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
+- **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`, which dispatches by the registry's `AccessMode` — `Single` (desktop, the application server's bases, codeRunner) returns the lone session regardless of thread; `Shared` (wenterprise-server) does per-thread lookup with a process-wide fallback. `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
 ### Frontend Layer (`frontend.dll`, `wfrontend.dll`)
 
 Two sibling DLLs share the same form/view/control code paths through `OES_USE_WEB` ifdefs and `ibFrontendWindow` typedef (`wxWindow` for desktop, `ibWebWindow` for web):
 
-- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `daemon.exe`, `codeRunner.exe`.
+- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `launcher.exe`, `codeRunner.exe`. (`appserver.exe` links `backend` alone.)
 - **`wfrontend.dll`** — web UI (HTML serialisation of form control trees via `ToJSON()`, cpp-httplib transport). Used by `wenterprise-server.exe`.
 
 Shared frontend objects:
@@ -91,90 +92,99 @@ Shared frontend objects:
 
 ## Application Bootstrap and Ownership
 
-OES runs on a single coordinator — `ibApplicationData` (`backend/appData.h`) — that owns every process-wide subsystem. No subsystem has a static `Instance()` of its own; every `Get*()` returns `nullptr` before bring-up and after teardown, callers null-check. The pattern is the same for every entry-point binary (enterprise / designer / launcher / codeRunner / daemon / wes); only the run-mode flag and the wxApp class change.
+### Processes and bases
 
-### The sandwich
+A process holds **one base or several**. `ibApplicationHost` (`backend/appHost.h`) is the process: it owns its bases (`std::unique_ptr<ibApplicationInstance>`, in the order they were opened) and whatever is the process's rather than a base's. `ibApplicationInstance` (`backend/appData.h`) is one base and owns that base's subsystems. Every desktop host, the web host and the tests hold one base; the application server (`appserver.exe`) holds every base of its server folder. Design and decisions: `docs/private/multi-base-process.md`.
 
-```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ exe-specific main()                                             │
-  │   • argv parsing, runMode pick                                  │
-  │   • ibCrashGuard::Install (headless) OR ibWxApp::OnInit (GUI)   │
-  │   • appDataCreateFile / appDataCreateServer                     │
-  └────────────────────────────┬────────────────────────────────────┘
-                               │
-                               ▼
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ ibApplicationData ctor — wires every subsystem in init order    │
-  │                                                                 │
-  │   m_connectionPool    ◄── primary DB layer, lazy clones         │
-  │   m_pluginManager     ◄── scans plugins/ and loads .dll         │
-  │   m_lockManager       ◄── sys_lock coordinator                  │
-  │   m_queryableFactory  ◄── L4 query-engine source factory        │
-  │   m_sessionRegistry   ◄── ibSession registry + worker pool      │
-  │   m_logger            ◄── audit+trace sink (.olg); lazy after DB │
-  │   m_helpService       ◄── syntax-helper corpus; lazy in locale  │
-  │   m_activeMetaData    ◄── per-runMode fabric, populated later   │
-  │                                                                 │
-  │   (each owned subsystem ctor takes ib::AppDataCtorToken)        │
-  └────────────────────────────┬────────────────────────────────────┘
-                               │
-                               ▼
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ ibSession (per-cookie on web, single on desktop)                │
-  │   • holds a connection holder out of the pool                   │
-  │   • owns a per-session ibProcUnit (runtime)                     │
-  │   • frame/document graph on GUI; visual host on web             │
-  └─────────────────────────────────────────────────────────────────┘
-```
+There is **no global current base**. A thread reaches a base through a chain of owners: its session → the session's registry → the base → the process. `ibApplicationInstance::Get()` (the `appData` macro) answers the base of the session the thread works for, else the base the thread is bound to (`ibApplicationInstanceScope`: the thread opening or closing a base, a model's read thread, the web server's HTTP threads). A thread with neither is refused with an exception; `Get(false)` answers null instead, for destructors and teardown. A base's own service threads (the registry, the job tick) do not bind — they hold their base and ask it. Every `Get*()` returns `nullptr` before the first base opens and after the last one closes.
 
-### Construction order (`ibApplicationData::ibApplicationData`)
+| Owner | Holds |
+|---|---|
+| `ibApplicationHost` — the process | its bases; the plugins (loaded once); the platform locale and the syntax-helper corpus; ONE worker pool for every base; the limits of `backend.conf` (`Workers`, `Bases`, the default `Connections`) |
+| `ibApplicationInstance` — a base | connection pool (sized by the base's own `infobase.conf`), lock manager, L4 queryable factory, session registry, job manager, MCP server, settings storage, logger, active metadata |
+| `ibSession` | its connection holder, its runtime (ProcUnits), its frame or visual host |
 
-The init list is **the** ordering contract. Listed in the order they're constructed:
+A connection layer knows its pool (`ibDatabaseLayer::GetPool`), so a transaction is pinned in the base it runs in, never in "the current" one.
 
-| # | Field | What it does | Why this slot |
-|---|---|---|---|
-| 1 | `m_connectionPool` | Pool of `ibDatabaseLayer` — master + lazy clones | Everything else needs DB access; this must exist first. |
-| 2 | `m_pluginManager` | Loads `plugins/*.dll` | Plugins may need `db_query` (=pool). |
-| 3 | `m_lockManager` | `sys_lock` table coordinator | Independent — could move; ordered for readability. |
-| 4 | `m_queryableFactory` | L4 query-engine source factory (`ibQueryableFactory`) | Descriptor contents follow the metadata open/close lifecycle; the object itself lives with appData. |
-| 5 | `m_sessionRegistry` | Session registry + worker pool (`PickWorkerCount(runMode)` workers) | After pool so first session can already check connections out. |
-
-`m_logger` is created lazily in `CreateLogger()` after the DB opens (not in the init list).
-
-`m_helpService` (syntax-helper corpus) is constructed lazily in `InitLocale()` once the platform locale is settled — corpus directory naming depends on the canonicalised locale code, so the service can't come up before locale resolution finishes. See `docs/syntax-helper-design.md` for the loader / `ZipSource` / pack-on-build pipeline.
-
-`m_activeMetaData` is populated later by `CreateActiveMetaData(mode, flags)` — the fabric picks a concrete subclass (`ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer) by `runMode`. Launcher/codeRunner have no metadata at all.
-
-### Destruction order (`~ibApplicationData`)
-
-The destructor does **business actions only** (the explicit hooks each subsystem needs before its dtor fires). It does NOT call `reset()` on any `unique_ptr` field — destruction is left to the compiler-generated sweep in **reverse declaration order**. Declaration order in `appData.h` is chosen so reverse sweep gives the safe sequence:
+### Opening a base
 
 ```
-~ibApplicationData() {
-    m_activeMetaData->OnDestroy();      // business hook
-    m_sessionRegistry->Stop();          // drain workers, DELETE sys_session
-    m_pluginManager->UnloadAll();       // each plugin sees Destroy()
-    m_connectionPool->Shutdown();       // invalidate handouts
-    // dtor sweep follows, in reverse declaration order:
-    //   m_activeMetaData     (last declared → destroyed first)
-    //   m_helpService
-    //   m_sessionRegistry
-    //   m_logger             (own SQLite, no external deps)
-    //   m_queryableFactory
-    //   m_lockManager
-    //   m_pluginManager
-    //   m_connectionPool     (first declared → destroyed last)
+  exe-specific main()
+    • argv parsing, runMode pick
+    • ibCrashGuard::Install (headless) OR ibWxApp::OnInit (GUI)
+    • ibApplicationInstance::CreateFileAppDataEnv(ibFileInstanceRequest)
+      or CreateServerAppDataEnv(ibServerInstanceRequest)     ← run mode, name, locale + the DBMS's
+          │
+          ├─ ibApplicationHost::Ensure(runMode)   the process comes up with its first base;
+          │                                       one beyond backend.conf `Bases` is refused
+          ├─ the driver opens the database        Firebird file / PostgreSQL server
+          ├─ new ibApplicationInstance            its subsystems, in init order (below)
+          └─ ibApplicationInstance::Open          ONE road for every kind of base:
+               listed in the process, the opening thread working for it,
+               pool (infobase.conf `Connections`), CanOpen (held by another process?),
+               system tables + migrations, locale, logger, platform jobs.
+               Refused or thrown → closed again, alone; the other bases stay.
+```
+
+### Construction order (`ibApplicationInstance::ibApplicationInstance`)
+
+The init list is **the** ordering contract:
+
+| # | Field | Why this slot |
+|---|---|---|
+| 1 | `m_connectionPool` | Everything else needs DB access. `Open` inits it once the database is open. |
+| 2 | `m_lockManager` | Its holder names the pool from the token — it never asks "the current" one. |
+| 3 | `m_queryableFactory` | L4 query-engine source factory; its descriptors follow the metadata's open/close. |
+| 4 | `m_sessionRegistry` | After the pool, so the first session can already check connections out. Its work runs on the process's worker pool. |
+| 5 | `m_jobManager` | The base's scheduled jobs; each run opens a session of its own. |
+| 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
+| 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
+
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(mode, flags)` — `ibMetaDataConfiguration` for runtime, `ibMetaDataConfigurationStorage` for designer; launcher and codeRunner have none. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+
+### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
+
+Two steps. The base is first **closed while it is still listed** — its sessions, removing their rows as the registry stops, ask `ibApplicationHost::HasRegistry` whether their registry still stands, and the answer must be yes — and only then taken out of the set and freed, an empty shell:
+
+```
+ibApplicationInstance::Close() {
+    m_jobManager->Stop();               // nothing of ours still runs against what goes next
+    m_mcpServer->Stop();
+    m_sessionRegistry->Stop();          // drains this base's work off the shared pool, DELETEs sys_session
+    m_activeMetaData->OnDestroy();
+    m_connectionPool->Shutdown();
+    // then every field is released in reverse declaration order, each emptied under the
+    // process's lock first, so a question asked after it is gone reads "none"
 }
 ```
 
-If a new subsystem joins, **add the business hook to the dtor body** and **append the field in declaration order so it dies before its dependencies**.
+`ibApplicationHost::CloseAll` closes every base newest first, then the process: its worker pool is joined, then the plugins unload. `Close()` is idempotent — the destructor runs it again over the shell. If a new subsystem joins, add its hook to `Close()` and append the field in declaration order so it dies before its dependencies.
 
 ### Token pattern for subsystem construction
 
-Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`) as its first argument. The token's default ctor is private; only `ibApplicationData` is a friend, so only it can mint a token. External code that tries `new ibSessionRegistry(…)` gets a compile error — token is unreachable.
+Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance` and `ibApplicationHost` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus).
 
-Why a token instead of `friend class ibApplicationData` on each subsystem header? Friend scattered across 7 headers means refactoring appData ripples into every owned class. A single token type centralises the "who can build subsystems" decision; subsystem headers stay clean and declare ctors public.
+Why a token instead of a friend declaration on each subsystem header? Friends scattered across seven headers mean refactoring the owner ripples into every owned class. One token type keeps the "who can build subsystems" decision in one place; subsystem headers declare their ctors public.
+
+### The application server (`appserver.exe`, `src/engine/appserver/`)
+
+A headless process that serves the bases of its **server folder** (`--dir`, by default `server` beside the executable):
+
+```
+<server folder>/
+  server.conf      one group per base: Kind=firebird|postgresql, Id, Path or Server/Port/Database/User/Password,
+                   IbUser/IbPassword — the Id is assigned at the first start and written back
+  server.key       this installation's key, made at the first start
+  <Id>/            one folder per base: its journal (oeslog) and infobase.conf; a Firebird base's sys.fdb too
+```
+
+- **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). 0 means the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
+- **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
+- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVICE_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
+- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers share a base with application servers, clients with clients — a client (designer, enterprise, the web host) is refused while a server serves the base, and a server while a client uses it. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
+- **Journal:** every line about a base carries its name — `(trade1) source …` — and the console shows what goes to the file.
+- **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
+- **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
 
 Unit tests build subsystems directly (no full appData) — the test CMake target defines `OES_TESTING`, which opens the token's default ctor inside test TUs only. Production builds (sln / CMake non-test) leave it undefined and the gate stays closed.
 
@@ -185,7 +195,7 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
 | Binary type | Helper | What it wires |
 |---|---|---|
 | GUI (`enterprise` / `designer` / `codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal). Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
-| Console (`wenterprise-server` / `daemon`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer`, runs `wxSocketBase::Initialize`, calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
+| Console (`wenterprise-server` / `appserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer`, runs `wxSocketBase::Initialize`, calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
 
 ### Crash plumbing layers
 
@@ -645,7 +655,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 
 `ibSession::Current()` is the canonical "session this code is currently working on". Dispatch depends on `AccessMode` (a process-wide setting fixed at startup before any session is created):
 
-- **Single** (desktop, daemon, codeRunner) — one session per process for its lifetime. `Current()` returns the lone session regardless of thread.
+- **Single** (desktop, codeRunner, each base of the application server) — one session per registry for its lifetime. `Current()` returns the lone session regardless of thread.
 - **Shared** (wenterprise-server) — per-thread lookup of bound sessions, with a process-wide fallback for threads that aren't bound (registry consumer, signal handlers).
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (codeRunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
@@ -658,7 +668,7 @@ Runtime ProcUnits live on per-session descriptors. The session's root `ibValueMo
 
 - **Single-consumer queue + priority** — one registry thread processes `Add / Attach / Detach / Remove / SetActivity` requests (Urgent → Normal → Low → Background). All DB mutation for `sys_session` happens on this thread.
 - **Liveness via heartbeat on `lastActive`** — each process's `JobHeartbeatOwn` UPDATEs `lastActive` on its own `sys_session` rows every ~1s. Any row trailing `now` by more than `kStaleCutoffSec` (10s, in `sessionRegistry.cpp`) is treated as a zombie and DELETEd by another process's sweep. The earlier row-lock-as-source-of-truth design (a long-running `SELECT ... WITH LOCK` over own-session rows, probed via `TryProbeRowLock`) was **rolled back** — it self-deadlocked (see `session-registry.md §4`); only retirement comments remain in code. Record write protection is a separate concern — optimistic `DataVersion` check + the `sys_lock` table, see [record-locks.md](private/record-locks.md).
-- **Connect/Disconnect API** — desktop `ibApplicationData::Connect` and web `ibWebSession::Login` both call `registry.Connect(req)` which returns an `ibSessionTicket` (RAII, dtor submits Remove@Urgent).
+- **Connect/Disconnect API** — desktop `ibApplicationInstance::CreateSession` and web `ibWebSession::Login` both call `registry.Connect(req)` which returns an `ibSessionTicket` (RAII, dtor submits Remove@Urgent).
 - **Single mutator of session state.** `ibSession`'s state-machine mutators (`Transition`, `TransitionAuth`, `SetIdentity`, `SetInserted`, `WaitForState`, `WaitForAuth`) and auth-flow setters (`SetUserInfo`, `EnableDebug`, `SetSessionRawPassword`) are private under `friend ibSessionRegistry`. Public façades `ibSessionRegistry::InstallUser(s, info, pwd)` and `EnableDebugForSession(s)` are the only entry points for auth bring-up — `appData` and login dialogs route through them, never poke session internals directly.
 - **Cluster snapshot** — `ibSessionRegistry::GetClusterSnapshot()` returns `ibSessionSnapshot` (formerly `ibApplicationDataSessionArray` on `appData`), refreshed every ~3s by `JobRefreshSnapshot`. Snapshot now lives in `backend/session/sessionSnapshot.{h,cpp}`.
 
@@ -685,7 +695,7 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 - Forms, per-instance catalog/document runtimes, external data processors / reports hang off as children of the root via the same descriptor mixin (`m_parent` raw-pointer chain; container enforces parent-outlives-child).
 - Concurrent sessions therefore run on **physically separate** ProcUnit instances. The shared resource is the immutable `ibByteCode` (read-only); per-session frame stacks, locals, and binders are isolated.
 
-**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibApplicationData::Connect` for desktop / `ibWebSession::Login` for web) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
+**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibApplicationInstance::CreateSession` for desktop / `ibWebSession::Login` for web) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
 
 **Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Desktop has N=1 session on the wx main thread; web has N per-cookie sessions, each pinned to its own worker. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (codeRunner sandbox / system bootstrap).
 
@@ -725,7 +735,7 @@ ibPreparedStatement  (abstract)
 
 ### Access Pattern
 
-All database access goes through the `db_query` macro, which is `ibApplicationData::GetDatabaseLayer()` — it resolves through the connection pool and returns a `std::shared_ptr<ibDatabaseLayer>` (the active checked-out layer). Example:
+All database access goes through the `db_query` macro, which is `ibApplicationInstance::GetDatabaseLayer()` — it resolves through the connection pool of the thread's base and returns a `std::shared_ptr<ibDatabaseLayer>` (the active checked-out layer). Example:
 
 ```cpp
 ibDatabaseResultSet* rs = db_query->RunQueryWithResults(
@@ -882,7 +892,7 @@ The server runs each connection as a `wxThread` (`ibDebuggerServer::ibDebuggerSe
 
 ```
 launcher.exe (or direct enterprise.exe with CLI creds)
-  └─ ibApplicationData::CreateServerAppDataEnv(mode, server, port, ibUser, ibPwd, db, locale)
+  └─ ibApplicationInstance::CreateServerAppDataEnv(ibServerInstanceRequest{ mode, server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
             └─ appData->CreateSession<ibEnterpriseSession>()        # phased session lifecycle
                  # registry runs Connect(req) under the session factory:
@@ -892,7 +902,7 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                  #     (ibGUISession overrides — builds the wx frame here)
                  └─ session->Open(user, password)                   # auth orchestration
                       └─ ticket.Attach(user, pwd) — Submit(Attach, Normal)
-                           └─ ibApplicationData::AuthenticateUser
+                           └─ ibApplicationInstance::AuthenticateUser
                                   (PBKDF2 preferred, MD5 silent-upgrade path)
                                 └─ InstallUser writes session->m_userInfo
                                      └─ NotifyAuthenticated phases (registry-driven):

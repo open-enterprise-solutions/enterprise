@@ -8,6 +8,7 @@
 // sys_job goes through the L2 door: it renders the dialect (upsert above all) so
 // nothing here has to ask which driver it is on.
 #include "backend/databaseLayer/databaseQueryBuilder.h"
+#include "backend/databaseLayer/connectionHolder.h"   // a holder bound to the named base's pool
 // ibBackendQueryException — the write tells "no connection" from "the base said no" by its Kind.
 #include "backend/query/queryException.h"
 #include "backend/session/sessionException.h"   // NoBase = the session had no connection to give
@@ -29,10 +30,15 @@
 // SELECT failed — is worse than running it twice.
 // ---------------------------------------------------------------------------
 
-ibDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key)
+ibDateTime ibJobManager::ReadSharedLastRun(const ibGuid& key, const ibApplicationInstance* applicationInstance)
 {
 	try {
-		ibDatabaseQueryBuilder q;
+		// THROUGH THE NAMED BASE'S POOL when there is one — the tick asks about its own base from a thread with
+		// no session to ask "the current one" through — else the calling thread's db_query channel (a run,
+		// under its session).
+		ibSingleConnectionHolder own;
+		own.SetPool(ibApplicationInstance::GetConnectionPool(applicationInstance));
+		ibDatabaseQueryBuilder q = applicationInstance != nullptr ? ibDatabaseQueryBuilder(&own) : ibDatabaseQueryBuilder();
 		ibQueryResult rs = q.From(job_table)
 			.Select({ wxT("lastRun") })
 			.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("jobKey")), ibParam(0)))

@@ -65,6 +65,10 @@
     </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
+    <ClInclude Include="appHost.h" />
+    <ClInclude Include="cipher\fieldCipher.h">
+      <Filter>cipher</Filter>
+    </ClInclude>
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h">
       <Filter>syntaxHelper</Filter>
@@ -925,6 +929,9 @@
     <ClInclude Include="session\designerExclusivePolicy.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\serviceExclusivePolicy.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="session\workerPool.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -1158,6 +1165,10 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />
+    <ClCompile Include="appHost.cpp" />
+    <ClCompile Include="cipher\fieldCipher.cpp">
+      <Filter>cipher</Filter>
+    </ClCompile>
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp">
       <Filter>syntaxHelper</Filter>
@@ -2365,6 +2376,9 @@
     <ClCompile Include="session\designerExclusivePolicy.cpp">
       <Filter>session</Filter>
     </ClCompile>
+    <ClCompile Include="session\serviceExclusivePolicy.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
     <ClCompile Include="session\workerPoolHeadless.cpp">
       <Filter>session</Filter>
     </ClCompile>
@@ -2597,6 +2611,9 @@
     </Filter>
     <Filter Include="session">
       <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cipher">
+      <UniqueIdentifier>{7c3e9a41-5b2d-4f8e-9a61-2d4c8b7e1f35}</UniqueIdentifier>
     </Filter>
     <Filter Include="lock">
       <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>

@@ -1,8 +1,10 @@
 #include "sessionRegistry.h"
 #include "sessionPolicy.h"
 #include "designerExclusivePolicy.h"
+#include "serviceExclusivePolicy.h"
 
 #include "backend/appData.h"
+#include "backend/appHost.h"   // SetThreadOwner — the registry thread's journal lines name its base
 #include "sessionSnapshot.h"
 #include "backend/backend_exception.h"
 #include "backend/guid.h"
@@ -81,31 +83,22 @@ constexpr int  kSilentSeconds     = static_cast<int>(
 #define SESSION_LOG(expr) do { std::ostringstream _o; _o << expr; LogSession(_o.str()); } while(0)
 
 // No static `Instance()` definition here — accessor moved to
-// `ibApplicationData::GetSessionRegistry()` (declared inline in appData.h).
+// `ibApplicationInstance::GetSessionRegistry()` (declared inline in appData.h).
 // Single coordinator pattern: subsystems do not own their own global
 // state, they exist for the duration of appData.
 
-ibSessionRegistry::ibSessionRegistry(ib::AppDataCtorToken, std::size_t maxWorkers)
+ibSessionRegistry::ibSessionRegistry(ib::AppDataCtorToken owner)
+	: m_applicationInstance(owner.GetApplicationInstance())
 {
-	// Allocate the worker pool here so registry owns the whole
-	// session-management subsystem end-to-end: pool stops before
-	// sessions tear down inside our Stop(). maxWorkers == 0 means
-	// "no pool" — desktop GUI modes that run a single session on the
-	// wx main thread don't need a thread pool at all.
-	if (maxWorkers > 0)
-		m_workerPool = std::make_unique<ibWorkerPoolHeadless>(maxWorkers);
+	// Its own writes go through its base's pool — reached down the chain once, here, where the pool already
+	// stands (the base builds it first), and never asked of "the current one" from the registry thread.
+	m_writeHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
 }
 
-void ibSessionRegistry::SetWorkerPool(std::unique_ptr<ibWorkerPool> pool)
+ibWorkerPool* ibSessionRegistry::GetWorkerPool() const
 {
-	// Drain the outgoing pool before it dies: Stop() lets pending tasks
-	// run to completion against sessions that are still alive, which a
-	// plain reset would not (the unique_ptr would destroy the pool with
-	// queued work still in it).
-	if (m_workerPool != nullptr)
-		m_workerPool->Stop();
-
-	m_workerPool = std::move(pool);
+	ibApplicationHost* const host = m_applicationInstance != nullptr ? m_applicationInstance->GetHost() : nullptr;
+	return host != nullptr ? host->GetWorkerPool() : nullptr;
 }
 
 void ibSessionRegistry::CloseAll(bool force)
@@ -147,7 +140,7 @@ void ibSessionRegistry::EnableDebugForSession(ibSession* s)
 ibSessionRegistry::~ibSessionRegistry()
 {
 	// Best-effort — in normal shutdown Stop() should have been called via
-	// ibApplicationData::Disconnect. Reaching the dtor with m_thread still
+	// ibApplicationInstance::Disconnect. Reaching the dtor with m_thread still
 	// joinable means something forgot to stop; join here so the process
 	// doesn't terminate with a running thread (which std::thread's dtor
 	// would turn into std::terminate anyway).
@@ -232,6 +225,10 @@ void ibSessionRegistry::EnsureStartedForCreateSession(ibRunMode runMode)
 	// once the consumer thread is running.
 	if (runMode == eDESIGNER_MODE)
 		AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
+
+	// …and a base served by an application server is that server's — in EVERY process, because the refusal has to happen
+	// in the one trying to come in (docs/private/multi-base-process.md § 5.2).
+	AddPolicy(std::make_unique<ibServiceExclusivePolicy>(this));
 
 	Start();
 }
@@ -381,25 +378,31 @@ void ibSessionRegistry::Start()
 
 void ibSessionRegistry::Stop()
 {
-	if (!m_thread.joinable()) {
-		// Even with no registry thread running, the pool may be live —
-		// the appData ctor allocates it before the registry starts. Stop
-		// anyway so workers join before the host returns from Stop.
-		if (m_workerPool) {
-			m_workerPool->Stop();
-			m_workerPool.reset();
-		}
+	// No registry thread — no session was ever made here, so nothing of ours is in the worker pool either.
+	if (!m_thread.joinable())
 		return;
-	}
 
-	// Drain worker pool BEFORE killing sessions: tasks in flight reference
-	// session pointers; if we tear sessions down first, the pool's worker
-	// threads are left calling into freed memory. After Stop, the pool's
-	// worker threads have joined and no new task can be submitted (Submit
-	// rejects with set_exception on a stopped pool).
-	if (m_workerPool) {
-		m_workerPool->Stop();
-		m_workerPool.reset();
+	// Drain THIS BASE'S work from the worker pool BEFORE killing sessions: tasks in flight reference session
+	// pointers; tear the sessions down first and a worker is left calling into freed memory. The pool is the
+	// process's and the other bases go on using it, so it is not stopped: each own session's queue is run to
+	// its end — a no-op waits behind everything queued before it, the queue being FIFO per session — and
+	// then dropped.
+	if (ibWorkerPool* const pool = GetWorkerPool()) {
+		std::vector<std::shared_ptr<ibSession>> own;
+		{
+			std::shared_lock<std::shared_mutex> lk(m_ownMutex);
+			own.reserve(m_own.size());
+			for (auto& kv : m_own)
+				if (auto s = kv.second.Share()) own.push_back(std::move(s));
+		}
+		for (const std::shared_ptr<ibSession>& s : own) {
+			// Only the sessions that work in it — a desktop window's runs on its own (ibGUISession).
+			if (s->GetWorkerPool() != pool)
+				continue;
+			try { pool->RunOnSession(s.get(), [] {}); }
+			catch (...) { /* swallowed: a task's own failure was reported where it ran; the queue is drained either way */ }
+			pool->DropSession(s.get());
+		}
 	}
 
 	// Quiesce the registry thread FIRST without giving it any new work.
@@ -423,7 +426,7 @@ void ibSessionRegistry::Stop()
 	// when m_stop fires; if its NotifyDisconnect → DetachRuntime path
 	// blocks on a mutex that main holds further up the stack (classic
 	// case: main crashed inside BeforeStart's lock_guard<m_runtimeMutex>,
-	// SEH dispatch unrolled to OnFatalException → ~ibApplicationData →
+	// SEH dispatch unrolled to OnFatalException → ~ibApplicationInstance →
 	// Stop without releasing C++ frames — the lock is still held), a
 	// blind join() hangs forever. m_threadAlive is set by ThreadBody
 	// at entry and cleared on exit (incl. exception path via the noexcept
@@ -550,6 +553,8 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	auto session = req.m_sessionFactory
 		? req.m_sessionFactory(idStr, req.m_kind)
 		: std::make_shared<ibSession>(idStr, req.m_kind);
+	session->m_registry = this;
+	session->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
 	session->SetIdentity(identity);
 
 	// --- Submit Add + wait for Created → Added / Rejected ---
@@ -819,6 +824,11 @@ void ibSessionRegistry::NotifyDisconnect(ibSession* s)
 			}
 		}
 	}
+	// THROUGH THE SESSION THAT IS LEAVING — the listeners take its runtime down and, for the last one out,
+	// close its base's configuration; what they reach they reach through that session (its base), as the
+	// login reached it through the session logging in. The scope survives the listener's own UnbindSession:
+	// it restores whatever this thread had before.
+	ibSessionScope leaving(s);
 	for (const auto& cb : disconnects)
 		if (cb) cb(s);
 	if (fireLast) {
@@ -861,16 +871,28 @@ ibSession* ibSessionRegistry::GetFallback() const
 
 // --- debug thread → parked session redirection --------------------------
 
+// The registry the calling thread is a debug worker of — written by the thread's own registration.
+static thread_local ibSessionRegistry* t_debugRegistry = nullptr;
+
 void ibSessionRegistry::RegisterDebugThread(std::thread::id tid)
 {
 	std::unique_lock<std::shared_mutex> lk(m_debugMtx);
 	m_debugThreads.insert(tid);
+	if (tid == std::this_thread::get_id())
+		t_debugRegistry = this;
 }
 
 void ibSessionRegistry::UnregisterDebugThread(std::thread::id tid)
 {
 	std::unique_lock<std::shared_mutex> lk(m_debugMtx);
 	m_debugThreads.erase(tid);
+	if (tid == std::this_thread::get_id() && t_debugRegistry == this)
+		t_debugRegistry = nullptr;
+}
+
+ibSessionRegistry* ibSessionRegistry::ForDebugThread()
+{
+	return t_debugRegistry;
 }
 
 bool ibSessionRegistry::IsDebugThread(std::thread::id tid) const
@@ -1004,7 +1026,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// the process's server; subsequent non-server sessions get Server()
 	// pinned to it so keep-alive / topology queries see the tree without
 	// the caller threading the pointer through. Single-session apps
-	// (desktop GUI, daemon, codeRunner) never add a WebServer-kind
+	// (desktop GUI, appserver, codeRunner) never add a WebServer-kind
 	// session, so m_currentServer stays nullptr and Server() does too.
 	if (s.GetKind() == ibSessionKind::WebServer) {
 		std::unique_lock<std::shared_mutex> lk(m_serverMutex);
@@ -1168,7 +1190,7 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 	if (!req.session) return;
 	ibSession& s = *req.session;
 
-	if (appData == nullptr) {
+	if (m_applicationInstance == nullptr) {
 		s.TransitionAuth(ibAuthState::AuthFailed, _("appData unavailable"));
 		return;
 	}
@@ -1176,12 +1198,13 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 	// Single auth entry — verifies creds and (when info.IsOk()) writes
 	// m_userInfo / m_sessionRawPassword onto the target session via
 	// InstallUser. Pin scope to the target so InstallUser routes to this
-	// session, not whatever the registry thread last touched.
+	// session, not whatever the registry thread last touched — and so
+	// everything the login reads reaches the session's base through it.
 	ibUserInfo info;
 	bool ok;
 	{
 		ibSessionScope scope(&s);
-		ok = appData->Login(req.user, req.password, info);
+		ok = m_applicationInstance->Login(req.user, req.password, info);
 	}
 	if (!ok) {
 		s.TransitionAuth(ibAuthState::AuthFailed, _("invalid user or password"));
@@ -1271,7 +1294,7 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// RunOnWorker(...).get() before Close, so by this point there are
 	// no in-flight tasks; DropSession just removes the empty queue
 	// entry from the pool's per-session map.
-	if (m_workerPool) m_workerPool->DropSession(&s);
+	if (ibWorkerPool* const pool = GetWorkerPool()) pool->DropSession(&s);
 
 	// If this session was holding exclusive mode, release it before the
 	// row teardown so any parked Adds resume. Drop the weak under the
@@ -1313,7 +1336,7 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// session sees the DELETE on next snapshot tick (or on next acquire
 	// attempt against the same key, which then succeeds). See
 	// docs/private/record-locks.md "Planned upgrade path".
-	if (auto* lm = ibApplicationData::GetLockManager())
+	if (auto* lm = ibApplicationInstance::GetLockManager(m_applicationInstance))
 		lm->OnSessionEnd(s.Identity().m_guid);
 
 	if (m_ownsSysSession && m_writeConn && s.Inserted()) {
@@ -1649,7 +1672,7 @@ void ibSessionRegistry::JobSweepStale()
 	// cleanup at all. It stayed until someone deleted the row by hand, and until
 	// then the document it guarded could not be opened on any machine.
 	try {
-		if (auto* lm = ibApplicationData::GetLockManager())
+		if (auto* lm = ibApplicationInstance::GetLockManager(m_applicationInstance))
 			lm->SweepOrphans(live);
 	}
 	catch (...) { /* swallowed: lock cleanup is best-effort, next sweep retries on stale rows */ }
@@ -1706,6 +1729,11 @@ void ibSessionRegistry::JobHeartbeatOwn()
 // 🛑 OUR OWN HEART KEEPS BEATING WHILE WE WATCH. This runs on the registry thread, which is the thread that
 // beats; sitting still for the window, it would let a peer asking the same question about US at the same
 // moment see our row stand still and remove it. So every poll beats first.
+int ibSessionRegistry::GetSilentSeconds()
+{
+	return kSilentSeconds;
+}
+
 size_t ibSessionRegistry::SettleSilentPeers(const std::vector<wxString>& peers)
 {
 	if (peers.empty() || !m_ownsSysSession || !m_writeConn)
@@ -1904,12 +1932,11 @@ void ibSessionRegistry::JobCheckSignal()
 void ibSessionRegistry::JobRefreshSnapshot()
 {
 	if (!m_ownsSysSession || !m_writeConn) {
-		static bool warned = false;
-		if (!warned) {
+		if (!m_loggedRefreshSkip) {
 			SESSION_LOG("[session REFRESH] skip - ownsSysSession="
 			          << m_ownsSysSession << " writeConn="
 			          << (m_writeConn ? "ok" : "null"));
-			warned = true;
+			m_loggedRefreshSkip = true;
 		}
 		return;
 	}
@@ -2082,12 +2109,11 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		                             std::memory_order_release);
 	}
 
-	static unsigned lastCount = UINT_MAX;
-	if (rowCount != lastCount) {
+	if (rowCount != m_loggedSnapshotRows) {
 		SESSION_LOG("[session REFRESH] snapshot now has " << rowCount
-		          << " row(s) (was " << (lastCount == UINT_MAX ? 0 : lastCount)
+		          << " row(s) (was " << (m_loggedSnapshotRows == UINT_MAX ? 0 : m_loggedSnapshotRows)
 		          << ")");
-		lastCount = rowCount;
+		m_loggedSnapshotRows = rowCount;
 	}
 
 	std::unique_lock<std::shared_mutex> lk(m_snapshotMtx);
@@ -2106,6 +2132,8 @@ ibSessionSnapshot ibSessionRegistry::GetClusterSnapshot() const
 void ibSessionRegistry::ThreadBody() noexcept
 {
 	m_threadAlive.store(true, std::memory_order_release);
+	// Its lines name its base — the journal's label, not a binding: the registry asks its own base.
+	ibApplicationHost::SetThreadOwner(m_applicationInstance);
 
 	using clock = std::chrono::steady_clock;
 	// Snapshot refresh runs at 1 Hz — cheap (one SELECT on sys_session).

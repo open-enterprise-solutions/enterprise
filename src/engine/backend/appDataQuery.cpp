@@ -8,10 +8,10 @@
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//								ibApplicationData
+//								ibApplicationInstance
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::TableAlreadyCreated()
+bool ibApplicationInstance::TableAlreadyCreated()
 {
 	ibDatabaseQueryBuilder q;
 	return q.TableExists(user_table) &&
@@ -20,7 +20,7 @@ bool ibApplicationData::TableAlreadyCreated()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void ibApplicationData::CreateTableUser()
+void ibApplicationInstance::CreateTableUser()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(user_table)) {
@@ -40,7 +40,7 @@ void ibApplicationData::CreateTableUser()
 	}
 }
 
-void ibApplicationData::CreateTableSession()
+void ibApplicationInstance::CreateTableSession()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(session_table)) {
@@ -75,7 +75,7 @@ void ibApplicationData::CreateTableSession()
 	}
 }
 
-void ibApplicationData::CreateTableEvent()
+void ibApplicationInstance::CreateTableEvent()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(event_table)) {
@@ -88,7 +88,7 @@ void ibApplicationData::CreateTableEvent()
 // session end / on zombie sweep. Index on (namespace, keyHash) drives
 // the per-acquire conflict-check; index on sessionGuid drives the
 // session-end cascade.
-void ibApplicationData::CreateTableLock()
+void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(lock_table)) {
@@ -124,7 +124,7 @@ void ibApplicationData::CreateTableLock()
 // Deliberately minimal. No history, no status, no next-run: those are
 // per-process observations (ibJobState) and belong in memory. What has to
 // be shared is exactly the one fact that decides whether to start.
-void ibApplicationData::CreateTableJob()
+void ibApplicationInstance::CreateTableJob()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(job_table)) {
@@ -185,7 +185,7 @@ void ibApplicationData::CreateTableJob()
 // opposite — every row is something somebody arranged and asked to keep, and it exists nowhere
 // else. A schema change here is ADD COLUMN (nullable, read as absent by an older row), never a
 // DROP. That is not an alpha-vs-release distinction; it is what the table holds.
-void ibApplicationData::CreateTableSettings()
+void ibApplicationInstance::CreateTableSettings()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(settings_table)) {
@@ -221,7 +221,7 @@ void ibApplicationData::CreateTableSettings()
 // clock's only loss is that each job may run once more than it strictly had to. A conversion would
 // have to guess which metaobject an old name meant, and a wrong guess silently applies one job's
 // "switched off" to another. (Alpha: there is no installed base to migrate.)
-void ibApplicationData::MigrateTableJob()
+void ibApplicationInstance::MigrateTableJob()
 {
 	ibDatabaseQueryBuilder qi;
 	if (!qi.TableExists(job_table))
@@ -242,7 +242,7 @@ void ibApplicationData::MigrateTableJob()
 // writes / reads assume these columns exist, so an old schema would
 // trip INSERT and snapshot SELECT otherwise. Columns are nullable, so
 // legacy rows stay valid until the next heartbeat rewrite.
-void ibApplicationData::MigrateTableSession()
+void ibApplicationInstance::MigrateTableSession()
 {
 	ibDatabaseQueryBuilder qi;
 	if (!qi.TableExists(session_table))
@@ -292,7 +292,7 @@ void ibApplicationData::MigrateTableSession()
 // every other driver (Firebird embedded, SQLite, ODBC) takes
 // plain BLOB. Firebird's BLOB SUB_TYPE 0 is implicit when no sub-type
 // is named.
-void ibApplicationData::MigrateTableBytecodeCache()
+void ibApplicationInstance::MigrateTableBytecodeCache()
 {
 	ibDatabaseQueryBuilder q;
 	if (q.TableExists(bytecode_cache_table)) {
@@ -329,7 +329,7 @@ void ibApplicationData::MigrateTableBytecodeCache()
 	}
 }
 
-bool ibApplicationData::ClearTableUser()
+bool ibApplicationInstance::ClearTableUser()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(user_table))
@@ -344,13 +344,13 @@ bool ibApplicationData::ClearTableUser()
 #include "fileSystem/fs.h"
 
 // User-record DB I/O moved onto ibUserInfo as static factories; see
-// backend/userInfo.{h,cpp}. ibApplicationData no longer mediates the
+// backend/userInfo.{h,cpp}. ibApplicationInstance no longer mediates the
 // sys_user round-trip — call sites use ibUserInfo::Read / Save / Serialize
 // / Deserialize directly.
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationData::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
+bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 {
 	ibReaderMemory reader = buffer;
 
@@ -370,7 +370,7 @@ bool ibApplicationData::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
+bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 {
 	// SELECT guid FROM sys_user
 	try {
@@ -408,10 +408,10 @@ bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 // what removes the row.
 // -----------------------------------------------------------------------
 
-ibSessionHolder ibApplicationData::CreateSession()
+ibSessionHolder ibApplicationInstance::CreateSession()
 {
 	// Default-factory passthrough — registry builds a plain ibSession.
-	// Used by codeRunner / daemon / headless callers and by the wes
+	// Used by codeRunner / appserver / headless callers and by the wes
 	// process's own system session bring-up. GUI apps go through the
 	// typed CreateSession<T>() template overload (defined in
 	// sessionRegistry.h after the registry class).

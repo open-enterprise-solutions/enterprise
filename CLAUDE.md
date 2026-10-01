@@ -12,7 +12,7 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
 form layer — builds from one code base and runs an **identical suite** under three toolchains on
 two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
-Every application (`enterprise`, `designer`, `daemon`, `launcher`, `codeRunner`, `simplePlugin`)
+Every application (`enterprise`, `designer`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
 links on every platform.
 
 The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
@@ -128,7 +128,7 @@ enterprise/
         ├── wenterprise-server/ # web server (wes process)
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
-        ├── daemon/          # daemon.exe    (background service)
+        ├── appserver/       # appserver.exe (the application server)
         ├── codeRunner/      # codeRunner.exe
         └── simplePlugin/    # simplePlugin.dll (example)
 ```
@@ -239,12 +239,19 @@ ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 
 ### Accessing Application State
 
+A process holds one base or several (`ibApplicationHost` → `ibApplicationInstance`); there is no global
+current base. `appData` is the base of the session the calling thread works for — a thread with no session
+and no bound base gets an exception (`ibApplicationInstance::Get(false)` answers null instead, for teardown).
+
 ```cpp
 appData->GetAppMode();           // ibRunMode enum (static GetAppMode())
-db_query;                        // std::shared_ptr<ibDatabaseLayer> (macro = GetDatabaseLayer())
+db_query;                        // std::shared_ptr<ibDatabaseLayer> (macro = GetDatabaseLayer()), the thread's base
 appData->GetUserInfo();          // const ibUserInfo& — current logged-in user
 activeMetaData->GetCommonMetaObject();  // root of the metadata tree (ibValueMetaObjectConfiguration*)
 ```
+
+A base's own service (the registry, the job manager, the MCP server) holds its base — it is built with
+`ib::AppDataCtorToken{ this }` and asks `GetApplicationInstance()` — and never reaches for "the current" one.
 
 ### Calling a Script Function from C++
 
@@ -272,7 +279,7 @@ ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
 
 ### Password Hashing — PBKDF2-HMAC-SHA256
 
-New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationData::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
+New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationInstance::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
 
 Argon2id (OWASP #1, memory-hard) would be the stronger option but requires vendoring an external library; revisit when the threat model calls for it.
 

@@ -86,7 +86,7 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return true;   // launcher / pre-bootstrap — nothing to declare against
 
@@ -152,7 +152,7 @@ bool ibValueMetaObjectScheduledJob::UnregisterJob()
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
-	if (ibJobManager* const manager = ibApplicationData::GetJobManager())
+	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
 		manager->Unregister(GetJobName());
 
 	return true;
@@ -160,7 +160,7 @@ bool ibValueMetaObjectScheduledJob::UnregisterJob()
 
 bool ibValueMetaObjectScheduledJob::RunNow() const
 {
-	if (ibJobManager* const manager = ibApplicationData::GetJobManager())
+	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
 		return manager->RunNow(GetJobName());
 	return false;
 }

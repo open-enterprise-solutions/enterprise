@@ -1,6 +1,6 @@
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockManager.h"
-#include "backend/appData.h"   // ibApplicationData::GetLockManager
+#include "backend/appData.h"   // ibApplicationInstance::GetLockManager
 
 ibLockHandle::ibLockHandle() = default;
 
@@ -53,7 +53,7 @@ void ibLockHandle::Release()
 	// rather than an error anyone reads. The manager swallows its own already;
 	// this is the boundary the language actually requires it at.
 	try {
-		if (auto* lm = ibApplicationData::GetLockManager())
+		if (auto* lm = ibApplicationInstance::GetLockManager())
 			lm->ReleaseRows(rows);
 	}
 	catch (...) {

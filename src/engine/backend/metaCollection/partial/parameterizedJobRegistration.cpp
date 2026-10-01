@@ -166,7 +166,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return true;   // launcher / pre-bootstrap — nothing to declare against
 
@@ -284,7 +284,7 @@ bool ibValueMetaObjectParameterizedJob::UnregisterRow(const ibGuid& objGuid, boo
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
-	if (ibJobManager* const manager = ibApplicationData::GetJobManager())
+	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
 		manager->Unregister(GetRowJobName(objGuid));
 
 	// A row that was DELETED takes its shared record with it — otherwise sys_job keeps the
@@ -302,7 +302,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 	// The Designer never runs a configuration's jobs. It edits them.
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
-	if (ibApplicationData::GetJobManager() == nullptr)
+	if (ibApplicationInstance::GetJobManager() == nullptr)
 		return true;
 
 	const ibBackendQueryable* queryable = GetQueryable();
@@ -363,7 +363,7 @@ bool ibValueMetaObjectParameterizedJob::UnregisterJobs()
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return true;
 

@@ -6,9 +6,11 @@
 // (lifecycle / auth) + script bindings (module manager, ProcUnit map).
 //
 // Renamed from ibSessionContext as part of the session-registry
-// refactor. ibSessionScope / Current() stay available as legacy shims
-// during migration — direct ibSession pointer passing (via ibProcUnit
-// etc.) is the target, thread_local Current() is deprecated.
+// refactor. The thread's binding (ibSessionScope, Current()) is the road
+// this platform takes to "which session — and which base — is this code
+// working for": a process of several bases resolves its base through it
+// (docs/private/multi-base-process.md). Passing a session explicitly where
+// one is already in hand remains the better spelling.
 
 #include "backend/backend.h"
 #include "backend/userInfo.h"
@@ -207,7 +209,7 @@ public:
 	// answers from wherever its window already is — the desktop pair from
 	// its main-window singleton, a web client from its tab — so nothing
 	// is stored here and there is no registration step to get wrong.
-	// Default null: daemon, codeRunner, the wes technical row have no UI.
+	// Default null: appserver, codeRunner, the wes technical row have no UI.
 	virtual ibBackendDocFrame* GetFrame() const { return nullptr; }
 
 	// Session-owned auth orchestration. Submits Attach to the registry
@@ -569,7 +571,7 @@ protected:
 	//
 	// The default is the other case: nothing to close. Then there is no
 	// owner whose death would release a holder — the holder sits in plain
-	// code (daemon's scope, a job runner, wes's technical global) — so
+	// code (appserver's scope, a job runner, wes's technical global) — so
 	// this IS the end and the session ends here.
 	//
 	// Returning false means "not now": nothing happened and the caller
@@ -687,7 +689,7 @@ public:
 	// session is created.
 	//
 	//   Single — the process runs exactly one session for its entire life
-	//            (designer.exe, enterprise.exe, daemon.exe, codeRunner.exe). Current() returns the lone session
+	//            (designer.exe, enterprise.exe, appserver.exe, codeRunner.exe). Current() returns the lone session
 	//            regardless of the calling thread; bindings are recorded
 	//            for diagnostics but lookup ignores them.
 	//
@@ -705,6 +707,11 @@ public:
 	// Canonical "session this code is currently working on". Lookup
 	// strategy depends on AccessMode (see above).
 	static ibSession* Current();
+
+	// Current() as far as the thread ALREADY KNOWS it — its own copy of its binding while no binding has
+	// changed since it was read; null otherwise. No lock and no registry, so it never waits: for callers that
+	// run under anybody's locks, the journal above all. Everything else asks Current().
+	static ibSession* CurrentCached() noexcept;
 
 	// Shared-mode fallback — session returned by Current() when the
 	// calling thread isn't bound. Effective only when AccessMode == Shared.
@@ -746,7 +753,7 @@ public:
 
 	// Convenience: whether the currently-scoped session has been
 	// force-exited. Returns false when no session is bound. Drop-in
-	// replacement for the legacy process-level ibApplicationData::
+	// replacement for the legacy process-level ibApplicationInstance::
 	// IsForceExit() at frontend / GUI startup checks.
 	static bool IsCurrentForceExit() {
 		auto* s = Current();
@@ -774,7 +781,22 @@ private:
 	bool m_listed = true;
 	void SetUnlisted() { m_listed = false; }
 
+	// ⭐ ITS OWNER — the registry that made it. A process may hold several bases
+	// (docs/private/multi-base-process.md), and a session answers "which one" by itself, down the chain:
+	// session → its registry → the registry's base → that base's pool. The registry stamps every session
+	// it creates; a rented read takes the registry of the session it rents. Stamped once, never moved.
+	// Null for a session made outside any registry (tests, benchmarks) — it belongs to no base.
+	class ibSessionRegistry* m_registry = nullptr;
+
 public:
+	// …WHILE IT IS IN IT. A session its registry has let go (Gone — ProcessRemove's last word) answers none:
+	// that registry may be gone with its base by now — a window outlives its base on the way out — and the
+	// stamp kept past it led every `appData` and every journal line into freed memory.
+	class ibSessionRegistry* GetRegistry() const {
+		return State() == ibSessionState::Gone ? nullptr : m_registry;
+	}
+	ibApplicationInstance* GetApplicationInstance() const;   // through the registry
+
 	// ⭐ IS THIS A RENTED READ? The registry row is the honest signature — a session minted to fetch
 	// one page on somebody's behalf takes none, and nothing else in the tree is unlisted. Asked by
 	// callers that must treat "reading FOR a session" differently from "being a session": the
@@ -890,7 +912,7 @@ public:
 	// to discover whether a session is attached for debugging and to
 	// access its watch list / debug-loop CV. Mutators (EnableDebug /
 	// DisableDebug) are restricted to the auth flow — see private block
-	// further down with friend ibApplicationData.
+	// further down with friend ibApplicationInstance.
 	bool IsDebug() const     { return m_debug != nullptr; }
 	ibDebugSession* Debug()  { return m_debug.get(); }
 
@@ -1180,7 +1202,7 @@ private:
 	bool       m_prev;
 };
 
-// ibApplicationData::CreateSession<SessionT> template bodies live in
+// ibApplicationInstance::CreateSession<SessionT> template bodies live in
 // sessionRegistry.h — they delegate through ibSessionRegistry's factory
 // methods, which require the registry's full type at instantiation.
 // Callers that use the typed overload include sessionRegistry.h.

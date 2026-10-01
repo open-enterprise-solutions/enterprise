@@ -57,7 +57,7 @@ public:
 private:
 	ibInterfacePostgres* m_pInterface;
 	int FindStatementAndAdjustPositionIndex(int* pPosition);
-	static wxString GenerateRandomStatementName();
+	static wxString GenerateStatementName();
 
 	ArrayOfPostgresPreparedStatementWrappers m_Statements;
 };

@@ -19,7 +19,7 @@
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
 #include "backend/query/querySelector.h"      // ibSelector — the TOTALS pre-order walk
-#include "backend/appData.h"                  // ibApplicationData::GetQueryableFactory
+#include "backend/appData.h"                  // ibApplicationInstance::GetQueryableFactory
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"     // ibQueryReadState — one build, one state of the data

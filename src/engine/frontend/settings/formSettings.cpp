@@ -97,7 +97,7 @@ void EachControl(ibValueFrame* control, const std::function<void(ibValueFrame*)>
 
 void ibRestoreFormSettings(ibValueForm* form)
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	ibSettingsKey key;
 	if (storage == nullptr || !SettingsKey(form, key))
 		return;
@@ -174,7 +174,7 @@ void ibRestoreFormSettings(ibValueForm* form)
 
 ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr)
 		return ibFormSettingsResult::NoStorage;
 
@@ -229,7 +229,7 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 
 ibFormSettingsResult ibResetFormSettings(const ibValueForm* form)
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr)
 		return ibFormSettingsResult::NoStorage;
 
@@ -242,7 +242,7 @@ ibFormSettingsResult ibResetFormSettings(const ibValueForm* form)
 
 bool ibHasFormSettings(const ibValueForm* form)
 {
-	ibSettingsStorage* storage = ibApplicationData::GetSettingsStorage();
+	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	ibSettingsKey key;
 	if (storage == nullptr || !SettingsKey(form, key))
 		return false;

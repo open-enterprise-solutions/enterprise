@@ -11,7 +11,7 @@
 
 void ibDialogActiveUser::RefreshActiveUserTable()
 {
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	if (reg == nullptr) return;
 	const ibSessionSnapshot arr = reg->GetClusterSnapshot();
 
@@ -69,7 +69,7 @@ void ibDialogActiveUser::RefreshLocksTable()
 
 	std::vector<ibLockSnapshotRow> rows;
 	try {
-		if (auto* lm = ibApplicationData::GetLockManager())
+		if (auto* lm = ibApplicationInstance::GetLockManager())
 			rows = lm->GetSnapshot();
 	}
 	catch (...) { rows.clear(); }
@@ -235,7 +235,7 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	if (reg == nullptr || !reg->Kick(guid)) {
 		ibJournalWarning(wxT("ui"), _("Failed to queue kick for session %s"), guid);
 	}
@@ -260,7 +260,7 @@ void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
 		}
 	}
 
-	auto* reg = ibApplicationData::GetSessionRegistry();
+	auto* reg = ibApplicationInstance::GetSessionRegistry();
 	if (reg == nullptr || !reg->Reload(guid)) {
 		ibJournalWarning(wxT("ui"), _("Failed to queue reload for session %s"), guid);
 	}
@@ -309,7 +309,7 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 			return;
 		}
 		std::vector<ibGuid> one{ g };
-		auto* lm = ibApplicationData::GetLockManager();
+		auto* lm = ibApplicationInstance::GetLockManager();
 		if (lm == nullptr) {
 			ibJournalWarning(wxT("ui"), _("Lock manager not available"));
 			return;

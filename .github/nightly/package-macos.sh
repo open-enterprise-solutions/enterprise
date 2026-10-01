@@ -5,7 +5,7 @@
 #
 # The image holds ONE folder, `OES`, and a link to /Applications: the folder is dragged as a whole. The
 # applications do not carry their libraries inside the bundles — enterprise.app, designer.app and
-# launcher.app stand beside libbackend / libfrontend / the wxWidgets dylibs, codeRunner and daemon, and the
+# launcher.app stand beside libbackend / libfrontend / the wxWidgets dylibs, codeRunner and appserver, and the
 # launcher finds the others as siblings — so the folder is what installs, not an .app alone.
 #
 # ⚠ THE LIBRARIES ARE FOUND BESIDE THE PROGRAM, NOT WHERE THEY WERE BUILT. Every dylib is named
@@ -86,7 +86,7 @@ for app in "$stage"/*.app; do
   codesign --force --deep --sign - "$app"
 done
 
-required=(enterprise.app designer.app launcher.app codeRunner daemon libbackend.dylib libfrontend.dylib backend.conf help/en.hlk lang/ru/open_es.mo
+required=(enterprise.app designer.app launcher.app codeRunner appserver libbackend.dylib libfrontend.dylib backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.dylib _fb/lib/libtommath.dylib _fb/plugins/libEngine13.dylib _fb/intl/libfbintl.dylib _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do
   [ -e "$stage/$r" ] || { echo "::error::The package would not run - missing: $r"; exit 1; }

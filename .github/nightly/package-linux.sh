@@ -42,7 +42,7 @@ while IFS= read -r -d '' f; do
   fi
 done < <(find "$stage" -type f -print0)
 
-required=(enterprise designer launcher codeRunner daemon libbackend.so libfrontend.so backend.conf help/en.hlk lang/ru/open_es.mo
+required=(enterprise designer launcher codeRunner appserver libbackend.so libfrontend.so backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.so.2 _fb/lib/libtommath.so.1 _fb/plugins/libEngine13.so _fb/intl/fbintl _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do
   [ -e "$stage/$r" ] || { echo "::error::The package would not run - missing: $r"; exit 1; }
@@ -50,7 +50,7 @@ done
 
 # Resolve, from a clean environment, what our own files need.
 unresolved=0
-for f in "$stage"/enterprise "$stage"/designer "$stage"/launcher "$stage"/codeRunner "$stage"/daemon "$stage"/libbackend.so "$stage"/libfrontend.so \
+for f in "$stage"/enterprise "$stage"/designer "$stage"/launcher "$stage"/codeRunner "$stage"/appserver "$stage"/libbackend.so "$stage"/libfrontend.so \
          "$stage"/_fb/lib/libfbclient.so.2 "$stage"/_fb/plugins/libEngine13.so "$stage"/_fb/intl/fbintl; do
   if env -u LD_LIBRARY_PATH ldd "$f" | grep -q 'not found'; then
     echo "::error::$(basename "$f") has unresolved libraries:"

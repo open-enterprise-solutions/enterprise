@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #if defined(_WIN32)
@@ -50,8 +51,8 @@ extern "C" WFRONTEND_API const char* wfrontendClientHTML();
 //
 // Two flavours:
 //
-//   * wfrontendInitFile()   — appDataCreateFile  (single-file DB path)
-//   * wfrontendInitServer() — appDataCreateServer (host/port/db)
+//   * wfrontendInitFile()   — CreateFileAppDataEnv   (single-file DB path)
+//   * wfrontendInitServer() — CreateServerAppDataEnv (host/port/db)
 //
 // Both then bring up the wes process's own system session via
 // CreateSession + session->Open(ibUser, ibPassword) — that's the
@@ -78,6 +79,12 @@ WFRONTEND_API bool wfrontendInitServer(
 
 WFRONTEND_API void        wfrontendShutdown();
 WFRONTEND_API std::string wfrontendLastError();
+
+// Run `work` on the calling thread for the base the web server serves — its own session's base; the session
+// itself answers through that base's registry. The host's HTTP threads have no session of their own
+// (docs/private/multi-base-process.md); a handler that works for a tab binds the tab's session on top. Before
+// init and after shutdown the work runs unbound.
+WFRONTEND_API void        wfrontendServe(const std::function<void()>& work);
 
 // Record the HTTP host:port the container is about to bind on. Host
 // process (wenterprise-server main) calls this right after arg parse,

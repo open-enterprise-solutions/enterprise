@@ -30,6 +30,13 @@ class BACKEND_API ibDatabaseConnectionHolder {
 public:
 	virtual ~ibDatabaseConnectionHolder() = default;
 
+	// ⭐ THE POOL THIS HOLDER TAKES ITS CONNECTIONS FROM — its base's, reached once down the chain and kept
+	// (docs/private/multi-base-process.md): a session's is bound by the registry that makes it (session →
+	// registry → base → pool), the registry's own by the registry. A holder nobody names — the db_query
+	// channel's per-thread one — takes the current base's pool, through the session.
+	void SetPool(class ibConnectionPool* pool) { m_pool = pool; }
+	class ibConnectionPool* GetPool() const;   // defined in connectionPool.cpp
+
 	// Single entry point: returns a usable conn for this holder.
 	// Resolution chain:
 	//   1. TX-pinned conn (BeginTransaction not yet committed/rollbacked)
@@ -106,6 +113,9 @@ public:
 	// the altered type), appended in execution order and replayed in REVERSE when the second phase
 	// fails. Built from the statements this save itself issued — never from reading the database.
 	std::vector<std::function<void(ibDatabaseLayer*)>>& DdlUndoActions() { return m_ddlUndo; }
+
+protected:
+	class ibConnectionPool* m_pool = nullptr;
 
 private:
 	std::set<wxString>                 m_ddlCreated;

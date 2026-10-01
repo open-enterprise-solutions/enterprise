@@ -18,7 +18,7 @@
 // this-less callers (static scaffold methods, the apply dialog) reach it without a metadata handle.
 ibRestructureInfo& ibMetaDataConfigurationBase::GetRestructureInfo()
 {
-	return ibApplicationData::GetActiveMetaData()->m_restructureInfo;
+	return ibApplicationInstance::GetActiveMetaData()->m_restructureInfo;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,7 +141,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	// transaction + the auto-acquired exclusive mode — the next apply then bails
 	// silently at the "transaction already active" guard ("metadata returned
 	// false", no text). Roll back + release here and rethrow so any caller
-	// (designer / codeRunner / daemon) still reports the error and the DB stays clean.
+	// (designer / codeRunner / appserver) still reports the error and the DB stays clean.
 	try {
 
 	//remove old tables (if need)

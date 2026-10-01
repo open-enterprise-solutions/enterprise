@@ -332,9 +332,11 @@ private:
 
 class BACKEND_API ibJobManager {
 public:
-	// Construction restricted to ibApplicationData via the token gate — same
+	// Construction restricted to ibApplicationInstance via the token gate — same
 	// pattern as the connection pool, lock manager and session registry.
-	explicit ibJobManager(ib::AppDataCtorToken);
+	// The token names the base whose schedule this is, asked instead of "the current one". A manager made
+	// outside any base (the tests) is named none and takes the base of the thread that makes it.
+	explicit ibJobManager(ib::AppDataCtorToken owner);
 	~ibJobManager();
 
 	ibJobManager(const ibJobManager&)            = delete;
@@ -347,7 +349,7 @@ public:
 	//
 	// Cheap and side-effect-free: no session, no database, no metadata. That is
 	// deliberate, because the platform's own list is registered from
-	// ibApplicationData the moment the database opens — long before there is a
+	// ibApplicationInstance the moment the database opens — long before there is a
 	// user, a configuration or a reason to spend a Connect on a job that may not
 	// come due for six hours. The session is built on first launch instead, so a
 	// job that never becomes due never costs anything.
@@ -501,7 +503,7 @@ public:
 
 	// Release every job and its session. Waits for in-flight runs so no worker is
 	// left holding a session the manager is dropping. Idempotent; called from
-	// ~ibApplicationData before the session registry goes down.
+	// ~ibApplicationInstance before the session registry goes down.
 	void Stop();
 
 private:
@@ -668,7 +670,9 @@ public:
 	//
 	// Best-effort by design: a database that cannot answer must not stop a job, since silently
 	// skipping work is worse than repeating it.
-	static ibDateTime ReadSharedLastRun(const ibGuid& key);
+	// applicationInstance — whose clock: the tick names its own base; a run leaves it out and reads through its
+	// session (the calling thread's db_query channel).
+	static ibDateTime ReadSharedLastRun(const ibGuid& key, const ibApplicationInstance* applicationInstance = nullptr);
 	static void       WriteSharedLastRun(const ibGuid& key, const wxString& name, const ibDateTime& when);
 
 	// Apply settings to a REGISTERED job, at once — no re-registration, because the entry holds a
@@ -746,6 +750,9 @@ private:
 	// Signalled when a tick finishes launching an entry and clears its m_inFlight. Unregister and
 	// Stop wait on it, so they never destroy an entry a launch is still writing to.
 	std::condition_variable                   m_inFlightCv;
+
+	// The base whose schedule this is — its owner.
+	ibApplicationInstance* const                  m_applicationInstance;
 
 	std::thread                               m_thread;
 	std::condition_variable                   m_tickCv;

@@ -3,7 +3,7 @@
 
 // ibOesConsoleBoot — RAII boot helper for OES console-class binaries.
 //
-// wes (wenterprise-server) and daemon don't have a wxApp — they're
+// wes (wenterprise-server) and appserver don't have a wxApp — they're
 // plain `int main(argc, argv)` that uses wx primitives (wxString,
 // wxSocket, wxLocale, wx file ops) via wxInitializer. The boot
 // sequence is identical in every such binary:
@@ -21,7 +21,7 @@
 //
 // Usage:
 //   int main(int argc, char** argv) {
-//       ibOesConsoleBoot boot(wxT("daemon"), argc, argv);
+//       ibOesConsoleBoot boot(wxT("appserver"), argc, argv);
 //       if (!boot.IsOk()) {
 //           std::fprintf(stderr, "wxWidgets failed to initialise\n");
 //           return 1;

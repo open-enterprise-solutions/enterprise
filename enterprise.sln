@@ -43,7 +43,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backend", "src\engine\backe
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "plugins", "plugins", "{95B54CB1-6B46-46C3-9DC6-059D6E7DD4CB}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "daemon", "src\engine\daemon\daemon.vcxproj", "{4AF26744-6E43-426E-85CF-FB566690A28A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "appserver", "src\engine\appserver\appserver.vcxproj", "{4AF26744-6E43-426E-85CF-FB566690A28A}"
 	ProjectSection(ProjectDependencies) = postProject
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00} = {35245A06-A72D-40B9-92FE-8EF2CCCC9D00}
 	EndProjectSection

@@ -71,7 +71,7 @@ writes the string: to change a picture, change its SVG there and run the script;
 a line in its `TARGETS` and a placeholder string. One act has one drawing everywhere it appears, and the
 manner is the one that file describes. XPM renders poorly at any size but its own, and no new one goes in.
 
-**The backend stays GUI-free and never shows a modal window.** Its callers include the daemon,
+**The backend stays GUI-free and never shows a modal window.** Its callers include the application server,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.
 Say it with `ibValueSystemFunction::Message`, or hand the reason back to the caller
 (`bool Verb(…, wxString* refusal)`).

@@ -218,8 +218,8 @@ struct ScriptCorpus : ::testing::Test {
 		// handler re-registration to tests/frontendFix.h, which runs on each wx
 		// cycle — the cycle is what wipes them (wxImageModule::OnExit).
 
-		if (ibApplicationData::Get() == nullptr
-		 && !ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (ibApplicationInstance::Get() == nullptr
+		 && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 
 		m_styleSaved = ibCompileCode::GetCodeStyle();

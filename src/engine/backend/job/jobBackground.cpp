@@ -265,7 +265,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 	if (!body)
 		ibBackendCoreException::Error(_("Background job: nothing to run"));
 
-	ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry();
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	if (registry == nullptr || appData == nullptr)
 		ibBackendCoreException::Error(_("Background job: the application is not running"));
 
@@ -329,6 +329,10 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		auto minted = std::make_shared<ibSession>(wxString(wxNewUniqueGuid),
 		                                          ibSessionKind::BackgroundJob);
 		minted->SetUnlisted();
+		// It reads for its parent — in the parent's base: the parent's registry is its owner, and the parent's
+		// base's pool gives its connection.
+		minted->m_registry = launch->m_parent->GetRegistry();
+		minted->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(launch->m_parent->GetApplicationInstance()));
 		run->m_holder = ibSessionHolder(std::move(minted));
 	}
 	else {

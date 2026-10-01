@@ -149,7 +149,7 @@ jobs:
           cmake --build --preset linux-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
-          oes_temp_db_sqlite_test oes_job_tenancy_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
 
       - name: Run
         working-directory: build/linux-debug
@@ -170,7 +170,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # The APPLICATIONS, which no test target pulls in: enterprise / designer / daemon /
+      # The APPLICATIONS, which no test target pulls in: enterprise / designer / appserver /
       # launcher / codeRunner / simplePlugin. Without this step nothing in CI ever compiled
       # them, so a break in an .exe's own sources reached a developer's machine first.
       # It is cheap here — backend and frontend are already built by the steps above, so
@@ -267,7 +267,7 @@ jobs:
           cmake --build --preset windows-x64-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
-          oes_temp_db_sqlite_test oes_job_tenancy_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
 
       - name: Run
         # No -C: every preset here uses Ninja, which is single-config.
@@ -545,7 +545,7 @@ jobs:
           cmake --build --preset linux-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
-          oes_temp_db_sqlite_test oes_job_tenancy_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
 
       # Twice the timeout of tests-linux: ASan costs about 2x.
       #
@@ -840,7 +840,7 @@ jobs:
           cmake --build --preset macos-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
-          oes_temp_db_sqlite_test oes_job_tenancy_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
           -- -k 0
 
       - name: Run

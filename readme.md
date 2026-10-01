@@ -227,7 +227,7 @@ enterprise/
         ├── designer/         # Designer/IDE executable
         ├── wenterprise-server/ # Web server (wes process)
         ├── launcher/         # Launcher (connection chooser)
-        ├── daemon/           # Background service
+        ├── appserver/        # The application server
         ├── codeRunner/       # Script runner
         └── simplePlugin/     # Example plugin
 ```

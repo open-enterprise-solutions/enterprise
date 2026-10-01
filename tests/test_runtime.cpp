@@ -72,8 +72,8 @@ struct BuiltInRuntime : ::testing::Test {
 		if (wxLog::GetActiveTarget() != nullptr)
 			delete wxLog::SetActiveTarget(new wxLogStderr());
 
-		if (ibApplicationData::Get() == nullptr
-		 && !ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+		if (ibApplicationInstance::Get() == nullptr
+		 && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 	}
 };

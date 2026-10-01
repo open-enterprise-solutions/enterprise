@@ -6,6 +6,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="daemon.cpp" />
+    <ClCompile Include="appServer.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="serverConfig.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="appServer.h" />
+    <ClInclude Include="serverConfig.h" />
   </ItemGroup>
 </Project>

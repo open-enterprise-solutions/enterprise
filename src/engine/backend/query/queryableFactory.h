@@ -2,7 +2,7 @@
 #define __QUERYABLE_FACTORY_H__
 
 // Queryable-source FACTORY — a NON-OWNING registry of source DESCRIPTORS, owned by
-// ibApplicationData (GetQueryableFactory(); the `query_sources` macro; nullptr
+// ibApplicationInstance (GetQueryableFactory(); the `query_sources` macro; nullptr
 // pre/post-appData — the ibLockManager ownership pattern, token-gated ctor).
 //
 // The query language covers ONLY the relational metaclasses: records with a data-reference
@@ -419,8 +419,8 @@ public:
 class BACKEND_API ibQueryableFactory
 {
 public:
-	// The GLOBAL factory's construction is restricted to ibApplicationData via the ib::AppDataCtorToken gate
-	// (mirrors ibLockManager); reached through ibApplicationData::GetQueryableFactory(). The per-config subclass
+	// The GLOBAL factory's construction is restricted to ibApplicationInstance via the ib::AppDataCtorToken gate
+	// (mirrors ibLockManager); reached through ibApplicationInstance::GetQueryableFactory(). The per-config subclass
 	// (ibMetaQueryableFactory, on the snapshot) uses the protected default ctor. Virtual dtor — the image owns the
 	// subclass through a base unique_ptr.
 	explicit ibQueryableFactory(ib::AppDataCtorToken);

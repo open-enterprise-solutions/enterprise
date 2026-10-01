@@ -52,7 +52,7 @@ ibPGDynamicSourceProperty::ibPGDynamicSourceProperty(ibPropertyObject* property,
 	const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
 	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
 	if (factory == nullptr)
-		factory = ibApplicationData::GetQueryableFactory();   // no config → the global base (common/plugin)
+		factory = ibApplicationInstance::GetQueryableFactory();   // no config → the global base (common/plugin)
 	if (factory != nullptr) {
 		for (ibQueryableSourceDescriptor* d : factory->GetDescriptors()) {
 			if (d == nullptr)
@@ -112,7 +112,7 @@ wxPGEditorDialogAdapter* ibPGDynamicSourceProperty::GetEditorDialog() const
 			const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
 			ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
 			if (factory == nullptr)
-				factory = ibApplicationData::GetQueryableFactory();
+				factory = ibApplicationInstance::GetQueryableFactory();
 			if (factory == nullptr)
 				return false;
 

@@ -20,10 +20,10 @@ public:
 	ibPluginManager(const ibPluginManager&) = delete;
 	ibPluginManager& operator=(const ibPluginManager&) = delete;
 
-	// Construction restricted to ibApplicationData via the
+	// Construction restricted to ibApplicationInstance via the
 	// ib::AppDataCtorToken gate — same pattern as the other
 	// appData-owned subsystems. Production callers reach the plugin
-	// manager through `ibApplicationData::m_pluginManager` (no public
+	// manager through `ibApplicationInstance::m_pluginManager` (no public
 	// static accessor today — appData uses it directly during startup).
 	explicit ibPluginManager(ib::AppDataCtorToken) {}
 

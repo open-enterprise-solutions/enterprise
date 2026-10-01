@@ -9,8 +9,6 @@
 #include "backend/metaData.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
-#include "backend/session/sessionRegistry.h"        // installing the pool the jobs run on
-#include "backend/session/workerPoolHeadless.h"
 
 #include "backend/query/schemaSnapshot.h"        // ibSchemaSnapshot + ContributeTables
 #include "backend/query/derivedStateBuilder.h"   // ibDerivedState::MaintainTotals
@@ -94,32 +92,13 @@ bool FoldTotals(ibSession* session)
 
 void ibRegisterPlatformJobs()
 {
-	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)
 		return;   // launcher / pre-bootstrap — no schedule to populate
 
-	// A pool to run them ON, before anything is declared.
-	//
-	// The registry sizes its own pool from the run mode: headless hosts get one,
-	// GUI hosts get none — which was right while a desktop process held exactly
-	// one session, and stops being right the moment a scheduled session exists.
-	// Without a pool ibSession::Submit falls back to running inline, i.e. on
-	// whichever thread asked — here the manager's own tick thread. The tick would
-	// then EXECUTE the job instead of dispatching it, and the whole schedule would
-	// stall for the duration of every run.
-	//
-	// Installed here rather than in each host's main, for the same reason the job
-	// list is: whoever opens a database needs it, and none of them should have to
-	// remember. A host that already has a pool (wes) keeps the one it has.
-	//
-	// Two workers: enough that one long job cannot stall another, small enough
-	// that background work never crowds out interactive sessions. The real ceiling
-	// is elsewhere — a session owns ONE connection, so concurrency is bounded by
-	// the connection pool (32), not by this number.
-	if (ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry()) {
-		if (registry->GetWorkerPool() == nullptr)
-			registry->SetWorkerPool(std::make_unique<ibWorkerPoolHeadless>(2));
-	}
+	// (The pool the jobs run ON is the process's — ibApplicationHost makes it with the process, for every
+	//  host that opens a base. Without one ibSession::Submit would run inline on the manager's own tick
+	//  thread, which would then EXECUTE a job instead of dispatching it and stall the whole schedule.)
 
 	ibJobDescription fold;
 	fold.m_name = wxT("totals.fold");

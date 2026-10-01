@@ -59,9 +59,9 @@ TEST_F(FrontendRuntimeFix, HarnessBringsUpGuiAndBackend)
 
 	EXPECT_NE(wxTheApp, nullptr)
 		<< "a live GUI wxApp is required — desktop controls are wxWindow subclasses";
-	EXPECT_NE(ibApplicationData::Get(), nullptr)
+	EXPECT_NE(ibApplicationInstance::Get(), nullptr)
 		<< "runtime-mode appData env must be up";
-	EXPECT_NE(ibApplicationData::GetConnectionPool(), nullptr)
+	EXPECT_NE(ibApplicationInstance::GetConnectionPool(), nullptr)
 		<< "the connection pool must be wired after CreateAppDataEnv";
 	EXPECT_NE(ibConnectionPool::ThreadHolder(), nullptr)
 		<< "the pool must hand out the master connection holder";

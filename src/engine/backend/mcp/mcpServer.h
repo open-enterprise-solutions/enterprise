@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // WHAT IT IS. An appData subsystem, the way ibJobManager / ibLockManager /
-// ibSettingsStorage are: constructed by ibApplicationData behind the
+// ibSettingsStorage are: constructed by ibApplicationInstance behind the
 // ib::AppDataCtorToken gate, reached through a static accessor, torn down with
 // everything else. It is IN THE CORE deliberately — not a plugin, not a mode of
 // one binary — so every host that has an appData can offer it, and a plugin
@@ -105,7 +105,7 @@ public:
 	ibMcpServer(const ibMcpServer&) = delete;
 	ibMcpServer& operator=(const ibMcpServer&) = delete;
 
-	// Construction restricted to ibApplicationData, the same gate every
+	// Construction restricted to ibApplicationInstance, the same gate every
 	// appData-owned subsystem is built behind.
 	//
 	// ⚠ BOTH OUT OF LINE, and the constructor is not an oversight: the listener
@@ -113,7 +113,9 @@ public:
 	// INLINE constructor needs the member's destructor too — for unwinding if it
 	// throws. Defined inline, this is `can't delete an incomplete type` at every
 	// call site that builds one.
-	explicit ibMcpServer(ib::AppDataCtorToken);
+	// The token names the base this server belongs to: every base has its own, so a process of several
+	// has several, and each asks ITS base (docs/private/multi-base-process.md).
+	explicit ibMcpServer(ib::AppDataCtorToken owner);
 	~ibMcpServer();
 
 	// --- the central entry point -----------------------------------------
@@ -335,6 +337,9 @@ private:
 	// The session everything is done in the name of. Not owned: it outlives the
 	// server by construction (the server is stopped when the session closes).
 	ibSession*                   m_session = nullptr;
+
+	// The base this server belongs to — its owner, asked instead of "the current one".
+	ibApplicationInstance* const     m_applicationInstance;
 
 	std::vector<ibMcpNotifier*>  m_notifiers;
 
