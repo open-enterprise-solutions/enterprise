@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 17:04+0300\n"
+"POT-Creation-Date: 2026-10-01 17:24+0300\n"
 "PO-Revision-Date: 2026-10-01 17:30+0300\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -999,12 +999,12 @@ msgstr "Объект с идентификатором '%llu' не сущест�
 
 #: src/engine/backend/compiler/valueSerialization.cpp:80
 #, c-format
-msgid "A value of type \"%s\" cannot be copied — it belongs to its session"
+msgid "A value of type \"%s\" cannot be copied - it belongs to its session"
 msgstr "Значение типа \"%s\" нельзя скопировать — оно принадлежит своему сеансу"
 
 #: src/engine/backend/compiler/valueSerialization.cpp:87
 #, c-format
-msgid "A value of type \"%s\" cannot be copied — it has no packed form"
+msgid "A value of type \"%s\" cannot be copied - it has no packed form"
 msgstr "Значение типа \"%s\" нельзя скопировать — у него нет упакованной формы"
 
 #: src/engine/backend/compiler/valueSerialization.cpp:247
