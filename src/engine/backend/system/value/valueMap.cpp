@@ -23,6 +23,16 @@ inline wchar_t FoldChar(const wchar_t c)
 		return (c >= L'a' && c <= L'z') ? (wchar_t)(c - (L'a' - L'A')) : c;
 	return (wchar_t)std::towupper((wint_t)c);
 }
+
+// WHETHER A REFUSAL IS SAID — the designer reads values without raising, every other process raises. Asked of
+// the base this thread works for, and "no" where there is none: a process with no base open (a test, a tool,
+// the way out) or a thread working for none is not the designer, and asking `appData` there dereferenced
+// nothing (2026-10-01, the first unit test that inserted a duplicate key).
+bool InDesigner()
+{
+	const ibApplicationInstance* const applicationInstance = ibApplicationInstance::Get(false);
+	return applicationInstance != nullptr && applicationInstance->DesignerMode();
+}
 }
 
 // WHICH RULE A KEY FOLLOWS — decided by what the key is, with nothing rendered to text on the way.
@@ -404,7 +414,7 @@ void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 	const bool indexed = Indexed();
 	const size_t hash = indexed ? HashOf(varKeyValue) : 0;
 	if ((indexed ? FindWithHash(varKeyValue, hash) : FindByWalk(varKeyValue)) >= 0) {
-		if (!appData->DesignerMode())
+		if (!InDesigner())
 			ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
@@ -471,7 +481,7 @@ bool ibValueContainer::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 		pvarValue = m_entries[idx].second;
 		return true;
 	}
-	if (!appData->DesignerMode())
+	if (!InDesigner())
 		ibBackendCoreException::Error(_("Key '%s' not found!"), varKeyValue.GetString());
 	return false;
 }
@@ -538,7 +548,7 @@ bool ibValueStructure::Init(ibValue** paParams, const long lSizeArray)
 bool ibValueStructure::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode())
+		if (!InDesigner())
 			ibBackendCoreException::Error(st_error_conversion);
 		return false;
 	}
@@ -548,7 +558,7 @@ bool ibValueStructure::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 bool ibValueStructure::SetAt(const ibValue& varKeyValue, const ibValue& cValue)
 {
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) {
+		if (!InDesigner()) {
 			ibBackendCoreException::Error(st_error_conversion);
 		} return false;
 	}
@@ -559,7 +569,7 @@ bool ibValueStructure::SetAt(const ibValue& varKeyValue, const ibValue& cValue)
 void ibValueStructure::Delete(const ibValue& varKeyValue)
 {
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) {
+		if (!InDesigner()) {
 			ibBackendCoreException::Error(st_error_conversion);
 		} return;
 	}
@@ -570,7 +580,7 @@ void ibValueStructure::Delete(const ibValue& varKeyValue)
 void ibValueStructure::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) {
+		if (!InDesigner()) {
 			ibBackendCoreException::Error(st_error_conversion);
 		} return;
 	}
@@ -581,7 +591,7 @@ void ibValueStructure::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING) {
-		if (!appData->DesignerMode()) {
+		if (!InDesigner()) {
 			ibBackendCoreException::Error(st_error_conversion);
 		}
 		return false;
