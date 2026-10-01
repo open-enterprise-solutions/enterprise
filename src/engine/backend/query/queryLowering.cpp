@@ -22,6 +22,7 @@
 #include "dbTableProvider.h"              // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
+#include "backend/session/session.h"      // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
@@ -1775,6 +1776,121 @@ ibQueryCondition ComputedComparison(const std::vector<ibSourceBinding>& sources,
 	return c;
 }
 
+static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
+{
+	if (!p)
+		return false;
+	if (p->m_kind == ibQueryPredicateKind::Leaf && p->m_leaf.m_semiJoin)
+		return true;
+	for (const ibQueryPredicatePtr& child : p->m_children)
+		if (MentionsSemiJoin(child))
+			return true;
+	return false;
+}
+
+// ⭐⭐ `x [NOT] IN (SELECT k FROM T WHERE …)` SAID TO THE SERVER AS THE SEMI-JOIN IT MEANS.
+//
+// The set used to be read here: the inner select run on its own, every value it returned brought over and sent
+// back as a parameter each. A payroll's «employees not yet paid» stopped at Firebird's 32 767 parameters at some
+// thirty-one thousand employees (perf night, PR #219), and below that every value made the round trip twice. The
+// server can answer the question itself — `EXISTS (SELECT * FROM T WHERE … AND T.k = x)`, the correlated filter
+// the access policy already renders (ibSemiJoinExists) — and NOT IN is the NOT of it, an anti-join.
+//
+// Said only where the leaf is certain to reach SQL: a WHERE handed to the door (not a CASE's WHEN, not a reading's
+// own condition) over ONE plain table, and an inner select over one plain table with one column and nothing that
+// changes which rows it has (no join, fold, TOP, union, totals). Null otherwise, and the set is read as before; rows
+// in memory test membership, with no parameters to run out of.
+//
+// ⚠ BOTH SIDES ARE IDENTITIES, AND ONE OF THEM IS A ROW'S OWN KEY. The correlation compares one field — a reference
+// by its id — while the set road says "empty" as the zero sentinel OR a NULL (DecomposeEquality), so an empty value
+// on both sides would match there and not here. A row key is never empty: with one on either side an empty value
+// matches nothing on both roads, and IN and NOT IN answer the same — «employees not in …», the case that ran out of
+// parameters, is exactly that shape.
+//
+// ⚠ THE INNER READ IS GUARDED as the read it replaces was. The session's policy folds its restriction into the
+// inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
+// not, and the outer rows would tell which. A refusal, a restriction through a join, a semi-join of the policy's own
+// go back to the rows road, which says or applies them in its own words.
+static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBinding>& sources,
+	const std::vector<const ibBackendQueryColumn*>& cols, const ibQuerySelect& sel,
+	const std::map<wxString, ibValue>& params, bool negated)
+{
+	auto plainTable = [](const ibBackendQueryable* q) {
+		return q != nullptr && !q->IsComputedInRam() && q->GetSourceRelation(wxString()) == nullptr
+			&& !q->GetQueryTableName().IsEmpty();
+	};
+	auto rowKeyOf = [](const ibBackendQueryable* q) -> const ibBackendQueryColumn* {
+		const std::vector<const ibBackendQueryColumn*> keys = q->GetPrimaryKeyColumns();
+		return keys.size() == 1 ? keys.front() : nullptr;
+	};
+	auto identity = [](const ibBackendQueryColumn* c, const ibBackendQueryColumn* rowKey) {
+		if (c == nullptr)
+			return false;
+		if (c == rowKey)
+			return true;
+		const std::vector<ibColumnSlot> slots = ColumnValueSlots(c);
+		return slots.size() == 1 && slots.front().m_role == ibColumnRole::ReferenceId;
+	};
+
+	if (sources.size() != 1 || !plainTable(sources.front().m_q) || cols.size() != 1)
+		return nullptr;
+	const ibBackendQueryColumn* const outerRowKey = rowKeyOf(sources.front().m_q);
+	if (!identity(cols.front(), outerRowKey))
+		return nullptr;
+	if (sel.m_selectAll || sel.m_projections.size() != 1 || !sel.m_joins.empty() || !sel.m_groupBy.empty()
+	    || sel.m_having || sel.m_top > 0 || sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_intoTemp.IsEmpty()
+	    || sel.m_forUpdate || sel.m_from.m_subquery || !sel.m_from.m_args.empty()
+	    || ibQueryMentionsAggregate(sel.m_projections.front().m_expr))
+		return nullptr;
+
+	try {
+		std::vector<ibQueryAstExprPtr> own;
+		const ibBackendQueryable* inner = ResolveSource(sel.m_from, params, &own, &sel);
+		if (!plainTable(inner) || !own.empty())
+			return nullptr;
+		const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), inner } };
+		const std::vector<const ibBackendQueryColumn*> key =
+			ResolveFieldOperand(innerSources, *sel.m_projections.front().m_expr, /*allowDotWalk*/ false);
+		const ibBackendQueryColumn* const innerRowKey = rowKeyOf(inner);
+		if (key.size() != 1 || !identity(key.front(), innerRowKey))
+			return nullptr;
+		if (cols.front() != outerRowKey && key.front() != innerRowKey)
+			return nullptr;   // two values that may both be empty — the set road says what "equal" means for them
+
+		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
+		scope.From(inner);
+		if (sel.m_where)
+			scope.Where(BuildWherePredicate(innerSources, *sel.m_where, params, /*allowDotWalk*/ true));
+		const ibAccessPolicy* const policy =
+			ibSession::Current() != nullptr ? ibSession::Current()->GetAccessPolicy() : nullptr;
+		if (policy != nullptr) {
+			scope.WithAccessPolicy(nullptr);
+			if (!policy->CheckSelect(scope, ibAccessStage::Table))
+				return nullptr;
+			std::vector<const ibBackendQueryable*> read;
+			scope.GetSources(read);
+			if (read.size() != 1)
+				return nullptr;
+		}
+
+		ibSemiJoinExists semi;
+		semi.m_inner    = inner;
+		semi.m_outerKey = cols.front();
+		semi.m_innerKey = key.front();
+		semi.m_where    = scope.GetWherePredicate();
+		if (MentionsSemiJoin(semi.m_where))
+			return nullptr;   // a nested EXISTS would read its own alias (`sj`) for this one's
+
+		ibQueryCondition exists;
+		exists.m_semiJoin = std::make_shared<ibSemiJoinExists>(semi);
+		const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(exists);
+		return negated ? ibQueryPredicate::Not(leaf) : leaf;
+	}
+	catch (const ibBackendException&) {
+		return nullptr;   // the rows road resolves the same select and says what is wrong with it
+	}
+}
+
 // Build the full boolean WHERE as an L3 predicate TREE (ibQueryPredicate). The door lowers it to
 // the L2 IR (OR/NOT/IS NULL all expressible there). IN expands to Or(Eq …), BETWEEN to And(>=, <=),
 // NOT IN / NOT BETWEEN / NOT LIKE wrap the positive form in Not — so the tree needs no dedicated node.
@@ -1955,6 +2071,10 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			values = ibQueryHierarchyScope(owner, cols.back(), named, e.m_unfold).Accepted();
 		}
 		else if (e.m_subquery) {
+			// Said to the server where it can be (InSubqueryAsSemiJoin) — then the set is never read here.
+			if (answer == ibHierarchyAnswer::Door)
+				if (ibQueryPredicatePtr semi = InSubqueryAsSemiJoin(sources, cols, *e.m_subquery, params, e.m_negated))
+					return semi;
 			ibSubqueryOwner localOwner;   // the inner queryable lives only for this materialisation
 			const std::shared_ptr<ibSubqueryQueryable> subq = WrapSelectAsQueryable(*e.m_subquery, params, localOwner);
 			const std::vector<const ibBackendQueryColumn*> outCols = subq->GetColumns();
