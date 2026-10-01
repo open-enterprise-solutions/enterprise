@@ -64,7 +64,8 @@ ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsi
 			holder != nullptr ? holder->GetQueryable() : nullptr;
 		if (queryable == nullptr)
 			continue;   // the kind member exists but this object vends no source
-		names->Insert(object->GetName(),
+		// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
+		names->SetAt(object->GetName(),
 			new ibValueQueryable(queryable, kindName + wxT(".") + object->GetName()));
 	}
 	return names;

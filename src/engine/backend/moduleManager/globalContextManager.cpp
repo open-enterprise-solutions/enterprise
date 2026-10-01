@@ -28,8 +28,9 @@ class ibValueGlobalContextStructureManager : public ibValueStructure {
 			if (so == nullptr)
 				continue;
 			const ibValue createdValue = so->CreateObject();
-			// Name surface builds lazily on first GetPMethods() — no eager populate.
-			ibValueStructure::Insert(object->GetName(), createdValue);
+			// TWO OBJECTS MAY SHARE A NAME while a configuration is being edited (it is refused only when
+			// saved), so a repeated name is put, not inserted: one of them holds it, and which does not matter.
+			ibValueStructure::SetAt(object->GetName(), createdValue);
 		}
 	}
 

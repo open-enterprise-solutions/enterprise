@@ -202,6 +202,19 @@ TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
     EXPECT_EQ(s.Count(), 2u);
 }
 
+// Insert refuses a repeated key in every process, with no question about the designer; an owner for whom a
+// repeat is no error puts it with SetAt — one entry, the later value (the metadata namespaces do).
+TEST(ValueStructure, InsertRefusesARepeatAndSetAtPutsIt) {
+    ibValueStructure s;
+    s.Insert(Field(wxT("Name")), ibValue(ibNumber(1)));
+    EXPECT_ANY_THROW(s.Insert(Field(wxT("NAME")), ibValue(ibNumber(2))));
+    EXPECT_TRUE(s.SetAt(Field(wxT("name")), ibValue(ibNumber(3))));
+    ibValue out;
+    ASSERT_TRUE(s.Property(Field(wxT("Name")), out));
+    EXPECT_EQ(out.GetInteger(), 3);
+    EXPECT_EQ(s.Count(), 1u);
+}
+
 // THE METHOD TABLE IS ONE PER TYPE, not one per structure: two structures answer from the same
 // table, and a read-only one from the other (it has no Insert, and Get keeps its number).
 TEST(ValueStructure, StructuresShareOneMethodTable) {
