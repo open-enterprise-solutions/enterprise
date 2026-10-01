@@ -106,7 +106,7 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	ibDataViewColumn* columnCode = new ibDataViewColumn(_("Code"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_code, FromDIP(100), wxALIGN_LEFT,
 		wxDATAVIEW_COL_SORTABLE);
 
-	ibDataViewColumn* columnDescription = new ibDataViewColumn(_("Description"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_description, FromDIP(175), wxALIGN_LEFT,
+	ibDataViewColumn* columnDescription = new ibDataViewColumn(wxGETTEXT_IN_CONTEXT("item name", "Description"), new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT), model_description, FromDIP(175), wxALIGN_LEFT,
 		wxDATAVIEW_COL_SORTABLE);
 
 	m_tableEditor = new ibDataViewCtrl(this, wxID_ANY);

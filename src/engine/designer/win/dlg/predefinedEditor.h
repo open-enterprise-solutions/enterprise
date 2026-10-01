@@ -214,7 +214,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 			// --- Description ---
 			wxBoxSizer* sizerDescription = new wxBoxSizer(wxHORIZONTAL);
-			m_staticTextDescription = new wxStaticText(this, wxID_ANY, _("Description"), wxDefaultPosition, wxSize(kLabel, -1));
+			m_staticTextDescription = new wxStaticText(this, wxID_ANY, wxGETTEXT_IN_CONTEXT("item name", "Description"), wxDefaultPosition, wxSize(kLabel, -1));
 			sizerDescription->Add(m_staticTextDescription, 0, wxALL, kPad);
 			m_textDescription = new wxTextCtrl(this, wxID_ANY, strDescription);
 			sizerDescription->Add(m_textDescription, 1, wxALL, kPad);

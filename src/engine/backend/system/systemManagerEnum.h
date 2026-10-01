@@ -70,14 +70,16 @@ class ibValueEnumHttpMethod : public ibValueEnumeration<ibHttpMethod> {
 	public:
 	ibValueEnumHttpMethod() : ibValueEnumeration() {}
 
+	// A method is the protocol's word, the same in every language - not a catalog entry, where "Post" and
+	// "Delete" are a document's and a list's commands and translate as actions.
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Get, wxT("Get"), _("Get"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Post, wxT("Post"), _("Post"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Put, wxT("Put"), _("Put"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Patch, wxT("Patch"), _("Patch"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Delete, wxT("Delete"), _("Delete"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Head, wxT("Head"), _("Head"));
-		AddEnumeration(ibHttpMethod::ibHttpMethod_Options, wxT("Options"), _("Options"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Get, wxT("Get"), wxT("Get"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Post, wxT("Post"), wxT("Post"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Put, wxT("Put"), wxT("Put"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Patch, wxT("Patch"), wxT("Patch"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Delete, wxT("Delete"), wxT("Delete"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Head, wxT("Head"), wxT("Head"));
+		AddEnumeration(ibHttpMethod::ibHttpMethod_Options, wxT("Options"), wxT("Options"));
 	}
 };
 

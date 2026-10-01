@@ -33,8 +33,8 @@ class FRONTEND_API ibValueEnumStretch :
 	public:
 	ibValueEnumStretch() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxStretch::wxSHRINK, wxT("Shrink"), _("Shrink"));
-		AddEnumeration(wxStretch::wxEXPAND, wxT("Expand"), _("Expand"));
+		AddEnumeration(wxStretch::wxSHRINK, wxT("Shrink"), wxGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
+		AddEnumeration(wxStretch::wxEXPAND, wxT("Expand"), wxGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
 	}
 private:
 };

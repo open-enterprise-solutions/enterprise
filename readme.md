@@ -8,7 +8,8 @@ composer**. The platform turns the description into database tables, forms and r
 the database in step with the description as it changes.
 
 It ships with everything that loop needs: a designer, a compiler and bytecode interpreter, a remote
-debugger, a multi-database layer, a job manager, a web server — and a built-in **MCP server**, so an
+debugger, a multi-database layer, a job manager, an application server that serves several bases from
+one process, a web server — and a built-in **MCP server**, so an
 AI assistant can read, build and check a configuration alongside the developer, through the same
 doors the developer uses.
 
@@ -66,9 +67,14 @@ doors the developer uses.
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
   journalled.
+- **Application server** — `appserver` serves the bases its `server.conf` lists from one process:
+  Firebird and PostgreSQL side by side, one worker pool for all, and each base with its own
+  connections, sessions, locks, jobs and journal. Several servers may share a base; a desktop client
+  and a server may not use one at the same time. Passwords in its configuration are sealed
+  (AES-256-GCM).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
-- **Localisation** — the interface in English, Russian and Ukrainian; every caption of a
+- **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
   configuration can be written per language.
 - **Web client — in progress.** `wenterprise-server` serves the same forms to a browser. Layout,
   commands, navigation, text fields, check boxes and toolbars work today; tables and reference
@@ -106,7 +112,7 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
 6. Run `designer.exe` to build a configuration, `enterprise.exe` to work in it — or `launcher.exe`
-   to pick a base first.
+   to pick a base first. `appserver.exe` serves the bases of a server folder with no window.
 
 ### macOS
 
@@ -170,6 +176,7 @@ cmake -B build \
 cmake --build build --parallel
 ```
 
+The web runtime (`wfrontend` + `wenterprise-server`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
 The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 
 ### wxWidgets Submodule
@@ -186,13 +193,14 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (10 C++ projects)
+├── enterprise.sln            # MSBuild solution (11 C++ projects)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
 ├── NOTICE.md                 # third-party licenses, the wx fork, the LGPL past
-├── locale/                   # interface translations (ru, uk)
+├── locale/                   # interface translations (ru, uk): the template and the catalogs
+├── lang/                     # the compiled catalogs the programs read at run time
 ├── tests/                    # Google Test suites (built by CMake)
 ├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
 │   └── private/              # PRIVATE submodule (design docs) — resolves for members of the
@@ -245,7 +253,7 @@ enterprise/
 | Other databases | ODBC; SQLite (tests + logging) |
 | AI access | Model Context Protocol (Streamable HTTP) |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
-| Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (macOS / Linux) |
+| Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (Windows / macOS / Linux) |
 | Tests | Google Test, run in CI (GitHub Actions) |
 | License | PolyForm Noncommercial 1.0.0 — source-available, not open source |
 

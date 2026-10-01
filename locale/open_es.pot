@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 16:32+0300\n"
+"POT-Creation-Date: 2026-10-01 17:04+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2172,12 +2172,10 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:168
 #: src/engine/backend/metaCollection/metaFormObject.h:328
-#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:117
 #: src/engine/backend/metaCollection/metaSectionObject.h:109
 #: src/engine/backend/metaCollection/partial/commonObject.h:373
-#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgctxt "access right"
 msgid "Use"
 msgstr ""
 
@@ -2918,6 +2916,12 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:285
 #: src/engine/backend/session/sessionSnapshot.cpp:93
 msgid "Job"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
+#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgid "Use"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
@@ -4458,60 +4462,7 @@ msgid "The position of the value in its enumeration, as the values are listed in
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:923
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
-#: src/engine/backend/system/systemManagerEnum.h:78
-#: src/engine/backend/system/value/valueTable.h:391
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
-#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
-#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
-#: src/engine/designer/win/dlg/homePageEditor.cpp:61
-#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
-#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
-#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
-#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
-#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
-#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
-#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
-#: src/engine/frontend/win/dlgs/userList.cpp:75
-#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
-#: src/engine/launcher/launcher.cpp:256
+msgctxt "access right"
 msgid "Delete"
 msgstr ""
 
@@ -4568,9 +4519,7 @@ msgid "What the platform does with the document's movements when it is posted ag
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1285
-#: src/engine/backend/system/systemManagerEnum.h:117
-#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
-#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgctxt "document attribute"
 msgid "Number"
 msgstr ""
 
@@ -4638,7 +4587,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/commonObjectEnum.h:57
 #: src/engine/designer/win/dlg/predefinedEditor.cpp:109
 #: src/engine/designer/win/dlg/predefinedEditor.h:217
-#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgctxt "item name"
 msgid "Description"
 msgstr ""
 
@@ -4765,6 +4714,62 @@ msgstr ""
 #: src/engine/frontend/win/dlgs/userList.cpp:74
 #: src/engine/launcher/launcher.cpp:249
 msgid "Edit"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
+#: src/engine/backend/system/value/valueTable.h:391
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
+#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
+#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
+#: src/engine/designer/win/dlg/homePageEditor.cpp:61
+#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
+#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
+#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
+#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
+#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
+#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
+#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
+#: src/engine/frontend/win/dlgs/userList.cpp:75
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
+#: src/engine/launcher/launcher.cpp:256
+msgid "Delete"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:179
@@ -4929,7 +4934,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:23
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:54
-#: src/engine/backend/system/systemManagerEnum.h:75
 msgid "Post"
 msgstr ""
 
@@ -6780,71 +6784,56 @@ msgstr ""
 msgid "Encoding of the current locale"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:74
-msgid "Get"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:76
-msgid "Put"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:77
-msgid "Patch"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:79
-msgid "Head"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:80
-#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
-msgid "Options"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:112
+#: src/engine/backend/system/systemManagerEnum.h:114
 #: src/engine/backend/system/value/valueSpreadsheet.h:128
 msgid "None"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:115
+#: src/engine/backend/system/systemManagerEnum.h:117
 msgid "Null"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:116
+#: src/engine/backend/system/systemManagerEnum.h:118
 #: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:300
 msgid "Boolean"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:118
+#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgid "Number"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h:120
 #: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
 msgid "String"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/backend/system/systemManagerEnum.h:121
 msgid "Property name"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:120
+#: src/engine/backend/system/systemManagerEnum.h:122
 msgid "Object start"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:121
+#: src/engine/backend/system/systemManagerEnum.h:123
 msgid "Object end"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:122
+#: src/engine/backend/system/systemManagerEnum.h:124
 msgid "Array start"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:123
+#: src/engine/backend/system/systemManagerEnum.h:125
 msgid "Array end"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:132
+#: src/engine/backend/system/systemManagerEnum.h:134
 msgid "Compact"
 msgstr ""
 
-#: src/engine/backend/system/systemManagerEnum.h:133
+#: src/engine/backend/system/systemManagerEnum.h:135
 msgid "Indented"
 msgstr ""
 
@@ -9283,6 +9272,10 @@ msgstr ""
 msgid "Debugging in the current session"
 msgstr ""
 
+#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
+msgid "Options"
+msgstr ""
+
 #: src/engine/enterprise/win/dlg/functionAll.h:33
 msgid "All operations"
 msgstr ""
@@ -10192,6 +10185,10 @@ msgstr ""
 msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
 msgstr ""
 
+#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgid "Description"
+msgstr ""
+
 #: src/engine/frontend/syntaxHelper/helpDetailView.cpp:301
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1783
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3176
@@ -10329,12 +10326,12 @@ msgid "Alt+"
 msgstr ""
 
 #: src/engine/frontend/visualView/controlEnum.h:36
+msgctxt "sizer flag"
 msgid "Shrink"
 msgstr ""
 
-#. TRANSLATORS: Action for manipulating a tree control
 #: src/engine/frontend/visualView/controlEnum.h:37
-#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgctxt "sizer flag"
 msgid "Expand"
 msgstr ""
 
@@ -11607,6 +11604,11 @@ msgstr ""
 #. TRANSLATORS: Action for manipulating a tree control
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8811
 msgid "Collapse"
+msgstr ""
+
+#. TRANSLATORS: Action for manipulating a tree control
+#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgid "Expand"
 msgstr ""
 
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8832

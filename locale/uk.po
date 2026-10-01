@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 16:32+0300\n"
+"POT-Creation-Date: 2026-10-01 17:04+0300\n"
 "PO-Revision-Date: 2026-10-01 17:30+0300\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -1235,7 +1235,9 @@ msgstr "Шару запитів не вдалося підготувати оп�
 msgid ""
 "%s\n"
 "The statement was: %s"
-msgstr "%s\nТекст оператора: %s"
+msgstr ""
+"%s\n"
+"Текст оператора: %s"
 
 #: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp:315
 #: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp:340
@@ -1731,7 +1733,10 @@ msgid ""
 "Assistant access did not start: port %u on %s is already taken.\n"
 "\n"
 "Another designer is probably open and holding it - only one can. Close it, or give this one a port of its own in Tools > Options > Assistant access."
-msgstr "Доступ для асистента не запущено: порт %u на %s уже зайнятий.\n\nІмовірно, відкрито інший конфігуратор, і порт зайнятий ним - зайняти його може лише один. Закрийте його або задайте цьому конфігуратору власний порт в Інструменти > Параметри > Доступ для асистента."
+msgstr ""
+"Доступ для асистента не запущено: порт %u на %s уже зайнятий.\n"
+"\n"
+"Імовірно, відкрито інший конфігуратор, і порт зайнятий ним - зайняти його може лише один. Закрийте його або задайте цьому конфігуратору власний порт в Інструменти > Параметри > Доступ для асистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:705
 #: src/engine/backend/mcp/mcpServer.cpp:716
@@ -1793,7 +1798,10 @@ msgid ""
 "Assistant access is switched off.\n"
 "\n"
 "Turn it on in Tools > Options > Assistant access."
-msgstr "Доступ для асистента вимкнено.\n\nУвімкніть його в Інструменти > Параметри > Доступ для асистента."
+msgstr ""
+"Доступ для асистента вимкнено.\n"
+"\n"
+"Увімкніть його в Інструменти > Параметри > Доступ для асистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:920
 msgid "The address or the port is not set"
@@ -1826,14 +1834,20 @@ msgid ""
 "\n"
 "\n"
 "An assistant is connected."
-msgstr "\n\nАсистента підключено."
+msgstr ""
+"\n"
+"\n"
+"Асистента підключено."
 
 #: src/engine/backend/mcp/mcpServer.cpp:1223
 msgid ""
 "\n"
 "\n"
 "Nothing is connected yet - the key and the setup line are on the same settings page."
-msgstr "\n\nПоки нічого не підключено - ключ і рядок налаштування є на тій самій сторінці параметрів."
+msgstr ""
+"\n"
+"\n"
+"Поки нічого не підключено - ключ і рядок налаштування є на тій самій сторінці параметрів."
 
 #: src/engine/backend/mcp/mcpServer.cpp:2444
 #, c-format
@@ -2192,14 +2206,12 @@ msgstr "Код команди: CommandProcessing(CommandParameter, ExecuteParame
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:168
 #: src/engine/backend/metaCollection/metaFormObject.h:328
-#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:117
 #: src/engine/backend/metaCollection/metaSectionObject.h:109
 #: src/engine/backend/metaCollection/partial/commonObject.h:373
-#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgctxt "access right"
 msgid "Use"
-msgstr "Використовувати"
+msgstr "Використання"
 
 #: src/engine/backend/metaCollection/metaCommandObjectMenu.cpp:12
 msgid "Open command module"
@@ -2939,6 +2951,12 @@ msgstr "модуль завдання не зареєстровано в цьо�
 #: src/engine/backend/session/sessionSnapshot.cpp:93
 msgid "Job"
 msgstr "Завдання"
+
+#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
+#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgid "Use"
+msgstr "Використовувати"
 
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
 msgid "Whether the job runs by its schedule. Off: the job stays declared and can still be started by hand, but the job manager never starts it."
@@ -4478,60 +4496,7 @@ msgid "The position of the value in its enumeration, as the values are listed in
 msgstr "Позиція значення в його перерахуванні, у тому порядку, в якому значення перелічено в конфігурації. Значення порівнюються і сортуються за нею, тому запит із сортуванням за полем-перерахуванням упорядковує за оголошеним порядком, а не за іменем."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:923
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
-#: src/engine/backend/system/systemManagerEnum.h:78
-#: src/engine/backend/system/value/valueTable.h:391
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
-#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
-#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
-#: src/engine/designer/win/dlg/homePageEditor.cpp:61
-#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
-#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
-#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
-#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
-#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
-#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
-#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
-#: src/engine/frontend/win/dlgs/userList.cpp:75
-#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
-#: src/engine/launcher/launcher.cpp:256
+msgctxt "access right"
 msgid "Delete"
 msgstr "Видалення"
 
@@ -4588,9 +4553,7 @@ msgid "What the platform does with the document's movements when it is posted ag
 msgstr "Що платформа робить із рухами документа під час повторного проведення або скасування проведення. Автоматично (за замовчуванням): очищуються перед запуском обробника проведення і під час скасування проведення. Під час скасування проведення: зберігаються під час повторного проведення, очищуються під час скасування. Ніколи: їх очищує конфігурація. Видалений документ завжди забирає свої рухи із собою."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1285
-#: src/engine/backend/system/systemManagerEnum.h:117
-#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
-#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgctxt "document attribute"
 msgid "Number"
 msgstr "Номер"
 
@@ -4658,7 +4621,7 @@ msgstr "Код елемента - короткий ідентифікатор, �
 #: src/engine/backend/metaCollection/partial/commonObjectEnum.h:57
 #: src/engine/designer/win/dlg/predefinedEditor.cpp:109
 #: src/engine/designer/win/dlg/predefinedEditor.h:217
-#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgctxt "item name"
 msgid "Description"
 msgstr "Найменування"
 
@@ -4786,6 +4749,62 @@ msgstr "Копіювати"
 #: src/engine/launcher/launcher.cpp:249
 msgid "Edit"
 msgstr "Редагувати"
+
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
+#: src/engine/backend/system/value/valueTable.h:391
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
+#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
+#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
+#: src/engine/designer/win/dlg/homePageEditor.cpp:61
+#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
+#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
+#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
+#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
+#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
+#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
+#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
+#: src/engine/frontend/win/dlgs/userList.cpp:75
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
+#: src/engine/launcher/launcher.cpp:256
+msgid "Delete"
+msgstr "Видалити"
 
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:179
 msgid "Mark as delete"
@@ -4949,7 +4968,6 @@ msgstr "Провести та закрити"
 
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:23
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:54
-#: src/engine/backend/system/systemManagerEnum.h:75
 msgid "Post"
 msgstr "Провести"
 
@@ -6561,7 +6579,9 @@ msgstr ""
 msgid ""
 "The base cannot be served - a client outside the application servers uses it:\n"
 "%s, %s, %s"
-msgstr "Базу не можна обслуговувати - її використовує клієнт поза серверами застосунків:\n%s, %s, %s"
+msgstr ""
+"Базу не можна обслуговувати - її використовує клієнт поза серверами застосунків:\n"
+"%s, %s, %s"
 
 #: src/engine/backend/session/serviceExclusivePolicy.cpp:22
 #, c-format
@@ -6802,71 +6822,56 @@ msgstr "Системна кодова сторінка OEM"
 msgid "Encoding of the current locale"
 msgstr "Кодування поточної локалі"
 
-#: src/engine/backend/system/systemManagerEnum.h:74
-msgid "Get"
-msgstr "Get"
-
-#: src/engine/backend/system/systemManagerEnum.h:76
-msgid "Put"
-msgstr "Put"
-
-#: src/engine/backend/system/systemManagerEnum.h:77
-msgid "Patch"
-msgstr "Patch"
-
-#: src/engine/backend/system/systemManagerEnum.h:79
-msgid "Head"
-msgstr "Head"
-
-#: src/engine/backend/system/systemManagerEnum.h:80
-#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
-msgid "Options"
-msgstr "Параметри"
-
-#: src/engine/backend/system/systemManagerEnum.h:112
+#: src/engine/backend/system/systemManagerEnum.h:114
 #: src/engine/backend/system/value/valueSpreadsheet.h:128
 msgid "None"
 msgstr "Немає"
 
-#: src/engine/backend/system/systemManagerEnum.h:115
+#: src/engine/backend/system/systemManagerEnum.h:117
 msgid "Null"
 msgstr "Null"
 
-#: src/engine/backend/system/systemManagerEnum.h:116
+#: src/engine/backend/system/systemManagerEnum.h:118
 #: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:300
 msgid "Boolean"
 msgstr "Булеве"
 
-#: src/engine/backend/system/systemManagerEnum.h:118
+#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgid "Number"
+msgstr "Число"
+
+#: src/engine/backend/system/systemManagerEnum.h:120
 #: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
 msgid "String"
 msgstr "Рядок"
 
-#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/backend/system/systemManagerEnum.h:121
 msgid "Property name"
 msgstr "Ім'я властивості"
 
-#: src/engine/backend/system/systemManagerEnum.h:120
+#: src/engine/backend/system/systemManagerEnum.h:122
 msgid "Object start"
 msgstr "Початок об'єкта"
 
-#: src/engine/backend/system/systemManagerEnum.h:121
+#: src/engine/backend/system/systemManagerEnum.h:123
 msgid "Object end"
 msgstr "Кінець об'єкта"
 
-#: src/engine/backend/system/systemManagerEnum.h:122
+#: src/engine/backend/system/systemManagerEnum.h:124
 msgid "Array start"
 msgstr "Початок масиву"
 
-#: src/engine/backend/system/systemManagerEnum.h:123
+#: src/engine/backend/system/systemManagerEnum.h:125
 msgid "Array end"
 msgstr "Кінець масиву"
 
-#: src/engine/backend/system/systemManagerEnum.h:132
+#: src/engine/backend/system/systemManagerEnum.h:134
 msgid "Compact"
 msgstr "Компактний"
 
-#: src/engine/backend/system/systemManagerEnum.h:133
+#: src/engine/backend/system/systemManagerEnum.h:135
 msgid "Indented"
 msgstr "З відступами"
 
@@ -8386,7 +8391,10 @@ msgid ""
 "%d other session(s) are connected.\n"
 "\n"
 "This update changes no database structure, so it can be applied dynamically. Connected users keep working and pick the new configuration up when they log in again."
-msgstr "Підключено інших сеансів: %d.\n\nЦе оновлення не змінює структуру бази даних, тому його можна застосувати динамічно. Підключені користувачі продовжують роботу й отримають нову конфігурацію під час наступного входу."
+msgstr ""
+"Підключено інших сеансів: %d.\n"
+"\n"
+"Це оновлення не змінює структуру бази даних, тому його можна застосувати динамічно. Підключені користувачі продовжують роботу й отримають нову конфігурацію під час наступного входу."
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:368
 msgid "Update dynamically"
@@ -8403,7 +8411,10 @@ msgid ""
 "%d other session(s) are connected.\n"
 "\n"
 "This update changes the database structure, which requires exclusive mode. It cannot be applied dynamically."
-msgstr "Підключено інших сеансів: %d.\n\nЦе оновлення змінює структуру бази даних, для чого потрібен монопольний режим. Застосувати його динамічно не можна."
+msgstr ""
+"Підключено інших сеансів: %d.\n"
+"\n"
+"Це оновлення змінює структуру бази даних, для чого потрібен монопольний режим. Застосувати його динамічно не можна."
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:402
 msgid "Open database file"
@@ -9277,7 +9288,14 @@ msgid ""
 "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n"
 "\n"
 "Or launch through launcher.exe to pick a saved infobase."
-msgstr "Не вдалося запустити enterprise.exe - інформаційну базу не вказано.\n\nВкажіть один із варіантів:\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n\nАбо запустіть через launcher.exe, щоб вибрати збережену інформаційну базу."
+msgstr ""
+"Не вдалося запустити enterprise.exe - інформаційну базу не вказано.\n"
+"\n"
+"Вкажіть один із варіантів:\n"
+"  --file=<path>          (Firebird embedded / файл SQLite)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n"
+"\n"
+"Або запустіть через launcher.exe, щоб вибрати збережену інформаційну базу."
 
 #: src/engine/enterprise/mainApp.cpp:165 src/engine/enterprise/mainApp.cpp:301
 msgid "OES Enterprise"
@@ -9308,6 +9326,10 @@ msgstr "Система"
 #: src/engine/enterprise/win/dlg/enterpriseOption.cpp:32
 msgid "Debugging in the current session"
 msgstr "Налагодження в поточному сеансі"
+
+#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
+msgid "Options"
+msgstr "Параметри"
 
 #: src/engine/enterprise/win/dlg/functionAll.h:33
 msgid "All operations"
@@ -9420,7 +9442,9 @@ msgstr "Не вдалося прочитати документ з файлу \"
 msgid ""
 "The file '%s' doesn't exist and couldn't be opened.\n"
 "It has been removed from the most recently used files list."
-msgstr "Файл '%s' не існує, і його не вдалося відкрити.\nЙого видалено зі списку нещодавно використаних файлів."
+msgstr ""
+"Файл '%s' не існує, і його не вдалося відкрити.\n"
+"Його видалено зі списку нещодавно використаних файлів."
 
 #: src/engine/frontend/docView/docView.cpp:1271
 msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
@@ -9720,7 +9744,10 @@ msgid ""
 "The configuration has been updated by an administrator.\n"
 "\n"
 "You are still working with the version this session started on. Restart now to pick up the new one?"
-msgstr "Конфігурацію оновлено адміністратором.\n\nВи все ще працюєте з версією, з якою почався цей сеанс. Перезапустити зараз, щоб отримати нову?"
+msgstr ""
+"Конфігурацію оновлено адміністратором.\n"
+"\n"
+"Ви все ще працюєте з версією, з якою почався цей сеанс. Перезапустити зараз, щоб отримати нову?"
 
 #: src/engine/frontend/mainFrame/mainFrame.cpp:611
 #, c-format
@@ -9730,7 +9757,12 @@ msgid ""
 "%s\n"
 "\n"
 "Everything visible on it right now will be sent. Allow it?"
-msgstr "Асистент просить знімок цього вікна:\n\n%s\n\nУсе, що зараз видно в ньому, буде надіслано. Дозволити?"
+msgstr ""
+"Асистент просить знімок цього вікна:\n"
+"\n"
+"%s\n"
+"\n"
+"Усе, що зараз видно в ньому, буде надіслано. Дозволити?"
 
 #: src/engine/frontend/mainFrame/mainFrame.cpp:614
 msgid "Picture of the window"
@@ -10218,6 +10250,10 @@ msgstr "Довідка"
 msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
 msgstr "Виберіть статтю в дереві ліворуч або натисніть Ctrl+F1 на ідентифікаторі в редакторі."
 
+#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgid "Description"
+msgstr "Опис"
+
 #: src/engine/frontend/syntaxHelper/helpDetailView.cpp:301
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1783
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3176
@@ -10355,12 +10391,12 @@ msgid "Alt+"
 msgstr "Alt+"
 
 #: src/engine/frontend/visualView/controlEnum.h:36
+msgctxt "sizer flag"
 msgid "Shrink"
 msgstr "Стиснути"
 
-#. TRANSLATORS: Action for manipulating a tree control
 #: src/engine/frontend/visualView/controlEnum.h:37
-#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgctxt "sizer flag"
 msgid "Expand"
 msgstr "Розширити"
 
@@ -11635,6 +11671,11 @@ msgstr "Рядок %i"
 msgid "Collapse"
 msgstr "Згорнути"
 
+#. TRANSLATORS: Action for manipulating a tree control
+#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgid "Expand"
+msgstr "Розгорнути"
+
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8832
 #, c-format
 msgid "%s (%d items)"
@@ -11851,7 +11892,10 @@ msgid ""
 "Nothing standing beside this field can say what a value in it may be.\n"
 "\n"
 "A link takes that from the field it names: a characteristic says it through its chart, a field holding a type description says it outright. In a tabular section the neighbours are the other columns of the same row."
-msgstr "Жодне поле поруч із цим не може сказати, яким може бути значення в ньому.\n\nЗв'язок бере це з поля, яке він називає: характеристика повідомляє це через свій план видів характеристик, поле з описом типів - безпосередньо. У табличній частині сусіди - це інші колонки того самого рядка."
+msgstr ""
+"Жодне поле поруч із цим не може сказати, яким може бути значення в ньому.\n"
+"\n"
+"Зв'язок бере це з поля, яке він називає: характеристика повідомляє це через свій план видів характеристик, поле з описом типів - безпосередньо. У табличній частині сусіди - це інші колонки того самого рядка."
 
 #: src/engine/frontend/win/dlgs/choiceLink/choiceLink.cpp:116
 msgid "The field whose value decides the TYPE of this one."
@@ -11915,7 +11959,10 @@ msgid ""
 "The row taking its value from '%s' has no parameter name.\n"
 "\n"
 "Choose one in the Name column - it says WHICH field of the chosen object this narrows - or remove the row."
-msgstr "У рядка, що бере значення з '%s', не вказано ім'я параметра.\n\nВиберіть його в колонці Ім'я - воно визначає, ЯКЕ поле вибраного об'єкта звужується, - або видаліть рядок."
+msgstr ""
+"У рядка, що бере значення з '%s', не вказано ім'я параметра.\n"
+"\n"
+"Виберіть його в колонці Ім'я - воно визначає, ЯКЕ поле вибраного об'єкта звужується, - або видаліть рядок."
 
 #: src/engine/frontend/win/dlgs/choiceParameters/choiceParameters.cpp:669
 msgid "this attribute"
@@ -12897,7 +12944,10 @@ msgid ""
 "This level groups by several fields, and a hierarchy unfolds one field's parent chain.\n"
 "\n"
 "Give the hierarchy field a level of its own."
-msgstr "Цей рівень групує за кількома полями, а ієрархія розгортає ланцюжок батьків одного поля.\n\nВиділіть полю ієрархії окремий рівень."
+msgstr ""
+"Цей рівень групує за кількома полями, а ієрархія розгортає ланцюжок батьків одного поля.\n"
+"\n"
+"Виділіть полю ієрархії окремий рівень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1788
 msgid "totals level name"
@@ -12909,21 +12959,30 @@ msgid ""
 "Another totals level is already called '%s'.\n"
 "\n"
 "Levels are read back by name, so two the same would make one of them unreachable."
-msgstr "Інший рівень підсумків уже називається '%s'.\n\nРівні читаються за іменем, тому з двох однакових один стане недоступним."
+msgstr ""
+"Інший рівень підсумків уже називається '%s'.\n"
+"\n"
+"Рівні читаються за іменем, тому з двох однакових один стане недоступним."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1842
 msgid ""
 "This level unfolds through a hierarchy, which follows one field's parent chain.\n"
 "\n"
 "Remove the hierarchy first, or give the extra fields a level of their own."
-msgstr "Цей рівень розгортається за ієрархією, яка йде ланцюжком батьків одного поля.\n\nСпочатку приберіть ієрархію або виділіть додатковим полям окремий рівень."
+msgstr ""
+"Цей рівень розгортається за ієрархією, яка йде ланцюжком батьків одного поля.\n"
+"\n"
+"Спочатку приберіть ієрархію або виділіть додатковим полям окремий рівень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1852
 msgid ""
 "A level of several fields cannot be read by periods: a period is a scale, and a key made of several fields has none.\n"
 "\n"
 "Give the period a level of its own."
-msgstr "Рівень із кількох полів не можна читати за періодами: період - це шкала, а ключ із кількох полів її не має.\n\nВиділіть періоду окремий рівень."
+msgstr ""
+"Рівень із кількох полів не можна читати за періодами: період - це шкала, а ключ із кількох полів її не має.\n"
+"\n"
+"Виділіть періоду окремий рівень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1904
 msgid "Totals kind"
@@ -12959,7 +13018,9 @@ msgstr "Період:"
 msgid ""
 "Report periods from this moment. Empty = from the earliest period in the data.\n"
 "A bound does not filter rows — it says which periods to show."
-msgstr "Виводити періоди з цього моменту. Порожньо = з найранішого періоду в даних.\nМежа не відбирає рядки — вона визначає, які періоди показувати."
+msgstr ""
+"Виводити періоди з цього моменту. Порожньо = з найранішого періоду в даних.\n"
+"Межа не відбирає рядки — вона визначає, які періоди показувати."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2130
 msgid "Report periods up to this moment. Empty = to the latest period in the data."
@@ -13061,7 +13122,10 @@ msgid ""
 "Another query of this package already produces the result '%s'.\n"
 "\n"
 "Results are asked for by name, so two the same would make one of them unreachable."
-msgstr "Інший запит цього пакета вже повертає результат '%s'.\n\nРезультати запитуються за іменем, тому з двох однакових один стане недоступним."
+msgstr ""
+"Інший запит цього пакета вже повертає результат '%s'.\n"
+"\n"
+"Результати запитуються за іменем, тому з двох однакових один стане недоступним."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:305
 msgid "A temporary table is read by the statements after it, not shown: the order and the totals of this query were removed with the change."
@@ -13192,7 +13256,10 @@ msgid ""
 "'%s' cannot be a %s.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation."
-msgstr "'%s' не підходить як %s.\n\nІм'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків."
+msgstr ""
+"'%s' не підходить як %s.\n"
+"\n"
+"Ім'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorFill.cpp:1697
 #, c-format
@@ -13357,7 +13424,10 @@ msgid ""
 "'%s' cannot be a field name.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation."
-msgstr "'%s' не може бути ім'ям поля.\n\nІм'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків."
+msgstr ""
+"'%s' не може бути ім'ям поля.\n"
+"\n"
+"Ім'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:166
 #, c-format
@@ -13378,7 +13448,10 @@ msgid ""
 "'%s' cannot be a table name.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation - after an ampersand when the table is a parameter."
-msgstr "'%s' не може бути ім'ям таблиці.\n\nІм'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків, - після амперсанда, якщо таблиця є параметром."
+msgstr ""
+"'%s' не може бути ім'ям таблиці.\n"
+"\n"
+"Ім'я - це одне слово: літери, цифри та підкреслення, без пробілів і розділових знаків, - після амперсанда, якщо таблиця є параметром."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:340
 #, c-format
@@ -13479,13 +13552,18 @@ msgid ""
 "This grouping is made of several fields, and a hierarchy unfolds one field's parent chain.\n"
 "\n"
 "Give the hierarchy field a grouping of its own."
-msgstr "Це групування складається з кількох полів, а ієрархія розгортає ланцюжок батьків одного поля.\n\nВиділіть полю ієрархії окреме групування."
+msgstr ""
+"Це групування складається з кількох полів, а ієрархія розгортає ланцюжок батьків одного поля.\n"
+"\n"
+"Виділіть полю ієрархії окреме групування."
 
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1470
 msgid ""
 "A parameter (&From) or a literal date. Empty = from the data.\n"
 "A bound does not filter rows - it says which periods to show."
-msgstr "Параметр (&From) або літерал дати. Порожньо = за даними.\nМежа не відбирає рядки - вона визначає, які періоди показувати."
+msgstr ""
+"Параметр (&From) або літерал дати. Порожньо = за даними.\n"
+"Межа не відбирає рядки - вона визначає, які періоди показувати."
 
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1559
 msgid "No fields: this node prints the DETAIL RECORDS - the rows under the grouping above it."
@@ -14063,7 +14141,10 @@ msgid ""
 "Could not start %s.\n"
 "\n"
 "%s"
-msgstr "Не вдалося запустити %s.\n\n%s"
+msgstr ""
+"Не вдалося запустити %s.\n"
+"\n"
+"%s"
 
 #: src/engine/launcher/launcher.cpp:313 src/engine/launcher/launcher.h:57
 msgid "Launch OES"

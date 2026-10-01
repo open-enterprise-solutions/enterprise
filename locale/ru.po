@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 16:32+0300\n"
+"POT-Creation-Date: 2026-10-01 17:04+0300\n"
 "PO-Revision-Date: 2026-10-01 17:30+0300\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -139,7 +139,9 @@ msgstr ""
 msgid ""
 "Constant number expected:\n"
 "%s"
-msgstr "Ожидается числовая константа:\n%s"
+msgstr ""
+"Ожидается числовая константа:\n"
+"%s"
 
 #: src/engine/backend/backend_exception.cpp:126
 #, c-format
@@ -709,7 +711,10 @@ msgid ""
 "System error - compilation failed (#2)\n"
 "Module1:%s\n"
 "Parent1:%s"
-msgstr "Системная ошибка - сбой компиляции (#2)\nМодуль1:%s\nРодитель1:%s"
+msgstr ""
+"Системная ошибка - сбой компиляции (#2)\n"
+"Модуль1:%s\n"
+"Родитель1:%s"
 
 #: src/engine/backend/compiler/procUnit.cpp:2582
 #, c-format
@@ -1233,7 +1238,9 @@ msgstr "Слою запросов не удалось подготовить о�
 msgid ""
 "%s\n"
 "The statement was: %s"
-msgstr "%s\nТекст оператора: %s"
+msgstr ""
+"%s\n"
+"Текст оператора: %s"
 
 #: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp:315
 #: src/engine/backend/databaseLayer/databaseQueryBuilder.cpp:340
@@ -1729,7 +1736,10 @@ msgid ""
 "Assistant access did not start: port %u on %s is already taken.\n"
 "\n"
 "Another designer is probably open and holding it - only one can. Close it, or give this one a port of its own in Tools > Options > Assistant access."
-msgstr "Доступ для ассистента не запущен: порт %u на %s уже занят.\n\nВероятно, открыт другой конфигуратор, и порт занят им - занять его может только один. Закройте его или задайте этому конфигуратору свой порт в Сервис > Параметры > Доступ для ассистента."
+msgstr ""
+"Доступ для ассистента не запущен: порт %u на %s уже занят.\n"
+"\n"
+"Вероятно, открыт другой конфигуратор, и порт занят им - занять его может только один. Закройте его или задайте этому конфигуратору свой порт в Сервис > Параметры > Доступ для ассистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:705
 #: src/engine/backend/mcp/mcpServer.cpp:716
@@ -1791,7 +1801,10 @@ msgid ""
 "Assistant access is switched off.\n"
 "\n"
 "Turn it on in Tools > Options > Assistant access."
-msgstr "Доступ для ассистента выключен.\n\nВключите его в Сервис > Параметры > Доступ для ассистента."
+msgstr ""
+"Доступ для ассистента выключен.\n"
+"\n"
+"Включите его в Сервис > Параметры > Доступ для ассистента."
 
 #: src/engine/backend/mcp/mcpServer.cpp:920
 msgid "The address or the port is not set"
@@ -1824,14 +1837,20 @@ msgid ""
 "\n"
 "\n"
 "An assistant is connected."
-msgstr "\n\nАссистент подключён."
+msgstr ""
+"\n"
+"\n"
+"Ассистент подключён."
 
 #: src/engine/backend/mcp/mcpServer.cpp:1223
 msgid ""
 "\n"
 "\n"
 "Nothing is connected yet - the key and the setup line are on the same settings page."
-msgstr "\n\nПока ничего не подключено - ключ и строка настройки находятся на той же странице параметров."
+msgstr ""
+"\n"
+"\n"
+"Пока ничего не подключено - ключ и строка настройки находятся на той же странице параметров."
 
 #: src/engine/backend/mcp/mcpServer.cpp:2444
 #, c-format
@@ -2190,14 +2209,12 @@ msgstr "Код команды: CommandProcessing(CommandParameter, ExecuteParame
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:168
 #: src/engine/backend/metaCollection/metaFormObject.h:328
-#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:117
 #: src/engine/backend/metaCollection/metaSectionObject.h:109
 #: src/engine/backend/metaCollection/partial/commonObject.h:373
-#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgctxt "access right"
 msgid "Use"
-msgstr "Использовать"
+msgstr "Использование"
 
 #: src/engine/backend/metaCollection/metaCommandObjectMenu.cpp:12
 msgid "Open command module"
@@ -2937,6 +2954,12 @@ msgstr "модуль задания не зарегистрирован в эт�
 #: src/engine/backend/session/sessionSnapshot.cpp:93
 msgid "Job"
 msgstr "Задание"
+
+#: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
+#: src/engine/backend/metaCollection/partial/parameterizedJob.h:286
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:685
+msgid "Use"
+msgstr "Использовать"
 
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:103
 msgid "Whether the job runs by its schedule. Off: the job stays declared and can still be started by hand, but the job manager never starts it."
@@ -4476,60 +4499,7 @@ msgid "The position of the value in its enumeration, as the values are listed in
 msgstr "Позиция значения в его перечислении, в том порядке, в котором значения перечислены в конфигурации. Значения сравниваются и сортируются по ней, поэтому запрос с сортировкой по полю-перечислению упорядочивает по объявленному порядку, а не по имени."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:923
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
-#: src/engine/backend/system/systemManagerEnum.h:78
-#: src/engine/backend/system/value/valueTable.h:391
-#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
-#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
-#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
-#: src/engine/designer/win/dlg/homePageEditor.cpp:61
-#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
-#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
-#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
-#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
-#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
-#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
-#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
-#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
-#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
-#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
-#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
-#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
-#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
-#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
-#: src/engine/frontend/win/dlgs/userList.cpp:75
-#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
-#: src/engine/launcher/launcher.cpp:256
+msgctxt "access right"
 msgid "Delete"
 msgstr "Удаление"
 
@@ -4586,9 +4556,7 @@ msgid "What the platform does with the document's movements when it is posted ag
 msgstr "Что платформа делает с движениями документа при повторном проведении или отмене проведения. Автоматически (по умолчанию): очищаются перед запуском обработчика проведения и при отмене проведения. При отмене проведения: сохраняются при повторном проведении, очищаются при отмене. Никогда: их очищает конфигурация. Удалённый документ всегда забирает свои движения с собой."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1285
-#: src/engine/backend/system/systemManagerEnum.h:117
-#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
-#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgctxt "document attribute"
 msgid "Number"
 msgstr "Номер"
 
@@ -4656,7 +4624,7 @@ msgstr "Код элемента - короткий идентификатор, �
 #: src/engine/backend/metaCollection/partial/commonObjectEnum.h:57
 #: src/engine/designer/win/dlg/predefinedEditor.cpp:109
 #: src/engine/designer/win/dlg/predefinedEditor.h:217
-#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgctxt "item name"
 msgid "Description"
 msgstr "Наименование"
 
@@ -4784,6 +4752,62 @@ msgstr "Копировать"
 #: src/engine/launcher/launcher.cpp:249
 msgid "Edit"
 msgstr "Редактировать"
+
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:178
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:342
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:248
+#: src/engine/backend/system/value/valueTable.h:391
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration.cpp:29
+#: src/engine/designer/mainFrame/metaTree/treeDataProcessor_impl.cpp:291
+#: src/engine/designer/mainFrame/metaTree/treeDataReport_impl.cpp:292
+#: src/engine/designer/win/dlg/homePageEditor.cpp:61
+#: src/engine/designer/win/dlg/predefinedEditor.cpp:88
+#: src/engine/designer/win/editor/visualEditor/visualEditorAttributeTree.cpp:406
+#: src/engine/designer/win/editor/visualEditor/visualEditorCommandTree.cpp:264
+#: src/engine/designer/win/editor/visualEditor/visualEditorNotebook.cpp:103
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:258
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:275
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:317
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:345
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:382
+#: src/engine/frontend/win/dlgs/linqConstructor/linqConstructor.cpp:435
+#: src/engine/frontend/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:639
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:747
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:808
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:926
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1015
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1349
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1652
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2157
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2352
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2392
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1475
+#: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1374
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2455
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2514
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2515
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2688
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:2816
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3519
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3628
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4591
+#: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:4638
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:423
+#: src/engine/frontend/win/dlgs/settings/list/listSettings.cpp:566
+#: src/engine/frontend/win/dlgs/settings/savedSettings.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:101
+#: src/engine/frontend/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:645
+#: src/engine/frontend/win/dlgs/settings/settingsFilterEditor.cpp:1212
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:159
+#: src/engine/frontend/win/dlgs/settings/settingsSortEditor.cpp:358
+#: src/engine/frontend/win/dlgs/userList.cpp:75
+#: src/engine/frontend/win/editor/gridEditor/gridEditor.cpp:369
+#: src/engine/launcher/launcher.cpp:256
+msgid "Delete"
+msgstr "Удалить"
 
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:179
 msgid "Mark as delete"
@@ -4947,7 +4971,6 @@ msgstr "Провести и закрыть"
 
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:23
 #: src/engine/backend/metaCollection/partial/documentAction.cpp:54
-#: src/engine/backend/system/systemManagerEnum.h:75
 msgid "Post"
 msgstr "Провести"
 
@@ -6550,14 +6573,18 @@ msgstr "ibJsonProvider: некорректный JSON в байте %d"
 msgid ""
 "Another designer process is already running:\n"
 "%s, %s, %s"
-msgstr "Другой процесс конфигуратора уже запущен:\n%s, %s, %s"
+msgstr ""
+"Другой процесс конфигуратора уже запущен:\n"
+"%s, %s, %s"
 
 #: src/engine/backend/session/serviceExclusivePolicy.cpp:17
 #, c-format
 msgid ""
 "The base cannot be served - a client outside the application servers uses it:\n"
 "%s, %s, %s"
-msgstr "Базу нельзя обслуживать - её использует клиент вне серверов приложений:\n%s, %s, %s"
+msgstr ""
+"Базу нельзя обслуживать - её использует клиент вне серверов приложений:\n"
+"%s, %s, %s"
 
 #: src/engine/backend/session/serviceExclusivePolicy.cpp:22
 #, c-format
@@ -6798,71 +6825,56 @@ msgstr "Системная кодовая страница OEM"
 msgid "Encoding of the current locale"
 msgstr "Кодировка текущей локали"
 
-#: src/engine/backend/system/systemManagerEnum.h:74
-msgid "Get"
-msgstr "Get"
-
-#: src/engine/backend/system/systemManagerEnum.h:76
-msgid "Put"
-msgstr "Put"
-
-#: src/engine/backend/system/systemManagerEnum.h:77
-msgid "Patch"
-msgstr "Patch"
-
-#: src/engine/backend/system/systemManagerEnum.h:79
-msgid "Head"
-msgstr "Head"
-
-#: src/engine/backend/system/systemManagerEnum.h:80
-#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
-msgid "Options"
-msgstr "Параметры"
-
-#: src/engine/backend/system/systemManagerEnum.h:112
+#: src/engine/backend/system/systemManagerEnum.h:114
 #: src/engine/backend/system/value/valueSpreadsheet.h:128
 msgid "None"
 msgstr "Нет"
 
-#: src/engine/backend/system/systemManagerEnum.h:115
+#: src/engine/backend/system/systemManagerEnum.h:117
 msgid "Null"
 msgstr "Null"
 
-#: src/engine/backend/system/systemManagerEnum.h:116
+#: src/engine/backend/system/systemManagerEnum.h:118
 #: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:300
 msgid "Boolean"
 msgstr "Булево"
 
-#: src/engine/backend/system/systemManagerEnum.h:118
+#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
+#: src/engine/frontend/win/dlgs/formatConstructor/formatConstructor.cpp:214
+msgid "Number"
+msgstr "Число"
+
+#: src/engine/backend/system/systemManagerEnum.h:120
 #: src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp:7
 msgid "String"
 msgstr "Строка"
 
-#: src/engine/backend/system/systemManagerEnum.h:119
+#: src/engine/backend/system/systemManagerEnum.h:121
 msgid "Property name"
 msgstr "Имя свойства"
 
-#: src/engine/backend/system/systemManagerEnum.h:120
+#: src/engine/backend/system/systemManagerEnum.h:122
 msgid "Object start"
 msgstr "Начало объекта"
 
-#: src/engine/backend/system/systemManagerEnum.h:121
+#: src/engine/backend/system/systemManagerEnum.h:123
 msgid "Object end"
 msgstr "Конец объекта"
 
-#: src/engine/backend/system/systemManagerEnum.h:122
+#: src/engine/backend/system/systemManagerEnum.h:124
 msgid "Array start"
 msgstr "Начало массива"
 
-#: src/engine/backend/system/systemManagerEnum.h:123
+#: src/engine/backend/system/systemManagerEnum.h:125
 msgid "Array end"
 msgstr "Конец массива"
 
-#: src/engine/backend/system/systemManagerEnum.h:132
+#: src/engine/backend/system/systemManagerEnum.h:134
 msgid "Compact"
 msgstr "Компактный"
 
-#: src/engine/backend/system/systemManagerEnum.h:133
+#: src/engine/backend/system/systemManagerEnum.h:135
 msgid "Indented"
 msgstr "С отступами"
 
@@ -8336,7 +8348,9 @@ msgstr "Конфигурация '%s' была изменена. Сохрани�
 msgid ""
 "Configuration '%s' has been changed.\n"
 "Do you want to save?"
-msgstr "Конфигурация '%s' была изменена.\nХотите сохранить?"
+msgstr ""
+"Конфигурация '%s' была изменена.\n"
+"Хотите сохранить?"
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:147
 msgid "Failed to save configuration before launching the runtime."
@@ -8380,7 +8394,10 @@ msgid ""
 "%d other session(s) are connected.\n"
 "\n"
 "This update changes no database structure, so it can be applied dynamically. Connected users keep working and pick the new configuration up when they log in again."
-msgstr "Подключено других сеансов: %d.\n\nЭто обновление не меняет структуру базы данных, поэтому его можно применить динамически. Подключённые пользователи продолжают работу и получат новую конфигурацию при следующем входе."
+msgstr ""
+"Подключено других сеансов: %d.\n"
+"\n"
+"Это обновление не меняет структуру базы данных, поэтому его можно применить динамически. Подключённые пользователи продолжают работу и получат новую конфигурацию при следующем входе."
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:368
 msgid "Update dynamically"
@@ -8397,7 +8414,10 @@ msgid ""
 "%d other session(s) are connected.\n"
 "\n"
 "This update changes the database structure, which requires exclusive mode. It cannot be applied dynamically."
-msgstr "Подключено других сеансов: %d.\n\nЭто обновление меняет структуру базы данных, для чего нужен монопольный режим. Применить его динамически нельзя."
+msgstr ""
+"Подключено других сеансов: %d.\n"
+"\n"
+"Это обновление меняет структуру базы данных, для чего нужен монопольный режим. Применить его динамически нельзя."
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:402
 msgid "Open database file"
@@ -9271,7 +9291,14 @@ msgid ""
 "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n"
 "\n"
 "Or launch through launcher.exe to pick a saved infobase."
-msgstr "Не удалось запустить enterprise.exe - информационная база не указана.\n\nУкажите один из вариантов:\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n\nИли запустите через launcher.exe, чтобы выбрать сохранённую информационную базу."
+msgstr ""
+"Не удалось запустить enterprise.exe - информационная база не указана.\n"
+"\n"
+"Укажите один из вариантов:\n"
+"  --file=<path>          (Firebird embedded / файл SQLite)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n"
+"\n"
+"Или запустите через launcher.exe, чтобы выбрать сохранённую информационную базу."
 
 #: src/engine/enterprise/mainApp.cpp:165 src/engine/enterprise/mainApp.cpp:301
 msgid "OES Enterprise"
@@ -9302,6 +9329,10 @@ msgstr "Система"
 #: src/engine/enterprise/win/dlg/enterpriseOption.cpp:32
 msgid "Debugging in the current session"
 msgstr "Отладка в текущем сеансе"
+
+#: src/engine/enterprise/win/dlg/enterpriseOption.h:29
+msgid "Options"
+msgstr "Параметры"
 
 #: src/engine/enterprise/win/dlg/functionAll.h:33
 msgid "All operations"
@@ -9414,7 +9445,9 @@ msgstr "Не удалось прочитать документ из файла 
 msgid ""
 "The file '%s' doesn't exist and couldn't be opened.\n"
 "It has been removed from the most recently used files list."
-msgstr "Файл '%s' не существует, и его не удалось открыть.\nОн удалён из списка недавно использованных файлов."
+msgstr ""
+"Файл '%s' не существует, и его не удалось открыть.\n"
+"Он удалён из списка недавно использованных файлов."
 
 #: src/engine/frontend/docView/docView.cpp:1271
 msgid "There is nothing here to print. In a form with several tables, put the cursor in the one to print."
@@ -9714,7 +9747,10 @@ msgid ""
 "The configuration has been updated by an administrator.\n"
 "\n"
 "You are still working with the version this session started on. Restart now to pick up the new one?"
-msgstr "Конфигурация обновлена администратором.\n\nВы всё ещё работаете с версией, с которой начался этот сеанс. Перезапустить сейчас, чтобы получить новую?"
+msgstr ""
+"Конфигурация обновлена администратором.\n"
+"\n"
+"Вы всё ещё работаете с версией, с которой начался этот сеанс. Перезапустить сейчас, чтобы получить новую?"
 
 #: src/engine/frontend/mainFrame/mainFrame.cpp:611
 #, c-format
@@ -9724,7 +9760,12 @@ msgid ""
 "%s\n"
 "\n"
 "Everything visible on it right now will be sent. Allow it?"
-msgstr "Ассистент просит снимок этого окна:\n\n%s\n\nВсё, что сейчас видно в нём, будет отправлено. Разрешить?"
+msgstr ""
+"Ассистент просит снимок этого окна:\n"
+"\n"
+"%s\n"
+"\n"
+"Всё, что сейчас видно в нём, будет отправлено. Разрешить?"
 
 #: src/engine/frontend/mainFrame/mainFrame.cpp:614
 msgid "Picture of the window"
@@ -10212,6 +10253,10 @@ msgstr "Справка"
 msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
 msgstr "Выберите статью в дереве слева или нажмите Ctrl+F1 на идентификаторе в редакторе."
 
+#: src/engine/frontend/syntaxHelper/helpDetailView.cpp:288
+msgid "Description"
+msgstr "Описание"
+
 #: src/engine/frontend/syntaxHelper/helpDetailView.cpp:301
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1783
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:3176
@@ -10349,12 +10394,12 @@ msgid "Alt+"
 msgstr "Alt+"
 
 #: src/engine/frontend/visualView/controlEnum.h:36
+msgctxt "sizer flag"
 msgid "Shrink"
 msgstr "Сжать"
 
-#. TRANSLATORS: Action for manipulating a tree control
 #: src/engine/frontend/visualView/controlEnum.h:37
-#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgctxt "sizer flag"
 msgid "Expand"
 msgstr "Расширить"
 
@@ -11629,6 +11674,11 @@ msgstr "Строка %i"
 msgid "Collapse"
 msgstr "Свернуть"
 
+#. TRANSLATORS: Action for manipulating a tree control
+#: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8814
+msgid "Expand"
+msgstr "Развернуть"
+
 #: src/engine/frontend/win/ctrls/dataview/datavgen.cpp:8832
 #, c-format
 msgid "%s (%d items)"
@@ -11845,7 +11895,10 @@ msgid ""
 "Nothing standing beside this field can say what a value in it may be.\n"
 "\n"
 "A link takes that from the field it names: a characteristic says it through its chart, a field holding a type description says it outright. In a tabular section the neighbours are the other columns of the same row."
-msgstr "Ни одно поле рядом с этим не может сказать, каким может быть значение в нём.\n\nСвязь берёт это из поля, которое она называет: характеристика сообщает это через свой план видов характеристик, поле с описанием типов - напрямую. В табличной части соседи - это другие колонки той же строки."
+msgstr ""
+"Ни одно поле рядом с этим не может сказать, каким может быть значение в нём.\n"
+"\n"
+"Связь берёт это из поля, которое она называет: характеристика сообщает это через свой план видов характеристик, поле с описанием типов - напрямую. В табличной части соседи - это другие колонки той же строки."
 
 #: src/engine/frontend/win/dlgs/choiceLink/choiceLink.cpp:116
 msgid "The field whose value decides the TYPE of this one."
@@ -11909,7 +11962,10 @@ msgid ""
 "The row taking its value from '%s' has no parameter name.\n"
 "\n"
 "Choose one in the Name column - it says WHICH field of the chosen object this narrows - or remove the row."
-msgstr "У строки, берущей значение из '%s', не указано имя параметра.\n\nВыберите его в колонке Имя - оно говорит, КАКОЕ поле выбираемого объекта сужается, - или удалите строку."
+msgstr ""
+"У строки, берущей значение из '%s', не указано имя параметра.\n"
+"\n"
+"Выберите его в колонке Имя - оно говорит, КАКОЕ поле выбираемого объекта сужается, - или удалите строку."
 
 #: src/engine/frontend/win/dlgs/choiceParameters/choiceParameters.cpp:669
 msgid "this attribute"
@@ -12891,7 +12947,10 @@ msgid ""
 "This level groups by several fields, and a hierarchy unfolds one field's parent chain.\n"
 "\n"
 "Give the hierarchy field a level of its own."
-msgstr "Этот уровень группирует по нескольким полям, а иерархия разворачивает цепочку родителей одного поля.\n\nВыделите полю иерархии отдельный уровень."
+msgstr ""
+"Этот уровень группирует по нескольким полям, а иерархия разворачивает цепочку родителей одного поля.\n"
+"\n"
+"Выделите полю иерархии отдельный уровень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1788
 msgid "totals level name"
@@ -12903,21 +12962,30 @@ msgid ""
 "Another totals level is already called '%s'.\n"
 "\n"
 "Levels are read back by name, so two the same would make one of them unreachable."
-msgstr "Другой уровень итогов уже называется '%s'.\n\nУровни читаются по имени, поэтому из двух одинаковых один станет недоступен."
+msgstr ""
+"Другой уровень итогов уже называется '%s'.\n"
+"\n"
+"Уровни читаются по имени, поэтому из двух одинаковых один станет недоступен."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1842
 msgid ""
 "This level unfolds through a hierarchy, which follows one field's parent chain.\n"
 "\n"
 "Remove the hierarchy first, or give the extra fields a level of their own."
-msgstr "Этот уровень разворачивается по иерархии, которая следует цепочке родителей одного поля.\n\nСначала уберите иерархию или выделите дополнительным полям отдельный уровень."
+msgstr ""
+"Этот уровень разворачивается по иерархии, которая следует цепочке родителей одного поля.\n"
+"\n"
+"Сначала уберите иерархию или выделите дополнительным полям отдельный уровень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1852
 msgid ""
 "A level of several fields cannot be read by periods: a period is a scale, and a key made of several fields has none.\n"
 "\n"
 "Give the period a level of its own."
-msgstr "Уровень из нескольких полей нельзя читать по периодам: период - это шкала, а у ключа из нескольких полей её нет.\n\nВыделите периоду отдельный уровень."
+msgstr ""
+"Уровень из нескольких полей нельзя читать по периодам: период - это шкала, а у ключа из нескольких полей её нет.\n"
+"\n"
+"Выделите периоду отдельный уровень."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:1904
 msgid "Totals kind"
@@ -12953,7 +13021,9 @@ msgstr "Период:"
 msgid ""
 "Report periods from this moment. Empty = from the earliest period in the data.\n"
 "A bound does not filter rows — it says which periods to show."
-msgstr "Выводить периоды с этого момента. Пусто = с самого раннего периода в данных.\nГраница не отбирает строки — она говорит, какие периоды показывать."
+msgstr ""
+"Выводить периоды с этого момента. Пусто = с самого раннего периода в данных.\n"
+"Граница не отбирает строки — она говорит, какие периоды показывать."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp:2130
 msgid "Report periods up to this moment. Empty = to the latest period in the data."
@@ -13055,7 +13125,10 @@ msgid ""
 "Another query of this package already produces the result '%s'.\n"
 "\n"
 "Results are asked for by name, so two the same would make one of them unreachable."
-msgstr "Другой запрос этого пакета уже возвращает результат '%s'.\n\nРезультаты запрашиваются по имени, поэтому из двух одинаковых один станет недоступен."
+msgstr ""
+"Другой запрос этого пакета уже возвращает результат '%s'.\n"
+"\n"
+"Результаты запрашиваются по имени, поэтому из двух одинаковых один станет недоступен."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorEdit.cpp:305
 msgid "A temporary table is read by the statements after it, not shown: the order and the totals of this query were removed with the change."
@@ -13186,7 +13259,10 @@ msgid ""
 "'%s' cannot be a %s.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation."
-msgstr "'%s' не подходит как %s.\n\nИмя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания."
+msgstr ""
+"'%s' не подходит как %s.\n"
+"\n"
+"Имя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructorFill.cpp:1697
 #, c-format
@@ -13351,7 +13427,10 @@ msgid ""
 "'%s' cannot be a field name.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation."
-msgstr "'%s' не может быть именем поля.\n\nИмя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания."
+msgstr ""
+"'%s' не может быть именем поля.\n"
+"\n"
+"Имя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:166
 #, c-format
@@ -13372,7 +13451,10 @@ msgid ""
 "'%s' cannot be a table name.\n"
 "\n"
 "A name is one word: letters, digits and underscores, with no spaces or punctuation - after an ampersand when the table is a parameter."
-msgstr "'%s' не может быть именем таблицы.\n\nИмя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания, - после амперсанда, если таблица является параметром."
+msgstr ""
+"'%s' не может быть именем таблицы.\n"
+"\n"
+"Имя - это одно слово: буквы, цифры и подчёркивания, без пробелов и знаков препинания, - после амперсанда, если таблица является параметром."
 
 #: src/engine/frontend/win/dlgs/queryConstructor/queryTempTableDialog.cpp:340
 #, c-format
@@ -13473,13 +13555,18 @@ msgid ""
 "This grouping is made of several fields, and a hierarchy unfolds one field's parent chain.\n"
 "\n"
 "Give the hierarchy field a grouping of its own."
-msgstr "Эта группировка состоит из нескольких полей, а иерархия разворачивает цепочку родителей одного поля.\n\nВыделите полю иерархии отдельную группировку."
+msgstr ""
+"Эта группировка состоит из нескольких полей, а иерархия разворачивает цепочку родителей одного поля.\n"
+"\n"
+"Выделите полю иерархии отдельную группировку."
 
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1470
 msgid ""
 "A parameter (&From) or a literal date. Empty = from the data.\n"
 "A bound does not filter rows - it says which periods to show."
-msgstr "Параметр (&From) или литерал даты. Пусто = по данным.\nГраница не отбирает строки - она говорит, какие периоды показывать."
+msgstr ""
+"Параметр (&From) или литерал даты. Пусто = по данным.\n"
+"Граница не отбирает строки - она говорит, какие периоды показывать."
 
 #: src/engine/frontend/win/dlgs/settings/composer/composerSettings.cpp:1559
 msgid "No fields: this node prints the DETAIL RECORDS - the rows under the grouping above it."
@@ -14057,7 +14144,10 @@ msgid ""
 "Could not start %s.\n"
 "\n"
 "%s"
-msgstr "Не удалось запустить %s.\n\n%s"
+msgstr ""
+"Не удалось запустить %s.\n"
+"\n"
+"%s"
 
 #: src/engine/launcher/launcher.cpp:313 src/engine/launcher/launcher.h:57
 msgid "Launch OES"

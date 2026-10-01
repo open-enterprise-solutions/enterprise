@@ -997,7 +997,7 @@ Two parallel translation surfaces exist; do not confuse them:
 ```
 # Regenerate the template from current sources (uses Poedit's gettext tools).
 xgettext --from-code=UTF-8 --keyword=_ --keyword=wxTRANSLATE --keyword=RuntimeError \
-         --keyword=wxPLURAL:1,2 --language=C++ --no-wrap \
+         --keyword=wxPLURAL:1,2 --keyword=wxGETTEXT_IN_CONTEXT:1c,2 --language=C++ --no-wrap \
          --output=locale/open_es.pot --files-from=<list-of-cpp-files>
 
 # Merge new entries into each language file (preserves existing translations).
@@ -1012,3 +1012,5 @@ msgfmt --check-format --output-file=locale/uk.mo locale/uk.po
 ```
 
 The Poedit GUI (`File → Open` on the .po) does Step 1 + the editing UI in one shot. CLI route is faster for batch updates from CI.
+
+One English word with two meanings takes a context for the special one: `wxGETTEXT_IN_CONTEXT("document attribute", "Number")` is translated apart from `_("Number")`.
