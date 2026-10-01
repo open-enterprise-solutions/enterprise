@@ -149,6 +149,46 @@ The window case follows the expected sort-heavy `n log n` shape rather than quad
 
 The stored `PerfStockReport` was applied to the database and executed through both the composition API and the application object path (`Reports.PerfStockReport.Create()` into `SpreadsheetDocument`). It produced 100 product groups and totals `899,780` / `11,247,250`; the background user-path job completed successfully within the journal's one-second timestamp interval. Release builds do not emit the debug technology trace, so a sub-second internal document-layout split is not claimed.
 
+### Million-movement follow-up
+
+The same current-build configuration was extended to exactly 1,000,000 committed `PerfStock` movements. Independent raw and virtual-table reads still agree with the generator oracle:
+
+| Check | Result |
+| --- | ---: |
+| movement rows | 1,000,000 |
+| raw quantity | 8,997,800 |
+| raw amount | 112,472,500 |
+| `Balance()` quantity | 4,498,600 |
+| `Balance()` amount | 56,232,500 |
+
+After one warm-up, five Release MCP round trips produced:
+
+| Scenario | Minimum | Median | Worst observed |
+| --- | ---: | ---: | ---: |
+| aggregate | 172.70 ms | 192.36 ms | 241.52 ms |
+| group by product | 2,695.50 ms | 2,908.77 ms | 3,270.17 ms |
+| join + group | 801.62 ms | 856.34 ms | 1,015.72 ms |
+| window + order, top 10 | 10.33 s | 30.75 s | 45.13 s |
+
+The million-row aggregate and hash/group shapes remain practical locally. The window query is the clear database hot path: its profile is dominated by Firebird `SortedStream` work and temporary-file spill, with very high run-to-run variance. This is a query/index/work-memory optimization target rather than evidence of the grouping-validator defect returning.
+
+### Payroll calculation register: 50,000 employees
+
+A separate real metadata contour was applied to the same disposable base: `PerfEmployee`, `PerfPayrollTypes`, `PerfPayroll`, `PerfWorkSchedule`, `PerfPayrollDocument`, and `PerfPayrollReport`. The chart declares salary, leave, and bonus calculation types, including displacement (`SALARY` displaces `LEAVE`) and base/leading dependencies (`BONUS` depends on `SALARY`). The schedule contains 31 January work days.
+
+The populated contour contains 50,000 distinct employees and 63,000 calculation-register records:
+
+| Calculation type | Rows | Result total |
+| --- | ---: | ---: |
+| salary | 50,000 | 274,750,000 |
+| bonus | 10,000 | 5,000,000 |
+| leave, including storno | 3,000 | 2,000,000 |
+| **total** | **63,000** | **281,750,000** |
+
+The first 1,000-employee writer used one `FindByCode` lookup per employee and took 49.967 s. Selecting employees once and writing register sets in batches reduced subsequent 10,000-employee batches to 2.559 s, 4.046 s, 6.052 s, and 2.552 s; the final 8,000-employee batch took 2.030 s. The variation includes database growth and one rejected selection shape, but the dominant application hot path is unambiguous: repeated point lookup inside the generation loop, not record-set writing.
+
+The report composer metadata validates against the register and aggregate totals were verified independently. A final full `SpreadsheetDocument` composition over the 63,000-row cross-table did not answer within the MCP request timeout, so no successful end-to-end report time is claimed.
+
 ## Builds and tests
 
 - Clean Release configure: `BUILD_TESTING=ON`, Firebird and PostgreSQL enabled for test linkage.
@@ -167,3 +207,5 @@ A configure with both database drivers disabled also exposes an existing CMake i
 2. `oes_tests` cannot link when both database drivers are configured off because driver tests remain in the target.
 3. A direct uninstalled launch needs the Firebird client runtime made available beside the binaries (`libfbclient.dylib` and its library directory). With that runtime present, both current-source GUI applications initialize and the integration run succeeds; packaging/runtime discovery remains worth hardening.
 4. Non-exact `ibNumber` division is the largest measured primitive hotspot at about 135x its native control. It was measured, not changed, because neither correctness nor a localized regression was established in this run.
+5. A payroll anti-selection written as `NOT IN (SELECT ...)` is lowered to an `IN (?, ?, ...)` parameter list. Once the existing employee set reached roughly 31,000 rows it exceeded Firebird's 32,767-parameter limit. Rewriting the same selection as `LEFT JOIN ... WHERE P.Employee IS NULL` avoids the expansion and remained fast. The query lowering should preserve the subquery or otherwise avoid materializing an unbounded parameter list.
+6. MCP boolean metadata writes returned `ibDataValue: wrong value kind (expected 6, got 1)` even when the Designer and generated DDL reflected the requested flag. Immediately after adding calculation-register capabilities, source discovery also omitted derived sources such as `ActualActionPeriod`, `ScheduleData`, and `Recalculation` until metadata reinitialization. These are tooling/source-registration defects; the persisted configuration itself finishes clean (`differsFromDatabase=false`, `unsavedEdits=false`).

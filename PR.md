@@ -7,7 +7,7 @@
 - Fixed both defects in the engine and added focused positive and negative regression coverage.
 - Release test, Designer, and Enterprise targets build; targeted and related suites pass.
 - Full suite result is 2,281 passed, 12 skipped, and one pre-existing timezone-sensitive failure.
-- Built a fresh integration configuration with 100 products, 10 warehouses, and 100,000 register movements; independent query, balance, and report totals agree.
+- Built a fresh integration configuration and extended it to 1,000,000 stock movements plus a real payroll calculation register for 50,000 employees; independent query, balance, and payroll totals agree.
 
 ## Measurements
 
@@ -23,8 +23,14 @@
 | DB group by product | 139.10 ms at 10k | 905.95 ms at 100k | 6.51x | — | current build |
 | DB join + group | 33.25 ms at 10k | 261.02 ms at 100k | 7.85x | — | current build |
 | DB window + order | 267.39 ms at 10k | 3,740.60 ms at 100k | 13.99x | rejected by validator | executes correctly |
+| DB aggregate, 1m | — | 172.70 / 192.36 ms min/median | — | — | exact oracle match |
+| DB group by product, 1m | — | 2.70 / 2.91 s min/median | — | — | exact oracle match |
+| DB join + group, 1m | — | 0.80 / 0.86 s min/median | — | — | exact oracle match |
+| DB window + order, 1m | — | 10.33 / 30.75 s min/median | — | — | temp-sort/spill hotspot |
 
-The database timings are direct Release MCP round trips after warm-up (minimum of five; medians and methodology are in `perf-night-report.md`). The current-source Designer and Enterprise also completed an attached-debugger launch and a real `SpreadsheetDocument` report composition without the former shutdown crash.
+The database timings are direct Release MCP round trips after warm-up (five measured samples; methodology and worst values are in `perf-night-report.md`). The current-source Designer and Enterprise also completed an attached-debugger launch and a real stock `SpreadsheetDocument` report composition without the former shutdown crash.
+
+The payroll contour contains 50,000 employees and 63,000 calculation rows (50,000 salary, 10,000 bonus, 3,000 leave/storno), totaling 281,750,000. Replacing per-employee `FindByCode` calls (49.967 s for 1,000 employees) with one set selection reduced normal 10,000-employee batches to roughly 2.0-6.1 s. A full 63,000-row payroll cross-table composition exceeded the MCP request timeout, so the PR does not claim an end-to-end report time.
 
 ## Fixes
 
@@ -85,6 +91,8 @@ These results cover parsing, metadata resolution, and validation. Database execu
 - With both database drivers disabled, `oes_tests` still compiles driver tests but excludes their implementations, producing link failures. Suspected CMake source gating.
 - Direct uninstalled GUI launch requires the Firebird client runtime beside the binaries. With it present, current-source Designer and Enterprise initialize and complete the integration run; packaging/runtime discovery can still be hardened.
 - Non-exact `ibNumber` division measures about 97.4 ns/op, roughly 135x its native control. No isolated regression or safe correction was established.
+- `NOT IN (SELECT ...)` can be expanded into an unbounded parameter list; the payroll run crossed Firebird's 32,767-parameter limit at roughly 31k existing employees. `LEFT JOIN ... IS NULL` is the working shape; query lowering still needs a general fix.
+- MCP boolean metadata writes can report a value-kind error despite the persisted flag, and newly enabled calculation-register derived sources may require metadata reinitialization before source discovery sees them.
 
 ## Verification
 
@@ -92,4 +100,4 @@ These results cover parsing, metadata resolution, and validation. Database execu
 - Targeted regressions: 3/3 pass.
 - Related parser/grouping/socket suite: 19/19 pass.
 - Full Release suite: 2,281 pass, 12 skip, one unrelated failure described above.
-- Fresh current-build integration: 100,000/100,000 register rows read back; independent totals and balances match; 20/20 query matrix cases validate; report composition into `SpreadsheetDocument` succeeds.
+- Fresh current-build integration: 1,000,000/1,000,000 stock rows and 63,000/63,000 payroll rows read back; independent totals and balances match; 20/20 query matrix cases validate; stock report composition into `SpreadsheetDocument` succeeds.
