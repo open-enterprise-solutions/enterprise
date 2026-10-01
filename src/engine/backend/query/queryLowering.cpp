@@ -5685,14 +5685,25 @@ void CollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
 			if (key.IsSameAs(written, false))
 				return;
 	}
-	// AN AGGREGATE FOLDS EVERYTHING BENEATH IT, however deep. Nested calls change nothing — once
-	// inside, inside stays.
+	// A GROUP aggregate folds everything beneath it, however deep. A WINDOW aggregate does not fold
+	// the SELECT: it keeps one answer per input row, so its argument is free with respect to any
+	// ordinary GROUP BY beside it. Treating SUM(x) OVER (...) as a group aggregate made an otherwise
+	// non-grouping window query demand every plain projection in GROUP BY.
 	const bool fold = insideAggregate
-		|| (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func));
+		|| (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func) && !e->m_over);
 
 	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) {
 		CollectFoldedAndFree(child, fold, folded, free, groupedExprs);
 	});
+	// Window keys live beside the ordinary operand tree. In a SELECT that also has a GROUP BY they
+	// must obey the same rule as the window argument: the window runs over grouped rows, so a raw key
+	// cannot escape grouping merely because it is written inside OVER (...).
+	if (e->m_over) {
+		for (const ibQueryAstExprPtr& partition : e->m_over->m_partitionBy)
+			CollectFoldedAndFree(partition, insideAggregate, folded, free, groupedExprs);
+		for (const ibQueryOrderItem& order : e->m_over->m_orderBy)
+			CollectFoldedAndFree(order.m_expr, insideAggregate, folded, free, groupedExprs);
+	}
 }
 
 // THE OTHER HALF OF THE SAME RULE: the columns that live INSIDE an aggregate.

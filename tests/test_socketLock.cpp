@@ -12,12 +12,24 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
+#include <memory>
 #include <thread>
 
 #include <wx/init.h>
 #include <wx/socket.h>
 
 #include "backend/debugger/debugClient.h"   // ibSocketLock lives beside the one class that holds such a socket
+#include "backend/debugger/debugServer.h"
+
+// Narrow constructor access for the listener lifecycle test below. Production
+// ownership remains private to ibMetaDataConfiguration.
+class ibDebuggerServerTestPeer {
+public:
+	static std::unique_ptr<ibDebuggerServer> Create() {
+		return std::unique_ptr<ibDebuggerServer>(new ibDebuggerServer());
+	}
+};
 
 namespace {
 
@@ -192,6 +204,29 @@ TEST_F(SocketLockFix, Assign_ThenHold_SeesTheNewSocket)
 	lock.Destroy(slot);
 	EXPECT_EQ(slot, nullptr);
 	pair.Release();
+}
+
+// The server listener belongs to its connection object. Shutdown used to call
+// wxSocketServer::Destroy from this thread while EntryClient was waiting on the
+// same listener. On macOS that raced two CFRunLoop source operations and crashed
+// application startup/teardown in CFRunLoopRemoveSource. Repeated real listener
+// lifecycles cover the failing road and also keep shutdown bounded.
+TEST_F(SocketLockFix, ServerShutdown_WhileWaitingForClient_IsBounded)
+{
+	using namespace std::chrono;
+	constexpr int kRounds = 100;
+	constexpr auto kShutdownLimit = seconds(1);
+
+	for (int round = 0; round < kRounds; ++round) {
+		auto server = ibDebuggerServerTestPeer::Create();
+		ASSERT_TRUE(server->CreateServer(wxT("127.0.0.1"), 49170, false))
+			<< "round " << round;
+
+		const auto started = steady_clock::now();
+		server->ShutdownServer();
+		EXPECT_LT(steady_clock::now() - started, kShutdownLimit)
+			<< "round " << round;
+	}
 }
 
 // The CONTROL: two threads calling wxSocketBase::Close() on one socket directly, no lock.

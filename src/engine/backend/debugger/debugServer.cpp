@@ -238,19 +238,12 @@ void ibDebuggerServer::ShutdownServer()
 
 	thread->Delete();          // sets TestDestroy() flag
 
-	// Tear the listening socket down BEFORE Wait(). Without this the
-	// worker thread sleeps inside wxSocketServer::Accept(true) (the
-	// blocking-accept branch when m_waitConnection is true) or waits
-	// out a full waitDebuggerTimeout in WaitForAccept(0, ...) on every
-	// loop tick — neither path polls TestDestroy fast enough to make
-	// shutdown timely. Destroying the server socket aborts the in-
-	// flight accept so the next TestDestroy check immediately exits
-	// the loop. Worker's own OnKill/dtor will null the pointer it
-	// holds; the duplicate Destroy is a no-op.
-	if (auto* srv = thread->m_socketServer) {
-		srv->Destroy();
-		thread->m_socketServer = nullptr;
-	}
+	// The connection object owns both sockets. In particular, do not destroy
+	// m_socketServer here while EntryClient may be inside WaitForAccept: on
+	// macOS both paths remove the same CFRunLoop source, and their race ends in
+	// CFRunLoopRemoveSource with a released source. EntryClient uses a bounded
+	// wait below, so Delete() is observed and Wait() joins the worker before the
+	// connection destructor releases the listener.
 
 	if (!isSelf) {
 		thread->Wait();        // block until worker actually exited
@@ -1059,10 +1052,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 
 		while (!TestDestroy()) {
 
-			if (m_socketServer != nullptr && m_waitConnection) {
-				m_socket = m_socketServer->Accept(true);
-			}
-			else if (m_socketServer != nullptr && m_socketServer->WaitForAccept(0, waitDebuggerTimeout)) {
+			// Always wait in a short, bounded interval. The old wait-mode path
+			// called Accept(true), which forced ShutdownServer to destroy this
+			// listener from another thread just to wake it. The bounded wait lets
+			// this worker exit before its owner destroys the listener, and still lets
+			// the bootstrap wait for a client in CreateServer().
+			if (m_socketServer != nullptr && m_socketServer->WaitForAccept(0, waitDebuggerTimeout)) {
 				m_socket = m_socketServer->Accept(false);
 			}
 
@@ -1076,10 +1071,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 				m_socket->SetOption(SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
 			}
 
-			// Keep trying. Accept(true) comes back after the socket's own ten-second
-			// timeout, and a debugger that has not arrived yet is the ordinary case.
-			// Breaking on that timeout is what left m_socket null while the flag below
-			// said a connection had been accepted.
+			// Keep trying: a debugger that has not arrived yet is the ordinary case.
+			// Breaking after a bounded wait is what left m_socket null while the flag
+			// below said a connection had been accepted.
 			if (m_socket != nullptr)
 				break;
 		}
