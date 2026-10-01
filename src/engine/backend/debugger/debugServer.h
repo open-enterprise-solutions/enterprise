@@ -12,7 +12,7 @@
 struct ibRunContext;
 class ibSession;
 class ibMetaDataConfiguration;
-class ibDebuggerServerTestPeer;
+class ibStandaloneDebuggerServer;
 
 // Lifecycle: owned by ibMetaDataConfiguration as a unique_ptr field
 // (private ctor + friend). Ctor/dtor maintain the `ms_debugServer`
@@ -128,7 +128,7 @@ class BACKEND_API ibDebuggerServer {
 	// "the current one" (docs/private/multi-base-process.md).
 	explicit ibDebuggerServer(class ibMetaDataConfigurationBase* metaData);
 	friend class ibMetaDataConfiguration;
-	friend class ibDebuggerServerTestPeer;
+	friend class ibStandaloneDebuggerServer;   // a test's server with no configuration around it (test_socketLock.cpp)
 
 public:
 

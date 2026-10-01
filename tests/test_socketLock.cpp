@@ -22,12 +22,12 @@
 #include "backend/debugger/debugClient.h"   // ibSocketLock lives beside the one class that holds such a socket
 #include "backend/debugger/debugServer.h"
 
-// Narrow constructor access for the listener lifecycle test below. Production
-// ownership remains private to ibMetaDataConfiguration.
-class ibDebuggerServerTestPeer {
+// A debugger server with no configuration around it — for the listener lifecycle test below, which needs the
+// listener and nothing it would ask a configuration for. In production only ibMetaDataConfiguration makes one.
+class ibStandaloneDebuggerServer {
 public:
-	static std::unique_ptr<ibDebuggerServer> Create() {
-		return std::unique_ptr<ibDebuggerServer>(new ibDebuggerServer());
+	static std::unique_ptr<ibDebuggerServer> Make() {
+		return std::unique_ptr<ibDebuggerServer>(new ibDebuggerServer(nullptr));
 	}
 };
 
@@ -218,7 +218,7 @@ TEST_F(SocketLockFix, ServerShutdown_WhileWaitingForClient_IsBounded)
 	constexpr auto kShutdownLimit = seconds(1);
 
 	for (int round = 0; round < kRounds; ++round) {
-		auto server = ibDebuggerServerTestPeer::Create();
+		auto server = ibStandaloneDebuggerServer::Make();
 		ASSERT_TRUE(server->CreateServer(wxT("127.0.0.1"), 49170, false))
 			<< "round " << round;
 
