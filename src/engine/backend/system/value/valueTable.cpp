@@ -244,12 +244,9 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	const long index = varKeyValue.GetUInteger();
-	// ⚠ THE DESIGNER EXEMPTION IS ASKED OF SOMETHING THAT NEED NOT BE THERE. `appData` is null in a
-	// headless host — a test binary, a tool linking the backend alone — and this dereferenced it
-	// with no guard, so an out-of-range index answered with an ACCESS VIOLATION instead of the
-	// message one line below (measured 2026-09-09, oes_tests). No appData means no designer, which
-	// is also the stricter reading: the bounds error is raised rather than waved through.
-	if (index >= GetRowCount() && (appData == nullptr || !appData->DesignerMode())) {
+	// No designer exemption, here or for the columns below: only the running indexer reaches these, and the
+	// designer runs none — its caret walk reads a table through a sample row (census, 2026-10-01).
+	if (index >= GetRowCount()) {
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
@@ -464,10 +461,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& 
 bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
-	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
-	// — the condition already meant "out of range AND not in the designer". Spelled out;
-	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
-	if (index >= m_listColumnInfo.size() && (appData == nullptr || !appData->DesignerMode())) {
+	if (index >= m_listColumnInfo.size()) {
 		ibBackendCoreException::Error(_("Index goes beyond array")); 
 		return false;
 	}
@@ -550,9 +544,6 @@ ibValueModelTable::ibValueModelTableReturnLine::~ibValueModelTableReturnLine() {
 
 bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	// See GetPropVal below for why the null is asked about at all.
-	if (appData != nullptr && appData->DesignerMode())
-		return false;
 	return SetValueByMetaID(
 		m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum),
 		varPropVal
@@ -561,14 +552,10 @@ bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lProp
 
 bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	// 🛑 `appData` NEED NOT EXIST. It is the running application, and the backend is also linked by
-	// hosts that have none — the test binary is one. Reading a column off a query's answer row went
-	// straight through here and took the process down with an ACCESS VIOLATION (measured 2026-09-09,
-	// oes_tests: `q[0].V` on a LINQ result). No application means no designer, so the read proceeds,
-	// which is what a headless host wants; the designer's refusal is unchanged where it applies.
-	if (appData != nullptr && appData->DesignerMode())
-		return false;
-
+	// ⚠ NOT ASKED WHETHER THIS IS THE DESIGNER. That question guarded nothing: the designer's caret walk reads
+	// a column off a SAMPLE row, one with no item, and the table answers false for a row without an item by
+	// itself (GetViewData). It also asked the current base, which a thread working for none cannot answer —
+	// and before that, in a host with no application at all, it dereferenced null (2026-09-09, oes_tests).
 	return GetValueByMetaID(
 		m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum), pvarPropVal
 	);

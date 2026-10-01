@@ -5,7 +5,6 @@
 
 #include "valueDatabase.h"
 #include "backend/databaseLayer/databaseLayer.h"
-#include "backend/appData.h"
 #include "backend/session/session.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -42,8 +41,15 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	// engine — the access policy, the row-level restrictions, the register rules; this one hands a
 	// script the session's raw connection, so what it runs is answered by nobody. That is a tool for
 	// the person who administers the data, and only for them: DataAdministration, the same right the
-	// designer's administration menu asks. (Nothing runs in the designer anyway — it answers stubs.)
-	if (!appData->DesignerMode() && activeMetaData != nullptr && !activeMetaData->AccessRight_DataAdministration())
+	// designer's administration menu asks. (Nothing runs for the caret's walk anyway — it answers stubs.)
+	//
+	// ⭐ THE CARET'S WALK FOR COMPLETION RUNS NO SQL — in any editor, not only the designer's. It reaches
+	// these methods by CALLING them (and replays earlier calls on the same value), so a literal statement
+	// typed above the caret would be executed on Ctrl+Space; the stubs below are what it gets instead. Asked
+	// of the evaluation, not of the process: the designer runs no other script, and the frontend's editors
+	// complete with the same walk in the client too — the composer's expression editor (census, 2026-10-01).
+	const bool completing = ibBackendException::IsEvalComplete();
+	if (!completing && activeMetaData != nullptr && !activeMetaData->AccessRight_DataAdministration())
 		ibBackendAccessException::Error(_("DatabaseLayer runs raw SQL past the access policy - it needs the Data administration right"));
 
 	// A statement is DATA, not a format: the three doors below are printf-style, and a script's SQL
@@ -52,7 +58,7 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	// a script.
 	if (lMethodNum == ePrepareStatement)
 	{
-		if (!appData->DesignerMode())
+		if (!completing)
 		{
 			ibPreparedStatement* preparedStatement = ses_query->PrepareStatement(wxT("%s"), paParams[0]->GetString());
 			if (preparedStatement == nullptr) {
@@ -68,13 +74,13 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	}
 	else if (lMethodNum == eRunQuery)
 	{
-		if (!appData->DesignerMode())
+		if (!completing)
 			pvarRetValue = ses_query->RunQuery(wxT("%s"), paParams[0]->GetString());
 		return true;
 	}
 	else if (lMethodNum == eRunQueryWithResults)
 	{
-		if (!appData->DesignerMode())
+		if (!completing)
 		{
 			ibDatabaseResultSet* resultSet = ses_query->RunQueryWithResults(wxT("%s"), paParams[0]->GetString());
 			if (resultSet == nullptr) {
