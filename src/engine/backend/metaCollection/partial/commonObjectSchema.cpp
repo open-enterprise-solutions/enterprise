@@ -29,6 +29,10 @@ namespace {
 // Non-unique — an attribute value repeats. Named <table>_<attrId>_IX (metaID key: stable and short). A
 // register has no single row reference, so its caller passes orderRef = nullptr and the ordered variant
 // degrades to a plain index there.
+//
+// ⭐ THE ORDERED VARIANT IS A LIST INDEX, BOTH WAYS. A list sorted by the attribute orders by (attribute,
+// reference) and scrolls up in that order reversed; Firebird walks an index forward only, so the ordered
+// variant carries its descending twin (ListIndex) — the same as the register's period index.
 void ContributeAttributeIndexes(ibSchemaTable& t,
 	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
 	const ibBackendQueryColumn* orderRef = nullptr)
@@ -37,10 +41,11 @@ void ContributeAttributeIndexes(ibSchemaTable& t,
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
-		std::vector<const ibBackendQueryColumn*> cols = { attr->GetQueryColumn() };
+		const wxString name = wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
 		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr->GetQueryColumn())
-			cols.push_back(orderRef);
-		t.Index(wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId()), std::move(cols));
+			t.ListIndex(name, { attr->GetQueryColumn(), orderRef });
+		else
+			t.Index(name, { attr->GetQueryColumn() });
 	}
 }
 } // namespace
