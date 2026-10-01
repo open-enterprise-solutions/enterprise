@@ -1,6 +1,8 @@
 #ifndef __ADVPROP_VALUE_PICTURE_H__
 #define __ADVPROP_VALUE_PICTURE_H__
 
+#include <wx/bmpbndl.h>
+#include <wx/dc.h>
 #include <wx/propgrid/propgrid.h>
 
 // ⭐ A VALUE'S PICTURE IS READ OFF THE VALUE WHEN THE GRID DRAWS, not stored in the property.
